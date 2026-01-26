@@ -2,14 +2,19 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+// Lazy init para evitar quebrar o app se variáveis faltarem em produção
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  throw new Error('VITE_SUPABASE_URL ou VITE_SUPABASE_PUBLISHABLE_KEY não configurados');
+let _supabase: ReturnType<typeof createClient> | null = null;
+function getSupabase() {
+  if (_supabase) return _supabase;
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    throw new Error('Configuração do WhatsApp indisponível. Verifique as variáveis VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY.');
+  }
+  _supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  return _supabase;
 }
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 function formatPhone(raw: string): string | null {
   const digits = raw.replace(/\D/g, '');
@@ -21,6 +26,7 @@ function formatPhone(raw: string): string | null {
 }
 
 async function callEdgeFunction(payload: Record<string, unknown>): Promise<any> {
+  const supabase = getSupabase();
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -140,6 +146,7 @@ export async function uploadBase64PdfToSupabaseStorage(
   const blob = new Blob([binary], { type: mime });
 
   // Fazer upload via Supabase Storage
+  const supabase = getSupabase();
   const { data, error } = await supabase.storage.from(bucket).upload(fileName, blob, {
     cacheControl: '3600',
     upsert: true,
