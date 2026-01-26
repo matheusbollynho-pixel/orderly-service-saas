@@ -1,0 +1,196 @@
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+
+export interface Client {
+  id: string;
+  name: string;
+  cpf: string;
+  phone?: string;
+  email?: string;
+  whatsapp?: string;
+  apelido?: string;
+  instagram?: string;
+  autoriza_instagram: boolean;
+  birth_date?: string | null;
+  endereco?: string;
+  cidade?: string;
+  state?: string;
+  notes?: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Motorcycle {
+  id: string;
+  client_id: string;
+  placa: string;
+  marca: string;
+  modelo: string;
+  ano?: number;
+  cilindrada?: string;
+  cor?: string;
+  motor?: string;
+  chassi?: string;
+  notes?: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export function useClients() {
+  const [clients, setClients] = useState<Client[]>([]);
+  const [motorcycles, setMotorcycles] = useState<Motorcycle[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Buscar cliente por CPF
+  const searchClientByCPF = async (cpf: string): Promise<Client | null> => {
+    try {
+      const cleanCPF = cpf.replace(/\D/g, '');
+      const { data, error } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('cpf', cleanCPF)
+        .eq('active', true)
+        .limit(1);
+
+      if (error || !data || data.length === 0) {
+        console.log('Cliente não encontrado:', error);
+        return null;
+      }
+
+      return data[0];
+    } catch (err) {
+      console.error('Erro ao buscar cliente:', err);
+      return null;
+    }
+  };
+
+  // Buscar cliente por nome (parcial)
+  const searchClientByName = async (name: string): Promise<Client[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('clients')
+        .select('*')
+        .ilike('name', `%${name}%`)
+        .eq('active', true)
+        .limit(10);
+
+      if (error) throw error;
+      return data || [];
+    } catch (err) {
+      console.error('Erro ao buscar clientes:', err);
+      return [];
+    }
+  };
+
+  // Buscar cliente por telefone
+  const searchClientByPhone = async (phone: string): Promise<Client | null> => {
+    try {
+      const cleanPhone = phone.replace(/\D/g, '');
+      const { data, error } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('phone', cleanPhone)
+        .eq('active', true)
+        .limit(1);
+
+      if (error || !data || data.length === 0) {
+        console.log('Cliente não encontrado:', error);
+        return null;
+      }
+
+      return data[0];
+    } catch (err) {
+      console.error('Erro ao buscar cliente:', err);
+      return null;
+    }
+  };
+
+  // Buscar moto por placa
+  const searchMotorcycleByPlate = async (placa: string): Promise<Motorcycle | null> => {
+    try {
+      const cleanPlate = placa.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const { data, error } = await supabase
+        .from('motorcycles')
+        .select('*')
+        .eq('placa', cleanPlate)
+        .eq('active', true)
+        .limit(1);
+
+      if (error || !data || data.length === 0) {
+        console.log('Moto não encontrada:', error);
+        return null;
+      }
+
+      return data[0];
+    } catch (err) {
+      console.error('Erro ao buscar moto:', err);
+      return null;
+    }
+  };
+
+  // Buscar motos de um cliente
+  const getClientMotorcycles = async (clientId: string): Promise<Motorcycle[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('motorcycles')
+        .select('*')
+        .eq('client_id', clientId)
+        .eq('active', true);
+
+      if (error) throw error;
+      return data || [];
+    } catch (err) {
+      console.error('Erro ao buscar motos do cliente:', err);
+      return [];
+    }
+  };
+
+  // Criar ou atualizar cliente
+  const upsertClient = async (client: Partial<Client>): Promise<Client | null> => {
+    try {
+      const { data, error } = await supabase
+        .from('clients')
+        .upsert(client as any, { onConflict: 'cpf' })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (err) {
+      console.error('Erro ao salvar cliente:', err);
+      return null;
+    }
+  };
+
+  // Criar ou atualizar moto
+  const upsertMotorcycle = async (motorcycle: Partial<Motorcycle>): Promise<Motorcycle | null> => {
+    try {
+      const { data, error } = await supabase
+        .from('motorcycles')
+        .upsert(motorcycle as any, { onConflict: 'placa' })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (err) {
+      console.error('Erro ao salvar moto:', err);
+      return null;
+    }
+  };
+
+  return {
+    clients,
+    motorcycles,
+    loading,
+    searchClientByCPF,
+    searchClientByName,
+    searchClientByPhone,
+    searchMotorcycleByPlate,
+    getClientMotorcycles,
+    upsertClient,
+    upsertMotorcycle
+  };
+}
