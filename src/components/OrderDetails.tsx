@@ -407,8 +407,13 @@ export function OrderDetails({
                 value={exitDate}
                 onChange={(e) => {
                   setExitDate(e.target.value);
+                  // Converte a data para timestamp garantindo que fica no meio-dia (12:00) para evitar problemas de timezone
+                  const dateStr = e.target.value; // yyyy-MM-dd
+                  const [year, month, day] = dateStr.split('-').map(Number);
+                  // Cria data no meio-dia UTC para evitar virar o dia anterior em outros fusos
+                  const timestamp = new Date(year, month - 1, day, 12, 0, 0, 0).toISOString();
                   const ev = new CustomEvent('order:updateExitDate', { 
-                    detail: { id: order.id, exit_date: e.target.value } 
+                    detail: { id: order.id, exit_date: timestamp } 
                   });
                   window.dispatchEvent(ev);
                 }}
