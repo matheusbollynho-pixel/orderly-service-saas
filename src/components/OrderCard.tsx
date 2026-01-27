@@ -75,7 +75,7 @@ export function OrderCard({ order, onClick }: OrderCardProps) {
                 <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Entrada</span>
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Calendar className="h-3 w-3" />
-                  <span>{format(new Date(order.entry_date), 'dd/MM/yy')}</span>
+                  <span>{format(new Date(order.entry_date + 'T00:00:00'), 'dd/MM/yy')}</span>
                 </div>
               </div>
             )}
@@ -84,7 +84,7 @@ export function OrderCard({ order, onClick }: OrderCardProps) {
                 <span className="text-[10px] font-medium text-[hsl(var(--status-done))] uppercase tracking-wide">Concluído</span>
                 <div className="flex items-center gap-1 text-xs text-[hsl(var(--status-done))]">
                   <Calendar className="h-3 w-3" />
-                  <span className="font-medium">{format(new Date(order.exit_date), 'dd/MM/yy')}</span>
+                  <span className="font-medium">{format(new Date(order.exit_date + 'T00:00:00'), 'dd/MM/yy')}</span>
                 </div>
               </div>
             )}

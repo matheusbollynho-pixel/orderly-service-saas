@@ -130,10 +130,20 @@ export function OrderDetails({
   const [retiradaCPF, setRetiradaCPF] = useState('');
   const [retiradaDocumento, setRetiradaDocumento] = useState('');
   
-  // Função para formatar data para yyyy-MM-dd
+  // Função para formatar data para yyyy-MM-dd sem problemas de timezone
   const formatDateToInput = (dateStr: string | null) => {
     if (!dateStr) return '';
     try {
+      // Se já está no formato yyyy-MM-dd, retorna direto
+      if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        return dateStr;
+      }
+      // Pega apenas a parte da data (antes do T ou espaço)
+      const datePart = dateStr.split('T')[0].split(' ')[0];
+      if (datePart.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        return datePart;
+      }
+      // Fallback: tenta converter normalmente
       const date = new Date(dateStr);
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, '0');
