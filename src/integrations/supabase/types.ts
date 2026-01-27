@@ -136,6 +136,66 @@ export type Database = {
           },
         ]
       },
+      cash_flow: {
+        Row: {
+          id: string
+          date: string
+          type: 'entrada' | 'saida' | 'retirada'
+          amount: number
+          description: string
+          category: string | null
+          payment_method: 'dinheiro' | 'pix' | 'credito' | 'debito' | 'transferencia' | 'outro' | null
+          order_id: string | null
+          payment_id: string | null
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          date: string
+          type: 'entrada' | 'saida' | 'retirada'
+          amount: number
+          description: string
+          category?: string | null
+          payment_method?: 'dinheiro' | 'pix' | 'credito' | 'debito' | 'transferencia' | 'outro' | null
+          order_id?: string | null
+          payment_id?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          date?: string
+          type?: 'entrada' | 'saida' | 'retirada'
+          amount?: number
+          description?: string
+          category?: string | null
+          payment_method?: 'dinheiro' | 'pix' | 'credito' | 'debito' | 'transferencia' | 'outro' | null
+          order_id?: string | null
+          payment_id?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_flow_order_id_fkey",
+            columns: ["order_id"],
+            isOneToOne: false,
+            referencedRelation: "service_orders",
+            referencedColumns: ["id"],
+          },
+          {
+            foreignKeyName: "cash_flow_payment_id_fkey",
+            columns: ["payment_id"],
+            isOneToOne: false,
+            referencedRelation: "payments",
+            referencedColumns: ["id"],
+          },
+        ]
+      },
       clients: {
         Row: {
           id: string

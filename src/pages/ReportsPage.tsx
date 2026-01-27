@@ -21,11 +21,20 @@ export function ReportsPage() {
     const d = new Date();
     const day = d.getDay(); // 0 (Dom) .. 6 (Sáb)
     const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Segunda como início
-    return new Date(d.setDate(diff));
+    const date = new Date(d.setDate(diff));
+    date.setHours(0, 0, 0, 0);
+    return date;
   };
-  const startOfMonth = () => new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const startOfMonth = () => {
+    const date = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  };
 
   const rangeStart = period === 'week' ? startOfWeek() : startOfMonth();
+
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
 
   const { totalGeral, porMecanico } = useMemo(() => {
     const mecMap = new Map(mechanics.map(m => [m.id, m]));
@@ -226,6 +235,7 @@ export function ReportsPage() {
             }}
           />
         </TabsContent>
+
       </Tabs>
     </div>
   );

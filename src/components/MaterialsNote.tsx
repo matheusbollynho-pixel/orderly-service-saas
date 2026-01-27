@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Trash2, ChevronDown, ChevronUp } from 'lucide-react';
-import { Material, Mechanic } from '@/types/service-order';
+import { Material, Mechanic, PaymentMethod } from '@/types/service-order';
 
 interface MaterialsNoteProps {
   materiais: Material[];
@@ -31,8 +31,8 @@ export function MaterialsNote({
 }: MaterialsNoteProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [newMaterial, setNewMaterial] = useState({
+    quantidade: '01',
     descricao: '',
-    quantidade: '',
     valor: '',
     is_service: false,
     mechanic_id: undefined as string | undefined
@@ -50,8 +50,8 @@ export function MaterialsNote({
     }
 
     const payload: any = {
-      descricao: newMaterial.descricao,
       quantidade: newMaterial.quantidade,
+      descricao: newMaterial.descricao,
       valor: parseFloat(newMaterial.valor) || 0,
       is_service: newMaterial.is_service,
     };
@@ -63,7 +63,7 @@ export function MaterialsNote({
 
     onAddMaterial(payload);
 
-    setNewMaterial({ descricao: '', quantidade: '', valor: '', is_service: false, mechanic_id: undefined });
+    setNewMaterial({ quantidade: '01', descricao: '', valor: '', is_service: false, mechanic_id: undefined });
   };
 
   return (
@@ -78,90 +78,116 @@ export function MaterialsNote({
           </div>
         ) : (
           <div className="space-y-2 mb-4">
+            {/* Cabeçalho simplificado */}
             <div className="grid grid-cols-12 gap-2 bg-orange-200 p-2 rounded font-semibold text-xs text-orange-900">
+              <div className="col-span-1"></div>
               <div className="col-span-7">DESCRIÇÃO</div>
-              <div className="col-span-2 text-center">QTD</div>
-              <div className="col-span-3 text-right">VALOR</div>
+              <div className="col-span-2">QTD/VALOR</div>
+              <div className="col-span-2">AÇÃO</div>
             </div>
 
+            {/* Linhas de materiais - Expandível */}
             {materiais.map((material) => (
-              <div key={material.id} className="bg-white rounded border border-orange-200">
-                <div
-                  onClick={() => !disabled && setExpandedId(expandedId === material.id ? null : material.id)}
-                  className="grid grid-cols-12 gap-2 p-3 cursor-pointer hover:bg-orange-50 transition-colors"
+              <div key={material.id}>
+                <div 
+                  className="grid grid-cols-12 gap-2 bg-white p-2 rounded border border-orange-200 items-center hover:bg-orange-50 cursor-pointer"
+                  onClick={() => setExpandedId(expandedId === material.id ? null : material.id)}
                 >
-                  <div className="col-span-7 text-sm font-medium text-gray-800 truncate">
+                  <div className="col-span-1 flex justify-center">
+                    {expandedId === material.id ? (
+                      <ChevronUp className="h-4 w-4 text-orange-600" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 text-orange-600" />
+                    )}
+                  </div>
+                  <div className="col-span-7 text-sm font-medium text-orange-900">
                     {material.descricao}
                   </div>
-                  <div className="col-span-2 text-center text-sm text-gray-600">
-                    {material.quantidade}
+                  <div className="col-span-2 text-sm text-orange-800">
+                    {material.quantidade} × R$ {parseFloat(String(material.valor)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
-                  <div className="col-span-3 text-right text-sm font-semibold text-orange-700">
-                    R$ {material.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </div>
-                  <div className="col-span-1 flex justify-end">
-                    {!disabled && (
-                      expandedId === material.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                    )}
+                  <div className="col-span-2 flex justify-end">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveMaterial(material.id);
+                      }}
+                      disabled={disabled}
+                      className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
                   </div>
                 </div>
 
-                {expandedId === material.id && !disabled && (
-                  <div className="bg-orange-50 border-t border-orange-200 p-3 space-y-2">
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <label className="text-xs font-semibold text-gray-700">Descrição</label>
-                        <Input
-                          size={1}
-                          value={material.descricao}
-                          onChange={(e) => onUpdateMaterial(material.id, 'descricao', e.target.value)}
-                          disabled={disabled}
-                          className="h-8 text-sm"
-                        />
+                {/* Detalhe expandível */}
+                {expandedId === material.id && (
+                  <div className="bg-orange-50 border border-orange-200 border-t-0 p-3 rounded-b space-y-3">
+                    <div className="flex gap-2 items-end">
+                      <div className="w-16">
+                        <label className="text-xs font-semibold text-orange-900 block mb-1">Quantidade</label>
+                        <Select value={material.quantidade || '01'} onValueChange={(value) => onUpdateMaterial(material.id, 'quantidade', value)}>
+                          <SelectTrigger className="h-8 text-xs text-center">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: 99 }, (_, i) => (i + 1).toString().padStart(2, '0')).map((num) => (
+                              <SelectItem key={num} value={num}>{num}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
-                      <div>
-                        <label className="text-xs font-semibold text-gray-700">Quantidade</label>
+                      <div className="w-24">
+                        <label className="text-xs font-semibold text-orange-900 block mb-1">Valor (R$)</label>
                         <Input
-                          size={1}
-                          value={material.quantidade}
-                          onChange={(e) => onUpdateMaterial(material.id, 'quantidade', e.target.value)}
-                          disabled={disabled}
-                          className="h-8 text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold text-gray-700">Valor (R$)</label>
-                        <Input
-                          size={1}
                           type="number"
-                          step="0.01"
                           value={material.valor}
                           onChange={(e) => onUpdateMaterial(material.id, 'valor', e.target.value)}
                           disabled={disabled}
-                          className="h-8 text-sm"
+                          className="h-8 text-xs text-right"
+                          placeholder="0,00"
                         />
                       </div>
                     </div>
-                    <div className="flex justify-end">
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => onRemoveMaterial(material.id)}
+
+                    <div className="flex items-center gap-2">
+                      <Checkbox 
+                        checked={material.is_service || false} 
+                        onCheckedChange={(checked) => onUpdateMaterial(material.id, 'is_service', String(Boolean(checked)))}
                         disabled={disabled}
-                        className="h-7"
-                      >
-                        <Trash2 className="h-3 w-3 mr-1" /> {loadingDelete ? 'Removendo...' : 'Remover'}
-                      </Button>
+                        className="h-4 w-4"
+                      />
+                      <span className="text-xs font-medium">Serviço</span>
                     </div>
+
+                    {material.is_service && (
+                      <div>
+                        <label className="text-xs font-semibold text-orange-900 block mb-1">Mecânico</label>
+                        <Select value={material.mechanic_id || 'none'} onValueChange={(value) => onUpdateMaterial(material.id, 'mechanic_id', value === 'none' ? '' : value)} disabled={disabled}>
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue placeholder="Nenhum" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Nenhum</SelectItem>
+                            {mecanicos.filter(m => m.active).map(m => (
+                              <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             ))}
 
-            <div className="grid grid-cols-12 gap-2 bg-orange-300 p-3 rounded font-bold text-orange-900 text-right mt-2">
+            {/* Total */}
+            <div className="grid grid-cols-12 gap-2 bg-orange-300 p-2 rounded font-bold text-orange-900 text-xs mt-2">
               <div className="col-span-9">TOTAL:</div>
-              <div className="col-span-3">
+              <div className="col-span-3 text-right">
                 R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
@@ -172,18 +198,21 @@ export function MaterialsNote({
           <div className="border-t border-orange-300 pt-4 space-y-3">
             <h4 className="font-semibold text-orange-900 text-sm">Adicionar novo material</h4>
             <div className="space-y-3">
-              <div className="grid grid-cols-4 gap-2">
-                <div>
+              <div className="flex gap-2 items-end">
+                <div className="w-16">
                   <label className="text-xs font-semibold text-orange-900 block mb-1">Qtd</label>
-                  <Input
-                    placeholder="Un"
-                    value={newMaterial.quantidade}
-                    onChange={(e) => setNewMaterial({ ...newMaterial, quantidade: e.target.value })}
-                    disabled={disabled}
-                    className="h-8"
-                  />
+                  <Select value={newMaterial.quantidade || '01'} onValueChange={(value) => setNewMaterial({ ...newMaterial, quantidade: value })}>
+                    <SelectTrigger className="h-8 text-xs text-center">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: 99 }, (_, i) => (i + 1).toString().padStart(2, '0')).map((num) => (
+                        <SelectItem key={num} value={num}>{num}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="col-span-2">
+                <div className="flex-1">
                   <label className="text-xs font-semibold text-orange-900 block mb-1">Descrição</label>
                   <Input
                     placeholder="Descrição"
@@ -193,81 +222,55 @@ export function MaterialsNote({
                     className="h-8"
                   />
                 </div>
-                <div>
+                <div className="w-24">
                   <label className="text-xs font-semibold text-orange-900 block mb-1">Valor (R$)</label>
                   <Input
                     type="number"
-                    step="0.01"
                     placeholder="0,00"
                     value={newMaterial.valor}
                     onChange={(e) => setNewMaterial({ ...newMaterial, valor: e.target.value })}
                     disabled={disabled}
-                    className="h-8"
+                    className="h-8 text-xs text-right"
                   />
                 </div>
               </div>
+              <div className="flex items-end gap-2">
+                <div className="flex items-center gap-1 flex-1">
+                  <Checkbox 
+                    checked={newMaterial.is_service} 
+                    onCheckedChange={(checked) => setNewMaterial({ ...newMaterial, is_service: Boolean(checked) })}
+                    disabled={disabled}
+                    className="h-4 w-4"
+                  />
+                  <span className="text-xs font-medium leading-none">Serviço</span>
+                </div>
+              </div>
               {newMaterial.is_service && (
-                <div className="grid grid-cols-4 gap-2">
-                  <div className="col-span-3">
-                    <label className="text-xs font-semibold text-orange-900 block mb-1">Mecânico</label>
-                    <Select value={newMaterial.mechanic_id || 'none'} onValueChange={(value) => setNewMaterial({ ...newMaterial, mechanic_id: value === 'none' ? undefined : value })} disabled={disabled}>
-                      <SelectTrigger className="h-8" disabled={disabled}>
-                        <SelectValue placeholder="Nenhum" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Nenhum</SelectItem>
-                        {mecanicos.filter(m => m.active).map(m => (
-                          <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-end">
-                    <div className="flex items-center gap-1 flex-1">
-                      <Checkbox 
-                        checked={newMaterial.is_service} 
-                        onCheckedChange={(checked) => setNewMaterial({ ...newMaterial, is_service: Boolean(checked) })}
-                        disabled={disabled}
-                        className="h-4 w-4"
-                      />
-                      <span className="text-xs font-medium leading-none">Srv</span>
-                    </div>
-                  </div>
+                <div>
+                  <label className="text-xs font-semibold text-orange-900 block mb-1">Mecânico</label>
+                  <Select value={newMaterial.mechanic_id || 'none'} onValueChange={(value) => setNewMaterial({ ...newMaterial, mechanic_id: value === 'none' ? undefined : value })} disabled={disabled}>
+                    <SelectTrigger className="h-8" disabled={disabled}>
+                      <SelectValue placeholder="Nenhum" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Nenhum</SelectItem>
+                      {mecanicos.filter(m => m.active).map(m => (
+                        <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
-              {!newMaterial.is_service && (
-                <div className="flex items-end justify-end">
-                  <div className="flex items-center gap-1">
-                    <Checkbox 
-                      checked={newMaterial.is_service} 
-                      onCheckedChange={(checked) => setNewMaterial({ ...newMaterial, is_service: Boolean(checked) })}
-                      disabled={disabled}
-                      className="h-4 w-4"
-                    />
-                    <span className="text-xs font-medium leading-none">Srv</span>
-                  </div>
-                  <Button
-                    type="button"
-                    onClick={handleAddMaterial}
-                    disabled={disabled || loadingAdd}
-                    className="h-8 bg-orange-600 hover:bg-orange-700 ml-2"
-                  >
-                    {loadingAdd ? 'Salvando...' : '+'}
-                  </Button>
-                </div>
-              )}
-              {newMaterial.is_service && (
-                <div className="flex items-end justify-end">
-                  <Button
-                    type="button"
-                    onClick={handleAddMaterial}
-                    disabled={disabled || loadingAdd}
-                    className="h-8 bg-orange-600 hover:bg-orange-700"
-                  >
-                    {loadingAdd ? 'Salvando...' : '+'}
-                  </Button>
-                </div>
-              )}
+              <div className="flex items-end justify-end gap-2">
+                <Button
+                  type="button"
+                  onClick={handleAddMaterial}
+                  disabled={disabled || loadingAdd}
+                  className="h-8 bg-orange-600 hover:bg-orange-700"
+                >
+                  {loadingAdd ? 'Salvando...' : '+ Adicionar'}
+                </Button>
+              </div>
             </div>
           </div>
         )}

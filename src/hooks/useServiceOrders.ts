@@ -336,6 +336,10 @@ export function useServiceOrders() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['service-orders'] });
+      // Invalidar cache do cash_flow para atualizar em tempo real
+      queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
+      queryClient.invalidateQueries({ queryKey: ['cash-flow-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['cash-flow-period'] });
       toast.success('Pagamento registrado!');
     },
     onError: (error: any) => {
@@ -354,6 +358,9 @@ export function useServiceOrders() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['service-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
+      queryClient.invalidateQueries({ queryKey: ['cash-flow-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['cash-flow-period'] });
       toast.success('Pagamento removido!');
     },
     onError: (error: any) => {
@@ -361,6 +368,7 @@ export function useServiceOrders() {
       toast.error(`Erro ao remover pagamento: ${error?.message || 'Erro desconhecido'}`);
     },
   });
+
 
   return {
     orders: ordersQuery.data ?? [],

@@ -12,24 +12,34 @@ import { MaterialsPage } from './MaterialsPage';
 import { ReportsPage } from './ReportsPage';
 import { MechanicsPage } from './MechanicsPage';
 import AfterSalesPage from './AfterSalesPage';
+import { CashFlowPage } from './CashFlowPage';
 import { BottomNav } from '@/components/BottomNav';
 import { EmptyState } from '@/components/EmptyState';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Wrench, Search } from 'lucide-react';
 import { toast } from 'sonner';
-import { sendWhatsAppText } from '@/lib/whatsappService';
 
-type View = 'dashboard' | 'new' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics' | 'pos-venda';
+type View = 'dashboard' | 'new' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa';
 
 export default function Index() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, canAccessCashFlow, canAccessReports } = useAuth();
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [selectedOrder, setSelectedOrder] = useState<ServiceOrder | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<OrderStatus | null>(null);
-  const [testPhone, setTestPhone] = useState('');
-  const [isSendingText, setIsSendingText] = useState(false);
+
+  // Redirecionar se usuário restrito tentar acessar caixa ou relatórios
+  useEffect(() => {
+    if (!canAccessCashFlow && currentView === 'fluxo-caixa') {
+      setCurrentView('dashboard');
+      toast.error('Você não tem acesso ao Fluxo de Caixa');
+    }
+    if (!canAccessReports && currentView === 'reports') {
+      setCurrentView('dashboard');
+      toast.error('Você não tem acesso aos Relatórios');
+    }
+  }, [currentView, canAccessCashFlow, canAccessReports]);
 
   // Limpar filtro quando sair da view de orders
   useEffect(() => {
@@ -383,26 +393,6 @@ Retirada: ${retiradaInfo}`;
     });
   };
 
-  const handleSendTestFromList = async () => {
-    const cleanPhone = (testPhone || '').replace(/\D/g, '');
-    if (cleanPhone.length < 10 || cleanPhone.length > 11) {
-      toast.warning('Telefone inválido. Use DDD + número.');
-      return;
-    }
-    try {
-      setIsSendingText(true);
-      const ok = await sendWhatsAppText({ phone: cleanPhone, text: 'Mensagem de teste ✅' });
-      if (ok) {
-        toast.success('Mensagem de teste enviada!');
-      }
-    } catch (e) {
-      console.error('Falha ao enviar teste:', e);
-      toast.error('Erro ao enviar a mensagem de teste.');
-    } finally {
-      setIsSendingText(false);
-    }
-  };
-
   const navView = currentView === 'details' || currentView === 'materials' ? 'orders' : currentView as any;
 
   // Filtrar ordens por busca
@@ -427,7 +417,7 @@ Retirada: ${retiradaInfo}`;
     <div className="min-h-screen bg-background pb-24">
       {/* Header com Logo */}
       <header className="sticky top-0 z-10 bg-white shadow-md border-b">
-        <div className="container max-w-lg mx-auto px-4 py-3">
+        <div className="container max-w-lg md:max-w-3xl lg:max-w-6xl mx-auto px-4 py-3">
           <div className="flex items-center justify-center">
             <img src="/bandara-logo.png" alt="Bandara Motos" className="h-20 w-auto" />
           </div>
@@ -435,7 +425,7 @@ Retirada: ${retiradaInfo}`;
       </header>
 
       {/* Main Content */}
-      <main className="container max-w-lg mx-auto px-4 py-5">
+      <main className="container max-w-lg md:max-w-3xl lg:max-w-6xl mx-auto px-4 py-5">
         {currentView === 'dashboard' && (
           <div className="space-y-5 animate-fade-in">
             <div>
@@ -489,6 +479,10 @@ Retirada: ${retiradaInfo}`;
           <AfterSalesPage />
         )}
 
+        {currentView === 'fluxo-caixa' && (
+          <CashFlowPage />
+        )}
+
         {currentView === 'new' && (
           <OrderForm
             onSubmit={handleCreateOrder}
@@ -512,33 +506,14 @@ Retirada: ${retiradaInfo}`;
                 </button>
               )}
             </div>
-            {/* Teste rápido de WhatsApp */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <div className="sm:col-span-2 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                <Input
-                  placeholder="Buscar por nome, telefone, placa ou ID..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 h-11"
-                />
-              </div>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="DDD + telefone"
-                  value={testPhone}
-                  onChange={(e) => setTestPhone(e.target.value)}
-                  className="h-11"
-                />
-                <button
-                  onClick={handleSendTestFromList}
-                  disabled={isSendingText}
-                  className="h-11 px-3 rounded-md bg-emerald-600 text-white text-sm hover:bg-emerald-700 disabled:opacity-50"
-                  title="Enviar mensagem WhatsApp"
-                >
-                  {isSendingText ? 'Enviando…' : 'Enviar teste'}
-                </button>
-              </div>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
+                placeholder="Buscar por nome, telefone, placa ou ID..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 h-11"
+              />
             </div>
             
             {isLoading ? (
@@ -590,6 +565,7 @@ Retirada: ${retiradaInfo}`;
             isDeletingPayment={isDeletingPayment}
             isUpdating={isUpdating}
             isAdmin={isAdmin}
+            canAccessPayments={canAccessReports}
           />
         )}
 

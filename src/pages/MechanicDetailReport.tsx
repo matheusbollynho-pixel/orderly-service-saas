@@ -27,25 +27,58 @@ export function MechanicDetailReport({ onBack }: MechanicDetailReportProps) {
   }, [selectedMechanicId, mechanics]);
 
   const filteredOrders = useMemo(() => {
-    if (!selectedMechanicId || !startDate || !endDate) return [];
+    console.log('🔄 useMemo executado com:', { selectedMechanicId, startDate, endDate, ordersCount: orders.length });
+    
+    if (!selectedMechanicId) {
+      console.log('❌ Sem mecânico selecionado');
+      return [];
+    }
+    if (!startDate) {
+      console.log('❌ Sem data inicial');
+      return [];
+    }
+    if (!endDate) {
+      console.log('❌ Sem data final');
+      return [];
+    }
 
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59);
+    // Corrigir a data para timezone local (input date vem no formato YYYY-MM-DD)
+    const [startYear, startMonth, startDay] = startDate.split('-').map(Number);
+    const start = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
+    
+    const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
+    const end = new Date(endYear, endMonth - 1, endDay, 23, 59, 59, 999);
 
-    return orders
-      .filter(o => o.status === 'concluida')
+    console.log('📅 Datas de filtro:', {
+      startDateInput: startDate,
+      endDateInput: endDate,
+      startCompare: start.toISOString(),
+      endCompare: end.toISOString()
+    });
+
+    console.log('📋 Todos os status das ordens:', orders.map(o => ({ id: o.id, status: o.status, date: o.created_at })));
+
+    const filtered = orders
       .filter(o => {
-        // Inclui ordens onde o mecânico está atribuído à OS OU a qualquer material dela
+        console.log(`🔍 Verificando status de ${o.id}: "${o.status}" === "concluida"?`, o.status === 'concluida');
+        return o.status === 'concluida';
+      })
+      .filter(o => {
         const hasMechanicInOS = o.mechanic_id === selectedMechanicId;
         const hasMechanicInMaterials = (o.materials || []).some(m => m.mechanic_id === selectedMechanicId);
+        console.log(`👤 OS ${o.id} tem mecânico? OS: ${hasMechanicInOS}, Materials: ${hasMechanicInMaterials}`);
         return hasMechanicInOS || hasMechanicInMaterials;
       })
       .filter(o => {
         const osDate = new Date(o.created_at);
-        return osDate >= start && osDate <= end;
+        const isInRange = osDate >= start && osDate <= end;
+        console.log(`⏰ OS ${o.id} (${osDate.toLocaleDateString('pt-BR')}) está entre ${start.toLocaleDateString('pt-BR')} e ${end.toLocaleDateString('pt-BR')}?`, isInRange);
+        return isInRange;
       })
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    console.log(`✅ Resultado da filtragem: ${filtered.length} ordens encontradas`);
+    return filtered;
   }, [orders, selectedMechanicId, startDate, endDate]);
 
   const { totalServicos, totalComissao } = useMemo(() => {

@@ -21,32 +21,56 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
   const [adding, setAdding] = useState<Record<string, { amount: string; method: PaymentMethod; notes?: string }>>({});
 
   const sanitizeMoney = (value: string) => {
-    const normalized = value.replace(/[^0-9.,]/g, '').replace(',', '.');
-    const num = parseFloat(normalized);
-    if (isNaN(num) || num < 0) return '';
-    return num.toFixed(2);
+    // Apenas remover caracteres que não são números ou ponto/vírgula
+    return value.replace(/[^0-9.,]/g, '').replace(',', '.');
   };
 
   const startOfWeek = () => {
     const d = new Date();
     const day = d.getDay();
     const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-    return new Date(d.setDate(diff));
+    const date = new Date(d.setDate(diff));
+    date.setHours(0, 0, 0, 0);
+    return date;
   };
-  const startOfMonth = () => new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const startOfMonth = () => {
+    const date = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    date.setHours(0, 0, 0, 0);
+    return date;
+  };
   const rangeStart = period === 'week' ? startOfWeek() : startOfMonth();
 
   const filteredOrders = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = orders
-      .filter(o => new Date(o.created_at) >= rangeStart)
+    
+    // Manter todas as ordens, mas marcar quais pagamentos estão no período
+    const ordersWithPaymentInfo = orders.map(o => {
+      const paymentsInRange = (o.payments || []).filter(
+        p => new Date(p.created_at) >= rangeStart
+      );
+      return { 
+        ...o, 
+        _paymentsInRange: paymentsInRange,
+        _hasPaymentsInRange: paymentsInRange.length > 0 
+      };
+    });
+
+    const list = ordersWithPaymentInfo
       .map(o => {
         const totalOS = (o.materials || []).reduce((acc, m) => acc + ((m.valor || 0) * (parseFloat(m.quantidade) || 0)), 0);
+        // Soma TODOS os pagamentos (não apenas os do período)
         const totalPaid = (o.payments || []).reduce((acc, p) => acc + (p.amount || 0), 0);
         const pending = Math.max(totalOS - totalPaid, 0);
         return { ...o, _totalOS: totalOS, _totalPaid: totalPaid, _pending: pending } as any;
       })
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      // Ordena colocando primeiro as ordens que têm pagamentos no período, depois por data
+      .sort((a, b) => {
+        // Se uma tem pagamento no período e a outra não, coloca a com pagamento primeiro
+        if (a._hasPaymentsInRange && !b._hasPaymentsInRange) return -1;
+        if (!a._hasPaymentsInRange && b._hasPaymentsInRange) return 1;
+        // Depois ordena por data da ordem
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
 
     if (!q) return list;
     return list.filter(o =>
@@ -56,25 +80,20 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
   }, [orders, query, rangeStart]);
 
   const methodLabels: Record<PaymentMethod, string> = {
-    dinheiro: 'Dinheiro',
+    dinheiro: 'DIN',
     pix: 'PIX',
-    credito: 'Cartão (crédito)',
-    debito: 'Cartão (débito)',
-    transferencia: 'Transferência',
-    outro: 'Outro',
+    cartao: 'CAR',
   };
 
-  const methods: PaymentMethod[] = ['dinheiro','pix','credito','debito','transferencia','outro'];
+  const methods: PaymentMethod[] = ['dinheiro','pix','cartao'];
 
   const methodTotals = useMemo(() => {
     const acc: Record<PaymentMethod, { amount: number; count: number }> = {
       dinheiro: { amount: 0, count: 0 },
       pix: { amount: 0, count: 0 },
-      credito: { amount: 0, count: 0 },
-      debito: { amount: 0, count: 0 },
-      transferencia: { amount: 0, count: 0 },
-      outro: { amount: 0, count: 0 },
+      cartao: { amount: 0, count: 0 },
     };
+    // Somar TODOS os pagamentos (não apenas os do período)
     filteredOrders.forEach((o: any) => {
       (o.payments || []).forEach((p: any) => {
         const method = (p.method || 'outro') as PaymentMethod;
@@ -139,7 +158,10 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs text-muted-foreground">{new Date(o.created_at).toLocaleDateString('pt-BR')}</p>
+                    <p className="text-xs text-muted-foreground">OS: {new Date(o.created_at).toLocaleDateString('pt-BR')}</p>
+                    {o._paymentsInRange && o._paymentsInRange.length > 0 && (
+                      <p className="text-xs text-muted-foreground">Último pgto: {new Date(Math.max(...o._paymentsInRange.map((p: any) => new Date(p.created_at).getTime()))).toLocaleDateString('pt-BR')}</p>
+                    )}
                     <p className="font-medium">{o.client_name}</p>
                     <p className="text-sm text-muted-foreground">{o.equipment}</p>
                   </div>
@@ -161,18 +183,25 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
                     <p className="text-sm text-muted-foreground">Nenhum pagamento registrado.</p>
                   ) : (
                     <div className="space-y-2">
-                      {o.payments.map((p: any) => (
-                        <div key={p.id} className="flex items-center justify-between text-sm">
-                          <div>
-                            <p className="font-medium">R$ {Number(p.amount || 0).toFixed(2)} <span className="text-muted-foreground">• {p.method}</span></p>
-                            {p.reference ? <p className="text-xs text-muted-foreground">Ref: {p.reference}</p> : null}
-                            {p.notes ? <p className="text-xs text-muted-foreground">Obs: {p.notes}</p> : null}
+                      {o.payments.map((p: any) => {
+                        const isInPeriod = new Date(p.created_at) >= rangeStart;
+                        return (
+                          <div key={p.id} className={`flex items-center justify-between text-sm ${!isInPeriod ? 'opacity-60' : ''}`}>
+                            <div>
+                              <p className="text-xs text-muted-foreground">
+                                {new Date(p.created_at).toLocaleDateString('pt-BR')}
+                                {!isInPeriod && ' (fora do período)'}
+                              </p>
+                              <p className="font-medium">R$ {Number(p.amount || 0).toFixed(2)} <span className="text-muted-foreground">• {p.method}</span></p>
+                              {p.reference ? <p className="text-xs text-muted-foreground">Ref: {p.reference}</p> : null}
+                              {p.notes ? <p className="text-xs text-muted-foreground">Obs: {p.notes}</p> : null}
+                            </div>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => onDeletePayment(p.id)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => onDeletePayment(p.id)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -188,7 +217,6 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
                     className="h-9 sm:col-span-2"
                     type="number"
                     min="0"
-                    step="0.01"
                   />
                   <Select
                     value={adding[o.id]?.method || 'dinheiro'}

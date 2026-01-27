@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { ServiceOrder, OrderStatus, STATUS_LABELS, PaymentMethod } from '@/types/service-order';
 import { StatusBadge } from './StatusBadge';
 import { Checklist } from './Checklist';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
@@ -28,13 +29,14 @@ import {
   Trash2,
   Loader2,
   Printer,
+  Download,
   UserCheck,
   Calendar,
   Eye,
   EyeOff
 } from 'lucide-react';
 import { useMechanics } from '@/hooks/useMechanics';
-import { generateOrderPDFBase64 } from '@/lib/pdfGenerator';
+import { generateOrderPDFBase64, generateOrderPDF } from '@/lib/pdfGenerator';
 import { sendWhatsAppDocument, sendWhatsAppText } from '@/lib/whatsappService';
 
 import { formatDistanceToNow, format } from 'date-fns';
@@ -70,6 +72,7 @@ interface OrderDetailsProps {
   isDeletingPayment?: boolean;
   isUpdating?: boolean;
   isAdmin?: boolean;
+  canAccessPayments?: boolean;
 }
 
 export function OrderDetails({
@@ -91,13 +94,33 @@ export function OrderDetails({
   isDeletingPayment = false,
   isUpdating = false,
   isAdmin = false,
+  canAccessPayments = true,
 }: OrderDetailsProps) {
   const { mechanics } = useMechanics();
   const printRef = useRef<HTMLDivElement>(null);
   const [showSignature, setShowSignature] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [activeTab, setActiveTab] = useState<'checklist' | 'materiais'>('checklist');
   const [isSendingPDF, setIsSendingPDF] = useState(false);
   const [isSendingText, setIsSendingText] = useState(false);
+
+  // Carregar e salvar termsAccepted no localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(`terms_accepted_${order.id}`);
+      if (saved === 'true') {
+        setTermsAccepted(true);
+      }
+    }
+  }, [order.id]);
+
+  // Função para atualizar termsAccepted e salvar no localStorage
+  const handleTermsChange = (checked: boolean) => {
+    setTermsAccepted(checked);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`terms_accepted_${order.id}`, String(checked));
+    }
+  };
   const [usarAutorizacao, setUsarAutorizacao] = useState<boolean>(() => {
     const retiradaInfo = order.problem_description?.match(/Retirada: (.+?)(?:\n|$)/)?.[1] || 'Cliente';
     return retiradaInfo !== 'Cliente';
@@ -142,12 +165,9 @@ export function OrderDetails({
   const totalPaid = (order.payments || []).reduce((acc, p) => acc + (p.amount || 0), 0);
   const pending = Math.max(totalOS - totalPaid, 0);
   const methodOptions: Array<{ value: PaymentMethod; label: string }> = [
-    { value: 'dinheiro', label: 'Dinheiro' },
+    { value: 'dinheiro', label: 'DIN' },
     { value: 'pix', label: 'PIX' },
-    { value: 'credito', label: 'Cartão (crédito)' },
-    { value: 'debito', label: 'Cartão (débito)' },
-    { value: 'transferencia', label: 'Transferência' },
-    { value: 'outro', label: 'Outro' },
+    { value: 'cartao', label: 'CAR' },
   ];
 
   const handleAddPayment = () => {
@@ -164,6 +184,10 @@ export function OrderDetails({
   };
 
   const handleSendWhatsAppPDF = async () => {
+    if (!order.signature_data) {
+      alert('É necessário coletar a assinatura do cliente antes de enviar o PDF.');
+      return;
+    }
     const cleanPhone = order.client_phone?.replace(/\D/g, '') || '';
     if (cleanPhone.length < 10 || cleanPhone.length > 11) {
       alert('Telefone do cliente inválido para WhatsApp.');
@@ -191,6 +215,10 @@ export function OrderDetails({
   };
 
   const handleSignatureSave = (signature: string) => {
+    if (!termsAccepted) {
+      alert('Por favor, confirme que leu e concorda com os termos da Ordem de Serviço antes de assinar.');
+      return;
+    }
     onSignatureSave(signature);
     setShowSignature(false);
   };
@@ -227,6 +255,19 @@ export function OrderDetails({
     }
   };
 
+  const handleDownloadPDF = () => {
+    if (!order.signature_data) {
+      alert('É necessário coletar a assinatura do cliente antes de gerar o PDF.');
+      return;
+    }
+    try {
+      generateOrderPDF(order);
+    } catch (error: any) {
+      console.error('Erro ao baixar PDF:', error);
+      alert('Erro ao gerar PDF. Tente novamente.');
+    }
+  };
+
   return (
     <>
       <div className="pb-24">
@@ -252,6 +293,15 @@ export function OrderDetails({
         
         {isAdmin && (
           <div className="flex items-center gap-2">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={handleDownloadPDF}
+              className="h-9 w-9 text-primary hover:text-primary"
+              title="Baixar PDF da ordem de serviço"
+            >
+              <Download className="h-5 w-5" />
+            </Button>
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-9 w-9 text-destructive hover:text-destructive">
@@ -286,7 +336,13 @@ export function OrderDetails({
               <StatusBadge status={order.status} />
               <Select 
                 value={order.status} 
-                onValueChange={(value) => onStatusChange(value as OrderStatus)}
+                onValueChange={(value) => {
+                  if (value === 'concluida' && !order.signature_data) {
+                    alert('É necessário coletar a assinatura do cliente antes de concluir a ordem de serviço.');
+                    return;
+                  }
+                  onStatusChange(value as OrderStatus);
+                }}
                 disabled={isUpdating}
               >
                 <SelectTrigger className="w-[140px] h-8 text-sm">
@@ -434,6 +490,10 @@ export function OrderDetails({
               variant="outline"
               size="sm"
               onClick={() => {
+                if (!order.signature_data) {
+                  alert('É necessário coletar a assinatura do cliente antes de imprimir.');
+                  return;
+                }
                 const retiradaInfo = order.problem_description?.match(/Retirada: (.+?)(?:\n|$)/)?.[1] || 'Cliente';
                 const usar = usarAutorizacao && retiradaInfo !== 'Cliente';
                 const printContent = `
@@ -458,27 +518,6 @@ export function OrderDetails({
                       <div class="section">
                         <div class="label">O que fazer na moto?</div>
                         <div class="value">${order.problem_description?.split('\n\nRetirada:')[0] || order.problem_description}</div>
-                      </div>
-                      <div class="section warn">
-                        <div class="label">⚠️ Autorização de Retirada</div>
-                        ${usar
-                          ? (() => {
-                              const nomeMatch = retiradaInfo.match(/Nome: ([^|]+)/);
-                              const telMatch = retiradaInfo.match(/Tel: ([^|]+)/);
-                              const cpfMatch = retiradaInfo.match(/CPF: (.+)$/);
-                              return `
-                                <div class="value">Outra pessoa (autorizada)</div>
-                                <div class="value">Nome: ${nomeMatch?.[1]?.trim() || 'Não informado'}</div>
-                                ${telMatch && telMatch[1]?.trim() !== 'Não informado' ? `<div class="value">Telefone: ${telMatch[1]?.trim()}</div>` : ''}
-                                ${cpfMatch && cpfMatch[1]?.trim() !== 'Não informado' ? `<div class="value">CPF: ${cpfMatch[1]?.trim()}</div>` : ''}
-                              `;
-                            })()
-                          : `
-                              <div class="value">Nome: ${order.client_name}</div>
-                              <div class="value">Telefone: ${order.client_phone || 'Não informado'}</div>
-                            `
-                        }
-                        <div class="value" style="margin-top:8px;color:#b91c1c;font-size:12px">Será necessário apresentar documento com foto na retirada!</div>
                       </div>
                     </body>
                   </html>
@@ -511,126 +550,6 @@ export function OrderDetails({
             <div>
               <p className="text-xs text-muted-foreground">O que fazer na moto?</p>
               <p className="text-sm text-foreground">{order.problem_description?.split('\n\nRetirada:')[0] || order.problem_description}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Autorização de Retirada */}
-      <Card className="card-elevated border-red-200 bg-red-50">
-        <CardContent className="p-4 space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <UserCheck className="h-5 w-5 text-red-600" />
-              <h3 className="font-semibold text-red-900">⚠️ Autorização de Retirada</h3>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-red-700">Usar autorização indicada</span>
-              <Switch checked={usarAutorizacao} onCheckedChange={(v) => setUsarAutorizacao(Boolean(v))} />
-            </div>
-          </div>
-          
-          <div className="space-y-2">
-            {(() => {
-              const retiradaInfo = order.problem_description?.match(/Retirada: (.+?)(?:\n|$)/)?.[1] || 'Cliente';
-              
-              if (!usarAutorizacao || retiradaInfo === 'Cliente') {
-                return (
-                  <>
-                    <div>
-                      <p className="text-xs text-red-700 font-medium">Nome:</p>
-                      <p className="text-sm text-red-900 font-semibold">{order.client_name}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-red-700 font-medium">Telefone:</p>
-                      <p className="text-sm text-red-900 font-semibold">{order.client_phone || 'Não informado'}</p>
-                    </div>
-                  </>
-                );
-              } else {
-                // Extrair nome, telefone e CPF da string "Outra pessoa - Nome: X | Tel: Y | CPF: Z"
-                const nomeMatch = retiradaInfo.match(/Nome: ([^|]+)/);
-                const telMatch = retiradaInfo.match(/Tel: ([^|]+)/);
-                const cpfMatch = retiradaInfo.match(/CPF: (.+)$/);
-                
-                return (
-                  <>
-                    <div>
-                      <p className="text-xs text-red-700 font-medium">Situação de retirada:</p>
-                      <p className="text-sm text-red-900 font-semibold">Outra pessoa (autorizada)</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-red-700 font-medium">Nome:</p>
-                      <p className="text-sm text-red-900 font-semibold">{nomeMatch?.[1]?.trim() || 'Não informado'}</p>
-                    </div>
-                    {telMatch && telMatch[1]?.trim() !== 'Não informado' && (
-                      <div>
-                        <p className="text-xs text-red-700 font-medium">Telefone:</p>
-                        <p className="text-sm text-red-900 font-semibold">{telMatch[1]?.trim()}</p>
-                      </div>
-                    )}
-                    {cpfMatch && cpfMatch[1]?.trim() !== 'Não informado' && (
-                      <div>
-                        <p className="text-xs text-red-700 font-medium">CPF:</p>
-                        <p className="text-sm text-red-900 font-semibold">{cpfMatch[1]?.trim()}</p>
-                      </div>
-                    )}
-                  </>
-                );
-              }
-            })()}
-            
-            <div className="pt-2 border-t border-red-300">
-              <p className="text-xs text-red-600 font-medium">
-                ⚠️ Será necessário apresentar documento com foto na retirada!
-              </p>
-            </div>
-            
-            {/* Campos para preencher dados na hora da retirada */}
-            <div className="pt-3 border-t border-red-300">
-              <p className="text-xs text-red-800 font-semibold mb-3">
-                📝 Dados confirmados na retirada:
-              </p>
-              <div className="space-y-2">
-                <div>
-                  <Label className="text-xs text-red-700">Nome completo</Label>
-                  <Input
-                    placeholder="Nome de quem está retirando"
-                    value={retiradaNome}
-                    onChange={(e) => setRetiradaNome(e.target.value)}
-                    className="h-9 text-sm bg-white border-red-300"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label className="text-xs text-red-700">Telefone</Label>
-                    <Input
-                      placeholder="(XX) XXXXX-XXXX"
-                      value={retiradaTelefone}
-                      onChange={(e) => setRetiradaTelefone(e.target.value)}
-                      className="h-9 text-sm bg-white border-red-300"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-red-700">CPF</Label>
-                    <Input
-                      placeholder="XXX.XXX.XXX-XX"
-                      value={retiradaCPF}
-                      onChange={(e) => setRetiradaCPF(e.target.value)}
-                      className="h-9 text-sm bg-white border-red-300"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-xs text-red-700">Documento apresentado (tipo e nº)</Label>
-                  <Input
-                    placeholder="Ex: RG 12.345.678-9 ou CNH 12345678900"
-                    value={retiradaDocumento}
-                    onChange={(e) => setRetiradaDocumento(e.target.value)}
-                    className="h-9 text-sm bg-white border-red-300"
-                  />
-                </div>
-              </div>
             </div>
           </div>
         </CardContent>
@@ -673,8 +592,9 @@ export function OrderDetails({
       </Card>
 
       {/* Pagamentos */}
-      <Card className="card-elevated">
-        <CardContent className="p-4 space-y-3">
+      {canAccessPayments !== false && (
+        <Card className="card-elevated">
+          <CardContent className="p-4 space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h3 className="font-medium text-foreground">Pagamentos</h3>
@@ -725,7 +645,6 @@ export function OrderDetails({
                 className="h-9 sm:col-span-2"
                 type="number"
                 min="0"
-                step="0.01"
               />
               <Select
                 value={paymentForm.method}
@@ -751,6 +670,24 @@ export function OrderDetails({
               </Button>
             </div>
           )}
+        </CardContent>
+      </Card>
+      )}
+
+      {/* Termos da Ordem de Serviço */}
+      <Card className="card-elevated border-blue-200 bg-blue-50">
+        <CardContent className="p-4">
+          <div className="flex items-start gap-3">
+            <Checkbox
+              id="terms-checkbox"
+              checked={termsAccepted}
+              onCheckedChange={handleTermsChange}
+              className="mt-1"
+            />
+            <label htmlFor="terms-checkbox" className="text-sm text-blue-900 leading-relaxed cursor-pointer">
+              <span className="font-semibold">Declaro que li e concordo com os termos da Ordem de Serviço</span>, incluindo o prazo de 30 dias para retirada da motocicleta e a taxa de estadia de R$ 6,00 por dia após esse prazo.
+            </label>
+          </div>
         </CardContent>
       </Card>
 
@@ -786,8 +723,16 @@ export function OrderDetails({
           ) : (
             <Button 
               variant="outline" 
-              onClick={() => setShowSignature(true)}
+              onClick={() => {
+                if (!termsAccepted) {
+                  alert('Por favor, confirme que leu e concorda com os termos da Ordem de Serviço antes de coletar a assinatura.');
+                  return;
+                }
+                setShowSignature(true);
+              }}
+              disabled={!termsAccepted}
               className="w-full"
+              title={!termsAccepted ? 'É necessário aceitar os termos antes de assinar' : ''}
             >
               Coletar Assinatura
             </Button>

@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { User } from '@supabase/supabase-js';
 
 const ADMIN_EMAIL = 'bandaramotos2@hotmail.com';
+const RESTRICTED_USER_EMAIL = 'bandaramotos2@gmail.com';
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -27,6 +28,9 @@ export function useAuth() {
   }, []);
 
   const isAdmin = user?.email === ADMIN_EMAIL;
+  const isRestrictedUser = user?.email === RESTRICTED_USER_EMAIL;
+  const canAccessCashFlow = !isRestrictedUser;
+  const canAccessReports = !isRestrictedUser;
 
   const signOut = async () => {
     await supabase.auth.signOut();
@@ -36,6 +40,9 @@ export function useAuth() {
     user,
     loading,
     isAdmin,
+    isRestrictedUser,
+    canAccessCashFlow,
+    canAccessReports,
     signOut,
   };
 }

@@ -18,14 +18,16 @@ export interface Material {
   descricao: string;
   quantidade: string;
   valor: number;
+  type?: CashFlowType; // entrada, saida ou retirada
   is_service?: boolean; // true = servico (entra em comissao), false = peca
   mechanic_id?: string | null; // mecanico responsavel pelo item
+  payment_method?: PaymentMethod | null; // forma de pagamento do item (pix, dinheiro, cartao)
   paid_at?: string | null; // data quando foi pago
   created_at: string;
   updated_at: string;
 }
 
-export type PaymentMethod = 'dinheiro' | 'pix' | 'credito' | 'debito' | 'transferencia' | 'outro';
+export type PaymentMethod = 'dinheiro' | 'pix' | 'cartao';
 
 export interface Payment {
   id: string;
@@ -98,3 +100,43 @@ export const STATUS_LABELS: Record<OrderStatus, string> = {
   em_andamento: 'Em Andamento',
   concluida: 'Concluída',
 };
+
+export type CashFlowType = 'entrada' | 'saida' | 'retirada';
+
+export interface CashFlow {
+  id: string;
+  type: CashFlowType;
+  amount: number;
+  description: string;
+  category?: string | null;
+  payment_method?: PaymentMethod | null;
+  order_id?: string | null;
+  payment_id?: string | null;
+  date: string;
+  notes?: string | null;
+  created_at: string;
+  created_by?: string | null;
+}
+
+export interface CashFlowSummary {
+  date: string;
+  total_entradas: number;
+  total_saidas: number;
+  total_retiradas: number;
+  saldo: number;
+  entradas: CashFlow[];
+  saidas: CashFlow[];
+  retiradas: CashFlow[];
+}
+
+export interface CashFlowPeriodSummary {
+  start_date: string;
+  end_date: string;
+  total_entradas: number;
+  total_saidas: number;
+  total_retiradas: number;
+  saldo: number;
+  entradas: CashFlow[];
+  saidas: CashFlow[];
+  retiradas: CashFlow[];
+}

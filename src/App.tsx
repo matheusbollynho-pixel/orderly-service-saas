@@ -7,6 +7,7 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import { LoginPage } from "./pages/LoginPage";
 import AfterSalesPage from "./pages/AfterSalesPage";
+import { CashFlowPage } from "./pages/CashFlowPage";
 import { useAuth } from "./hooks/useAuth";
 
 const queryClient = new QueryClient();
@@ -33,6 +34,7 @@ function AuthenticatedApp() {
     <Routes>
       <Route path="/" element={<Index />} />
       <Route path="/pos-venda" element={<AfterSalesPage />} />
+      <Route path="/fluxo-caixa" element={<CashFlowPage />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
