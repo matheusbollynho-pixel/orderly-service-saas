@@ -152,6 +152,11 @@ export function OrderDetails({
   }));
   const [showFullClient, setShowFullClient] = useState(false);
 
+  // Atualizar exitDate quando a ordem mudar
+  useEffect(() => {
+    setExitDate(formatDateToInput(order.exit_date));
+  }, [order.id, order.exit_date]);
+
   const formatDateDisplay = (dateStr?: string | null) => {
     if (!dateStr) return '';
     try {
