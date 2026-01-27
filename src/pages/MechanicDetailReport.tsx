@@ -81,13 +81,13 @@ export function MechanicDetailReport({ onBack }: MechanicDetailReportProps) {
     return filtered;
   }, [orders, selectedMechanicId, startDate, endDate]);
 
-  const { totalServicos, totalComissao } = useMemo(() => {
+  const { totalServicos, totalComissao, totalPecas } = useMemo(() => {
     let totalServicos = 0;
     let totalComissao = 0;
+    let totalPecas = 0;
 
     filteredOrders.forEach(o => {
       (o.materials || [])
-        .filter(m => m.is_service === true)
         .forEach(material => {
           // Se material tem seu próprio mechanic_id, só conta se for do mechanic selecionado
           if (material.mechanic_id && material.mechanic_id !== selectedMechanicId) {
@@ -95,14 +95,20 @@ export function MechanicDetailReport({ onBack }: MechanicDetailReportProps) {
           }
           const qtd = parseFloat(material.quantidade) || 0;
           const valor = (material.valor || 0) * qtd;
-          totalServicos += valor;
-          if (selectedMechanic) {
-            totalComissao += valor * (selectedMechanic.commission_rate / 100);
+          
+          if (material.is_service === true) {
+            totalServicos += valor;
+            if (selectedMechanic) {
+              totalComissao += valor * (selectedMechanic.commission_rate / 100);
+            }
+          } else {
+            // É uma peça
+            totalPecas += valor;
           }
         });
     });
 
-    return { totalServicos, totalComissao };
+    return { totalServicos, totalComissao, totalPecas };
   }, [filteredOrders, selectedMechanic, selectedMechanicId]);
 
   return (
@@ -185,7 +191,7 @@ export function MechanicDetailReport({ onBack }: MechanicDetailReportProps) {
       {selectedMechanic && startDate && endDate && (
         <Card>
           <CardContent className="p-4 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="bg-blue-50 p-4 rounded-lg">
                 <p className="text-xs text-blue-600 font-medium">Total de OS</p>
                 <p className="text-2xl font-bold text-blue-900">{filteredOrders.length}</p>
@@ -193,6 +199,10 @@ export function MechanicDetailReport({ onBack }: MechanicDetailReportProps) {
               <div className="bg-green-50 p-4 rounded-lg">
                 <p className="text-xs text-green-600 font-medium">Faturado (Serviços)</p>
                 <p className="text-2xl font-bold text-green-900">R$ {totalServicos.toFixed(2)}</p>
+              </div>
+              <div className="bg-purple-50 p-4 rounded-lg">
+                <p className="text-xs text-purple-600 font-medium">Vendido (Peças)</p>
+                <p className="text-2xl font-bold text-purple-900">R$ {totalPecas.toFixed(2)}</p>
               </div>
               <div className="bg-orange-50 p-4 rounded-lg">
                 <p className="text-xs text-orange-600 font-medium">Comissão a Pagar</p>

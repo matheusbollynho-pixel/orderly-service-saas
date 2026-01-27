@@ -36,7 +36,7 @@ export function BottomNav({ activeView, onViewChange, isAdmin }: BottomNavProps)
   return (
     <nav className="bottom-nav">
       <div className="overflow-x-auto scrollbar-hide py-2 pb-safe">
-        <div className="flex items-center gap-2 px-2 min-w-max">
+        <div className="flex items-center justify-around md:justify-around gap-2 px-2 min-w-max md:min-w-0">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeView === item.id;
@@ -46,7 +46,7 @@ export function BottomNav({ activeView, onViewChange, isAdmin }: BottomNavProps)
                 key={item.id}
                 onClick={() => onViewChange(item.id)}
                 className={cn(
-                  "flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-all flex-shrink-0",
+                  "flex flex-col items-center gap-1 px-3 py-2.5 rounded-lg transition-all flex-shrink-0",
                   isActive 
                     ? "text-primary" 
                     : "text-muted-foreground hover:text-foreground"
@@ -57,7 +57,7 @@ export function BottomNav({ activeView, onViewChange, isAdmin }: BottomNavProps)
                   isActive && "bg-primary/10"
                 )}>
                   <Icon className={cn(
-                    "h-5 w-5 transition-transform",
+                    "h-5.5 w-5.5 transition-transform",
                     isActive && "scale-110"
                   )} />
                 </div>
@@ -67,10 +67,10 @@ export function BottomNav({ activeView, onViewChange, isAdmin }: BottomNavProps)
           })}
           <button
             onClick={handleLogout}
-            className="flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-all text-muted-foreground hover:text-destructive flex-shrink-0"
+            className="flex flex-col items-center gap-1 px-3 py-2.5 rounded-lg transition-all text-muted-foreground hover:text-destructive flex-shrink-0"
           >
             <div className="p-2 rounded-xl transition-all hover:bg-destructive/10">
-              <LogOut className="h-5 w-5" />
+              <LogOut className="h-5.5 w-5.5" />
             </div>
             <span className="text-xs font-medium whitespace-nowrap">Sair</span>
           </button>

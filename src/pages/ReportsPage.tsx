@@ -16,6 +16,7 @@ export function ReportsPage() {
   const [period, setPeriod] = useState<Period>('month');
   const [activeTab, setActiveTab] = useState<'resumo' | 'detalhado' | 'itens' | 'pagamentos'>('resumo');
   const [itemsQuery, setItemsQuery] = useState('');
+  const [selectedMechanicFilter, setSelectedMechanicFilter] = useState<string>('todos');
 
   const startOfWeek = () => {
     const d = new Date();
@@ -69,36 +70,82 @@ export function ReportsPage() {
   }, [orders, mechanics, rangeStart]);
 
   // Resumo de peças (itens) por período
-  const { totalPecas, pecasPorOS } = useMemo(() => {
+  const { totalPecas, pecasPorOS, pecasPorMecanico } = useMemo(() => {
+    const mecMap = new Map(mechanics.map(m => [m.id, m]));
     let total = 0;
-    const lista: Array<{ id: string; created_at: string; equipment: string; client_name: string; total: number }> = [];
+    const lista: Array<{ 
+      id: string; 
+      created_at: string; 
+      equipment: string; 
+      client_name: string; 
+      total: number;
+      mechanic_id?: string;
+      mechanic_name?: string;
+    }> = [];
+    const porMec: Record<string, { name: string; total: number }> = {};
 
     orders
       .filter(o => o.status === 'concluida')
       .filter(o => new Date(o.created_at) >= rangeStart)
       .forEach(o => {
-        const somaOS = (o.materials || [])
+        let somaOS = 0;
+        // Mecânico é o da OS, não do material individual
+        const mecId = o.mechanic_id || 'sem';
+        const mec = mecMap.get(mecId);
+        const mecName = mec?.name || 'Sem mecânico';
+        
+        // Soma todas as peças da OS (não serviços)
+        (o.materials || [])
           .filter(m => m.is_service !== true)
-          .reduce((acc, m) => acc + ((m.valor || 0) * (parseFloat(m.quantidade) || 0)), 0);
+          .forEach(m => {
+            const valor = (m.valor || 0) * (parseFloat(m.quantidade) || 0);
+            somaOS += valor;
+          });
+        
         if (somaOS > 0) {
-          lista.push({ id: o.id, created_at: o.created_at, equipment: o.equipment, client_name: o.client_name, total: somaOS });
+          // Atribui todas as peças ao mecânico da OS
+          if (!porMec[mecId]) porMec[mecId] = { name: mecName, total: 0 };
+          porMec[mecId].total += somaOS;
+          
+          lista.push({ 
+            id: o.id, 
+            created_at: o.created_at, 
+            equipment: o.equipment, 
+            client_name: o.client_name, 
+            total: somaOS,
+            mechanic_id: mecId,
+            mechanic_name: mecName
+          });
           total += somaOS;
         }
       });
 
     // Ordenar por data desc
     lista.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    return { totalPecas: total, pecasPorOS: lista };
-  }, [orders, rangeStart]);
+    return { totalPecas: total, pecasPorOS: lista, pecasPorMecanico: porMec };
+  }, [orders, rangeStart, mechanics]);
 
   const filteredPecas = useMemo(() => {
     const q = itemsQuery.trim().toLowerCase();
-    if (!q) return pecasPorOS;
-    return pecasPorOS.filter(item =>
-      item.client_name.toLowerCase().includes(q) ||
-      item.equipment.toLowerCase().includes(q)
-    );
-  }, [itemsQuery, pecasPorOS]);
+    let filtered = pecasPorOS;
+    
+    // Filtro por mecânico
+    if (selectedMechanicFilter !== 'todos') {
+      filtered = filtered.filter(item => 
+        item.mechanic_id === selectedMechanicFilter
+      );
+    }
+    
+    // Filtro por busca
+    if (q) {
+      filtered = filtered.filter(item =>
+        item.client_name.toLowerCase().includes(q) ||
+        item.equipment.toLowerCase().includes(q)
+      );
+    }
+    
+    return filtered;
+  }, [itemsQuery, pecasPorOS, selectedMechanicFilter]);
 
   useEffect(() => {
     const handler = () => setActiveTab('detalhado');
@@ -115,9 +162,9 @@ export function ReportsPage() {
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="w-full">
         <TabsList className="grid grid-cols-4 w-full">
           <TabsTrigger value="resumo">Resumo</TabsTrigger>
-          <TabsTrigger value="detalhado">Relatório Detalhado</TabsTrigger>
-          <TabsTrigger value="itens">Itens (peças)</TabsTrigger>
-          <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>
+          <TabsTrigger value="detalhado">Mecânicos</TabsTrigger>
+          <TabsTrigger value="itens">Peças</TabsTrigger>
+          <TabsTrigger value="pagamentos">Pagtos</TabsTrigger>
         </TabsList>
 
         <TabsContent value="resumo" className="space-y-5">
@@ -171,13 +218,25 @@ export function ReportsPage() {
         </TabsContent>
 
         <TabsContent value="itens" className="space-y-5">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             <Input
               placeholder="Buscar cliente ou moto..."
               value={itemsQuery}
               onChange={(e) => setItemsQuery(e.target.value)}
               className="h-10 sm:col-span-2"
             />
+            <Select value={selectedMechanicFilter} onValueChange={setSelectedMechanicFilter}>
+              <SelectTrigger className="w-full h-10">
+                <SelectValue placeholder="Todos mecânicos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos mecânicos</SelectItem>
+                {mechanics.map(m => (
+                  <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                ))}
+                <SelectItem value="sem">Sem mecânico</SelectItem>
+              </SelectContent>
+            </Select>
             <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>
               <SelectTrigger className="w-full h-10">
                 <SelectValue />
@@ -189,10 +248,35 @@ export function ReportsPage() {
             </Select>
           </div>
 
+          {/* Cards resumo por mecânico */}
+          {selectedMechanicFilter === 'todos' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {Object.entries(pecasPorMecanico).map(([id, data]) => (
+                <Card key={id} className="cursor-pointer hover:bg-accent" onClick={() => setSelectedMechanicFilter(id)}>
+                  <CardContent className="p-3">
+                    <p className="text-xs text-muted-foreground">{data.name}</p>
+                    <p className="text-lg font-bold">R$ {data.total.toFixed(2)}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
           <Card>
             <CardContent className="p-4">
-              <p className="text-sm text-muted-foreground">Peças ({period === 'week' ? 'semana' : 'mês'})</p>
-              <p className="text-2xl font-bold">R$ {totalPecas.toFixed(2)}</p>
+              <p className="text-sm text-muted-foreground">
+                Peças ({period === 'week' ? 'semana' : 'mês'})
+                {selectedMechanicFilter !== 'todos' && (
+                  <span className="ml-2">
+                    - {mechanics.find(m => m.id === selectedMechanicFilter)?.name || 'Sem mecânico'}
+                  </span>
+                )}
+              </p>
+              <p className="text-2xl font-bold">
+                R$ {selectedMechanicFilter === 'todos' 
+                  ? totalPecas.toFixed(2) 
+                  : (pecasPorMecanico[selectedMechanicFilter]?.total || 0).toFixed(2)}
+              </p>
             </CardContent>
           </Card>
 
@@ -205,10 +289,11 @@ export function ReportsPage() {
               {filteredPecas.map(item => (
                 <Card key={item.id}>
                   <CardContent className="p-4 flex items-center justify-between">
-                    <div>
+                    <div className="flex-1">
                       <p className="text-xs text-muted-foreground">{new Date(item.created_at).toLocaleDateString('pt-BR')}</p>
                       <p className="font-medium">{item.client_name}</p>
                       <p className="text-sm text-muted-foreground">{item.equipment}</p>
+                      <p className="text-xs text-muted-foreground italic mt-1">Mecânico: {item.mechanic_name}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-sm">Total de peças</p>
