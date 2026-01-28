@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS cash_flow (
   amount DECIMAL(10, 2) NOT NULL CHECK (amount > 0),
   description TEXT NOT NULL,
   category TEXT,
-  payment_method TEXT CHECK (payment_method IN ('dinheiro', 'pix', 'credito', 'debito', 'transferencia', 'outro')),
+  payment_method TEXT CHECK (payment_method IN ('dinheiro', 'pix', 'cartao', 'credito', 'debito', 'transferencia', 'outro')),
   order_id UUID REFERENCES service_orders(id) ON DELETE SET NULL,
   payment_id UUID REFERENCES payments(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT now(),
