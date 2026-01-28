@@ -18,6 +18,7 @@ interface PaymentsTabProps {
 
 export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPayment, onDeletePayment }: PaymentsTabProps) {
   const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed_unpaid'>('all');
   const [adding, setAdding] = useState<Record<string, { amount: string; method: PaymentMethod; notes?: string }>>({});
 
   const sanitizeMoney = (value: string) => {
@@ -63,6 +64,16 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
         const pending = Math.max(totalOS - totalPaid, 0);
         return { ...o, _totalOS: totalOS, _totalPaid: totalPaid, _pending: pending } as any;
       })
+      // Aplica filtro de status
+      .filter(o => {
+        if (statusFilter === 'pending') {
+          return o._pending > 0;
+        }
+        if (statusFilter === 'completed_unpaid') {
+          return o.status === 'concluida' && o._pending > 0;
+        }
+        return true; // 'all'
+      })
       // Ordena colocando primeiro as ordens que têm pagamentos no período, depois por data
       .sort((a, b) => {
         // Se uma tem pagamento no período e a outra não, coloca a com pagamento primeiro
@@ -77,7 +88,7 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
       o.client_name.toLowerCase().includes(q) ||
       o.equipment.toLowerCase().includes(q)
     );
-  }, [orders, query, rangeStart]);
+  }, [orders, query, rangeStart, statusFilter]);
 
   const methodLabels: Record<PaymentMethod, string> = {
     dinheiro: 'DIN',
@@ -117,13 +128,23 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
         <Input
           placeholder="Buscar cliente ou moto..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="h-10 sm:col-span-2"
+          className="h-10"
         />
+        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
+          <SelectTrigger className="w-full h-10">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas</SelectItem>
+            <SelectItem value="pending">Com pendência</SelectItem>
+            <SelectItem value="completed_unpaid">Concluídas não pagas</SelectItem>
+          </SelectContent>
+        </Select>
         <Select value={period} onValueChange={(v) => onPeriodChange(v as any)}>
           <SelectTrigger className="w-full h-10">
             <SelectValue />
