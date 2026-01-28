@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MechanicDetailReport } from './MechanicDetailReport';
 import { PaymentsTab } from '@/components/PaymentsTab';
 
-type Period = 'week' | 'month';
+type Period = 'week' | 'month' | 'all';
 
 export function ReportsPage() {
   const { orders, isLoading, createPayment, deletePayment, updatePayment } = useServiceOrders();

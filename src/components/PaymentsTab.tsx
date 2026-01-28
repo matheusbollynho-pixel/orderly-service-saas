@@ -10,8 +10,8 @@ import { Trash2, Plus, Edit2 } from 'lucide-react';
 interface PaymentsTabProps {
   orders: ServiceOrder[];
   isLoading?: boolean;
-  period: 'week' | 'month';
-  onPeriodChange: (p: 'week' | 'month') => void;
+  period: 'week' | 'month' | 'all';
+  onPeriodChange: (p: 'week' | 'month' | 'all') => void;
   onAddPayment: (payload: { order_id: string; amount: number; method: PaymentMethod; reference?: string | null; notes?: string | null }) => void;
   onDeletePayment: (id: string) => void;
   onUpdatePayment: (payload: { id: string; created_at?: string; amount?: number; method?: PaymentMethod; notes?: string | null }) => void;
@@ -42,7 +42,7 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
     date.setHours(0, 0, 0, 0);
     return date;
   };
-  const rangeStart = period === 'week' ? startOfWeek() : startOfMonth();
+  const rangeStart = period === 'week' ? startOfWeek() : period === 'month' ? startOfMonth() : new Date('2000-01-01');
 
   const filteredOrders = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -155,6 +155,7 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
           <SelectContent>
             <SelectItem value="week">Semana atual</SelectItem>
             <SelectItem value="month">Mês atual</SelectItem>
+            <SelectItem value="all">Todos</SelectItem>
           </SelectContent>
         </Select>
       </div>
