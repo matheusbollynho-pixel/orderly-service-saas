@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Trash2, Plus } from 'lucide-react';
+import { Trash2, Plus, Edit2 } from 'lucide-react';
 
 interface PaymentsTabProps {
   orders: ServiceOrder[];
@@ -14,12 +14,15 @@ interface PaymentsTabProps {
   onPeriodChange: (p: 'week' | 'month') => void;
   onAddPayment: (payload: { order_id: string; amount: number; method: PaymentMethod; reference?: string | null; notes?: string | null }) => void;
   onDeletePayment: (id: string) => void;
+  onUpdatePayment: (payload: { id: string; created_at?: string; amount?: number; method?: PaymentMethod; notes?: string | null }) => void;
 }
 
-export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPayment, onDeletePayment }: PaymentsTabProps) {
+export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPayment, onDeletePayment, onUpdatePayment }: PaymentsTabProps) {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed_unpaid'>('all');
   const [adding, setAdding] = useState<Record<string, { amount: string; method: PaymentMethod; notes?: string }>>({});
+  const [editingPayment, setEditingPayment] = useState<string | null>(null);
+  const [editDate, setEditDate] = useState<Record<string, string>>({});
 
   const sanitizeMoney = (value: string) => {
     // Apenas remover caracteres que não são números ou ponto/vírgula
@@ -206,20 +209,67 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
                     <div className="space-y-2">
                       {o.payments.map((p: any) => {
                         const isInPeriod = new Date(p.created_at) >= rangeStart;
+                        const isEditing = editingPayment === p.id;
                         return (
-                          <div key={p.id} className={`flex items-center justify-between text-sm ${!isInPeriod ? 'opacity-60' : ''}`}>
-                            <div>
-                              <p className="text-xs text-muted-foreground">
-                                {new Date(p.created_at).toLocaleDateString('pt-BR')}
-                                {!isInPeriod && ' (fora do período)'}
-                              </p>
-                              <p className="font-medium">R$ {Number(p.amount || 0).toFixed(2)} <span className="text-muted-foreground">• {p.method}</span></p>
-                              {p.reference ? <p className="text-xs text-muted-foreground">Ref: {p.reference}</p> : null}
-                              {p.notes ? <p className="text-xs text-muted-foreground">Obs: {p.notes}</p> : null}
+                          <div key={p.id} className={`flex items-center justify-between text-sm gap-2 ${!isInPeriod ? 'opacity-60' : ''}`}>
+                            <div className="flex-1">
+                              {isEditing ? (
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    type="date"
+                                    value={editDate[p.id] || new Date(p.created_at).toISOString().split('T')[0]}
+                                    onChange={(e) => setEditDate(prev => ({ ...prev, [p.id]: e.target.value }))}
+                                    className="h-8 w-40"
+                                  />
+                                  <Button
+                                    size="sm"
+                                    className="h-8"
+                                    onClick={() => {
+                                      const newDate = editDate[p.id];
+                                      if (newDate) {
+                                        // Criar data no formato correto mantendo o timezone local
+                                        const dateObj = new Date(newDate + 'T12:00:00');
+                                        onUpdatePayment({ id: p.id, created_at: dateObj.toISOString() });
+                                        setEditingPayment(null);
+                                      }
+                                    }}
+                                  >
+                                    Salvar
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8"
+                                    onClick={() => setEditingPayment(null)}
+                                  >
+                                    Cancelar
+                                  </Button>
+                                </div>
+                              ) : (
+                                <>
+                                  <p className="text-xs text-muted-foreground">
+                                    {new Date(p.created_at).toLocaleDateString('pt-BR')}
+                                    {!isInPeriod && ' (fora do período)'}
+                                  </p>
+                                  <p className="font-medium">R$ {Number(p.amount || 0).toFixed(2)} <span className="text-muted-foreground">• {p.method}</span></p>
+                                  {p.reference ? <p className="text-xs text-muted-foreground">Ref: {p.reference}</p> : null}
+                                  {p.notes ? <p className="text-xs text-muted-foreground">Obs: {p.notes}</p> : null}
+                                </>
+                              )}
                             </div>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => onDeletePayment(p.id)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {!isEditing && (
+                              <div className="flex gap-1">
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
+                                  setEditingPayment(p.id);
+                                  setEditDate(prev => ({ ...prev, [p.id]: new Date(p.created_at).toISOString().split('T')[0] }));
+                                }}>
+                                  <Edit2 className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => onDeletePayment(p.id)}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         );
                       })}

@@ -369,6 +369,35 @@ export function useServiceOrders() {
     },
   });
 
+  const updatePaymentMutation = useMutation({
+    mutationFn: async (payload: { id: string; created_at?: string; amount?: number; method?: string; notes?: string | null }) => {
+      const { data, error } = await supabase
+        .from('payments')
+        .update({
+          ...(payload.created_at && { created_at: payload.created_at }),
+          ...(payload.amount && { amount: payload.amount }),
+          ...(payload.method && { method: payload.method }),
+          ...(payload.notes !== undefined && { notes: payload.notes }),
+        })
+        .eq('id', payload.id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['service-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
+      queryClient.invalidateQueries({ queryKey: ['cash-flow-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['cash-flow-period'] });
+      toast.success('Pagamento atualizado!');
+    },
+    onError: (error: any) => {
+      console.error('Update payment error:', error);
+      toast.error(`Erro ao atualizar pagamento: ${error?.message || 'Erro desconhecido'}`);
+    },
+  });
+
 
   return {
     orders: ordersQuery.data ?? [],
@@ -393,7 +422,9 @@ export function useServiceOrders() {
     // Payments
     createPayment: createPaymentMutation.mutate,
     deletePayment: deletePaymentMutation.mutate,
+    updatePayment: updatePaymentMutation.mutate,
     isCreatingPayment: createPaymentMutation.isPending,
     isDeletingPayment: deletePaymentMutation.isPending,
+    isUpdatingPayment: updatePaymentMutation.isPending,
   };
 }

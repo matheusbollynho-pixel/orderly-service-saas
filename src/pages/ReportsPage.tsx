@@ -11,7 +11,7 @@ import { PaymentsTab } from '@/components/PaymentsTab';
 type Period = 'week' | 'month';
 
 export function ReportsPage() {
-  const { orders, isLoading, createPayment, deletePayment } = useServiceOrders();
+  const { orders, isLoading, createPayment, deletePayment, updatePayment } = useServiceOrders();
   const { mechanics } = useMechanics();
   const [period, setPeriod] = useState<Period>('month');
   const [activeTab, setActiveTab] = useState<'resumo' | 'detalhado' | 'itens' | 'pagamentos'>('resumo');
@@ -317,6 +317,9 @@ export function ReportsPage() {
             }}
             onDeletePayment={(id) => {
               deletePayment(id);
+            }}
+            onUpdatePayment={(payload) => {
+              updatePayment(payload);
             }}
           />
         </TabsContent>
