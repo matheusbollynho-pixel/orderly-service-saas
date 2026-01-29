@@ -58,6 +58,7 @@ interface OrderDetailsProps {
   onBack: () => void;
   onOpenMaterials?: () => void;
   onStatusChange: (status: OrderStatus) => void;
+  onUpdateOrder?: (data: Partial<ServiceOrder> & { id: string }) => void;
   onChecklistItemToggle: (id: string, completed: boolean) => void;
   onChecklistItemRating?: (id: string, rating: number) => void;
   onChecklistItemObservations?: (id: string, observations: string) => void;
@@ -80,6 +81,7 @@ export function OrderDetails({
   onBack,
   onOpenMaterials,
   onStatusChange,
+  onUpdateOrder,
   onChecklistItemToggle,
   onChecklistItemRating,
   onChecklistItemObservations,
@@ -99,26 +101,31 @@ export function OrderDetails({
   const { mechanics } = useMechanics();
   const printRef = useRef<HTMLDivElement>(null);
   const [showSignature, setShowSignature] = useState(false);
-  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(order.terms_accepted ?? false);
   const [activeTab, setActiveTab] = useState<'checklist' | 'materiais'>('checklist');
   const [isSendingPDF, setIsSendingPDF] = useState(false);
   const [isSendingText, setIsSendingText] = useState(false);
 
-  // Carregar e salvar termsAccepted no localStorage
+  // Sincronizar com dados da OS
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(`terms_accepted_${order.id}`);
-      if (saved === 'true') {
-        setTermsAccepted(true);
-      }
-    }
-  }, [order.id]);
+    setTermsAccepted(order.terms_accepted ?? false);
+  }, [order.id, order.terms_accepted]);
 
-  // Função para atualizar termsAccepted e salvar no localStorage
+  // Função para atualizar termsAccepted e salvar no Supabase
   const handleTermsChange = (checked: boolean) => {
     setTermsAccepted(checked);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(`terms_accepted_${order.id}`, String(checked));
+    // Salvar os termos no banco de dados (se o campo existir)
+    if (onUpdateOrder && order.id) {
+      try {
+        // Apenas tenta salvar se o campo terms_accepted existir no objeto order
+        onUpdateOrder({ 
+          id: order.id, 
+          ...(typeof order.terms_accepted !== 'undefined' && { terms_accepted: checked })
+        });
+      } catch (e) {
+        console.warn('Não foi possível salvar terms_accepted:', e);
+        // Continua mesmo se falhar
+      }
     }
   };
   const [usarAutorizacao, setUsarAutorizacao] = useState<boolean>(() => {

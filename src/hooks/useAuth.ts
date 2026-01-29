@@ -10,9 +10,15 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    console.log('🔐 useAuth: iniciando');
+    
     // Verificar sessão atual
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('🔐 useAuth: sessão obtida');
       setUser(session?.user ?? null);
+      setLoading(false);
+    }).catch((err) => {
+      console.error('🔐 useAuth: erro ao obter sessão:', err);
       setLoading(false);
     });
 
@@ -20,11 +26,12 @@ export function useAuth() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log('🔐 useAuth: auth state changed');
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => subscription?.unsubscribe();
   }, []);
 
   const isAdmin = user?.email === ADMIN_EMAIL;

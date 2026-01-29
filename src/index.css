@@ -75,6 +75,27 @@
     --shadow-modal: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
   }
 
+  /* iOS/Safari specific fixes */
+  * {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+  }
+  
+  body {
+    -webkit-text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  button, a, input, select, textarea {
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+  }
+  
+  input, textarea {
+    -webkit-appearance: none;
+    border-radius: 0;
+  }
+
   .dark {
     --background: 222 47% 8%;
     --foreground: 215 20% 95%;

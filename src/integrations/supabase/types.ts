@@ -103,7 +103,7 @@ export type Database = {
           id: string
           order_id: string
           amount: number
-          method: 'dinheiro' | 'pix' | 'credito' | 'debito' | 'transferencia' | 'outro'
+          method: 'dinheiro' | 'pix' | 'cartao' | 'credito' | 'debito' | 'transferencia' | 'outro'
           reference: string | null
           notes: string | null
           created_at: string
@@ -112,7 +112,7 @@ export type Database = {
           id?: string
           order_id: string
           amount: number
-          method: 'dinheiro' | 'pix' | 'credito' | 'debito' | 'transferencia' | 'outro'
+          method: 'dinheiro' | 'pix' | 'cartao' | 'credito' | 'debito' | 'transferencia' | 'outro'
           reference?: string | null
           notes?: string | null
           created_at?: string
@@ -121,7 +121,7 @@ export type Database = {
           id?: string
           order_id?: string
           amount?: number
-          method?: 'dinheiro' | 'pix' | 'credito' | 'debito' | 'transferencia' | 'outro'
+          method?: 'dinheiro' | 'pix' | 'cartao' | 'credito' | 'debito' | 'transferencia' | 'outro'
           reference?: string | null
           notes?: string | null
           created_at?: string
@@ -332,6 +332,7 @@ export type Database = {
           problem_description: string
           status: Database["public"]["Enums"]["order_status"]
           signature_data: string | null
+          terms_accepted: boolean
           entry_date: string | null
           exit_date: string | null
           mechanic_id: string | null
@@ -354,6 +355,7 @@ export type Database = {
           problem_description: string
           status?: Database["public"]["Enums"]["order_status"]
           signature_data?: string | null
+          terms_accepted?: boolean
           entry_date?: string | null
           exit_date?: string | null
           mechanic_id?: string | null
@@ -376,6 +378,7 @@ export type Database = {
           problem_description?: string
           status?: Database["public"]["Enums"]["order_status"]
           signature_data?: string | null
+          terms_accepted?: boolean
           entry_date?: string | null
           exit_date?: string | null
           mechanic_id?: string | null

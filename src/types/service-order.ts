@@ -55,6 +55,7 @@ export interface ServiceOrder {
   problem_description: string;
   status: OrderStatus;
   signature_data: string | null;
+  terms_accepted?: boolean; // Se aceitou os termos da OS
   entry_date?: string;
   exit_date?: string | null;
   created_at: string;

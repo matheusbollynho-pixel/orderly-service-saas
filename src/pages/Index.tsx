@@ -551,6 +551,7 @@ Retirada: ${retiradaInfo}`;
             onBack={handleBackFromDetails}
             onOpenMaterials={handleOpenMaterials}
             onStatusChange={handleStatusChange}
+            onUpdateOrder={updateOrder}
             onChecklistItemToggle={handleChecklistToggle}
             onChecklistItemRating={handleChecklistRating}
             onChecklistItemObservations={handleChecklistObservations}
