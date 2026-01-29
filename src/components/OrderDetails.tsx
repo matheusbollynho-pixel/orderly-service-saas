@@ -108,22 +108,25 @@ export function OrderDetails({
 
   // Sincronizar com dados da OS
   useEffect(() => {
-    setTermsAccepted(order.terms_accepted ?? false);
+    console.log('🔄 Sincronizando termsAccepted:', order.terms_accepted, 'para order:', order.id);
+    setTermsAccepted(order.terms_accepted === true); // Garantir que é boolean true/false
   }, [order.id, order.terms_accepted]);
 
   // Função para atualizar termsAccepted e salvar no Supabase
   const handleTermsChange = (checked: boolean) => {
+    console.log('✅ Termos alterados para:', checked);
     setTermsAccepted(checked);
     // Salvar os termos no banco de dados (se o campo existir)
     if (onUpdateOrder && order.id) {
       try {
         // Apenas tenta salvar se o campo terms_accepted existir no objeto order
+        console.log('💾 Salvando termsAccepted no banco:', { id: order.id, terms_accepted: checked });
         onUpdateOrder({ 
           id: order.id, 
-          ...(typeof order.terms_accepted !== 'undefined' && { terms_accepted: checked })
+          terms_accepted: checked
         });
       } catch (e) {
-        console.warn('Não foi possível salvar terms_accepted:', e);
+        console.warn('❌ Não foi possível salvar terms_accepted:', e);
         // Continua mesmo se falhar
       }
     }
