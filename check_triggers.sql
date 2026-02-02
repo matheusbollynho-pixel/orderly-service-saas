@@ -1,0 +1,9 @@
+-- Ver todos os triggers ativos na tabela payments
+SELECT 
+  trigger_name,
+  event_manipulation,
+  action_statement,
+  action_timing
+FROM information_schema.triggers
+WHERE event_object_table = 'payments'
+ORDER BY trigger_name;

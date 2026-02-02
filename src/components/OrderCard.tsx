@@ -15,6 +15,13 @@ export function OrderCard({ order, onClick }: OrderCardProps) {
   const totalItems = order.checklist_items?.length ?? 0;
   const progress = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
 
+  const toSafeDate = (value?: string | null) => {
+    if (!value) return null;
+    const normalized = value.includes('T') ? value : `${value}T00:00:00`;
+    const date = new Date(normalized);
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
+
   return (
     <Card 
       className="card-elevated cursor-pointer transition-all hover:shadow-elevated active:scale-[0.99] animate-slide-up"
@@ -61,10 +68,12 @@ export function OrderCard({ order, onClick }: OrderCardProps) {
             )}
 
             <p className="text-xs text-muted-foreground mt-3">
-              {formatDistanceToNow(new Date(order.created_at), { 
-                addSuffix: true, 
-                locale: ptBR 
-              })}
+              {(() => {
+                const createdAt = toSafeDate(order.created_at);
+                return createdAt
+                  ? formatDistanceToNow(createdAt, { addSuffix: true, locale: ptBR })
+                  : '';
+              })()}
             </p>
           </div>
           
@@ -75,7 +84,12 @@ export function OrderCard({ order, onClick }: OrderCardProps) {
                 <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Entrada</span>
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Calendar className="h-3 w-3" />
-                  <span>{format(new Date(order.entry_date?.includes('T') ? order.entry_date : order.entry_date + 'T00:00:00'), 'dd/MM/yy')}</span>
+                  <span>
+                    {(() => {
+                      const entryDate = toSafeDate(order.entry_date);
+                      return entryDate ? format(entryDate, 'dd/MM/yy') : '';
+                    })()}
+                  </span>
                 </div>
               </div>
             )}
@@ -84,7 +98,12 @@ export function OrderCard({ order, onClick }: OrderCardProps) {
                 <span className="text-[10px] font-medium text-[hsl(var(--status-done))] uppercase tracking-wide">Concluído</span>
                 <div className="flex items-center gap-1 text-xs text-[hsl(var(--status-done))]">
                   <Calendar className="h-3 w-3" />
-                  <span className="font-medium">{format(new Date(order.exit_date?.includes('T') ? order.exit_date : order.exit_date + 'T00:00:00'), 'dd/MM/yy')}</span>
+                  <span className="font-medium">
+                    {(() => {
+                      const exitDate = toSafeDate(order.exit_date);
+                      return exitDate ? format(exitDate, 'dd/MM/yy') : '';
+                    })()}
+                  </span>
                 </div>
               </div>
             )}

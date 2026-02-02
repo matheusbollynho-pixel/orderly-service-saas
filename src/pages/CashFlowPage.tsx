@@ -100,11 +100,17 @@ export function CashFlowPage() {
   };
 
   const formatTime = (dateString: string) => {
-    return format(new Date(dateString), 'HH:mm', { locale: ptBR });
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return '';
+    return format(date, 'HH:mm', { locale: ptBR });
   };
 
   const formatDisplayDate = (dateString: string) => {
-    return format(new Date(dateString + 'T00:00:00'), 'dd/MM/yyyy', { locale: ptBR });
+    if (!dateString) return '';
+    const date = new Date(`${dateString}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return '';
+    return format(date, 'dd/MM/yyyy', { locale: ptBR });
   };
 
   const formatWeekDisplay = () => {
@@ -119,8 +125,10 @@ export function CashFlowPage() {
   };
 
   const formatMonthDisplay = (monthStr: string) => {
+    if (!monthStr || !monthStr.includes('-')) return '';
     const [year, month] = monthStr.split('-');
     const date = new Date(parseInt(year), parseInt(month) - 1);
+    if (Number.isNaN(date.getTime())) return '';
     return format(date, 'MMMM/yyyy', { locale: ptBR });
   };
 

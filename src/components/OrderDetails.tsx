@@ -109,6 +109,7 @@ export function OrderDetails({
   // Sincronizar com dados da OS
   useEffect(() => {
     console.log('🔄 Sincronizando termsAccepted:', order.terms_accepted, 'para order:', order.id);
+    console.log('📋 Order completo:', order);
     setTermsAccepted(order.terms_accepted === true); // Garantir que é boolean true/false
   }, [order.id, order.terms_accepted]);
 
