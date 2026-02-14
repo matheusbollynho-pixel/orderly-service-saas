@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -36,6 +37,7 @@ import {
   EyeOff
 } from 'lucide-react';
 import { useMechanics } from '@/hooks/useMechanics';
+import { useClients } from '@/hooks/useClients';
 import { generateOrderPDFBase64, generateOrderPDF } from '@/lib/pdfGenerator';
 import { sendWhatsAppDocument, sendWhatsAppText } from '@/lib/whatsappService';
 
@@ -99,6 +101,7 @@ export function OrderDetails({
   canAccessPayments = true,
 }: OrderDetailsProps) {
   const { mechanics } = useMechanics();
+  const { getClientById, getMotorcycleById, updateClientById, updateMotorcycleById } = useClients();
   const printRef = useRef<HTMLDivElement>(null);
   const [showSignature, setShowSignature] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(order.terms_accepted ?? false);
@@ -172,16 +175,124 @@ export function OrderDetails({
     notes: '',
   }));
   const [showFullClient, setShowFullClient] = useState(false);
+  const isExpress = (order.problem_description || '').toLowerCase().includes('cadastro express');
+  const stripExpressMarker = (text?: string | null) =>
+    (text || '').replace(/serviço rápido \(cadastro express\)/i, '').replace(/cadastro express/gi, '').trim();
+  const parseRetirada = (text?: string | null) => {
+    const info = (text || '').match(/Retirada:\s*(.+?)(?:\n|$)/)?.[1] || 'Cliente';
+    if (info === 'Cliente') {
+      return { quemPega: 'cliente' as const, nome: '', telefone: '', cpf: '' };
+    }
+    const nome = info.match(/Nome:\s*([^|]+)/)?.[1]?.trim() || '';
+    const telefone = info.match(/Tel:\s*([^|]+)/)?.[1]?.trim() || '';
+    const cpf = info.match(/CPF:\s*([^|]+)/)?.[1]?.trim() || '';
+    return { quemPega: 'outro' as const, nome, telefone, cpf };
+  };
+  const [expressDescription, setExpressDescription] = useState(stripExpressMarker(order.problem_description));
+  const [expressPhone, setExpressPhone] = useState(order.client_phone || '');
+  const [expressAddress, setExpressAddress] = useState(order.client_address || '');
+  const [expressClientName, setExpressClientName] = useState(order.client_name || '');
+  const [expressClientCpf, setExpressClientCpf] = useState(order.client_cpf || '');
+  const [expressClientApelido, setExpressClientApelido] = useState(order.client_apelido || '');
+  const [expressClientInstagram, setExpressClientInstagram] = useState(order.client_instagram || '');
+  const [expressClientAutorizaInstagram, setExpressClientAutorizaInstagram] = useState(!!order.autoriza_instagram);
+  const [expressClientBirthDate, setExpressClientBirthDate] = useState(formatDateToInput(order.client_birth_date || null));
+  const [expressMotoPlaca, setExpressMotoPlaca] = useState('');
+  const [expressMotoMarca, setExpressMotoMarca] = useState('');
+  const [expressMotoModelo, setExpressMotoModelo] = useState('');
+  const [expressMotoAno, setExpressMotoAno] = useState('');
+  const [expressMotoCor, setExpressMotoCor] = useState('');
+  const [showCompleteForm, setShowCompleteForm] = useState(false);
+  const [expressFormInitialized, setExpressFormInitialized] = useState(false);
+  const retiradaInicial = parseRetirada(order.problem_description);
+  const [expressQuemPega, setExpressQuemPega] = useState<'cliente' | 'outro'>(retiradaInicial.quemPega);
+  const [expressNomeRetirada, setExpressNomeRetirada] = useState(retiradaInicial.nome);
+  const [expressTelefoneRetirada, setExpressTelefoneRetirada] = useState(retiradaInicial.telefone);
+  const [expressCpfRetirada, setExpressCpfRetirada] = useState(retiradaInicial.cpf);
+  const [expressEntryDate, setExpressEntryDate] = useState(formatDateToInput(order.entry_date));
+  const toNoonISOString = (dateStr?: string) => {
+    if (!dateStr) return null;
+    const [year, month, day] = dateStr.split('-').map(Number);
+    if (!year || !month || !day) return null;
+    return new Date(year, month - 1, day, 12, 0, 0, 0).toISOString();
+  };
 
   // Atualizar exitDate quando a ordem mudar
   useEffect(() => {
     setExitDate(formatDateToInput(order.exit_date));
   }, [order.id, order.exit_date]);
 
+  useEffect(() => {
+    if (isExpress && !showCompleteForm) {
+      setActiveTab('materiais');
+    }
+  }, [isExpress, showCompleteForm]);
+
+  useEffect(() => {
+    setExpressDescription(stripExpressMarker(order.problem_description));
+    setExpressPhone(order.client_phone || '');
+    setExpressAddress(order.client_address || '');
+    setExpressClientName(order.client_name || '');
+    setExpressClientCpf(order.client_cpf || '');
+    setExpressClientApelido(order.client_apelido || '');
+    setExpressClientInstagram(order.client_instagram || '');
+    setExpressClientAutorizaInstagram(!!order.autoriza_instagram);
+    setExpressClientBirthDate(formatDateToInput(order.client_birth_date || null));
+    const retirada = parseRetirada(order.problem_description);
+    setExpressQuemPega(retirada.quemPega);
+    setExpressNomeRetirada(retirada.nome);
+    setExpressTelefoneRetirada(retirada.telefone);
+    setExpressCpfRetirada(retirada.cpf);
+    setExpressEntryDate(formatDateToInput(order.entry_date));
+    setExpressFormInitialized(false);
+  }, [order.id, order.problem_description, order.client_phone, order.client_address]);
+
+  useEffect(() => {
+    const loadClientMoto = async () => {
+      if (!isExpress) return;
+      if (expressFormInitialized) return;
+      if (order.client_id) {
+        const client = await getClientById(order.client_id);
+        if (client) {
+          setExpressClientName(client.name || '');
+          setExpressClientCpf(client.cpf || '');
+          setExpressPhone(client.phone || '');
+          setExpressClientApelido(client.apelido || '');
+          setExpressClientInstagram(client.instagram || '');
+          setExpressClientAutorizaInstagram(!!client.autoriza_instagram);
+          setExpressClientBirthDate(formatDateToInput(client.birth_date || null));
+          setExpressAddress(client.endereco || '');
+        }
+      }
+      if (order.motorcycle_id) {
+        const moto = await getMotorcycleById(order.motorcycle_id);
+        if (moto) {
+          setExpressMotoPlaca(moto.placa || '');
+          setExpressMotoMarca(moto.marca || '');
+          setExpressMotoModelo(moto.modelo || '');
+          setExpressMotoAno(moto.ano ? String(moto.ano) : '');
+          setExpressMotoCor(moto.cor || '');
+        }
+      }
+
+      setExpressFormInitialized(true);
+    };
+
+    loadClientMoto();
+  }, [isExpress, order.client_id, order.motorcycle_id, getClientById, getMotorcycleById, expressFormInitialized]);
+
+  const toSafeDate = (value?: string | null) => {
+    if (!value) return null;
+    const normalized = value.includes('T') ? value : `${value}T00:00:00`;
+    const date = new Date(normalized);
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
+
   const formatDateDisplay = (dateStr?: string | null) => {
-    if (!dateStr) return '';
+    const safeDate = toSafeDate(dateStr);
+    if (!safeDate) return '';
     try {
-      return format(new Date(dateStr), 'dd/MM/yyyy', { locale: ptBR });
+      return format(safeDate, 'dd/MM/yyyy', { locale: ptBR });
     } catch {
       return '';
     }
@@ -407,7 +518,7 @@ export function OrderDetails({
           {order.entry_date && (
             <div className="flex flex-col gap-2 pt-2 border-t">
               <span className="text-sm font-medium text-foreground">📅 Data de Entrada</span>
-              <span className="text-sm text-muted-foreground">{format(new Date(order.entry_date), 'dd/MM/yyyy', { locale: ptBR })}</span>
+              <span className="text-sm text-muted-foreground">{formatDateDisplay(order.entry_date)}</span>
             </div>
           )}
           {order.status === 'concluida' && (
@@ -434,6 +545,232 @@ export function OrderDetails({
           )}
         </CardContent>
       </Card>
+
+      {isExpress && (
+        <Card className="card-elevated">
+          <CardContent className="p-4 space-y-4">
+            <div>
+              <h3 className="font-medium text-foreground">Ordem de Serviço completa</h3>
+              <p className="text-xs text-muted-foreground">Preencha os dados restantes e remova o selo Express.</p>
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowCompleteForm((prev) => !prev)}
+            >
+              {showCompleteForm ? 'Ocultar formulário' : 'Preencher dados da OS completa'}
+            </Button>
+
+            {showCompleteForm && (
+              <>
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold">Cliente</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Nome</Label>
+                  <Input value={expressClientName} onChange={(e) => setExpressClientName(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>CPF</Label>
+                  <Input value={expressClientCpf} onChange={(e) => setExpressClientCpf(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Telefone</Label>
+                  <Input value={expressPhone} onChange={(e) => setExpressPhone(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Apelido</Label>
+                  <Input value={expressClientApelido} onChange={(e) => setExpressClientApelido(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Instagram</Label>
+                  <Input value={expressClientInstagram} onChange={(e) => setExpressClientInstagram(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Data de nascimento</Label>
+                  <Input type="date" value={expressClientBirthDate} onChange={(e) => setExpressClientBirthDate(e.target.value)} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Endereço</Label>
+                <Input value={expressAddress} onChange={(e) => setExpressAddress(e.target.value)} />
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="express-autoriza-instagram"
+                  checked={expressClientAutorizaInstagram}
+                  onCheckedChange={(checked) => setExpressClientAutorizaInstagram(checked)}
+                />
+                <Label htmlFor="express-autoriza-instagram" className="text-sm">
+                  Autoriza Instagram
+                </Label>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold">Moto</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Placa</Label>
+                  <Input value={expressMotoPlaca} onChange={(e) => setExpressMotoPlaca(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Marca</Label>
+                  <Input value={expressMotoMarca} onChange={(e) => setExpressMotoMarca(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Modelo</Label>
+                  <Input value={expressMotoModelo} onChange={(e) => setExpressMotoModelo(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Ano</Label>
+                  <Input value={expressMotoAno} onChange={(e) => setExpressMotoAno(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Cor</Label>
+                  <Input value={expressMotoCor} onChange={(e) => setExpressMotoCor(e.target.value)} />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Data de Entrada</Label>
+              <Input
+                type="date"
+                value={expressEntryDate}
+                onChange={(e) => setExpressEntryDate(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>O que fazer na moto?</Label>
+              <Textarea
+                value={expressDescription}
+                onChange={(e) => setExpressDescription(e.target.value)}
+                placeholder="Descreva o serviço"
+                rows={4}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Quem vai pegar a moto?</Label>
+              <Select value={expressQuemPega} onValueChange={(v) => setExpressQuemPega(v as 'cliente' | 'outro')}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cliente">Cliente</SelectItem>
+                  <SelectItem value="outro">Outra pessoa</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {expressQuemPega === 'outro' && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="space-y-2">
+                  <Label>Nome</Label>
+                  <Input
+                    value={expressNomeRetirada}
+                    onChange={(e) => setExpressNomeRetirada(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Telefone</Label>
+                  <Input
+                    value={expressTelefoneRetirada}
+                    onChange={(e) => setExpressTelefoneRetirada(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>CPF</Label>
+                  <Input
+                    value={expressCpfRetirada}
+                    onChange={(e) => setExpressCpfRetirada(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Telefone</Label>
+                <Input
+                  value={expressPhone}
+                  onChange={(e) => setExpressPhone(e.target.value)}
+                  placeholder="(xx) xxxxx-xxxx"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Endereço</Label>
+                <Input
+                  value={expressAddress}
+                  onChange={(e) => setExpressAddress(e.target.value)}
+                  placeholder="Rua, número, bairro"
+                />
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              onClick={() => {
+                if (!onUpdateOrder) return;
+                const cleanCpf = (value: string) => value.replace(/\D/g, '');
+                const cleanPhone = (value: string) => value.replace(/\D/g, '');
+                const cleanPlate = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7);
+                const retiradaInfo = expressQuemPega === 'cliente'
+                  ? 'Cliente'
+                  : `Outra pessoa - Nome: ${expressNomeRetirada || 'Não informado'} | Tel: ${expressTelefoneRetirada || 'Não informado'} | CPF: ${expressCpfRetirada || 'Não informado'}`;
+                const nextDescription = `${expressDescription.trim() || 'Sem descrição'}\n\nRetirada: ${retiradaInfo}`;
+                const equipmentParts = [expressMotoMarca, expressMotoModelo, expressMotoAno, expressMotoCor].filter(Boolean).join(' ').trim();
+                const equipment = expressMotoPlaca ? `${equipmentParts} (${cleanPlate(expressMotoPlaca)})`.trim() : equipmentParts;
+
+                if (order.client_id) {
+                  updateClientById(order.client_id, {
+                    name: expressClientName.trim(),
+                    cpf: cleanCpf(expressClientCpf),
+                    phone: cleanPhone(expressPhone),
+                    apelido: expressClientApelido.trim() || null,
+                    instagram: expressClientInstagram.trim() || null,
+                    autoriza_instagram: !!expressClientAutorizaInstagram,
+                    birth_date: expressClientBirthDate || null,
+                    endereco: expressAddress.trim() || null,
+                  });
+                }
+
+                if (order.motorcycle_id) {
+                  updateMotorcycleById(order.motorcycle_id, {
+                    placa: cleanPlate(expressMotoPlaca),
+                    marca: expressMotoMarca.trim(),
+                    modelo: expressMotoModelo.trim(),
+                    ano: expressMotoAno ? parseInt(expressMotoAno, 10) : null,
+                    cor: expressMotoCor.trim() || null,
+                  });
+                }
+
+                onUpdateOrder({
+                  id: order.id,
+                  problem_description: nextDescription,
+                  client_name: expressClientName.trim(),
+                  client_cpf: cleanCpf(expressClientCpf),
+                  client_phone: cleanPhone(expressPhone),
+                  client_address: expressAddress.trim(),
+                  client_apelido: expressClientApelido.trim() || '',
+                  client_instagram: expressClientInstagram.trim() || '',
+                  autoriza_instagram: !!expressClientAutorizaInstagram,
+                  client_birth_date: expressClientBirthDate || null,
+                  equipment: equipment || order.equipment,
+                  entry_date: toNoonISOString(expressEntryDate),
+                });
+              }}
+            >
+              Salvar e remover Express
+            </Button>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Client Info */}
       <Card className="card-elevated">
@@ -591,25 +928,30 @@ export function OrderDetails({
         <CardContent className="p-0">
           <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'checklist' | 'materiais')} className="w-full">
             <TabsList className="w-full rounded-none border-b bg-transparent p-0">
-              <TabsTrigger value="checklist" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:bg-transparent">
-                Checklist
-              </TabsTrigger>
+              {!isExpress || showCompleteForm ? (
+                <TabsTrigger value="checklist" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:bg-transparent">
+                  Checklist
+                </TabsTrigger>
+              ) : null}
               <TabsTrigger value="materiais" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:bg-transparent">
                 Peças e Serviços
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="checklist" className="p-4">
-              {order.checklist_items && (
-                <Checklist
-                  items={order.checklist_items}
-                  onItemToggle={onChecklistItemToggle}
-                  onRatingChange={onChecklistItemRating}
-                  onObservationsChange={onChecklistItemObservations}
-                  disabled={order.status === 'concluida'}
-                />
-              )}
-            </TabsContent>
+            {!isExpress || showCompleteForm ? (
+              <TabsContent value="checklist" className="p-4">
+                {order.checklist_items && (
+                  <Checklist
+                    items={order.checklist_items}
+                    onItemToggle={onChecklistItemToggle}
+                    onRatingChange={onChecklistItemRating}
+                    onObservationsChange={onChecklistItemObservations}
+                    disabled={order.status === 'concluida'}
+                    orderId={order.id}
+                  />
+                )}
+              </TabsContent>
+            ) : null}
 
             <TabsContent value="materiais" className="p-4">
               <div className="text-center py-4">

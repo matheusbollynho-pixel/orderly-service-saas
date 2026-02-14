@@ -1,10 +1,13 @@
+import { useState } from 'react';
 import { ChecklistItem } from '@/types/service-order';
 import { DEFAULT_CHECKLIST_ITEMS } from '@/types/service-order';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
-import { Star } from 'lucide-react';
+import { Star, Image as ImageIcon, X, Loader2 } from 'lucide-react';
+import { uploadChecklistPhoto, getChecklistPhotos } from '@/lib/photoService';
+import { toast } from 'sonner';
 
 interface ChecklistProps {
   items: ChecklistItem[];
@@ -12,6 +15,7 @@ interface ChecklistProps {
   onRatingChange?: (id: string, rating: number) => void;
   onObservationsChange?: (id: string, observations: string) => void;
   disabled?: boolean;
+  orderId?: string;
 }
 
 // Mapear label para tipo de checklist
@@ -58,7 +62,54 @@ const getLabelColor = (itemType?: string, completed?: boolean) => {
   }
 };
 
-export function Checklist({ items, onItemToggle, onRatingChange, onObservationsChange, disabled }: ChecklistProps) {
+export function Checklist({ items, onItemToggle, onRatingChange, onObservationsChange, disabled, orderId = '' }: ChecklistProps) {
+  const [uploadingPhotoId, setUploadingPhotoId] = useState<string | null>(null);
+  const [itemPhotos, setItemPhotos] = useState<Record<string, any[]>>({});
+  const [generalPhotos, setGeneralPhotos] = useState<any[]>([]);
+  const [uploadingGeneral, setUploadingGeneral] = useState(false);
+
+  const handlePhotoUpload = async (itemId: string, file: File) => {
+    if (!orderId) {
+      toast.error('OS não identificada');
+      return;
+    }
+
+    setUploadingPhotoId(itemId);
+    try {
+      const result = await uploadChecklistPhoto(file, orderId, itemId);
+      if (result) {
+        toast.success('Foto enviada com sucesso');
+        const photos = await getChecklistPhotos(itemId);
+        setItemPhotos((prev) => ({ ...prev, [itemId]: photos }));
+      } else {
+        toast.error('Erro ao enviar foto');
+      }
+    } finally {
+      setUploadingPhotoId(null);
+    }
+  };
+
+  const handleGeneralPhotoUpload = async (file: File) => {
+    if (!orderId) {
+      toast.error('OS não identificada');
+      return;
+    }
+
+    setUploadingGeneral(true);
+    try {
+      const result = await uploadChecklistPhoto(file, orderId, 'geral');
+      if (result) {
+        toast.success('Foto enviada com sucesso');
+        const photos = await getChecklistPhotos('geral');
+        setGeneralPhotos(photos);
+      } else {
+        toast.error('Erro ao enviar foto');
+      }
+    } finally {
+      setUploadingGeneral(false);
+    }
+  };
+
   // Mapa de ordenação e normalização de labels
   const orderMap: Record<string, number> = {
     'Chave da MOTO': 1,
@@ -191,6 +242,41 @@ export function Checklist({ items, onItemToggle, onRatingChange, onObservationsC
                 {itemType === 'rating' && item.rating && (
                   <span className="text-xs text-purple-600 font-medium">{item.rating}/5</span>
                 )}
+
+                {/* Botão de foto */}
+                {!disabled && (
+                  <div className="flex items-center gap-2">
+                    <label className="cursor-pointer">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={(e) => {
+                          const file = e.currentTarget.files?.[0];
+                          if (file) handlePhotoUpload(item.id, file);
+                        }}
+                        className="hidden"
+                        disabled={uploadingPhotoId === item.id}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 w-8 p-0"
+                        disabled={uploadingPhotoId === item.id}
+                        asChild
+                      >
+                        <span>
+                          {uploadingPhotoId === item.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <ImageIcon className="h-4 w-4" />
+                          )}
+                        </span>
+                      </Button>
+                    </label>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -214,6 +300,77 @@ export function Checklist({ items, onItemToggle, onRatingChange, onObservationsC
             disabled={disabled}
             className="resize-none min-h-[120px] bg-amber-50 border-amber-300"
           />
+        </div>
+      )}
+
+      {/* Fotos Gerais da Ordem */}
+      {!disabled && (
+        <div className="pt-4 border-t space-y-3">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium text-foreground">
+              📸 Fotos da Ordem
+            </label>
+            <label className="cursor-pointer">
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                capture="environment"
+                onChange={(e) => {
+                  const files = e.currentTarget.files;
+                  if (files) {
+                    Array.from(files).forEach((file) => {
+                      handleGeneralPhotoUpload(file);
+                    });
+                  }
+                }}
+                className="hidden"
+                disabled={uploadingGeneral}
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="gap-2"
+                disabled={uploadingGeneral}
+                asChild
+              >
+                <span>
+                  {uploadingGeneral ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ImageIcon className="h-4 w-4" />
+                  )}
+                  Adicionar Fotos
+                </span>
+              </Button>
+            </label>
+          </div>
+
+          {/* Galeria de fotos gerais */}
+          {generalPhotos.length > 0 && (
+            <div className="grid grid-cols-3 gap-2">
+              {generalPhotos.map((photo) => (
+                <div key={photo.id} className="relative group">
+                  <img
+                    src={photo.photo_url}
+                    alt="Foto da ordem"
+                    className="w-full h-24 object-cover rounded-md border border-border"
+                  />
+                  <button
+                    onClick={() => {
+                      setGeneralPhotos((prev) =>
+                        prev.filter((p) => p.id !== photo.id)
+                      );
+                    }}
+                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

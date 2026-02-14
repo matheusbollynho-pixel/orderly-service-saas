@@ -10,6 +10,8 @@ import { LoginPage } from "./pages/LoginPage";
 import AfterSalesPage from "./pages/AfterSalesPage";
 import { CashFlowPage } from "./pages/CashFlowPage";
 import { useAuth } from "./hooks/useAuth";
+import { useEffect } from "react";
+import { cleanupOldChecklistPhotos } from "./lib/cleanupService";
 
 console.log('📦 App.tsx importado');
 
@@ -24,6 +26,17 @@ const queryClient = new QueryClient({
 
 function AuthenticatedApp() {
   const { user, loading } = useAuth();
+
+  // Limpar fotos antigas uma vez por dia
+  useEffect(() => {
+    const lastCleanup = localStorage.getItem('lastPhotoCleanup');
+    const today = new Date().toDateString();
+
+    if (lastCleanup !== today) {
+      cleanupOldChecklistPhotos();
+      localStorage.setItem('lastPhotoCleanup', today);
+    }
+  }, []);
 
   if (loading) {
     return (

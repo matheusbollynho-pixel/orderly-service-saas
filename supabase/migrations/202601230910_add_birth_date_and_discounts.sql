@@ -22,17 +22,9 @@ CREATE INDEX idx_birthday_discounts_client_id ON birthday_discounts(client_id);
 -- Enable RLS
 ALTER TABLE birthday_discounts ENABLE ROW LEVEL SECURITY;
 
--- RLS Policy: Users can view all discounts
-CREATE POLICY "Users can view all birthday discounts" ON birthday_discounts
-  FOR SELECT
-  USING (auth.role() = 'authenticated');
-
--- RLS Policy: Users can insert new discounts
-CREATE POLICY "Users can insert birthday discounts" ON birthday_discounts
-  FOR INSERT
-  WITH CHECK (auth.role() = 'authenticated');
-
--- RLS Policy: Users can update discounts
-CREATE POLICY "Users can update birthday discounts" ON birthday_discounts
-  FOR UPDATE
-  USING (auth.role() = 'authenticated');
+-- RLS Policy: Allow all operations (like other tables in this app)
+CREATE POLICY "Allow all operations on birthday_discounts" 
+ON birthday_discounts 
+FOR ALL 
+USING (true)
+WITH CHECK (true);

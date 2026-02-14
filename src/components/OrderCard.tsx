@@ -14,6 +14,7 @@ export function OrderCard({ order, onClick }: OrderCardProps) {
   const completedItems = order.checklist_items?.filter(i => i.completed).length ?? 0;
   const totalItems = order.checklist_items?.length ?? 0;
   const progress = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
+  const isExpress = (order.problem_description || '').toLowerCase().includes('cadastro express');
 
   const toSafeDate = (value?: string | null) => {
     if (!value) return null;
@@ -33,6 +34,11 @@ export function OrderCard({ order, onClick }: OrderCardProps) {
             <div className="flex items-center gap-2 mb-2">
               <h3 className="font-semibold text-foreground truncate">{order.client_name}</h3>
               <StatusBadge status={order.status} />
+              {isExpress && (
+                <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                  Express
+                </span>
+              )}
             </div>
             
             <div className="space-y-1.5">

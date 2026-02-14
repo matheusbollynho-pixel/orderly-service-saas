@@ -51,6 +51,11 @@ interface OrderFormData {
 
 export function OrderForm({ onSubmit, onCancel, isSubmitting }: { onSubmit: any; onCancel: any; isSubmitting?: boolean }) {
   const [activeTab, setActiveTab] = useState<'cliente' | 'motos' | 'servicos'>('cliente');
+  const getTodayLocal = () => {
+    const now = new Date();
+    const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+    return local.toISOString().split('T')[0];
+  };
   const [formData, setFormData] = useState<OrderFormData>({
     client: { name: '', cpf: '', phone: '', address: '', numero: '', apelido: '', instagram: '', autoriza_instagram: false, birth_date: '' },
     motos: [{ placa: '', moto_info: '', equipment: '', model: '', year: '', color: '', km: '' }],
@@ -62,7 +67,7 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting }: { onSubmit: any;
       cpf_retirada: '',
       adesivo_loja: 'sim',
       o_que_fazer: '',
-      entry_date: new Date().toISOString().split('T')[0] // Data de hoje
+      entry_date: getTodayLocal() // Data de hoje (local)
     }
   });
 

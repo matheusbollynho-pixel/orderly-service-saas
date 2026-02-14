@@ -147,6 +147,42 @@ export function useClients() {
     }
   };
 
+  // Buscar cliente por ID
+  const getClientById = async (clientId: string): Promise<Client | null> => {
+    try {
+      const { data, error } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('id', clientId)
+        .limit(1)
+        .single();
+
+      if (error || !data) return null;
+      return data as Client;
+    } catch (err) {
+      console.error('Erro ao buscar cliente por ID:', err);
+      return null;
+    }
+  };
+
+  // Buscar moto por ID
+  const getMotorcycleById = async (motorcycleId: string): Promise<Motorcycle | null> => {
+    try {
+      const { data, error } = await supabase
+        .from('motorcycles')
+        .select('*')
+        .eq('id', motorcycleId)
+        .limit(1)
+        .single();
+
+      if (error || !data) return null;
+      return data as Motorcycle;
+    } catch (err) {
+      console.error('Erro ao buscar moto por ID:', err);
+      return null;
+    }
+  };
+
   // Criar ou atualizar cliente
   const upsertClient = async (client: Partial<Client>): Promise<Client | null> => {
     try {
@@ -181,6 +217,42 @@ export function useClients() {
     }
   };
 
+  // Atualizar cliente
+  const updateClientById = async (id: string, client: Partial<Client>): Promise<Client | null> => {
+    try {
+      const { data, error } = await supabase
+        .from('clients')
+        .update(client as any)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data as Client;
+    } catch (err) {
+      console.error('Erro ao atualizar cliente:', err);
+      return null;
+    }
+  };
+
+  // Atualizar moto
+  const updateMotorcycleById = async (id: string, motorcycle: Partial<Motorcycle>): Promise<Motorcycle | null> => {
+    try {
+      const { data, error } = await supabase
+        .from('motorcycles')
+        .update(motorcycle as any)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data as Motorcycle;
+    } catch (err) {
+      console.error('Erro ao atualizar moto:', err);
+      return null;
+    }
+  };
+
   return {
     clients,
     motorcycles,
@@ -190,7 +262,11 @@ export function useClients() {
     searchClientByPhone,
     searchMotorcycleByPlate,
     getClientMotorcycles,
+    getClientById,
+    getMotorcycleById,
     upsertClient,
-    upsertMotorcycle
+    upsertMotorcycle,
+    updateClientById,
+    updateMotorcycleById
   };
 }

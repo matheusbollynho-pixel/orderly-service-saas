@@ -13,6 +13,7 @@ import { ReportsPage } from './ReportsPage';
 import { MechanicsPage } from './MechanicsPage';
 import AfterSalesPage from './AfterSalesPage';
 import { CashFlowPage } from './CashFlowPage';
+import { ExpressCadastroPage } from './ExpressCadastroPage';
 import { BottomNav } from '@/components/BottomNav';
 import { EmptyState } from '@/components/EmptyState';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -20,7 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Wrench, Search } from 'lucide-react';
 import { toast } from 'sonner';
 
-type View = 'dashboard' | 'new' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa';
+type View = 'dashboard' | 'new' | 'express' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa';
 
 export default function Index() {
   const { isAdmin, canAccessCashFlow, canAccessReports } = useAuth();
@@ -75,6 +76,13 @@ export default function Index() {
   const handleCreateOrder = async (formData: any) => {
     try {
       console.log('📝 FormData recebido:', formData);
+
+      const toNoonISOString = (dateStr?: string | null) => {
+        if (!dateStr) return null;
+        const [year, month, day] = dateStr.split('-').map(Number);
+        if (!year || !month || !day) return null;
+        return new Date(year, month - 1, day, 12, 0, 0, 0).toISOString();
+      };
       
       // Validar dados obrigatórios
       if (!formData?.client?.name) {
@@ -176,7 +184,7 @@ Retirada: ${retiradaInfo}`;
         client_phone: formData.client.phone || '',
         client_address: fullAddress || '',
         client_birth_date: formData.client.birth_date || null,
-        entry_date: formData.servicos.entry_date || null,
+        entry_date: toNoonISOString(formData.servicos.entry_date),
         equipment: equipmentArray,
         problem_description: problemDescription,
       };
@@ -489,6 +497,10 @@ Retirada: ${retiradaInfo}`;
             onCancel={() => setCurrentView('dashboard')}
             isSubmitting={isCreating}
           />
+        )}
+
+        {currentView === 'express' && (
+          <ExpressCadastroPage onBack={() => setCurrentView('dashboard')} />
         )}
 
         {currentView === 'orders' && (

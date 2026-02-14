@@ -402,6 +402,48 @@ export type Database = {
           },
         ]
       }
+      checklist_photos: {
+        Row: {
+          id: string
+          checklist_item_id: string
+          order_id: string
+          photo_url: string
+          storage_path: string
+          uploaded_at: string
+        }
+        Insert: {
+          id?: string
+          checklist_item_id: string
+          order_id: string
+          photo_url: string
+          storage_path: string
+          uploaded_at?: string
+        }
+        Update: {
+          id?: string
+          checklist_item_id?: string
+          order_id?: string
+          photo_url?: string
+          storage_path?: string
+          uploaded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_photos_checklist_item_id_fkey"
+            columns: ["checklist_item_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "checklist_photos_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "service_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
