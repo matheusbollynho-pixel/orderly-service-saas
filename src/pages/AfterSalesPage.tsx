@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/integrations/supabase/client';
 import {
   getActiveBirthdayDiscounts,
   getUpcomingBirthdays,
@@ -12,13 +12,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Heart, Gift, Bell, Clock, CheckCircle } from 'lucide-react';
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+import { Heart, Gift, Bell, Clock, CheckCircle, Zap } from 'lucide-react';
+import { MaintenanceKeywordsManager } from '@/components/MaintenanceKeywordsManager';
 
 interface ClientDiscount {
   id: string;
@@ -287,12 +284,26 @@ export default function AfterSalesPage() {
             <Heart className="w-8 h-8 text-red-600" />
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Pós-Venda</h1>
-              <p className="text-gray-600">Campanha de Aniversário - 15% de Desconto</p>
+              <p className="text-gray-600">Gestão de campanhas e manutenção preventiva</p>
             </div>
           </div>
         </div>
 
-        {/* Stats Cards */}
+        {/* Tabs */}
+        <Tabs defaultValue="aniversario" className="mb-8">
+          <TabsList className="grid w-full grid-cols-2 bg-white">
+            <TabsTrigger value="aniversario" className="gap-2">
+              <Gift size={18} />
+              Aniversário
+            </TabsTrigger>
+            <TabsTrigger value="manutencao" className="gap-2">
+              <Zap size={18} />
+              Manutenção
+            </TabsTrigger>
+          </TabsList>
+
+          {/* ABA: ANIVERSÁRIO */}
+          <TabsContent value="aniversario" className="space-y-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <Card>
             <CardHeader className="pb-2">
@@ -454,6 +465,22 @@ export default function AfterSalesPage() {
             })
           )}
         </div>
+          </TabsContent>
+
+          {/* ABA: MANUTENÇÃO */}
+          <TabsContent value="manutencao" className="space-y-8">
+            <div className="bg-white rounded-lg border border-gray-200">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center gap-3 mb-2">
+                  <Zap className="w-6 h-6 text-purple-600" />
+                  <h2 className="text-2xl font-bold text-gray-900">Palavras-chave de Manutenção</h2>
+                </div>
+                <p className="text-gray-600">Adicione, edite ou desative palavras-chave para lembretes automáticos</p>
+              </div>
+              <MaintenanceKeywordsManager />
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Confirm Dialog */}

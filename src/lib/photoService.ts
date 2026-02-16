@@ -7,58 +7,73 @@ export async function uploadChecklistPhoto(
 ): Promise<{ url: string; path: string } | null> {
   try {
     const timestamp = Date.now();
-    const fileName = `${orderId}/${checklistItemId}/${timestamp}-${file.name}`;
-    const storagePath = `checklist-photos/${fileName}`;
+    
+    // Sanitizar nome - SIMPLES E DIRETO
+    let sanitizedName = file.name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+      .replace(/[^a-zA-Z0-9._-]/g, '_'); // Substitui especiais por _
+    
+    // Se for HEIC, renomear extensão para .jpg (sem converter, browser faz isso)
+    if (sanitizedName.toLowerCase().endsWith('.heic') || sanitizedName.toLowerCase().endsWith('.heif')) {
+      sanitizedName = sanitizedName.replace(/\.(heic|heif)$/i, '.jpg');
+    }
+    
+    const fileName = `${orderId}/${checklistItemId}/${timestamp}-${sanitizedName}`;
 
+    console.log('🚀 Upload DIRETO:', fileName, 'Size:', file.size, 'Type:', file.type);
+
+    // Upload DIRETO sem conversão
     const { data, error } = await supabase.storage
       .from('checklist-photos')
-      .upload(storagePath, file, {
+      .upload(fileName, file, {
         cacheControl: '3600',
         upsert: false,
       });
 
     if (error) {
-      console.error('Erro ao upload de foto:', error);
+      console.error('❌ Erro upload:', error);
       return null;
     }
 
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from('checklist-photos').getPublicUrl(storagePath);
+    console.log('📤 Arquivo salvo em:', data.path);
 
-    // Registrar foto no banco para limpeza automática
+    const { data: { publicUrl } } = supabase.storage
+      .from('checklist-photos')
+      .getPublicUrl(data.path);
+
+    console.log('✅ URL gerada:', publicUrl);
+
+    // Salvar no banco
     const { error: insertError } = await supabase.from('checklist_photos').insert({
       checklist_item_id: checklistItemId,
       order_id: orderId,
       photo_url: publicUrl,
-      storage_path: storagePath,
+      storage_path: data.path,
     });
 
     if (insertError) {
-      console.warn('Aviso ao registrar foto:', insertError);
+      console.error('❌ Erro ao salvar no DB:', insertError);
+      return null;
     }
 
-    return { url: publicUrl, path: storagePath };
+    console.log('✅ Salvo no banco de dados');
+    return { url: publicUrl, path: data.path };
   } catch (err) {
-    console.error('Erro ao fazer upload:', err);
+    console.error('❌ Erro geral:', err);
     return null;
   }
 }
 
 export async function deleteChecklistPhoto(storagePath: string): Promise<boolean> {
   try {
-    const { error } = await supabase.storage
+    await supabase.storage
       .from('checklist-photos')
       .remove([storagePath]);
 
-    if (error) {
-      console.error('Erro ao deletar foto:', error);
-      return false;
-    }
-
     return true;
   } catch (err) {
-    console.error('Erro ao deletar:', err);
+    console.error('Erro:', err);
     return false;
   }
 }
@@ -72,53 +87,103 @@ export async function getChecklistPhotos(checklistItemId: string) {
       .order('uploaded_at', { ascending: false });
 
     if (error) throw error;
+    
     return data || [];
   } catch (err) {
-    console.error('Erro ao buscar fotos:', err);
+    console.error('Erro:', err);
     return [];
   }
 }
 
-export async function deleteOldPhotos(daysThreshold: number = 100): Promise<number> {
+export async function deleteChecklistPhotos(checklistItemId: string): Promise<boolean> {
   try {
-    const threshold = new Date(Date.now() - daysThreshold * 24 * 60 * 60 * 1000);
+    const photos = await getChecklistPhotos(checklistItemId);
+    
+    if (photos.length === 0) return true;
 
+    const storagePaths = photos.map(p => p.storage_path).filter(Boolean);
+
+    if (storagePaths.length > 0) {
+      await supabase.storage
+        .from('checklist-photos')
+        .remove(storagePaths);
+    }
+
+    await supabase
+      .from('checklist_photos')
+      .delete()
+      .eq('checklist_item_id', checklistItemId);
+
+    return true;
+  } catch (err) {
+    console.error('Erro:', err);
+    return false;
+  }
+}
+
+export async function cleanupOldPhotos(days: number = 100): Promise<number | null> {
+  try {
+    console.log(`🧹 Limpando fotos com ${days}+ dias (banco + storage)...`);
+    
+    const threshold = new Date();
+    threshold.setDate(threshold.getDate() - days);
+    const thresholdISO = threshold.toISOString();
+
+    // 1. Obter fotos antigas do banco
     const { data: oldPhotos, error: selectError } = await supabase
       .from('checklist_photos')
       .select('id, storage_path')
-      .lt('uploaded_at', threshold.toISOString());
+      .lt('uploaded_at', thresholdISO);
 
-    if (selectError) throw selectError;
+    if (selectError) {
+      console.error('❌ Erro ao buscar fotos:', selectError);
+      return null;
+    }
 
     if (!oldPhotos || oldPhotos.length === 0) {
-      console.log('Nenhuma foto antiga para deletar');
+      console.log(`✅ Nenhuma foto com ${days}+ dias para deletar`);
       return 0;
     }
 
-    const storagePaths = oldPhotos.map((p) => p.storage_path);
+    console.log(`📍 Encontradas ${oldPhotos.length} fotos para deletar`);
 
+    // 2. Deletar do Storage
+    const storagePaths = oldPhotos.map(p => p.storage_path);
     if (storagePaths.length > 0) {
-      const { error: deleteStorageError } = await supabase.storage
+      console.log(`📁 Tentando deletar ${storagePaths.length} arquivos do storage...`);
+      console.log('🔍 Paths:', storagePaths);
+      
+      const { error: storageError } = await supabase.storage
         .from('checklist-photos')
         .remove(storagePaths);
 
-      if (deleteStorageError) {
-        console.error('Erro ao deletar fotos do storage:', deleteStorageError);
+      if (storageError) {
+        console.error('❌ Erro ao deletar Storage:', JSON.stringify(storageError));
+        // Não retornar aqui - continuar para deletar banco mesmo com erro
+      } else {
+        console.log(`✅ ${storagePaths.length} arquivos deletados do storage`);
       }
     }
 
-    const photoIds = oldPhotos.map((p) => p.id);
-    const { error: deleteDbError } = await supabase
+    // 3. Deletar do banco
+    const { error: deleteError, data: deletedData } = await supabase
       .from('checklist_photos')
       .delete()
-      .in('id', photoIds);
+      .lt('uploaded_at', thresholdISO)
+      .select('id');
 
-    if (deleteDbError) throw deleteDbError;
+    if (deleteError) {
+      console.error('❌ Erro ao deletar banco:', deleteError);
+      return null;
+    }
 
-    console.log(`${photoIds.length} fotos antigas deletadas`);
-    return photoIds.length;
+    const deletedCount = deletedData?.length || 0;
+    console.log(`✅ ${deletedCount} registros deletados do banco`);
+    console.log(`✅ Limpeza completa: ${deletedCount} fotos removidas`);
+    
+    return deletedCount;
   } catch (err) {
-    console.error('Erro ao deletar fotos antigas:', err);
-    return 0;
+    console.error('❌ Erro geral na limpeza:', err);
+    return null;
   }
 }

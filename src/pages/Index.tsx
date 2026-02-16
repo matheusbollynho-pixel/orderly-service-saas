@@ -20,6 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Wrench, Search } from 'lucide-react';
 import { toast } from 'sonner';
+import { getMaintenanceKeywords, findKeywordInText, createMaintenanceReminder } from '@/services/maintenanceReminderService';
 
 type View = 'dashboard' | 'new' | 'express' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa';
 
@@ -71,7 +72,7 @@ export default function Index() {
   } = useServiceOrders();
 
   const { mechanics } = useMechanics();
-  const { upsertClient, upsertMotorcycle } = useClients();
+  const { upsertClient, upsertMotorcycle, getClientById } = useClients();
 
   const handleCreateOrder = async (formData: any) => {
     try {
@@ -109,6 +110,7 @@ export default function Index() {
         apelido: formData.client.apelido || null,
         instagram: formData.client.instagram || null,
         autoriza_instagram: !!formData.client.autoriza_instagram,
+        autoriza_lembretes: formData.client.autoriza_lembretes !== false,
         endereco: `${formData.client.address || ''}${formData.client.numero ? ', ' + formData.client.numero : ''}`.trim() || null,
         birth_date: formData.client.birth_date || null,
       };
@@ -192,8 +194,37 @@ Retirada: ${retiradaInfo}`;
       console.log('📤 Enviando orderData:', orderData);
       
       createOrder(orderData, {
-        onSuccess: (newOrder: any) => {
+        onSuccess: async (newOrder: any) => {
           console.log('✅ OS criada com sucesso:', newOrder);
+          
+          // Check for maintenance keywords and create reminders
+          try {
+            const keywords = await getMaintenanceKeywords();
+            const detectedKeyword = findKeywordInText(
+              formData.servicos.o_que_fazer || '',
+              keywords
+            );
+            
+            if (detectedKeyword && savedClient?.id && savedClient?.autoriza_lembretes !== false) {
+              console.log('🔔 Palavra-chave detectada:', detectedKeyword.keyword);
+              const reminder = await createMaintenanceReminder(
+                newOrder.id,
+                savedClient.id,
+                formData.client.phone || '',
+                detectedKeyword.id,
+                new Date(newOrder.entry_date || new Date())
+              );
+              
+              if (reminder) {
+                console.log('✅ Lembrete criado:', reminder);
+                toast.success(`Lembrete automático criado para "${detectedKeyword.keyword}" em ${detectedKeyword.reminder_days} dias! 🔔`);
+              }
+            }
+          } catch (reminderError) {
+            console.error('⚠️ Erro ao criar lembrete:', reminderError);
+            // Don't fail the entire order creation
+          }
+          
           toast.success('Cliente, motos e OS salvos com sucesso! 🎉');
           setCurrentView('new');
         },
@@ -312,12 +343,41 @@ Retirada: ${retiradaInfo}`;
     createMaterial(
       { ...material, order_id: selectedOrder.id },
       {
-        onSuccess: (saved: any) => {
+        onSuccess: async (saved: any) => {
           setSelectedOrder(prev => {
             if (!prev) return null;
             const current = prev.materials || [];
             return { ...prev, materials: [...current, saved] } as ServiceOrder;
           });
+
+          // Criar lembrete baseado na descrição do item (Peças e Serviços)
+          try {
+            const keywords = await getMaintenanceKeywords();
+            const detectedKeyword = findKeywordInText(
+              saved?.descricao || material?.descricao || '',
+              keywords
+            );
+
+            if (detectedKeyword && selectedOrder?.client_id) {
+              const client = await getClientById(selectedOrder.client_id);
+              if (client?.autoriza_lembretes === false) return;
+
+              const serviceDate = new Date(saved?.created_at || selectedOrder?.entry_date || new Date());
+              const reminder = await createMaintenanceReminder(
+                selectedOrder.id,
+                selectedOrder.client_id,
+                selectedOrder.client_phone || '',
+                detectedKeyword.id,
+                serviceDate
+              );
+
+              if (reminder) {
+                toast.success(`Lembrete criado para "${detectedKeyword.keyword}" em ${detectedKeyword.reminder_days} dias! 🔔`);
+              }
+            }
+          } catch (reminderError) {
+            console.error('⚠️ Erro ao criar lembrete (Peças e Serviços):', reminderError);
+          }
         },
         onError: (error: any) => {
           toast.error(`Erro ao adicionar material: ${error?.message || 'Erro desconhecido'}`);

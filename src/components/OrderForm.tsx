@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -6,9 +6,10 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
-import { User, MapPin, Phone, Wrench, FileText, ArrowLeft, Truck } from 'lucide-react';
+import { User, MapPin, Phone, Wrench, FileText, ArrowLeft, Truck, AlertCircle } from 'lucide-react';
 import { ClientSearch } from '@/components/ClientSearch';
 import { Client, Motorcycle } from '@/hooks/useClients';
+import { getMaintenanceKeywords, findKeywordInText, type MaintenanceKeyword } from '@/services/maintenanceReminderService';
 
 interface ClientData {
   name: string;
@@ -19,6 +20,7 @@ interface ClientData {
   apelido?: string;
   instagram?: string;
   autoriza_instagram?: boolean;
+  autoriza_lembretes?: boolean;
   birth_date?: string; // YYYY-MM-DD
 }
 
@@ -51,13 +53,17 @@ interface OrderFormData {
 
 export function OrderForm({ onSubmit, onCancel, isSubmitting }: { onSubmit: any; onCancel: any; isSubmitting?: boolean }) {
   const [activeTab, setActiveTab] = useState<'cliente' | 'motos' | 'servicos'>('cliente');
+  const [maintenanceKeywords, setMaintenanceKeywords] = useState<MaintenanceKeyword[]>([]);
+  const [detectedKeywords, setDetectedKeywords] = useState<MaintenanceKeyword[]>([]);
+  
   const getTodayLocal = () => {
     const now = new Date();
     const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
     return local.toISOString().split('T')[0];
   };
+  
   const [formData, setFormData] = useState<OrderFormData>({
-    client: { name: '', cpf: '', phone: '', address: '', numero: '', apelido: '', instagram: '', autoriza_instagram: false, birth_date: '' },
+    client: { name: '', cpf: '', phone: '', address: '', numero: '', apelido: '', instagram: '', autoriza_instagram: false, autoriza_lembretes: true, birth_date: '' },
     motos: [{ placa: '', moto_info: '', equipment: '', model: '', year: '', color: '', km: '' }],
     servicos: {
       descricao_geral: '',
@@ -70,6 +76,33 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting }: { onSubmit: any;
       entry_date: getTodayLocal() // Data de hoje (local)
     }
   });
+
+  // Load maintenance keywords on component mount
+  useEffect(() => {
+    const loadKeywords = async () => {
+      const keywords = await getMaintenanceKeywords();
+      setMaintenanceKeywords(keywords);
+    };
+    loadKeywords();
+  }, []);
+
+  // Check for keywords in the service description
+  useEffect(() => {
+    if (maintenanceKeywords.length === 0) return;
+    
+    const detected: MaintenanceKeyword[] = [];
+    const text = formData.servicos.o_que_fazer;
+    
+    for (const keyword of maintenanceKeywords) {
+      if (text.toLowerCase().includes(keyword.keyword.toLowerCase())) {
+        if (!detected.find(k => k.id === keyword.id)) {
+          detected.push(keyword);
+        }
+      }
+    }
+    
+    setDetectedKeywords(detected);
+  }, [formData.servicos.o_que_fazer, maintenanceKeywords]);
 
   // Função para preencher o formulário com dados do cliente encontrado
   const handleClientFound = (client: Client, motorcycles: Motorcycle[]) => {
@@ -85,6 +118,7 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting }: { onSubmit: any;
         apelido: client.apelido || '',
         instagram: client.instagram || '',
         autoriza_instagram: client.autoriza_instagram || false,
+        autoriza_lembretes: client.autoriza_lembretes ?? true,
         birth_date: client.birth_date || ''
       }
     }));
@@ -224,6 +258,16 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting }: { onSubmit: any;
                 />
                 <Label htmlFor="autoriza_instagram" className="text-sm font-normal cursor-pointer">
                   Autoriza criar conteúdo para Instagram e marcar o cliente
+                </Label>
+              </div>
+              <div className="flex items-center gap-2 mt-2">
+                <Checkbox 
+                  id="autoriza_lembretes" 
+                  checked={formData.client.autoriza_lembretes}
+                  onCheckedChange={(checked) => updateField('client', 0, 'autoriza_lembretes', checked as boolean)}
+                />
+                <Label htmlFor="autoriza_lembretes" className="text-sm font-normal cursor-pointer">
+                  Autoriza receber lembretes de manutenção
                 </Label>
               </div>
             </div>
@@ -382,6 +426,29 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting }: { onSubmit: any;
                 rows={4}
                 className="resize-vertical min-h-[120px]"
               />
+              
+              {/* Detected keywords alert */}
+              {detectedKeywords.length > 0 && (
+                <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                  <div className="flex gap-2 items-start">
+                    <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <p className="font-semibold text-amber-900">Palavras-chave detectadas:</p>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {detectedKeywords.map((keyword) => (
+                          <div key={keyword.id} className="bg-amber-100 text-amber-900 px-3 py-1 rounded-full text-sm">
+                            <span className="font-medium">{keyword.keyword}</span>
+                            <span className="text-xs ml-2">⏱️ {keyword.reminder_days}d</span>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs text-amber-700 mt-2">
+                        ℹ️ Lembretes automáticos serão criados para quando o cliente voltar à loja!
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </TabsContent>

@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { AdminMenu } from "@/components/AdminMenu";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import { LoginPage } from "./pages/LoginPage";
@@ -11,7 +12,7 @@ import AfterSalesPage from "./pages/AfterSalesPage";
 import { CashFlowPage } from "./pages/CashFlowPage";
 import { useAuth } from "./hooks/useAuth";
 import { useEffect } from "react";
-import { cleanupOldChecklistPhotos } from "./lib/cleanupService";
+import { cleanupOldPhotos } from "./lib/photoService";
 
 console.log('📦 App.tsx importado');
 
@@ -27,13 +28,13 @@ const queryClient = new QueryClient({
 function AuthenticatedApp() {
   const { user, loading } = useAuth();
 
-  // Limpar fotos antigas uma vez por dia
+  // Limpar fotos antigas uma vez por dia (100+ dias)
   useEffect(() => {
     const lastCleanup = localStorage.getItem('lastPhotoCleanup');
     const today = new Date().toDateString();
 
     if (lastCleanup !== today) {
-      cleanupOldChecklistPhotos();
+      cleanupOldPhotos(100); // Limpar fotos com 100+ dias
       localStorage.setItem('lastPhotoCleanup', today);
     }
   }, []);
@@ -71,6 +72,7 @@ const App = () => {
         <TooltipProvider>
           <Toaster />
           <Sonner />
+          <AdminMenu />
           <BrowserRouter>
             <AuthenticatedApp />
           </BrowserRouter>

@@ -48,6 +48,7 @@ export interface ServiceOrder {
   client_apelido?: string;
   client_instagram?: string;
   autoriza_instagram?: boolean;
+  autoriza_lembretes?: boolean;
   client_phone: string;
   client_address: string;
   client_birth_date?: string; // YYYY-MM-DD

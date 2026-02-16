@@ -55,9 +55,4 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     detectSessionInUrl: true,
     flowType: 'implicit',
   },
-  global: {
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  },
 });

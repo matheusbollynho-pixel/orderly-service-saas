@@ -175,6 +175,8 @@ export function OrderDetails({
     notes: '',
   }));
   const [showFullClient, setShowFullClient] = useState(false);
+  const [autorizaInstagram, setAutorizaInstagram] = useState(order.autoriza_instagram !== false ? true : false);
+  const [autorizaLembretes, setAutorizaLembretes] = useState(order.autoriza_lembretes !== false ? true : false);
   const isExpress = (order.problem_description || '').toLowerCase().includes('cadastro express');
   const stripExpressMarker = (text?: string | null) =>
     (text || '').replace(/serviço rápido \(cadastro express\)/i, '').replace(/cadastro express/gi, '').trim();
@@ -195,7 +197,8 @@ export function OrderDetails({
   const [expressClientCpf, setExpressClientCpf] = useState(order.client_cpf || '');
   const [expressClientApelido, setExpressClientApelido] = useState(order.client_apelido || '');
   const [expressClientInstagram, setExpressClientInstagram] = useState(order.client_instagram || '');
-  const [expressClientAutorizaInstagram, setExpressClientAutorizaInstagram] = useState(!!order.autoriza_instagram);
+  const [expressClientAutorizaInstagram, setExpressClientAutorizaInstagram] = useState(order.autoriza_instagram !== false ? true : false);
+  const [expressClientAutorizaLembretes, setExpressClientAutorizaLembretes] = useState(order.autoriza_lembretes !== false ? true : false);
   const [expressClientBirthDate, setExpressClientBirthDate] = useState(formatDateToInput(order.client_birth_date || null));
   const [expressMotoPlaca, setExpressMotoPlaca] = useState('');
   const [expressMotoMarca, setExpressMotoMarca] = useState('');
@@ -217,10 +220,11 @@ export function OrderDetails({
     return new Date(year, month - 1, day, 12, 0, 0, 0).toISOString();
   };
 
-  // Atualizar exitDate quando a ordem mudar
   useEffect(() => {
     setExitDate(formatDateToInput(order.exit_date));
-  }, [order.id, order.exit_date]);
+    setAutorizaInstagram(order.autoriza_instagram !== false ? true : false);
+    setAutorizaLembretes(order.autoriza_lembretes !== false ? true : false);
+  }, [order.id, order.exit_date, order.autoriza_instagram, order.autoriza_lembretes]);
 
   useEffect(() => {
     if (isExpress && !showCompleteForm) {
@@ -237,6 +241,7 @@ export function OrderDetails({
     setExpressClientApelido(order.client_apelido || '');
     setExpressClientInstagram(order.client_instagram || '');
     setExpressClientAutorizaInstagram(!!order.autoriza_instagram);
+    setExpressClientAutorizaLembretes(!!order.autoriza_lembretes);
     setExpressClientBirthDate(formatDateToInput(order.client_birth_date || null));
     const retirada = parseRetirada(order.problem_description);
     setExpressQuemPega(retirada.quemPega);
@@ -260,6 +265,7 @@ export function OrderDetails({
           setExpressClientApelido(client.apelido || '');
           setExpressClientInstagram(client.instagram || '');
           setExpressClientAutorizaInstagram(!!client.autoriza_instagram);
+          setExpressClientAutorizaLembretes(!!client.autoriza_lembretes);
           setExpressClientBirthDate(formatDateToInput(client.birth_date || null));
           setExpressAddress(client.endereco || '');
         }
@@ -606,6 +612,16 @@ export function OrderDetails({
                   Autoriza Instagram
                 </Label>
               </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="express-autoriza-lembretes"
+                  checked={expressClientAutorizaLembretes}
+                  onCheckedChange={(checked) => setExpressClientAutorizaLembretes(checked)}
+                />
+                <Label htmlFor="express-autoriza-lembretes" className="text-sm">
+                  Autoriza Lembretes
+                </Label>
+              </div>
             </div>
 
             <div className="space-y-3">
@@ -733,6 +749,7 @@ export function OrderDetails({
                     apelido: expressClientApelido.trim() || null,
                     instagram: expressClientInstagram.trim() || null,
                     autoriza_instagram: !!expressClientAutorizaInstagram,
+                    autoriza_lembretes: !!expressClientAutorizaLembretes,
                     birth_date: expressClientBirthDate || null,
                     endereco: expressAddress.trim() || null,
                   });
@@ -758,6 +775,7 @@ export function OrderDetails({
                   client_apelido: expressClientApelido.trim() || '',
                   client_instagram: expressClientInstagram.trim() || '',
                   autoriza_instagram: !!expressClientAutorizaInstagram,
+                  autoriza_lembretes: !!expressClientAutorizaLembretes,
                   client_birth_date: expressClientBirthDate || null,
                   equipment: equipment || order.equipment,
                   entry_date: toNoonISOString(expressEntryDate),
@@ -846,6 +864,47 @@ export function OrderDetails({
               <p className="text-sm text-foreground">Moto: {order.equipment}</p>
             </div>
           )}
+
+          <div className="border-t pt-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="cliente-autoriza-instagram"
+                checked={autorizaInstagram}
+                onCheckedChange={(checked) => {
+                  if (!order.client_id) return;
+                  const novoValor = checked === true;
+                  setAutorizaInstagram(novoValor);
+                  updateClientById(order.client_id, { autoriza_instagram: novoValor });
+                  // Notificar o pai para atualizar o order
+                  if (onUpdateOrder) {
+                    onUpdateOrder({ id: order.id, autoriza_instagram: novoValor });
+                  }
+                }}
+              />
+              <Label htmlFor="cliente-autoriza-instagram" className="text-sm font-normal cursor-pointer">
+                Autoriza Instagram
+              </Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="cliente-autoriza-lembretes"
+                checked={autorizaLembretes}
+                onCheckedChange={(checked) => {
+                  if (!order.client_id) return;
+                  const novoValor = checked === true;
+                  setAutorizaLembretes(novoValor);
+                  updateClientById(order.client_id, { autoriza_lembretes: novoValor });
+                  // Notificar o pai para atualizar o order
+                  if (onUpdateOrder) {
+                    onUpdateOrder({ id: order.id, autoriza_lembretes: novoValor });
+                  }
+                }}
+              />
+              <Label htmlFor="cliente-autoriza-lembretes" className="text-sm font-normal cursor-pointer">
+                Autoriza Lembretes de Manutenção
+              </Label>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

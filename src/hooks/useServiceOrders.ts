@@ -16,12 +16,23 @@ export function useServiceOrders() {
           *,
           checklist_items (*),
           materials (*),
-          payments (*)
+          payments (*),
+          clients:client_id (autoriza_lembretes, autoriza_instagram)
         `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return data as ServiceOrder[];
+      
+      // Mapear os dados do cliente para o objeto de ordem
+      return (data as any[]).map(order => {
+        const clientData = Array.isArray(order.clients) ? order.clients[0] : order.clients;
+        return {
+          ...order,
+          autoriza_lembretes: (clientData?.autoriza_lembretes ?? order.autoriza_lembretes) !== false ? true : false,
+          autoriza_instagram: (clientData?.autoriza_instagram ?? order.autoriza_instagram) !== false ? true : false,
+          clients: undefined, // Remover o campo temporário
+        };
+      }) as ServiceOrder[];
     },
   });
 
@@ -93,9 +104,20 @@ export function useServiceOrders() {
 
   const updateOrderMutation = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<ServiceOrder> & { id: string }) => {
+      // Filtrar campos que pertencem à tabela clients, não a service_orders
+      const clientFields = ['autoriza_lembretes', 'autoriza_instagram'];
+      const serviceOrderUpdates = Object.fromEntries(
+        Object.entries(updates).filter(([key]) => !clientFields.includes(key))
+      );
+
+      // Se não há campos para atualizar em service_orders, apenas retornar
+      if (Object.keys(serviceOrderUpdates).length === 0) {
+        return null;
+      }
+
       const { data, error } = await supabase
         .from('service_orders')
-        .update(updates)
+        .update(serviceOrderUpdates)
         .eq('id', id)
         .select()
         .single();

@@ -17,11 +17,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Criar trigger para executar limpeza diariamente (usando pg_cron se disponível no plano pago)
--- Para planos pagos, use:
--- SELECT cron.schedule('delete-old-checklist-photos', '0 0 * * *', 'SELECT delete_old_checklist_photos()');
-
--- Para planos gratuitos, você pode adicionar lógica no aplicativo para chamar a função periodicamente
+-- Dar permissão de execução para usuários autenticados
+GRANT EXECUTE ON FUNCTION delete_old_checklist_photos() TO authenticated;
 
 -- Comentários
 COMMENT ON FUNCTION delete_old_checklist_photos IS 'Deleta fotos do checklist com mais de 100 dias';
+

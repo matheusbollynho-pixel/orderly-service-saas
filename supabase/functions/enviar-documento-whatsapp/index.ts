@@ -7,6 +7,8 @@ interface RequestBody {
   to: string;           // número destino, ex: "5511999999999"
   message?: string;     // texto da mensagem (opcional se enviar documento)
   fileUrl?: string;     // URL pública do arquivo (opcional)
+  fileBase64?: string;  // PDF em base64 (opcional)
+  fileName?: string;    // nome do arquivo (opcional)
   caption?: string;     // legenda para o documento (opcional)
 }
 
@@ -72,8 +74,8 @@ Deno.serve(async (req: Request) => {
 
     // Parse do corpo JSON
     const payload: RequestBody | null = await req.json().catch(() => null);
-    if (!payload || !payload.to || (!payload.message && !payload.fileUrl)) {
-      return new Response(JSON.stringify({ error: 'Corpo inválido. Campos requeridos: to e (message ou fileUrl)' }), {
+    if (!payload || !payload.to || (!payload.message && !payload.fileUrl && !payload.fileBase64)) {
+      return new Response(JSON.stringify({ error: 'Corpo inválido. Campos requeridos: to e (message ou fileUrl ou fileBase64)' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
       });
@@ -94,13 +96,21 @@ Deno.serve(async (req: Request) => {
 
     // Montar URL da Z-API (endpoint correto conforme documentação oficial)
     const ZAPI_TOKEN = OPTIONAL_TOKEN || '';
+    if (!ZAPI_TOKEN) {
+      console.error('ZAPI_TOKEN ausente no ambiente');
+      return new Response(JSON.stringify({ error: 'Servidor não configurado (ZAPI_TOKEN ausente)' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      });
+    }
     
     // Determina o endpoint baseado no tipo de conteúdo
     let endpoint = 'send-text'; // Default para mensagens de texto
     
     // Se houver fileUrl, usa send-document/pdf para PDFs
-    if (payload.fileUrl) {
-      endpoint = 'send-document/pdf'; // Para documentos PDF
+    const isPdf = (payload.fileName || '').toLowerCase().endsWith('.pdf') || !!payload.fileBase64;
+    if (payload.fileUrl || payload.fileBase64) {
+      endpoint = isPdf ? 'send-document/pdf' : 'send-document';
     }
     
     const url = `https://api.z-api.io/instances/${encodeURIComponent(INSTANCE_ID)}/token/${encodeURIComponent(ZAPI_TOKEN)}/${endpoint}`;
@@ -110,9 +120,23 @@ Deno.serve(async (req: Request) => {
       phone: payload.to,
     };
     
-    if (payload.fileUrl) {
-      // Para enviar documento via Z-API, usa campo 'document'
+    const safeFileName = (payload.fileName || 'documento.pdf')
+      .replace(/[\s]+/g, '_')
+      .replace(/[^a-zA-Z0-9_.-]/g, '');
+
+    if (payload.fileBase64) {
+      // Para enviar documento via Z-API em base64
+      const base64 = payload.fileBase64.startsWith('data:')
+        ? payload.fileBase64
+        : `data:application/pdf;base64,${payload.fileBase64}`;
+      zapiBody['document'] = base64;
+      zapiBody['fileName'] = safeFileName || 'documento.pdf';
+      if (payload.caption) zapiBody['caption'] = payload.caption;
+    } else if (payload.fileUrl) {
+      // Para enviar documento via Z-API por URL
       zapiBody['document'] = payload.fileUrl;
+      const fileNameFromUrl = payload.fileUrl.split('?')[0].split('/').pop();
+      zapiBody['fileName'] = safeFileName || fileNameFromUrl || 'documento.pdf';
       if (payload.caption) zapiBody['caption'] = payload.caption;
     } else if (payload.message) {
       // Para enviar apenas texto

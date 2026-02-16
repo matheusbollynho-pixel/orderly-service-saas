@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ChecklistItem } from '@/types/service-order';
 import { DEFAULT_CHECKLIST_ITEMS } from '@/types/service-order';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { Star, Image as ImageIcon, X, Loader2 } from 'lucide-react';
-import { uploadChecklistPhoto, getChecklistPhotos } from '@/lib/photoService';
+import { uploadChecklistPhoto, getChecklistPhotos, deleteChecklistPhoto } from '@/lib/photoService';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ChecklistProps {
   items: ChecklistItem[];
@@ -67,6 +68,32 @@ export function Checklist({ items, onItemToggle, onRatingChange, onObservationsC
   const [itemPhotos, setItemPhotos] = useState<Record<string, any[]>>({});
   const [generalPhotos, setGeneralPhotos] = useState<any[]>([]);
   const [uploadingGeneral, setUploadingGeneral] = useState(false);
+  const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
+
+  // Carregar fotos quando o componente montar ou orderId mudar
+  useEffect(() => {
+    if (orderId) {
+      loadAllPhotos();
+    }
+  }, [orderId]);
+
+  const loadAllPhotos = async () => {
+    if (!orderId) return;
+
+    // Carregar fotos gerais
+    const generalPhotos = await getChecklistPhotos('geral');
+    setGeneralPhotos(generalPhotos);
+
+    // Carregar fotos de cada item
+    const photosMap: Record<string, any[]> = {};
+    for (const item of items) {
+      const photos = await getChecklistPhotos(item.id);
+      if (photos.length > 0) {
+        photosMap[item.id] = photos;
+      }
+    }
+    setItemPhotos(photosMap);
+  };
 
   const handlePhotoUpload = async (itemId: string, file: File) => {
     if (!orderId) {
@@ -107,6 +134,45 @@ export function Checklist({ items, onItemToggle, onRatingChange, onObservationsC
       }
     } finally {
       setUploadingGeneral(false);
+    }
+  };
+
+  const handleDeletePhoto = async (photoId: string, storagePath: string, itemId: string) => {
+    setDeletingPhotoId(photoId);
+    try {
+      // Deletar do storage
+      const deleted = await deleteChecklistPhoto(storagePath);
+      
+      if (deleted) {
+        // Deletar do banco
+        const { error } = await supabase
+          .from('checklist_photos')
+          .delete()
+          .eq('id', photoId);
+
+        if (!error) {
+          toast.success('Foto deletada');
+          
+          // Atualizar estado local
+          if (itemId === 'geral') {
+            setGeneralPhotos((prev) => prev.filter((p) => p.id !== photoId));
+          } else {
+            setItemPhotos((prev) => ({
+              ...prev,
+              [itemId]: prev[itemId]?.filter((p) => p.id !== photoId) || []
+            }));
+          }
+        } else {
+          toast.error('Erro ao deletar registro');
+        }
+      } else {
+        toast.error('Erro ao deletar foto');
+      }
+    } catch (err) {
+      console.error('Erro ao deletar:', err);
+      toast.error('Erro ao deletar foto');
+    } finally {
+      setDeletingPhotoId(null);
     }
   };
 
@@ -160,14 +226,14 @@ export function Checklist({ items, onItemToggle, onRatingChange, onObservationsC
             const itemType = item.item_type || getItemType(item.label);
             
             return (
-              <div 
-                key={item.id}
-                className={cn(
-                  "flex flex-row items-center gap-3 p-3 rounded-lg border transition-all animate-fade-in",
-                  getItemColor(itemType, item.completed)
-                )}
-                style={{ animationDelay: `${index * 50}ms` }}
-              >
+              <div key={item.id} className="space-y-2">
+                <div 
+                  className={cn(
+                    "flex flex-row items-center gap-3 p-3 rounded-lg border transition-all animate-fade-in",
+                    getItemColor(itemType, item.completed)
+                  )}
+                  style={{ animationDelay: `${index * 50}ms` }}
+                >
                 {itemType === 'yesno' ? (
                   <div className="flex gap-2">
                     <Button
@@ -243,14 +309,22 @@ export function Checklist({ items, onItemToggle, onRatingChange, onObservationsC
                   <span className="text-xs text-purple-600 font-medium">{item.rating}/5</span>
                 )}
 
-                {/* Botão de foto */}
-                {!disabled && (
-                  <div className="flex items-center gap-2">
+                {/* Contador de fotos e botão */}
+                <div className="flex items-center gap-2">
+                  {/* Contador de fotos sempre visível */}
+                  {itemPhotos[item.id] && itemPhotos[item.id].length > 0 && (
+                    <span className="text-xs text-blue-600 font-medium flex items-center gap-1">
+                      <ImageIcon className="h-3 w-3" />
+                      {itemPhotos[item.id].length}
+                    </span>
+                  )}
+                  
+                  {/* Botão de adicionar foto */}
+                  {!disabled && (
                     <label className="cursor-pointer">
                       <input
                         type="file"
                         accept="image/*"
-                        capture="environment"
                         onChange={(e) => {
                           const file = e.currentTarget.files?.[0];
                           if (file) handlePhotoUpload(item.id, file);
@@ -275,11 +349,40 @@ export function Checklist({ items, onItemToggle, onRatingChange, onObservationsC
                         </span>
                       </Button>
                     </label>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            );
-          })}
+
+              {itemPhotos[item.id] && itemPhotos[item.id].length > 0 && (
+                <div className="grid grid-cols-3 gap-2 pl-9">
+                  {itemPhotos[item.id].map((photo) => (
+                    <div key={photo.id} className="relative group">
+                      <img
+                        src={photo.photo_url}
+                        alt={`Foto de ${item.label}`}
+                        className="w-full h-20 object-cover rounded-md border border-border cursor-pointer hover:opacity-90 transition-opacity"
+                        onClick={() => window.open(photo.photo_url, '_blank')}
+                      />
+                      {!disabled && (
+                        <button
+                          onClick={() => handleDeletePhoto(photo.id, photo.storage_path, item.id)}
+                          disabled={deletingPhotoId === photo.id}
+                          className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                        >
+                          {deletingPhotoId === photo.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <X className="h-3 w-3" />
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
         </div>
       </div>
 
@@ -355,18 +458,22 @@ export function Checklist({ items, onItemToggle, onRatingChange, onObservationsC
                   <img
                     src={photo.photo_url}
                     alt="Foto da ordem"
-                    className="w-full h-24 object-cover rounded-md border border-border"
+                    className="w-full h-24 object-cover rounded-md border border-border cursor-pointer hover:opacity-90 transition-opacity"
+                    onClick={() => window.open(photo.photo_url, '_blank')}
                   />
-                  <button
-                    onClick={() => {
-                      setGeneralPhotos((prev) =>
-                        prev.filter((p) => p.id !== photo.id)
-                      );
-                    }}
-                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
+                  {!disabled && (
+                    <button
+                      onClick={() => handleDeletePhoto(photo.id, photo.storage_path, 'geral')}
+                      disabled={deletingPhotoId === photo.id}
+                      className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                    >
+                      {deletingPhotoId === photo.id ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <X className="h-3 w-3" />
+                      )}
+                    </button>
+                  )}
                 </div>
               ))}
             </div>

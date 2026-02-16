@@ -1,19 +1,16 @@
 // src/services/whatsappService.ts
 
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/integrations/supabase/client';
 
 // Lazy init para evitar quebrar o app se variáveis faltarem em produção
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
 
-let _supabase: ReturnType<typeof createClient> | null = null;
 function getSupabase() {
-  if (_supabase) return _supabase;
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     throw new Error('Configuração do WhatsApp indisponível. Verifique as variáveis VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY.');
   }
-  _supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  return _supabase;
+  return supabase;
 }
 
 function formatPhone(raw: string): string | null {
@@ -25,20 +22,30 @@ function formatPhone(raw: string): string | null {
   return digits;
 }
 
+function sanitizeFileName(fileName: string): string {
+  const safe = fileName
+    .replace(/[\s]+/g, '_')
+    .replace(/[^a-zA-Z0-9_.-]/g, '');
+  return safe || 'documento.pdf';
+}
+
 async function callEdgeFunction(payload: Record<string, unknown>): Promise<any> {
   const supabase = getSupabase();
   const {
     data: { session },
   } = await supabase.auth.getSession();
 
-  const token = session?.access_token || SUPABASE_ANON_KEY;
+  const token = session?.access_token;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
 
   const res = await fetch(`${SUPABASE_URL}/functions/v1/enviar-documento-whatsapp`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
+    headers,
     body: JSON.stringify(payload),
   });
 
@@ -51,7 +58,9 @@ async function callEdgeFunction(payload: Record<string, unknown>): Promise<any> 
   }
 
   if (!res.ok || json?.success === false) {
-    const msg = json?.error || json?.message || `Falha na função (status ${res.status})`;
+    const details = json?.z_api_error ? ` | Detalhes: ${JSON.stringify(json.z_api_error)}` : '';
+    const statusInfo = json?.z_api_status ? ` | Z-API status: ${json.z_api_status}` : '';
+    const msg = (json?.error || json?.message || `Falha na função (status ${res.status})`) + statusInfo + details;
     throw new Error(msg);
   }
 
@@ -107,9 +116,19 @@ export async function sendWhatsAppDocument(params: {
   const phone = formatPhone(params.phone);
   if (!phone) throw new Error('Telefone do cliente inválido.');
 
-  const fileUrl = await uploadBase64PdfToSupabaseStorage(params.base64, params.fileName);
-  const res = await callEdgeFunction({ to: phone, fileUrl, caption: params.caption || 'Ordem de Serviço - Bandara Motos' });
-  return !!res;
+  const caption = params.caption || 'Ordem de Serviço - Bandara Motos';
+  const safeFileName = sanitizeFileName(params.fileName);
+
+  // Tenta enviar via URL assinada (storage). Se falhar, envia base64 direto.
+  try {
+    const fileUrl = await uploadBase64PdfToSupabaseStorage(params.base64, safeFileName);
+    const res = await callEdgeFunction({ to: phone, fileUrl, caption, fileName: safeFileName });
+    return !!res;
+  } catch (error) {
+    console.warn('Falha ao enviar via URL, tentando base64 direto:', error);
+    const res = await callEdgeFunction({ to: phone, fileBase64: params.base64, caption, fileName: safeFileName });
+    return !!res;
+  }
 }
 
 /**
@@ -158,11 +177,130 @@ export async function uploadBase64PdfToSupabaseStorage(
     throw error;
   }
 
-  // Gerar URL pública (assume bucket público). Se for privado, gere signed URL.
+  // Preferir URL assinada (funciona mesmo em bucket privado)
+  const { data: signedData, error: signedError } = await supabase.storage
+    .from(bucket)
+    .createSignedUrl(data.path, 60 * 60); // 1 hora
+
+  if (!signedError && signedData?.signedUrl) {
+    return signedData.signedUrl;
+  }
+
+  // Fallback: URL pública (para bucket público)
   const { data: publicData } = supabase.storage.from(bucket).getPublicUrl(data.path);
   const publicURL = publicData?.publicUrl;
 
   if (!publicURL) throw new Error('Não foi possível obter URL pública do arquivo');
 
   return publicURL;
+}
+
+export async function sendTestSatisfactionSurvey(): Promise<{ success: boolean; message: string; orderName?: string; phone?: string }> {
+  try {
+    const supabase = getSupabase();
+
+    const SATISFACTION_MESSAGE = `Olá! Tudo bem? 😊
+
+Aqui é da *Bandara Motos*.
+
+Queremos saber:
+👉 Como foi seu atendimento com a gente?
+👉 Ficou alguma dúvida sobre o serviço ou a peça?
+
+*De 0 a 10*, o quanto você indicaria a Bandara Motos para um amigo? ⭐
+
+Se precisar de algo, é só responder essa mensagem.
+Estamos à disposição! 🏍️🔧
+
+Siga-nos no Instagram: @BandaraMotos`;
+
+    const { data: orders, error } = await supabase
+      .from('service_orders')
+      .select('id, client_name, client_phone')
+      .ilike('client_name', '%Matheus%')
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (error || !orders || orders.length === 0) {
+      return { success: false, message: 'Ordem de Matheus não encontrada' };
+    }
+
+    const order = orders[0];
+    if (!order.client_phone) {
+      return { success: false, message: 'Ordem de Matheus não tem telefone cadastrado' };
+    }
+
+    await sendWhatsAppText({
+      phone: order.client_phone,
+      text: SATISFACTION_MESSAGE
+    });
+
+    await supabase
+      .from('service_orders')
+      .update({ satisfaction_survey_sent_at: new Date().toISOString() })
+      .eq('id', order.id);
+
+    return {
+      success: true,
+      message: `✅ Mensagem enviada para ${order.client_name}`,
+      orderName: order.client_name,
+      phone: order.client_phone
+    };
+  } catch (error) {
+    return { success: false, message: `❌ Erro: ${error.message}` };
+  }
+}
+
+export async function testSatisfactionSurveyWith4SecondDelay(): Promise<{ success: boolean; message: string }> {
+  try {
+    const supabase = getSupabase();
+
+    // Call RPC function to create payment
+    const { data, error } = await supabase.rpc('test_satisfaction_survey_4seconds');
+
+    if (error) {
+      return { success: false, message: `❌ Erro na RPC: ${error.message}` };
+    }
+
+    if (!data?.success) {
+      return { success: false, message: data?.message || 'Erro desconhecido na RPC' };
+    }
+
+    // Now send the satisfaction message
+    const SATISFACTION_MESSAGE = `Olá! Tudo bem? 😊
+
+Aqui é da *Bandara Motos*.
+
+Queremos saber:
+👉 Como foi seu atendimento com a gente?
+👉 Ficou alguma dúvida sobre o serviço ou a peça?
+
+*De 0 a 10*, o quanto você indicaria a Bandara Motos para um amigo? ⭐
+
+Se precisar de algo, é só responder essa mensagem.
+Estamos à disposição! 🏍️🔧
+
+Siga-nos no Instagram: @BandaraMotos`;
+
+    try {
+      await sendWhatsAppText({
+        phone: data.order_phone,
+        text: SATISFACTION_MESSAGE
+      });
+    } catch (whatsappError) {
+      console.error('❌ Erro ao enviar WhatsApp:', whatsappError);
+      // Don't fail completely, RPC was successful
+      return {
+        success: true,
+        message: `${data.message}\n\n⚠️ Erro ao enviar mensagem: ${whatsappError.message}`
+      };
+    }
+
+    return {
+      success: true,
+      message: `${data.message}\n\n✅ Mensagem enviada para ${data.order_phone}`
+    };
+  } catch (error) {
+    return { success: false, message: `❌ Erro: ${error.message}` };
+  }
 }

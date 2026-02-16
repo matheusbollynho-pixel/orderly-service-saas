@@ -11,6 +11,7 @@ export interface Client {
   apelido?: string;
   instagram?: string;
   autoriza_instagram: boolean;
+  autoriza_lembretes?: boolean;
   birth_date?: string | null;
   endereco?: string;
   cidade?: string;
@@ -186,9 +187,16 @@ export function useClients() {
   // Criar ou atualizar cliente
   const upsertClient = async (client: Partial<Client>): Promise<Client | null> => {
     try {
+      // Garantir que autoriza_lembretes e autoriza_instagram sejam true por padrão
+      const clientData = {
+        ...client,
+        autoriza_lembretes: client.autoriza_lembretes !== false ? true : false,
+        autoriza_instagram: client.autoriza_instagram !== false ? true : false,
+      };
+
       const { data, error } = await supabase
         .from('clients')
-        .upsert(client as any, { onConflict: 'cpf' })
+        .upsert(clientData as any, { onConflict: 'cpf' })
         .select()
         .single();
 

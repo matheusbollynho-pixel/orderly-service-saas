@@ -5,7 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
+import { createMaintenanceReminder } from '@/services/maintenanceReminderService';
 
 interface ExpressCadastroPageProps {
   onBack?: () => void;
@@ -40,6 +42,7 @@ export function ExpressCadastroPage({ onBack }: ExpressCadastroPageProps) {
     cor: '',
   });
   const [serviceDescription, setServiceDescription] = useState('');
+  const [autorizaLembretes, setAutorizaLembretes] = useState(true);
 
   const normalizePhone = (value: string) => value.replace(/\D/g, '');
   const normalizePlate = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7);
@@ -144,6 +147,7 @@ export function ExpressCadastroPage({ onBack }: ExpressCadastroPageProps) {
         cpf: cpfToSave,
         phone: normalizePhone(client.phone),
         autoriza_instagram: false,
+        autoriza_lembretes: autorizaLembretes,
       });
 
       if (!savedClient) {
@@ -187,7 +191,43 @@ export function ExpressCadastroPage({ onBack }: ExpressCadastroPageProps) {
               problem_description: `${desc} (cadastro express)`,
             },
             {
-              onSuccess: () => resolve(),
+              onSuccess: async () => {
+                // Process maintenance keywords from problem description
+                if (autorizaLembretes && savedClient?.id) {
+                  const problemDesc = `${desc} (cadastro express)`;
+                  const maintenanceKeywords = [
+                    'revisao',
+                    'revisão',
+                    'revisora',
+                    'oleo',
+                    'óleo',
+                    'oléo',
+                    'corrente',
+                    'correia',
+                    'cabo',
+                    'freio',
+                    'pneu',
+                    'motor',
+                  ];
+
+                  const detectedKeyword = maintenanceKeywords.find((keyword) =>
+                    problemDesc.toLowerCase().includes(keyword)
+                  );
+
+                  if (detectedKeyword) {
+                    try {
+                      await createMaintenanceReminder(
+                        savedMoto.id,
+                        detectedKeyword,
+                        `Lembrete: ${detectedKeyword.charAt(0).toUpperCase() + detectedKeyword.slice(1).toLowerCase()} para ${savedMoto.placa || 'sua moto'}`
+                      );
+                    } catch (err) {
+                      console.error('Erro ao criar lembrete de manutenção:', err);
+                    }
+                  }
+                }
+                resolve();
+              },
               onError: (error: any) => reject(error),
             }
           );
@@ -201,6 +241,7 @@ export function ExpressCadastroPage({ onBack }: ExpressCadastroPageProps) {
       setClient({ name: '', phone: '' });
       setMoto({ placa: '', marca: '', modelo: '', ano: '', cor: '' });
       setServiceDescription('');
+      setAutorizaLembretes(true);
     } finally {
       setIsSaving(false);
     }
@@ -358,7 +399,7 @@ export function ExpressCadastroPage({ onBack }: ExpressCadastroPageProps) {
         <CardHeader>
           <CardTitle>Serviço</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label>O que fazer na moto?</Label>
             <Input
@@ -367,6 +408,16 @@ export function ExpressCadastroPage({ onBack }: ExpressCadastroPageProps) {
               placeholder="Trocar óleo, cabo, revisão..."
               className="h-11"
             />
+          </div>
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="autoriza-lembretes-express"
+              checked={autorizaLembretes}
+              onCheckedChange={(checked) => setAutorizaLembretes(checked === true)}
+            />
+            <Label htmlFor="autoriza-lembretes-express" className="font-normal cursor-pointer">
+              Autoriza receber lembretes de manutenção
+            </Label>
           </div>
         </CardContent>
       </Card>
