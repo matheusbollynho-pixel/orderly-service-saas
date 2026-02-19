@@ -1,4 +1,4 @@
-import { LayoutDashboard, Plus, ClipboardList, ChartBar, Users, LogOut, Heart, Wallet, Bolt } from 'lucide-react';
+import { LayoutDashboard, Plus, ClipboardList, ChartBar, Users, LogOut, Heart, Wallet, Bolt, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
@@ -39,7 +39,7 @@ export function BottomNav({ activeView, onViewChange, isAdmin }: BottomNavProps)
       <div className="overflow-x-auto scrollbar-hide py-2 pb-safe">
         <div className="flex items-center justify-around md:justify-around gap-2 px-2 min-w-max md:min-w-0">
           {navItems.map((item) => {
-            const Icon = item.icon;
+            const Icon = item.icon ?? Circle;
             const isActive = activeView === item.id;
             
             return (

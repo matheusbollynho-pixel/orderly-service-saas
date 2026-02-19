@@ -24,6 +24,13 @@ const statusConfig = {
 
 export function StatusBadge({ status, className }: StatusBadgeProps) {
   const config = statusConfig[status];
+  if (!config) {
+    return (
+      <span className={cn('status-badge', className)}>
+        {STATUS_LABELS[status] ?? 'Status'}
+      </span>
+    );
+  }
   const Icon = config.icon;
 
   return (

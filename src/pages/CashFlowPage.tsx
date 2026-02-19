@@ -261,7 +261,11 @@ export function CashFlowPage() {
         <h3 className="text-sm font-semibold text-muted-foreground">Controle por Forma de Pagamento</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {Object.entries(paymentMethods).map(([method, balance]) => {
-            const config = methodLabels[method as keyof typeof methodLabels];
+            const config = methodLabels[method as keyof typeof methodLabels] ?? {
+              label: String(method),
+              icon: '💰',
+              color: 'text-muted-foreground',
+            };
             const isPositive = balance >= 0;
 
             return (
