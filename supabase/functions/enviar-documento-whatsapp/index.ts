@@ -56,18 +56,19 @@ Deno.serve(async (req: Request) => {
       ? (Deno.env.get('UAZAPI_ADMIN_TOKEN') || '')
       : (Deno.env.get('ZAPI_TOKEN') || '');
 
+    console.log(`📋 Provider: ${provider}, INSTANCE_ID: ${INSTANCE_ID?.substring(0, 8)}..., Token: ${ADMIN_TOKEN?.substring(0, 8)}...`);
+
     if (!INSTANCE_ID) {
-      console.error('Segredos da API WhatsApp não configurados no ambiente (INSTANCE_ID ausente)');
-      return new Response(JSON.stringify({ error: 'Servidor não configurado' }), {
+      console.error('❌ INSTANCE_ID não configurado no ambiente');
+      return new Response(JSON.stringify({ error: 'Servidor não configurado (INSTANCE_ID ausente)' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
       });
     }
 
-    // Montar URL do provedor
     if (!ADMIN_TOKEN) {
-      console.error('Admin Token da API WhatsApp ausente no ambiente');
-      return new Response(JSON.stringify({ error: 'Servidor não configurado (admin token ausente)' }), {
+      console.error('❌ ADMIN_TOKEN não configurado no ambiente');
+      return new Response(JSON.stringify({ error: 'Servidor não configurado (ADMIN_TOKEN ausente)' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
       });
@@ -82,7 +83,8 @@ Deno.serve(async (req: Request) => {
       endpoint = isPdf ? 'send-document/pdf' : 'send-document';
     }
     
-    const defaultBase = isUazApi ? 'https://api.uazapi.dev' : 'https://api.z-api.io';
+    // ✅ FIXO: UazAPI usa https://free.uazapi.com (não api.uazapi.dev)
+    const defaultBase = isUazApi ? 'https://free.uazapi.com' : 'https://api.z-api.io';
     const baseUrl = (Deno.env.get('WHATSAPP_BASE_URL') || defaultBase).replace(/\/$/, '');
     const textPathTemplate = Deno.env.get('WHATSAPP_TEXT_PATH') || '/instances/{instanceId}/token/{token}/send-text';
     const documentPathTemplate = Deno.env.get('WHATSAPP_DOCUMENT_PATH') || '/instances/{instanceId}/token/{token}/send-document';
