@@ -10,15 +10,9 @@ function buildDefaultUrl(): string {
   const provider = (Deno.env.get('WHATSAPP_PROVIDER') || 'zapi').toLowerCase();
 
   if (provider === 'uazapi') {
-    const base = (Deno.env.get('UAZAPI_BASE_URL') || 'https://api.uazapi.dev').replace(/\/$/, '');
-    const instanceId = Deno.env.get('UAZAPI_INSTANCE_ID') || '';
-    const token = Deno.env.get('UAZAPI_TOKEN') || '';
-    const pathTemplate = Deno.env.get('UAZAPI_TEXT_PATH') || '/instances/{instanceId}/token/{token}/send-text';
-
-    const path = pathTemplate
-      .replace('{instanceId}', encodeURIComponent(instanceId))
-      .replace('{token}', encodeURIComponent(token));
-
+    // UazAPI v2 (Bandara): endpoint de texto padrão
+    const base = (Deno.env.get('UAZAPI_BASE_URL') || 'https://bandara.uazapi.com').replace(/\/$/, '');
+    const path = Deno.env.get('UAZAPI_TEXT_PATH') || '/send/text';
     return `${base}${path}`;
   }
 
@@ -36,21 +30,20 @@ function buildHeaders(): Record<string, string> {
   };
 
   if (provider === 'uazapi') {
-    // Flexível para adaptar à documentação da UazAPI sem alterar código
-    const authType = (Deno.env.get('UAZAPI_AUTH_TYPE') || 'none').toLowerCase(); // none|bearer|header
-    const authHeader = Deno.env.get('UAZAPI_AUTH_HEADER') || 'Authorization';
-    const authToken = Deno.env.get('UAZAPI_AUTH_TOKEN') || Deno.env.get('UAZAPI_TOKEN') || '';
+    // Padrão UazAPI v2: header token com INSTANCE token
+    const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN') || Deno.env.get('UAZAPI_TOKEN') || '';
+    if (instanceToken) {
+      headers['token'] = instanceToken;
+    }
 
+    // Compatibilidade opcional com configurações antigas
+    const authType = (Deno.env.get('UAZAPI_AUTH_TYPE') || '').toLowerCase(); // bearer|header
+    const authHeader = Deno.env.get('UAZAPI_AUTH_HEADER') || 'Authorization';
+    const authToken = Deno.env.get('UAZAPI_AUTH_TOKEN') || '';
     if (authType === 'bearer' && authToken) {
       headers[authHeader] = `Bearer ${authToken}`;
     } else if (authType === 'header' && authToken) {
       headers[authHeader] = authToken;
-    }
-
-    const clientToken = Deno.env.get('UAZAPI_CLIENT_TOKEN') || '';
-    const clientTokenHeader = Deno.env.get('UAZAPI_CLIENT_TOKEN_HEADER') || 'Client-Token';
-    if (clientToken) {
-      headers[clientTokenHeader] = clientToken;
     }
 
     return headers;
@@ -69,8 +62,8 @@ function buildBody(phone: string, message: string): Record<string, unknown> {
   const formattedPhone = normalizeBrPhone(phone);
 
   if (provider === 'uazapi') {
-    const phoneField = Deno.env.get('UAZAPI_PHONE_FIELD') || 'phone';
-    const messageField = Deno.env.get('UAZAPI_MESSAGE_FIELD') || 'message';
+    const phoneField = Deno.env.get('UAZAPI_PHONE_FIELD') || 'number';
+    const messageField = Deno.env.get('UAZAPI_MESSAGE_FIELD') || 'text';
 
     return {
       [phoneField]: formattedPhone,

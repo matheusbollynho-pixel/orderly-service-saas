@@ -3,5 +3,8 @@ project_id = "cdigibzeweugjysiyicw"
 [functions.enviar-documento-whatsapp]
 verify_jwt = false
 
+[functions.check-maintenance-reminders]
+verify_jwt = false
+
 [functions.send-satisfaction-survey]
 verify_jwt = false
