@@ -174,9 +174,9 @@ export default function AfterSalesPage() {
         const detectedKeyword = findKeywordInText(description, keywords);
         if (!detectedKeyword) continue;
 
-        const order = material.order;
+        const order = material.order as any;
         if (!order?.id || !order?.client_id) continue;
-        if (order.client?.autoriza_lembretes === false) continue;
+        if (order?.client?.autoriza_lembretes === false) continue;
 
         const serviceDate = new Date(material.created_at || order.entry_date || new Date());
         const reminder = await createMaintenanceReminder(

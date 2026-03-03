@@ -91,18 +91,20 @@ Deno.serve(async (req: Request) => {
 
     if (payload.fileUrl) {
       // Para /send/media: enviar URL pública como JSON
+      requestBody.type = 'document';
       requestBody.file = payload.fileUrl;
       requestBody.text = payload.caption || 'Documento';
       const fileNameFromUrl = payload.fileUrl.split('?')[0].split('/').pop();
-      requestBody.fileName = safeFileName || fileNameFromUrl || 'documento.pdf';
+      requestBody.docName = safeFileName || fileNameFromUrl || 'documento.pdf';
     } else if (payload.fileBase64) {
       // Fallback: base64 (pode não funcionar em todos os providers)
       let base64 = payload.fileBase64;
       if (base64.startsWith('data:')) {
         base64 = base64.split(',')[1];
       }
+      requestBody.type = 'document';
       requestBody.file = base64;
-      requestBody.fileName = safeFileName;
+      requestBody.docName = safeFileName;
       requestBody.text = payload.caption || 'Documento';
     } else if (payload.message) {
       // Para /send/text: usar JSON com text

@@ -105,11 +105,12 @@ export function MaintenanceDebugPanel() {
       });
 
       try {
-        const { data: clients, error } = await supabase
-          .from('clients')
+        const clientsQuery = (supabase.from('clients') as any)
           .select('id, autoriza_lembretes')
           .eq('autoriza_lembretes', true)
           .limit(1);
+
+        const { data: clients, error } = await clientsQuery;
 
         if (error) throw error;
         const count = clients?.length || 0;
