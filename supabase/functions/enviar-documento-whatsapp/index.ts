@@ -34,43 +34,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Checagem de Authorization (temporariamente comentado para debug)
-    // const authHeader = req.headers.get('Authorization') || '';
-    // const tokenMatch = authHeader.match(/^Bearer (.+)$/);
-    // const userToken = tokenMatch ? tokenMatch[1] : null;
-    // if (!userToken) {
-    //   return new Response(JSON.stringify({ error: 'Header Authorization ausente ou inválido' }), {
-    //     status: 401,
-    //     headers: { 'Content-Type': 'application/json', ...corsHeaders },
-    //   });
-    // }
-
-    // Validar JWT chamando o endpoint /auth/v1/user do Supabase (TEMPORARIAMENTE DESABILITADO)
-    // const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
-    // const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-    // if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    //   return new Response(JSON.stringify({ error: 'Configuração do Supabase ausente' }), {
-    //     status: 500,
-    //     headers: { 'Content-Type': 'application/json', ...corsHeaders },
-    //   });
-    // }
-
-    // const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-    //   method: 'GET',
-    //   headers: {
-    //     Authorization: `Bearer ${userToken}`,
-    //     apikey: SUPABASE_SERVICE_ROLE_KEY,
-    //   },
-    // });
-
-    // if (!userRes.ok) {
-    //   const detail = await userRes.text().catch(() => '');
-    //   console.warn('Token inválido ao validar no Supabase', { status: userRes.status, detail });
-    //   return new Response(JSON.stringify({ error: 'Token inválido' }), {
-    //     status: 401,
-    //     headers: { 'Content-Type': 'application/json', ...corsHeaders },
-    //   });
-    // }
+    console.log('✅ Requisição POST recebida');
 
     // Parse do corpo JSON
     const payload: RequestBody | null = await req.json().catch(() => null);
@@ -80,6 +44,8 @@ Deno.serve(async (req: Request) => {
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
       });
     }
+
+    console.log('✅ Payload válido para:', payload.to);
 
     // Ler configuração do provedor
     const provider = (Deno.env.get('WHATSAPP_PROVIDER') || 'uazapi').toLowerCase();
@@ -187,8 +153,11 @@ Deno.serve(async (req: Request) => {
 
     // Timeout para a requisição à Z-API
     const controller = new AbortController();
-    const timeoutMs = 15000; // 15s
+    const timeoutMs = 30000; // 30s (UazAPI pode ser lenta)
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    console.log('🚀 Chamando UazAPI em:', url);
+    const startTime = Date.now();
 
     let zresp: Response;
     try {
@@ -198,9 +167,13 @@ Deno.serve(async (req: Request) => {
         body: JSON.stringify(zapiBody),
         signal: controller.signal,
       });
+      const duration = Date.now() - startTime;
+      console.log(`✅ UazAPI respondeu em ${duration}ms`);
     } catch (err: any) {
       clearTimeout(timeout);
+      const duration = Date.now() - startTime;
       if (err.name === 'AbortError') {
+        console.error(`❌ Timeout na UazAPI após ${duration}ms`);
         return new Response(JSON.stringify({ error: 'Tempo esgotado na requisição à API WhatsApp' }), {
           status: 504,
           headers: { 'Content-Type': 'application/json', ...corsHeaders },
