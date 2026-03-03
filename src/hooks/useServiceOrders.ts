@@ -10,7 +10,9 @@ export function useServiceOrders() {
   const ordersQuery = useQuery({
     queryKey: ['service-orders'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let data: any[] | null = null;
+
+      const fullQuery = await supabase
         .from('service_orders')
         .select(`
           *,
@@ -21,7 +23,19 @@ export function useServiceOrders() {
         `)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (fullQuery.error) {
+        console.error('❌ Erro na query completa de ordens. Aplicando fallback simples:', fullQuery.error);
+
+        const fallbackQuery = await supabase
+          .from('service_orders')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (fallbackQuery.error) throw fallbackQuery.error;
+        data = fallbackQuery.data as any[];
+      } else {
+        data = fullQuery.data as any[];
+      }
       
       // Mapear os dados do cliente para o objeto de ordem
       return (data as any[]).map(order => {
