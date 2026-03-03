@@ -82,14 +82,13 @@ Deno.serve(async (req: Request) => {
     }
 
     // Ler configuração do provedor
-    const provider = (Deno.env.get('WHATSAPP_PROVIDER') || 'zapi').toLowerCase();
+    const provider = (Deno.env.get('WHATSAPP_PROVIDER') || 'uazapi').toLowerCase();
     const isUazApi = provider === 'uazapi';
 
     const INSTANCE_ID = isUazApi ? Deno.env.get('UAZAPI_INSTANCE_ID') : Deno.env.get('ZAPI_INSTANCE_ID');
-    const CLIENT_TOKEN = isUazApi
-      ? (Deno.env.get('UAZAPI_CLIENT_TOKEN') || '')
-      : (Deno.env.get('ZAPI_CLIENT_TOKEN') || '');
-    const OPTIONAL_TOKEN = isUazApi ? Deno.env.get('UAZAPI_TOKEN') : Deno.env.get('ZAPI_TOKEN');
+    const ADMIN_TOKEN = isUazApi
+      ? (Deno.env.get('UAZAPI_ADMIN_TOKEN') || '')
+      : (Deno.env.get('ZAPI_TOKEN') || '');
 
     if (!INSTANCE_ID) {
       console.error('Segredos da API WhatsApp não configurados no ambiente (INSTANCE_ID ausente)');
@@ -100,10 +99,9 @@ Deno.serve(async (req: Request) => {
     }
 
     // Montar URL do provedor
-    const API_TOKEN = OPTIONAL_TOKEN || '';
-    if (!API_TOKEN) {
-      console.error('Token da API WhatsApp ausente no ambiente');
-      return new Response(JSON.stringify({ error: 'Servidor não configurado (token ausente)' }), {
+    if (!ADMIN_TOKEN) {
+      console.error('Admin Token da API WhatsApp ausente no ambiente');
+      return new Response(JSON.stringify({ error: 'Servidor não configurado (admin token ausente)' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
       });
@@ -132,7 +130,7 @@ Deno.serve(async (req: Request) => {
 
     const path = pathTemplate
       .replace('{instanceId}', encodeURIComponent(INSTANCE_ID))
-      .replace('{token}', encodeURIComponent(API_TOKEN));
+      .replace('{token}', encodeURIComponent(ADMIN_TOKEN));
 
     const url = `${baseUrl}${path}`;
 
@@ -174,18 +172,17 @@ Deno.serve(async (req: Request) => {
       'Content-Type': 'application/json',
     };
 
-    if (CLIENT_TOKEN) {
-      const clientTokenHeader = Deno.env.get('WHATSAPP_CLIENT_TOKEN_HEADER') || 'Client-Token';
-      zHeaders[clientTokenHeader] = CLIENT_TOKEN;
+    // Para UazAPI, adicionar Admin-Token no header
+    if (isUazApi && ADMIN_TOKEN) {
+      zHeaders['Admin-Token'] = ADMIN_TOKEN;
     }
 
     const authType = (Deno.env.get('WHATSAPP_AUTH_TYPE') || 'none').toLowerCase(); // none|bearer|header
     const authHeader = Deno.env.get('WHATSAPP_AUTH_HEADER') || 'Authorization';
-    const authToken = Deno.env.get('WHATSAPP_AUTH_TOKEN') || API_TOKEN;
-    if (authType === 'bearer' && authToken) {
-      zHeaders[authHeader] = `Bearer ${authToken}`;
-    } else if (authType === 'header' && authToken) {
-      zHeaders[authHeader] = authToken;
+    if (authType === 'bearer' && ADMIN_TOKEN) {
+      zHeaders[authHeader] = `Bearer ${ADMIN_TOKEN}`;
+    } else if (authType === 'header' && ADMIN_TOKEN) {
+      zHeaders[authHeader] = ADMIN_TOKEN;
     }
 
     // Timeout para a requisição à Z-API
