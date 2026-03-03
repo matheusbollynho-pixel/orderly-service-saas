@@ -48,7 +48,7 @@ Deno.serve(async (req: Request) => {
     console.log('✅ Payload válido para:', payload.to);
 
     // Ler configuração do provedor
-    const provider = (Deno.env.get('WHATSAPP_PROVIDER') || 'uazapi').toLowerCase();
+    const provider = (Deno.env.get('WHATSAPP_PROVIDER') || 'zapi').toLowerCase();
     const isUazApi = provider === 'uazapi';
 
     const INSTANCE_ID = isUazApi ? Deno.env.get('UAZAPI_INSTANCE_ID') : Deno.env.get('ZAPI_INSTANCE_ID');
@@ -83,12 +83,20 @@ Deno.serve(async (req: Request) => {
       endpoint = isPdf ? 'send-document/pdf' : 'send-document';
     }
     
-    // ✅ FIXO: UazAPI usa https://free.uazapi.com (não api.uazapi.dev)
+    // ✅ FIXO: UazAPI usa https://free.uazapi.com, Z-API usa https://api.z-api.io
     const defaultBase = isUazApi ? 'https://free.uazapi.com' : 'https://api.z-api.io';
     const baseUrl = (Deno.env.get('WHATSAPP_BASE_URL') || defaultBase).replace(/\/$/, '');
-    const textPathTemplate = Deno.env.get('WHATSAPP_TEXT_PATH') || '/instances/{instanceId}/token/{token}/send-text';
-    const documentPathTemplate = Deno.env.get('WHATSAPP_DOCUMENT_PATH') || '/instances/{instanceId}/token/{token}/send-document';
-    const documentPdfPathTemplate = Deno.env.get('WHATSAPP_DOCUMENT_PDF_PATH') || '/instances/{instanceId}/token/{token}/send-document/pdf';
+    
+    // Z-API espera token na query string (?apikey=), não no path
+    const textPathTemplate = Deno.env.get('WHATSAPP_TEXT_PATH') || (isUazApi 
+      ? '/instances/{instanceId}/send-text' 
+      : '/instances/{instanceId}/send-text?apikey={token}');
+    const documentPathTemplate = Deno.env.get('WHATSAPP_DOCUMENT_PATH') || (isUazApi
+      ? '/instances/{instanceId}/send-document'
+      : '/instances/{instanceId}/send-document?apikey={token}');
+    const documentPdfPathTemplate = Deno.env.get('WHATSAPP_DOCUMENT_PDF_PATH') || (isUazApi
+      ? '/instances/{instanceId}/send-document/pdf'
+      : '/instances/{instanceId}/send-document/pdf?apikey={token}');
 
     const pathTemplate = endpoint === 'send-text'
       ? textPathTemplate
@@ -101,8 +109,8 @@ Deno.serve(async (req: Request) => {
       .replace('{token}', encodeURIComponent(ADMIN_TOKEN));
 
     const url = `${baseUrl}${path}`;
-
-    // Montar payload conforme o provedor (campos customizáveis por env)
+    
+    console.log(`🚀 URL final: ${url.substring(0, 100)}...`);
     const phoneField = Deno.env.get('WHATSAPP_PHONE_FIELD') || 'phone';
     const messageField = Deno.env.get('WHATSAPP_MESSAGE_FIELD') || 'message';
     const documentField = Deno.env.get('WHATSAPP_DOCUMENT_FIELD') || 'document';
