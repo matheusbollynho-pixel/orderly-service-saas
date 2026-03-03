@@ -372,6 +372,15 @@ export async function deleteMaintenanceKeyword(
   try {
     console.log('🗑️ Tentando deletar keyword:', keywordId);
     
+    // Verificar se existe antes
+    const { data: before } = await sb
+      .from('maintenance_keywords')
+      .select('id, keyword')
+      .eq('id', keywordId)
+      .single();
+    
+    console.log('📋 Keyword ANTES do delete:', before);
+    
     const { data, error } = await sb
       .from('maintenance_keywords')
       .delete()
@@ -384,6 +393,20 @@ export async function deleteMaintenanceKeyword(
     }
     
     console.log('✅ Keyword deletada com sucesso:', data);
+    
+    // Verificar se foi realmente deletada
+    const { data: after } = await sb
+      .from('maintenance_keywords')
+      .select('id')
+      .eq('id', keywordId)
+      .maybeSingle();
+    
+    if (after) {
+      console.error('⚠️ ERRO: Keyword ainda existe no banco após delete!', after);
+      return false;
+    }
+    
+    console.log('✅ Confirmado: Keyword não existe mais no banco');
     return true;
   } catch (error) {
     console.error('❌ Erro ao deletar keyword:', error);
