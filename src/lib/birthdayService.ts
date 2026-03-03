@@ -24,6 +24,17 @@ export interface ClientWithBirthday {
   birthday_discount?: any;
 }
 
+export interface BirthdayDiscount {
+  id: string;
+  service_order_id: string;
+  discount_percentage: number;
+  starts_at: string;
+  expires_at: string;
+  is_active: boolean;
+  message_sent_at: string | null;
+  reminder_sent_at: string | null;
+}
+
 /**
  * Get all clients with upcoming birthdays (today to 7 days ahead)
  */
@@ -162,7 +173,7 @@ Aproveite seus *15% OFF* 😉🏍️`;
 /**
  * Get all active birthday discounts
  */
-export async function getActiveBirthdayDiscounts() {
+export async function getActiveBirthdayDiscounts(): Promise<BirthdayDiscount[]> {
   try {
     // Ignorar erros pois a tabela pode não existir ainda
     const { data, error } = await supabase

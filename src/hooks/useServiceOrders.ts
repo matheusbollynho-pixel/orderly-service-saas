@@ -34,6 +34,10 @@ export function useServiceOrders() {
         };
       }) as ServiceOrder[];
     },
+    // Fallback para manter celular/PC sincronizados mesmo sem evento realtime
+    refetchInterval: 4000,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 
   const createOrderMutation = useMutation({
@@ -341,12 +345,13 @@ export function useServiceOrders() {
 
   // Payments: create and delete
   const createPaymentMutation = useMutation({
-    mutationFn: async (payload: { order_id: string; amount: number; method: string; reference?: string | null; notes?: string | null }) => {
+    mutationFn: async (payload: { order_id: string; amount: number; discount_amount?: number | null; method: string; reference?: string | null; notes?: string | null }) => {
       const { data, error } = await supabase
         .from('payments')
         .insert({
           order_id: payload.order_id,
           amount: payload.amount,
+          discount_amount: payload.discount_amount ?? 0,
           method: payload.method as any,
           reference: payload.reference ?? null,
           notes: payload.notes ?? null,
@@ -392,12 +397,13 @@ export function useServiceOrders() {
   });
 
   const updatePaymentMutation = useMutation({
-    mutationFn: async (payload: { id: string; created_at?: string; amount?: number; method?: string; notes?: string | null }) => {
+    mutationFn: async (payload: { id: string; created_at?: string; amount?: number; discount_amount?: number | null; method?: string; notes?: string | null }) => {
       const { data, error } = await supabase
         .from('payments')
         .update({
           ...(payload.created_at && { created_at: payload.created_at }),
           ...(payload.amount && { amount: payload.amount }),
+          ...(payload.discount_amount !== undefined && { discount_amount: payload.discount_amount }),
           ...(payload.method && { method: payload.method }),
           ...(payload.notes !== undefined && { notes: payload.notes }),
         })

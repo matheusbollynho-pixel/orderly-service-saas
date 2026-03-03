@@ -1,1 +1,4 @@
 project_id = "cdigibzeweugjysiyicw"
+
+[functions.send-satisfaction-survey]
+verify_jwt = false

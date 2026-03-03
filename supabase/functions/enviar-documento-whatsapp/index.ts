@@ -1,6 +1,6 @@
 // @ts-nocheck
 // supabase/functions/enviar-documento-whatsapp/index.ts
-// Edge Function para enviar mensagem ou documento PDF via Z-API
+// Edge Function para enviar mensagem ou documento PDF via provedor de WhatsApp (Z-API/UazAPI)
 // Atualizado: 23/01/2026 - Suporte a envio de documentos PDF
 
 interface RequestBody {
@@ -81,24 +81,29 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Ler secrets (disponibilizadas automaticamente no runtime)
-    const INSTANCE_ID = Deno.env.get('ZAPI_INSTANCE_ID');
-    const CLIENT_TOKEN = Deno.env.get('ZAPI_CLIENT_TOKEN');
-    const OPTIONAL_TOKEN = Deno.env.get('ZAPI_TOKEN'); // usado se aplicável
+    // Ler configuração do provedor
+    const provider = (Deno.env.get('WHATSAPP_PROVIDER') || 'zapi').toLowerCase();
+    const isUazApi = provider === 'uazapi';
 
-    if (!INSTANCE_ID || !CLIENT_TOKEN) {
-      console.error('Segredos da Z-API não configurados no ambiente');
+    const INSTANCE_ID = isUazApi ? Deno.env.get('UAZAPI_INSTANCE_ID') : Deno.env.get('ZAPI_INSTANCE_ID');
+    const CLIENT_TOKEN = isUazApi
+      ? (Deno.env.get('UAZAPI_CLIENT_TOKEN') || '')
+      : (Deno.env.get('ZAPI_CLIENT_TOKEN') || '');
+    const OPTIONAL_TOKEN = isUazApi ? Deno.env.get('UAZAPI_TOKEN') : Deno.env.get('ZAPI_TOKEN');
+
+    if (!INSTANCE_ID) {
+      console.error('Segredos da API WhatsApp não configurados no ambiente (INSTANCE_ID ausente)');
       return new Response(JSON.stringify({ error: 'Servidor não configurado' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
       });
     }
 
-    // Montar URL da Z-API (endpoint correto conforme documentação oficial)
-    const ZAPI_TOKEN = OPTIONAL_TOKEN || '';
-    if (!ZAPI_TOKEN) {
-      console.error('ZAPI_TOKEN ausente no ambiente');
-      return new Response(JSON.stringify({ error: 'Servidor não configurado (ZAPI_TOKEN ausente)' }), {
+    // Montar URL do provedor
+    const API_TOKEN = OPTIONAL_TOKEN || '';
+    if (!API_TOKEN) {
+      console.error('Token da API WhatsApp ausente no ambiente');
+      return new Response(JSON.stringify({ error: 'Servidor não configurado (token ausente)' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
       });
@@ -113,11 +118,33 @@ Deno.serve(async (req: Request) => {
       endpoint = isPdf ? 'send-document/pdf' : 'send-document';
     }
     
-    const url = `https://api.z-api.io/instances/${encodeURIComponent(INSTANCE_ID)}/token/${encodeURIComponent(ZAPI_TOKEN)}/${endpoint}`;
+    const defaultBase = isUazApi ? 'https://api.uazapi.dev' : 'https://api.z-api.io';
+    const baseUrl = (Deno.env.get('WHATSAPP_BASE_URL') || defaultBase).replace(/\/$/, '');
+    const textPathTemplate = Deno.env.get('WHATSAPP_TEXT_PATH') || '/instances/{instanceId}/token/{token}/send-text';
+    const documentPathTemplate = Deno.env.get('WHATSAPP_DOCUMENT_PATH') || '/instances/{instanceId}/token/{token}/send-document';
+    const documentPdfPathTemplate = Deno.env.get('WHATSAPP_DOCUMENT_PDF_PATH') || '/instances/{instanceId}/token/{token}/send-document/pdf';
 
-    // Montar payload conforme o que a Z-API espera
+    const pathTemplate = endpoint === 'send-text'
+      ? textPathTemplate
+      : endpoint === 'send-document/pdf'
+        ? documentPdfPathTemplate
+        : documentPathTemplate;
+
+    const path = pathTemplate
+      .replace('{instanceId}', encodeURIComponent(INSTANCE_ID))
+      .replace('{token}', encodeURIComponent(API_TOKEN));
+
+    const url = `${baseUrl}${path}`;
+
+    // Montar payload conforme o provedor (campos customizáveis por env)
+    const phoneField = Deno.env.get('WHATSAPP_PHONE_FIELD') || 'phone';
+    const messageField = Deno.env.get('WHATSAPP_MESSAGE_FIELD') || 'message';
+    const documentField = Deno.env.get('WHATSAPP_DOCUMENT_FIELD') || 'document';
+    const fileNameField = Deno.env.get('WHATSAPP_FILENAME_FIELD') || 'fileName';
+    const captionField = Deno.env.get('WHATSAPP_CAPTION_FIELD') || 'caption';
+
     const zapiBody: Record<string, unknown> = {
-      phone: payload.to,
+      [phoneField]: payload.to,
     };
     
     const safeFileName = (payload.fileName || 'documento.pdf')
@@ -129,24 +156,37 @@ Deno.serve(async (req: Request) => {
       const base64 = payload.fileBase64.startsWith('data:')
         ? payload.fileBase64
         : `data:application/pdf;base64,${payload.fileBase64}`;
-      zapiBody['document'] = base64;
-      zapiBody['fileName'] = safeFileName || 'documento.pdf';
-      if (payload.caption) zapiBody['caption'] = payload.caption;
+      zapiBody[documentField] = base64;
+      zapiBody[fileNameField] = safeFileName || 'documento.pdf';
+      if (payload.caption) zapiBody[captionField] = payload.caption;
     } else if (payload.fileUrl) {
-      // Para enviar documento via Z-API por URL
-      zapiBody['document'] = payload.fileUrl;
+      // Para enviar documento por URL
+      zapiBody[documentField] = payload.fileUrl;
       const fileNameFromUrl = payload.fileUrl.split('?')[0].split('/').pop();
-      zapiBody['fileName'] = safeFileName || fileNameFromUrl || 'documento.pdf';
-      if (payload.caption) zapiBody['caption'] = payload.caption;
+      zapiBody[fileNameField] = safeFileName || fileNameFromUrl || 'documento.pdf';
+      if (payload.caption) zapiBody[captionField] = payload.caption;
     } else if (payload.message) {
       // Para enviar apenas texto
-      zapiBody['message'] = payload.message;
+      zapiBody[messageField] = payload.message;
     }
 
     const zHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
-      'Client-Token': CLIENT_TOKEN,
     };
+
+    if (CLIENT_TOKEN) {
+      const clientTokenHeader = Deno.env.get('WHATSAPP_CLIENT_TOKEN_HEADER') || 'Client-Token';
+      zHeaders[clientTokenHeader] = CLIENT_TOKEN;
+    }
+
+    const authType = (Deno.env.get('WHATSAPP_AUTH_TYPE') || 'none').toLowerCase(); // none|bearer|header
+    const authHeader = Deno.env.get('WHATSAPP_AUTH_HEADER') || 'Authorization';
+    const authToken = Deno.env.get('WHATSAPP_AUTH_TOKEN') || API_TOKEN;
+    if (authType === 'bearer' && authToken) {
+      zHeaders[authHeader] = `Bearer ${authToken}`;
+    } else if (authType === 'header' && authToken) {
+      zHeaders[authHeader] = authToken;
+    }
 
     // Timeout para a requisição à Z-API
     const controller = new AbortController();
@@ -164,13 +204,13 @@ Deno.serve(async (req: Request) => {
     } catch (err: any) {
       clearTimeout(timeout);
       if (err.name === 'AbortError') {
-        return new Response(JSON.stringify({ error: 'Tempo esgotado na requisição à Z-API' }), {
+        return new Response(JSON.stringify({ error: 'Tempo esgotado na requisição à API WhatsApp' }), {
           status: 504,
           headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
-      console.error('Falha ao chamar Z-API:', err);
-      return new Response(JSON.stringify({ error: 'Falha na chamada à Z-API' }), {
+      console.error('Falha ao chamar API WhatsApp:', err);
+      return new Response(JSON.stringify({ error: 'Falha na chamada à API WhatsApp' }), {
         status: 502,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
       });
@@ -182,13 +222,13 @@ Deno.serve(async (req: Request) => {
     let zJson: any = null;
     try { zJson = JSON.parse(text); } catch { zJson = { raw: text }; }
 
-    console.log('Z-API response:', { status: zresp.status, body: zJson });
+    console.log('WhatsApp API response:', { status: zresp.status, body: zJson });
 
     if (!zresp.ok) {
-      console.error('Z-API retornou erro', { status: zresp.status, body: zJson });
+      console.error('API WhatsApp retornou erro', { status: zresp.status, body: zJson });
       return new Response(JSON.stringify({ 
         success: false, 
-        error: 'Erro da Z-API', 
+        error: 'Erro da API WhatsApp', 
         z_api_status: zresp.status, 
         z_api_error: zJson 
       }), {

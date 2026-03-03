@@ -5,7 +5,22 @@ import { toast } from 'sonner';
 
 export function useCashFlow(selectedDate?: string) {
   const queryClient = useQueryClient();
-  const date = selectedDate || new Date().toISOString().split('T')[0];
+  // Usar a data em timezone de Paulo Afonso (UTC-3)
+  const getLocalDate = () => {
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Fortaleza',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    const parts = formatter.formatToParts(now);
+    const day = parts.find(p => p.type === 'day')?.value || '01';
+    const month = parts.find(p => p.type === 'month')?.value || '01';
+    const year = parts.find(p => p.type === 'year')?.value || '2026';
+    return `${year}-${month}-${day}`;
+  };
+  const date = selectedDate || getLocalDate();
 
   // Buscar todos os registros de um dia específico
   const cashFlowQuery = useQuery({
@@ -41,6 +56,9 @@ export function useCashFlow(selectedDate?: string) {
     },
     gcTime: 0,
     staleTime: 0,
+    refetchInterval: 4000,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 
   // Buscar resumo do dia
@@ -78,6 +96,9 @@ export function useCashFlow(selectedDate?: string) {
     },
     gcTime: 0,
     staleTime: 0,
+    refetchInterval: 4000,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 
   // Criar entrada manual
@@ -288,6 +309,9 @@ export function useCashFlowPeriod(period: 'week' | 'month', selectedMonth?: stri
         retiradas,
       } as CashFlowPeriodSummary;
     },
+    refetchInterval: 4000,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 
   return {

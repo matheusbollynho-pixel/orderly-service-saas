@@ -38,6 +38,7 @@ Deno.serve(async (req) => {
   try {
     console.log(`📥 Request: ${req.method}`)
     
+    // CORS
     if (req.method === 'OPTIONS') {
       return new Response(null, { 
         status: 204,
@@ -49,6 +50,7 @@ Deno.serve(async (req) => {
       })
     }
 
+    // Parse body
     let body = {}
     try {
       if (req.method === 'POST') {
@@ -64,6 +66,7 @@ Deno.serve(async (req) => {
 
     console.log(`🔍 Body: ${JSON.stringify(body)}`)
 
+    // Se tiver order_id, buscar ordem específica
     if (body.order_id) {
       console.log(`📋 Buscando ordem: ${body.order_id}`)
       
@@ -92,6 +95,7 @@ Deno.serve(async (req) => {
       })
     }
 
+    // Caso contrário, buscar ordens de 1 dia atrás
     console.log(`📊 Verificando ordens de 1 dia atrás`)
     
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()

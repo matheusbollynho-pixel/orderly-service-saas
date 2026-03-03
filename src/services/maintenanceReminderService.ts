@@ -23,6 +23,20 @@ export interface MaintenanceReminder {
   client_phone: string;
 }
 
+export interface MaintenanceReminderWithDetails extends MaintenanceReminder {
+  keyword?: {
+    keyword: string;
+    reminder_days: number;
+  } | null;
+  order?: {
+    client_name: string;
+    client_phone: string;
+    client?: {
+      autoriza_lembretes: boolean | null;
+    } | null;
+  } | null;
+}
+
 /**
  * Get all enabled maintenance keywords
  */
@@ -49,10 +63,16 @@ export function findKeywordInText(
   text: string,
   keywords: MaintenanceKeyword[]
 ): MaintenanceKeyword | null {
-  const lowerText = text.toLowerCase();
+  const normalize = (value: string) =>
+    value
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+
+  const normalizedText = normalize(text);
 
   for (const keyword of keywords) {
-    if (lowerText.includes(keyword.keyword.toLowerCase())) {
+    if (normalizedText.includes(normalize(keyword.keyword))) {
       return keyword;
     }
   }
@@ -190,6 +210,69 @@ export async function getPendingRemindersForClient(
 }
 
 /**
+ * Get all pending maintenance reminders with details
+ */
+export async function getPendingMaintenanceReminders(): Promise<MaintenanceReminderWithDetails[]> {
+  try {
+    const { data, error } = await sb
+      .from('maintenance_reminders')
+      .select(
+        `
+        id,
+        order_id,
+        client_id,
+        keyword_id,
+        service_date,
+        reminder_due_date,
+        reminder_sent_at,
+        client_phone,
+        keyword:maintenance_keywords(keyword, reminder_days),
+        order:service_orders(client_name, client_phone, client:clients(autoriza_lembretes))
+        `
+      )
+      .is('reminder_sent_at', null)
+      .order('reminder_due_date', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Erro ao buscar lembretes pendentes:', error);
+    return [];
+  }
+}
+
+/**
+ * Get all maintenance reminders (pending and sent) with details
+ */
+export async function getAllMaintenanceReminders(): Promise<MaintenanceReminderWithDetails[]> {
+  try {
+    const { data, error } = await sb
+      .from('maintenance_reminders')
+      .select(
+        `
+        id,
+        order_id,
+        client_id,
+        keyword_id,
+        service_date,
+        reminder_due_date,
+        reminder_sent_at,
+        client_phone,
+        keyword:maintenance_keywords(keyword, reminder_days),
+        order:service_orders(client_name, client_phone, client:clients(autoriza_lembretes))
+        `
+      )
+      .order('reminder_due_date', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Erro ao buscar todos os lembretes:', error);
+    return [];
+  }
+}
+
+/**
  * Get all reminders (sent and pending) for a client
  */
 export async function getAllRemindersForClient(
@@ -272,5 +355,175 @@ export async function createMaintenanceKeyword(
   } catch (error) {
     console.error('Erro ao criar keyword:', error);
     return null;
+  }
+}
+
+/**
+ * Delete maintenance keyword
+ */
+export async function deleteMaintenanceKeyword(
+  keywordId: string
+): Promise<boolean> {
+  try {
+    const { error } = await sb
+      .from('maintenance_keywords')
+      .delete()
+      .eq('id', keywordId);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Erro ao deletar keyword:', error);
+    return false;
+  }
+}
+
+/**
+ * Cancel pending reminders for a client and keyword (for rescheduling)
+ * Used when customer returns before the scheduled maintenance reminder date
+ */
+export async function cancelPendingRemindersForKeyword(
+  clientId: string | null,
+  clientPhone: string,
+  keywordId: string,
+  reason: string = 'Cliente retornou antes do prazo - remarcação de lembrete'
+): Promise<number> {
+  try {
+    // Get pending reminders to track cancellation
+    let selectQuery = sb
+      .from('maintenance_reminders')
+      .select('id, reminder_due_date, service_date')
+      .eq('keyword_id', keywordId)
+      .is('reminder_sent_at', null);
+
+    if (clientId) {
+      selectQuery = selectQuery.eq('client_id', clientId);
+    } else {
+      selectQuery = selectQuery.eq('client_phone', clientPhone);
+    }
+
+    const { data: remindersToCancel, error: selectError } = await selectQuery;
+    if (selectError) throw selectError;
+
+    if (!remindersToCancel || remindersToCancel.length === 0) {
+      return 0;
+    }
+
+    // Delete the pending reminders
+    let deleteQuery = sb
+      .from('maintenance_reminders')
+      .delete()
+      .eq('keyword_id', keywordId)
+      .is('reminder_sent_at', null);
+
+    if (clientId) {
+      deleteQuery = deleteQuery.eq('client_id', clientId);
+    } else {
+      deleteQuery = deleteQuery.eq('client_phone', clientPhone);
+    }
+
+    const { error: deleteError } = await deleteQuery;
+    if (deleteError) throw deleteError;
+
+    // Log the cancellation if reminder_history table exists
+    for (const reminder of remindersToCancel) {
+      try {
+        await sb
+          .from('maintenance_reminder_history')
+          .insert({
+            client_id: clientId,
+            client_phone: clientPhone,
+            keyword_id: keywordId,
+            action: 'cancelled',
+            reason: reason,
+            original_due_date: reminder.reminder_due_date,
+            original_service_date: reminder.service_date,
+          });
+      } catch (historyError) {
+        // History table might not exist yet, that's ok
+        console.debug('History not recorded:', historyError);
+      }
+    }
+
+    console.log(`✅ ${remindersToCancel.length} lembrete(s) cancelado(s) para reprogramação`);
+    return remindersToCancel.length;
+  } catch (error) {
+    console.error('Erro ao cancelar lembretes:', error);
+    return 0;
+  }
+}
+
+/**
+ * Reschedule maintenance reminder when customer returns early
+ * This function:
+ * 1. Cancels existing pending reminders for the same keyword
+ * 2. Creates a new reminder based on the new service date
+ */
+export async function rescheduleMaintenanceReminder(
+  orderId: string,
+  clientId: string | null,
+  clientPhone: string,
+  keywordId: string,
+  newServiceDate: Date
+): Promise<{ cancelled: number; created: MaintenanceReminder | null }> {
+  try {
+    // Step 1: Cancel existing pending reminders
+    const cancelledCount = await cancelPendingRemindersForKeyword(
+      clientId,
+      clientPhone,
+      keywordId,
+      'Cliente retornou para serviço - remarcação automática'
+    );
+
+    // Step 2: Create new reminder with the new service date
+    const newReminder = await createMaintenanceReminder(
+      orderId,
+      clientId,
+      clientPhone,
+      keywordId,
+      newServiceDate
+    );
+
+    console.log(`📅 Lembrete reprogramado: ${cancelledCount} cancelado(s), 1 novo criado`);
+
+    return {
+      cancelled: cancelledCount,
+      created: newReminder,
+    };
+  } catch (error) {
+    console.error('Erro ao reprogramar lembrete:', error);
+    return {
+      cancelled: 0,
+      created: null,
+    };
+  }
+}
+
+/**
+ * Get cancellation history for a client (if history table exists)
+ */
+export async function getReminderCancellationHistory(
+  clientId: string | null,
+  clientPhone: string
+): Promise<any[]> {
+  try {
+    let query = sb
+      .from('maintenance_reminder_history')
+      .select('*')
+      .eq('action', 'cancelled');
+
+    if (clientId) {
+      query = query.eq('client_id', clientId);
+    } else {
+      query = query.eq('client_phone', clientPhone);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.debug('Histórico não disponível:', error);
+    return [];
   }
 }

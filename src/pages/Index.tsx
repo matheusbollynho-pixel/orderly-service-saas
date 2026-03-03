@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useServiceOrders } from '@/hooks/useServiceOrders';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import { useMechanics } from '@/hooks/useMechanics';
 import { useAuth } from '@/hooks/useAuth';
 import { useClients } from '@/hooks/useClients';
@@ -20,11 +21,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Wrench, Search } from 'lucide-react';
 import { toast } from 'sonner';
-import { getMaintenanceKeywords, findKeywordInText, createMaintenanceReminder } from '@/services/maintenanceReminderService';
+import { getMaintenanceKeywords, findKeywordInText, createMaintenanceReminder, rescheduleMaintenanceReminder } from '@/services/maintenanceReminderService';
 
 type View = 'dashboard' | 'new' | 'express' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa';
 
 export default function Index() {
+  useRealtimeSync();
+
   const { isAdmin, canAccessCashFlow, canAccessReports } = useAuth();
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [selectedOrder, setSelectedOrder] = useState<ServiceOrder | null>(null);
@@ -73,6 +76,15 @@ export default function Index() {
 
   const { mechanics } = useMechanics();
   const { upsertClient, upsertMotorcycle, getClientById } = useClients();
+
+  // Mantém a OS selecionada sincronizada com o cache atualizado (PC/celular)
+  useEffect(() => {
+    if (!selectedOrder?.id) return;
+    const updated = orders.find((o) => o.id === selectedOrder.id);
+    if (updated) {
+      setSelectedOrder((prev) => (prev?.id === updated.id ? updated : prev));
+    }
+  }, [orders, selectedOrder?.id]);
 
   const handleCreateOrder = async (formData: any) => {
     try {
@@ -350,7 +362,7 @@ Retirada: ${retiradaInfo}`;
             return { ...prev, materials: [...current, saved] } as ServiceOrder;
           });
 
-          // Criar lembrete baseado na descrição do item (Peças e Serviços)
+          // Criar ou reprogramar lembrete baseado na descrição do item (Peças e Serviços)
           try {
             const keywords = await getMaintenanceKeywords();
             const detectedKeyword = findKeywordInText(
@@ -363,7 +375,9 @@ Retirada: ${retiradaInfo}`;
               if (client?.autoriza_lembretes === false) return;
 
               const serviceDate = new Date(saved?.created_at || selectedOrder?.entry_date || new Date());
-              const reminder = await createMaintenanceReminder(
+              
+              // Automatically cancel old pending reminder and create new one
+              const result = await rescheduleMaintenanceReminder(
                 selectedOrder.id,
                 selectedOrder.client_id,
                 selectedOrder.client_phone || '',
@@ -371,12 +385,15 @@ Retirada: ${retiradaInfo}`;
                 serviceDate
               );
 
-              if (reminder) {
-                toast.success(`Lembrete criado para "${detectedKeyword.keyword}" em ${detectedKeyword.reminder_days} dias! 🔔`);
+              if (result.created) {
+                const message = result.cancelled > 0 
+                  ? `✅ Lembrete anterior cancelado. Novo agendado para "${detectedKeyword.keyword}" em ${detectedKeyword.reminder_days} dias! 🔔`
+                  : `✅ Lembrete criado para "${detectedKeyword.keyword}" em ${detectedKeyword.reminder_days} dias! 🔔`;
+                toast.success(message);
               }
             }
           } catch (reminderError) {
-            console.error('⚠️ Erro ao criar lembrete (Peças e Serviços):', reminderError);
+            console.error('⚠️ Erro ao criar/reprogramar lembrete (Peças e Serviços):', reminderError);
           }
         },
         onError: (error: any) => {
@@ -432,7 +449,7 @@ Retirada: ${retiradaInfo}`;
     );
   };
 
-  const handleAddPayment = (payload: { order_id: string; amount: number; method: PaymentMethod; notes?: string | null }) => {
+  const handleAddPayment = (payload: { order_id: string; amount: number; discount_amount?: number | null; method: PaymentMethod; notes?: string | null }) => {
     createPayment(payload, {
       onSuccess: (saved: any) => {
         setSelectedOrder(prev => {

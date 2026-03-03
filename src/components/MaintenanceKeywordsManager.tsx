@@ -7,6 +7,7 @@ import {
   getMaintenanceKeywords,
   updateMaintenanceKeyword,
   createMaintenanceKeyword,
+  deleteMaintenanceKeyword,
   type MaintenanceKeyword,
 } from '@/services/maintenanceReminderService';
 
@@ -15,6 +16,7 @@ export function MaintenanceKeywordsManager() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const [searchFilter, setSearchFilter] = useState('');
 
   const [formData, setFormData] = useState<Partial<MaintenanceKeyword>>({
     keyword: '',
@@ -96,6 +98,20 @@ export function MaintenanceKeywordsManager() {
     });
   };
 
+  const handleDelete = async (keywordId: string, keywordName: string) => {
+    if (!confirm(`Tem certeza que deseja excluir a palavra-chave "${keywordName}"?`)) {
+      return;
+    }
+
+    const success = await deleteMaintenanceKeyword(keywordId);
+    if (success) {
+      setKeywords(keywords.filter((k) => k.id !== keywordId));
+      alert('Palavra-chave excluída com sucesso!');
+    } else {
+      alert('Erro ao excluir palavra-chave');
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-6 text-center">
@@ -104,14 +120,26 @@ export function MaintenanceKeywordsManager() {
     );
   }
 
+  const filteredKeywords = keywords.filter((keyword) =>
+    keyword.keyword.toLowerCase().includes(searchFilter.toLowerCase()) ||
+    (keyword.description || '').toLowerCase().includes(searchFilter.toLowerCase())
+  );
+
   return (
     <div className="p-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Palavras-chave de Manutenção</h2>
+      <div className="flex justify-between items-center gap-3">
+        <div className="flex-1">
+          <Input
+            type="text"
+            value={searchFilter}
+            onChange={(e) => setSearchFilter(e.target.value)}
+            placeholder="Pesquisar palavra-chave..."
+          />
+        </div>
         {!isAdding && !editing && (
           <Button
             onClick={() => setIsAdding(true)}
-            className="gap-2 bg-green-600 hover:bg-green-700"
+            className="gap-2 bg-green-600 hover:bg-green-700 flex-shrink-0"
           >
             <Plus size={20} /> Adicionar Keyword
           </Button>
@@ -203,12 +231,12 @@ export function MaintenanceKeywordsManager() {
 
       {/* Lista de keywords */}
       <div className="grid gap-4">
-        {keywords.length === 0 ? (
+        {filteredKeywords.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
-            Nenhuma palavra-chave cadastrada
+            {keywords.length === 0 ? 'Nenhuma palavra-chave cadastrada' : 'Nenhuma palavra-chave encontrada'}
           </div>
         ) : (
-          keywords.map((keyword) => (
+          filteredKeywords.map((keyword) => (
             <div
               key={keyword.id}
               className="bg-white p-4 rounded-lg border border-gray-200 flex justify-between items-start"
@@ -241,6 +269,14 @@ export function MaintenanceKeywordsManager() {
                   className="gap-1"
                 >
                   <Edit2 size={16} /> Editar
+                </Button>
+                <Button
+                  onClick={() => handleDelete(keyword.id, keyword.keyword)}
+                  size="sm"
+                  variant="destructive"
+                  className="gap-1"
+                >
+                  <Trash2 size={16} /> Excluir
                 </Button>
               </div>
             </div>

@@ -103,6 +103,7 @@ export type Database = {
           id: string
           order_id: string
           amount: number
+          discount_amount: number | null
           method: 'dinheiro' | 'pix' | 'cartao' | 'credito' | 'debito' | 'transferencia' | 'outro'
           reference: string | null
           notes: string | null
@@ -112,6 +113,7 @@ export type Database = {
           id?: string
           order_id: string
           amount: number
+          discount_amount?: number | null
           method: 'dinheiro' | 'pix' | 'cartao' | 'credito' | 'debito' | 'transferencia' | 'outro'
           reference?: string | null
           notes?: string | null
@@ -121,6 +123,7 @@ export type Database = {
           id?: string
           order_id?: string
           amount?: number
+          discount_amount?: number | null
           method?: 'dinheiro' | 'pix' | 'cartao' | 'credito' | 'debito' | 'transferencia' | 'outro'
           reference?: string | null
           notes?: string | null

@@ -1,29 +1,15 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.0";
+import { sendWhatsAppText } from "../_shared/whatsapp.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const ZAPI_INSTANCE_ID = Deno.env.get("ZAPI_INSTANCE_ID")!;
-const ZAPI_CLIENT_TOKEN = Deno.env.get("ZAPI_CLIENT_TOKEN")!;
-const ZAPI_TOKEN = Deno.env.get("ZAPI_TOKEN")!;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 async function sendWhatsAppMessage(phone: string, message: string): Promise<boolean> {
   try {
-    const url = `https://api.z-api.io/instances/${ZAPI_INSTANCE_ID}/token/${ZAPI_TOKEN}/send-text`;
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Client-Token": ZAPI_CLIENT_TOKEN,
-      },
-      body: JSON.stringify({
-        phone: phone,
-        message,
-      }),
-    });
-
-    return response.ok;
+    await sendWhatsAppText(phone, message);
+    return true;
   } catch (error) {
     console.error("Erro ao enviar WhatsApp:", error);
     return false;

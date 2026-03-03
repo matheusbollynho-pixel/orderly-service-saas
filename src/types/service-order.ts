@@ -33,6 +33,7 @@ export interface Payment {
   id: string;
   order_id: string;
   amount: number;
+  discount_amount?: number | null;
   method: PaymentMethod;
   reference?: string | null;
   notes?: string | null;

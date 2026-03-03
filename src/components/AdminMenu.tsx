@@ -6,14 +6,14 @@ import { MaintenanceKeywordsManager } from './MaintenanceKeywordsManager';
 import { useAuth } from '@/hooks/useAuth';
 
 export const AdminMenu = () => {
-  const { user } = useAuth();
+  const { user, isRestrictedUser } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [cleanupDays, setCleanupDays] = useState(100);
   const [isLoading, setIsLoading] = useState(false);
   const [showKeywordsManager, setShowKeywordsManager] = useState(false);
 
-  // Não renderizar se usuário não está autenticado
-  if (!user) {
+  // Não renderizar se usuário não está autenticado ou é usuário restrito
+  if (!user || isRestrictedUser) {
     return null;
   }
 

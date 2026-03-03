@@ -9,13 +9,25 @@ import {
   expireBirthdayDiscount,
   getClientBirthdayDiscount,
 } from '@/lib/birthdayService';
+import type { BirthdayDiscount } from '@/lib/birthdayService';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Heart, Gift, Bell, Clock, CheckCircle, Zap } from 'lucide-react';
+import { Heart, Gift, Bell, Clock, CheckCircle, Zap, Eye, EyeOff, Wrench } from 'lucide-react';
 import { MaintenanceKeywordsManager } from '@/components/MaintenanceKeywordsManager';
+import { MaintenanceDebugPanel } from '@/components/MaintenanceDebugPanel';
+import { useAuth } from '@/hooks/useAuth';
+import {
+  getPendingMaintenanceReminders,
+  getMaintenanceKeywords,
+  findKeywordInText,
+  createMaintenanceReminder,
+  getAllMaintenanceReminders,
+  type MaintenanceReminderWithDetails,
+} from '@/services/maintenanceReminderService';
 
 interface ClientDiscount {
   id: string;
@@ -32,9 +44,21 @@ interface ClientDiscount {
 }
 
 export default function AfterSalesPage() {
+  const { isRestrictedUser } = useAuth();
   const [clients, setClients] = useState<ClientDiscount[]>([]);
   const [loading, setLoading] = useState(true);
   const [sendingId, setSendingId] = useState<string | null>(null);
+  const [maintenanceReminders, setMaintenanceReminders] = useState<MaintenanceReminderWithDetails[]>([]);
+  const [maintenanceLoading, setMaintenanceLoading] = useState(true);
+  const [allMaintenanceReminders, setAllMaintenanceReminders] = useState<MaintenanceReminderWithDetails[]>([]);
+  const [backfillDays, setBackfillDays] = useState(180);
+  const [backfillLoading, setBackfillLoading] = useState(false);
+  const [filterStartDate, setFilterStartDate] = useState('');
+  const [filterEndDate, setFilterEndDate] = useState('');
+  const [filterKeyword, setFilterKeyword] = useState('');
+  const [filterClient, setFilterClient] = useState('');
+  const [expandUpcoming, setExpandUpcoming] = useState(true);
+  const [birthdayFilterType, setBirthdayFilterType] = useState<'all' | 'upcoming' | 'active'>('all');
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     clientId: string;
@@ -49,6 +73,7 @@ export default function AfterSalesPage() {
 
   useEffect(() => {
     loadData();
+    loadMaintenanceReminders();
   }, []);
 
   const loadData = async () => {
@@ -58,7 +83,7 @@ export default function AfterSalesPage() {
       const upcoming = await getUpcomingBirthdays();
       
       // Get active discounts
-      const discounts = await getActiveBirthdayDiscounts();
+      const discounts: BirthdayDiscount[] = await getActiveBirthdayDiscounts();
 
       // Combine data
       const clientsMap = new Map<string, ClientDiscount>();
@@ -114,6 +139,66 @@ export default function AfterSalesPage() {
     }
   };
 
+  const loadMaintenanceReminders = async () => {
+    setMaintenanceLoading(true);
+    const [pending, all] = await Promise.all([
+      getPendingMaintenanceReminders(),
+      getAllMaintenanceReminders(),
+    ]);
+    setMaintenanceReminders(pending);
+    setAllMaintenanceReminders(all);
+    setMaintenanceLoading(false);
+  };
+
+  const handleBackfillReminders = async () => {
+    setBackfillLoading(true);
+    try {
+      const since = new Date();
+      since.setDate(since.getDate() - backfillDays);
+
+      const { data: materials, error } = await supabase
+        .from('materials')
+        .select(
+          'id, descricao, created_at, order:service_orders(id, client_id, client_phone, entry_date, client:clients(autoriza_lembretes))'
+        )
+        .gte('created_at', since.toISOString());
+
+      if (error) throw error;
+
+      const keywords = await getMaintenanceKeywords();
+      let createdCount = 0;
+
+      for (const material of materials || []) {
+        const description = material.descricao || '';
+        const detectedKeyword = findKeywordInText(description, keywords);
+        if (!detectedKeyword) continue;
+
+        const order = material.order;
+        if (!order?.id || !order?.client_id) continue;
+        if (order.client?.autoriza_lembretes === false) continue;
+
+        const serviceDate = new Date(material.created_at || order.entry_date || new Date());
+        const reminder = await createMaintenanceReminder(
+          order.id,
+          order.client_id,
+          order.client_phone || '',
+          detectedKeyword.id,
+          serviceDate
+        );
+
+        if (reminder) createdCount++;
+      }
+
+      await loadMaintenanceReminders();
+      alert(`✅ Lembretes gerados: ${createdCount}`);
+    } catch (error) {
+      console.error('Erro ao reprocessar lembretes:', error);
+      alert('❌ Erro ao reprocessar lembretes');
+    } finally {
+      setBackfillLoading(false);
+    }
+  };
+
   const handleSendMessage = async (client: ClientDiscount) => {
     setSendingId(client.id);
     try {
@@ -162,6 +247,46 @@ export default function AfterSalesPage() {
     }
   };
 
+  const now = new Date();
+  const allowedReminders = maintenanceReminders.filter(
+    (reminder) => reminder.order?.client?.autoriza_lembretes !== false
+  );
+  const filteredAllowedReminders = allowedReminders.filter((reminder) => {
+    const dueDate = new Date(reminder.reminder_due_date);
+    if (filterStartDate) {
+      const start = new Date(`${filterStartDate}T00:00:00`);
+      if (dueDate < start) return false;
+    }
+    if (filterEndDate) {
+      const end = new Date(`${filterEndDate}T23:59:59.999`);
+      if (dueDate > end) return false;
+    }
+    if (filterKeyword) {
+      const keyword = (reminder.keyword?.keyword || '').toLowerCase();
+      if (!keyword.includes(filterKeyword.toLowerCase())) return false;
+    }
+    if (filterClient) {
+      const name = (reminder.order?.client_name || '').toLowerCase();
+      const phone = (reminder.order?.client_phone || reminder.client_phone || '').toLowerCase();
+      const query = filterClient.toLowerCase();
+      if (!name.includes(query) && !phone.includes(query)) return false;
+    }
+    return true;
+  });
+  const dueReminders = filteredAllowedReminders.filter(
+    (reminder) => new Date(reminder.reminder_due_date) <= now
+  );
+  const upcomingReminders = filteredAllowedReminders.filter(
+    (reminder) => new Date(reminder.reminder_due_date) > now
+  );
+
+  const totalAll = allMaintenanceReminders.length;
+  const totalSent = allMaintenanceReminders.filter((r) => r.reminder_sent_at).length;
+  const totalPending = allMaintenanceReminders.filter((r) => !r.reminder_sent_at).length;
+  const totalBlocked = allMaintenanceReminders.filter(
+    (r) => r.order?.client?.autoriza_lembretes === false
+  ).length;
+
   const getDaysUntilBirthday = (birthDate: string | null): number | null => {
     if (!birthDate) return null;
     
@@ -187,6 +312,18 @@ export default function AfterSalesPage() {
     const today = new Date();
     const diff = expire.getTime() - today.getTime();
     return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  };
+
+  const getFilteredBirthdayClients = () => {
+    return clients.filter(c => {
+      if (birthdayFilterType === 'upcoming') {
+        const daysUntil = getDaysUntilBirthday(c.birth_date);
+        return daysUntil !== null && daysUntil <= 7;
+      } else if (birthdayFilterType === 'active') {
+        return c.discount?.is_active;
+      }
+      return true; // 'all'
+    });
   };
 
   const getTodaysBirthdays = async () => {
@@ -291,21 +428,36 @@ export default function AfterSalesPage() {
 
         {/* Tabs */}
         <Tabs defaultValue="aniversario" className="mb-8">
-          <TabsList className="grid w-full grid-cols-2 bg-white">
+          <TabsList className={`grid w-full ${isRestrictedUser ? 'grid-cols-2' : 'grid-cols-3'} bg-white`}>
             <TabsTrigger value="aniversario" className="gap-2">
               <Gift size={18} />
               Aniversário
             </TabsTrigger>
-            <TabsTrigger value="manutencao" className="gap-2">
-              <Zap size={18} />
-              Manutenção
-            </TabsTrigger>
+            {!isRestrictedUser && (
+              <>
+                <TabsTrigger value="manutencao" className="gap-2">
+                  <Zap size={18} />
+                  Manutenção
+                </TabsTrigger>
+                <TabsTrigger value="debug" className="gap-2">
+                  <Wrench size={18} />
+                  Debug
+                </TabsTrigger>
+              </>
+            )}
           </TabsList>
 
           {/* ABA: ANIVERSÁRIO */}
           <TabsContent value="aniversario" className="space-y-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <Card>
+          <Card 
+            className={`cursor-pointer transition-all ${
+              birthdayFilterType === 'upcoming' 
+                ? 'ring-2 ring-red-600 bg-red-50' 
+                : 'hover:border-red-300'
+            }`}
+            onClick={() => setBirthdayFilterType('upcoming')}
+          >
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-gray-600">Aniversários próximos</CardTitle>
             </CardHeader>
@@ -316,7 +468,14 @@ export default function AfterSalesPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card 
+            className={`cursor-pointer transition-all ${
+              birthdayFilterType === 'active' 
+                ? 'ring-2 ring-green-600 bg-green-50' 
+                : 'hover:border-green-300'
+            }`}
+            onClick={() => setBirthdayFilterType('active')}
+          >
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-gray-600">Descontos ativos</CardTitle>
             </CardHeader>
@@ -327,7 +486,14 @@ export default function AfterSalesPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card 
+            className={`cursor-pointer transition-all ${
+              birthdayFilterType === 'all' 
+                ? 'ring-2 ring-blue-600 bg-blue-50' 
+                : 'hover:border-blue-300'
+            }`}
+            onClick={() => setBirthdayFilterType('all')}
+          >
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-gray-600">Clientes cadastrados</CardTitle>
             </CardHeader>
@@ -341,7 +507,7 @@ export default function AfterSalesPage() {
 
         {/* Clients List */}
         <div className="space-y-4">
-          {clients.length === 0 ? (
+          {getFilteredBirthdayClients().length === 0 ? (
             <Card>
               <CardContent className="pt-6 text-center">
                 <Gift className="w-12 h-12 text-gray-300 mx-auto mb-2" />
@@ -349,7 +515,7 @@ export default function AfterSalesPage() {
               </CardContent>
             </Card>
           ) : (
-            clients.map(client => {
+            getFilteredBirthdayClients().map(client => {
               const daysUntil = getDaysUntilBirthday(client.birth_date);
               const isUpcoming = daysUntil !== null && daysUntil <= 7;
               const daysUntilExpire = client.discount ? getDaysUntilExpire(client.discount.expires_at) : 0;
@@ -472,6 +638,220 @@ export default function AfterSalesPage() {
             <div className="bg-white rounded-lg border border-gray-200">
               <div className="p-6 border-b border-gray-200">
                 <div className="flex items-center gap-3 mb-2">
+                  <Bell className="w-6 h-6 text-blue-600" />
+                  <h2 className="text-2xl font-bold text-gray-900">Monitoramento de Lembretes</h2>
+                </div>
+                <p className="text-gray-600">Veja quais lembretes já estão prontos para envio e os próximos agendados</p>
+              </div>
+              <div className="p-6 space-y-6">
+                {maintenanceLoading ? (
+                  <p className="text-sm text-gray-600">Carregando lembretes...</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
+                      <div className="text-xs text-gray-500">Total criados</div>
+                      <div className="text-2xl font-bold text-gray-900">
+                        {totalAll}
+                      </div>
+                    </div>
+                    <div className="bg-blue-50 rounded-lg border border-blue-200 p-4">
+                      <div className="text-xs text-blue-600">Pendentes</div>
+                      <div className="text-2xl font-bold text-blue-700">
+                        {totalPending}
+                      </div>
+                    </div>
+                    <div className="bg-emerald-50 rounded-lg border border-emerald-200 p-4">
+                      <div className="text-xs text-emerald-600">Enviados</div>
+                      <div className="text-2xl font-bold text-emerald-700">
+                        {totalSent}
+                      </div>
+                    </div>
+                    <div className="bg-amber-50 rounded-lg border border-amber-200 p-4">
+                      <div className="text-xs text-amber-600">Bloqueados (não autorizados)</div>
+                      <div className="text-2xl font-bold text-amber-700">
+                        {totalBlocked}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {!maintenanceLoading && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
+                      <div className="text-xs text-gray-500">Total criados (pendentes)</div>
+                      <div className="text-2xl font-bold text-gray-900">
+                        {filteredAllowedReminders.length}
+                      </div>
+                    </div>
+                    <div className="bg-red-50 rounded-lg border border-red-200 p-4">
+                      <div className="text-xs text-red-600">Para envio agora</div>
+                      <div className="text-2xl font-bold text-red-700">
+                        {dueReminders.length}
+                      </div>
+                    </div>
+                    <div className="bg-emerald-50 rounded-lg border border-emerald-200 p-4">
+                      <div className="text-xs text-emerald-600">Agendados</div>
+                      <div className="text-2xl font-bold text-emerald-700">
+                        {upcomingReminders.length}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {!maintenanceLoading && filteredAllowedReminders.length === 0 && (
+                  <p className="text-sm text-gray-600">Nenhum lembrete pendente encontrado.</p>
+                )}
+                {!maintenanceLoading && (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                      <div>
+                        <label className="text-xs text-gray-600">Período (início)</label>
+                        <Input
+                          type="date"
+                          value={filterStartDate}
+                          onChange={(e) => setFilterStartDate(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-600">Período (fim)</label>
+                        <Input
+                          type="date"
+                          value={filterEndDate}
+                          onChange={(e) => setFilterEndDate(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-600">Palavra-chave</label>
+                        <Input
+                          type="text"
+                          value={filterKeyword}
+                          onChange={(e) => setFilterKeyword(e.target.value)}
+                          placeholder="Ex: óleo"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-600">Cliente (nome ou telefone)</label>
+                        <Input
+                          type="text"
+                          value={filterClient}
+                          onChange={(e) => setFilterClient(e.target.value)}
+                          placeholder="Ex: João ou 9999"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+                      <div>
+                        <label className="text-xs text-gray-600">Reprocessar últimos dias</label>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={backfillDays}
+                          onChange={(e) => setBackfillDays(parseInt(e.target.value || '1', 10))}
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={handleBackfillReminders}
+                          disabled={backfillLoading}
+                          className="bg-blue-600 hover:bg-blue-700"
+                        >
+                          {backfillLoading ? 'Reprocessando...' : 'Reprocessar vendas'}
+                        </Button>
+                      </div>
+                      <div className="lg:col-span-2 flex">
+                        <Button
+                          onClick={() => {
+                            setFilterStartDate('');
+                            setFilterEndDate('');
+                            setFilterKeyword('');
+                            setFilterClient('');
+                          }}
+                          variant="outline"
+                        >
+                          Limpar filtros
+                        </Button>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      Isso cria lembretes a partir de itens já vendidos dentro do período informado.
+                    </p>
+                  </div>
+                )}
+                {!maintenanceLoading && filteredAllowedReminders.length > 0 && (
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-sm font-semibold text-red-600 mb-3">
+                        Pendentes para envio ({dueReminders.length})
+                      </h3>
+                      {dueReminders.length === 0 ? (
+                        <p className="text-sm text-gray-600">Nenhum lembrete pendente para envio.</p>
+                      ) : (
+                        <div className="divide-y">
+                          {dueReminders.map((reminder) => (
+                            <div key={reminder.id} className="py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                              <div>
+                                <div className="font-semibold text-gray-900">{reminder.order?.client_name ?? 'Cliente'}</div>
+                                <div className="text-sm text-gray-600">{reminder.order?.client_phone ?? reminder.client_phone ?? ''}</div>
+                                <div className="text-sm text-gray-600">
+                                  Palavra-chave: <strong>{reminder.keyword?.keyword ?? '—'}</strong>
+                                </div>
+                              </div>
+                              <div className="text-sm text-gray-600">
+                                <div>Serviço: {new Date(reminder.service_date).toLocaleDateString('pt-BR')}</div>
+                                <div className="text-red-600">Lembrete: {new Date(reminder.reminder_due_date).toLocaleDateString('pt-BR')}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-semibold text-emerald-600">
+                          Próximos agendados ({upcomingReminders.length})
+                        </h3>
+                        <button
+                          onClick={() => setExpandUpcoming(!expandUpcoming)}
+                          className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+                          title={expandUpcoming ? 'Minimizar' : 'Expandir'}
+                        >
+                          {expandUpcoming ? (
+                            <Eye className="w-4 h-4 text-gray-600" />
+                          ) : (
+                            <EyeOff className="w-4 h-4 text-gray-600" />
+                          )}
+                        </button>
+                      </div>
+                      {upcomingReminders.length === 0 ? (
+                        <p className="text-sm text-gray-600">Nenhum lembrete agendado.</p>
+                      ) : expandUpcoming ? (
+                        <div className="divide-y">
+                          {upcomingReminders.map((reminder) => (
+                            <div key={reminder.id} className="py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                              <div>
+                                <div className="font-semibold text-gray-900">{reminder.order?.client_name ?? 'Cliente'}</div>
+                                <div className="text-sm text-gray-600">{reminder.order?.client_phone ?? reminder.client_phone ?? ''}</div>
+                                <div className="text-sm text-gray-600">
+                                  Palavra-chave: <strong>{reminder.keyword?.keyword ?? '—'}</strong>
+                                </div>
+                              </div>
+                              <div className="text-sm text-gray-600">
+                                <div>Serviço: {new Date(reminder.service_date).toLocaleDateString('pt-BR')}</div>
+                                <div className="text-emerald-600">Lembrete: {new Date(reminder.reminder_due_date).toLocaleDateString('pt-BR')}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg border border-gray-200">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center gap-3 mb-2">
                   <Zap className="w-6 h-6 text-purple-600" />
                   <h2 className="text-2xl font-bold text-gray-900">Palavras-chave de Manutenção</h2>
                 </div>
@@ -480,6 +860,24 @@ export default function AfterSalesPage() {
               <MaintenanceKeywordsManager />
             </div>
           </TabsContent>
+
+          {/* ABA: DEBUG */}
+          {!isRestrictedUser && (
+            <TabsContent value="debug" className="space-y-6">
+              <div className="bg-white rounded-lg border border-gray-200">
+                <div className="p-6 border-b border-gray-200">
+                  <div className="flex items-center gap-3 mb-2">
+                    <Wrench className="w-6 h-6 text-purple-600" />
+                    <h2 className="text-2xl font-bold text-gray-900">Painel de Debug</h2>
+                  </div>
+                  <p className="text-gray-600">Verifyque se todos os componentes estão funcionando corretamente</p>
+                </div>
+                <div className="p-6">
+                  <MaintenanceDebugPanel />
+                </div>
+              </div>
+            </TabsContent>
+          )}
         </Tabs>
       </div>
 

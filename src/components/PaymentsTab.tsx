@@ -12,15 +12,15 @@ interface PaymentsTabProps {
   isLoading?: boolean;
   period: 'week' | 'month' | 'all';
   onPeriodChange: (p: 'week' | 'month' | 'all') => void;
-  onAddPayment: (payload: { order_id: string; amount: number; method: PaymentMethod; reference?: string | null; notes?: string | null }) => void;
+  onAddPayment: (payload: { order_id: string; amount: number; discount_amount?: number | null; method: PaymentMethod; reference?: string | null; notes?: string | null }) => void;
   onDeletePayment: (id: string) => void;
-  onUpdatePayment: (payload: { id: string; created_at?: string; amount?: number; method?: PaymentMethod; notes?: string | null }) => void;
+  onUpdatePayment: (payload: { id: string; created_at?: string; amount?: number; discount_amount?: number | null; method?: PaymentMethod; notes?: string | null }) => void;
 }
 
 export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPayment, onDeletePayment, onUpdatePayment }: PaymentsTabProps) {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed_unpaid'>('all');
-  const [adding, setAdding] = useState<Record<string, { amount: string; method: PaymentMethod; notes?: string }>>({});
+  const [adding, setAdding] = useState<Record<string, { amount: string; discount_amount: string; method: PaymentMethod; notes?: string }>>({});
   const [editingPayment, setEditingPayment] = useState<string | null>(null);
   const [editDate, setEditDate] = useState<Record<string, string>>({});
 
@@ -64,8 +64,10 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
         const totalOS = (o.materials || []).reduce((acc, m) => acc + ((m.valor || 0) * (parseFloat(m.quantidade) || 0)), 0);
         // Soma TODOS os pagamentos (não apenas os do período)
         const totalPaid = (o.payments || []).reduce((acc, p) => acc + (p.amount || 0), 0);
-        const pending = Math.max(totalOS - totalPaid, 0);
-        return { ...o, _totalOS: totalOS, _totalPaid: totalPaid, _pending: pending } as any;
+        const totalDiscount = (o.payments || []).reduce((acc, p) => acc + (p.discount_amount || 0), 0);
+        const totalSettled = totalPaid + totalDiscount;
+        const pending = Math.max(totalOS - totalSettled, 0);
+        return { ...o, _totalOS: totalOS, _totalPaid: totalPaid, _totalDiscount: totalDiscount, _pending: pending } as any;
       })
       // Aplica filtro de status
       .filter(o => {
@@ -123,10 +125,11 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
   const handleAdd = (orderId: string) => {
     const state = adding[orderId];
     const amount = parseFloat(state?.amount || '');
+    const discountAmount = parseFloat(state?.discount_amount || '0') || 0;
     const method = state?.method;
-    if (!amount || amount <= 0 || !method) return;
-    onAddPayment({ order_id: orderId, amount, method, notes: state?.notes || null });
-    setAdding(prev => ({ ...prev, [orderId]: { amount: '', method, notes: state?.notes } }));
+    if (!amount || amount <= 0 || !method || discountAmount < 0) return;
+    onAddPayment({ order_id: orderId, amount, discount_amount: discountAmount, method, notes: state?.notes || null });
+    setAdding(prev => ({ ...prev, [orderId]: { amount: '', discount_amount: '', method, notes: state?.notes } }));
   };
 
   return (
@@ -193,8 +196,10 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
                   <div className="text-right">
                     <p className="text-sm">Total OS</p>
                     <p className="font-semibold">R$ {o._totalOS.toFixed(2)}</p>
-                    <p className="text-sm mt-1">Pago</p>
+                    <p className="text-sm mt-1">Recebido</p>
                     <p className="font-semibold text-emerald-600">R$ {o._totalPaid.toFixed(2)}</p>
+                    <p className="text-sm mt-1">Desconto</p>
+                    <p className="font-semibold text-blue-600">R$ {(o._totalDiscount || 0).toFixed(2)}</p>
                     <p className="text-sm mt-1">Pendente</p>
                     <p className={`font-semibold ${o._pending > 0 ? 'text-amber-600' : 'text-muted-foreground'}`}>R$ {o._pending.toFixed(2)}</p>
                   </div>
@@ -253,6 +258,7 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
                                     {!isInPeriod && ' (fora do período)'}
                                   </p>
                                   <p className="font-medium">R$ {Number(p.amount || 0).toFixed(2)} <span className="text-muted-foreground">• {p.method}</span></p>
+                                  {(p.discount_amount || 0) > 0 ? <p className="text-xs text-blue-600">Desconto: R$ {Number(p.discount_amount || 0).toFixed(2)}</p> : null}
                                   {p.reference ? <p className="text-xs text-muted-foreground">Ref: {p.reference}</p> : null}
                                   {p.notes ? <p className="text-xs text-muted-foreground">Obs: {p.notes}</p> : null}
                                 </>
@@ -278,21 +284,34 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-6 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-7 gap-2">
                   <Input
                     placeholder="Valor"
                     value={adding[o.id]?.amount || ''}
                     onChange={(e) => setAdding(prev => {
                       const amount = sanitizeMoney(e.target.value);
-                      return { ...prev, [o.id]: { ...(prev[o.id] || { method: 'dinheiro' }), amount } };
+                      return { ...prev, [o.id]: { ...(prev[o.id] || { method: 'dinheiro', discount_amount: '' }), amount } };
                     })}
                     className="h-9 sm:col-span-2"
                     type="number"
                     min="0"
+                    step="0.01"
+                  />
+                  <Input
+                    placeholder="Desconto (R$)"
+                    value={adding[o.id]?.discount_amount || ''}
+                    onChange={(e) => setAdding(prev => {
+                      const discount_amount = sanitizeMoney(e.target.value);
+                      return { ...prev, [o.id]: { ...(prev[o.id] || { amount: '', method: 'dinheiro' }), discount_amount } };
+                    })}
+                    className="h-9"
+                    type="number"
+                    min="0"
+                    step="0.01"
                   />
                   <Select
                     value={adding[o.id]?.method || 'dinheiro'}
-                    onValueChange={(v) => setAdding(prev => ({ ...prev, [o.id]: { ...(prev[o.id] || { amount: '' }), method: v as PaymentMethod } }))}
+                    onValueChange={(v) => setAdding(prev => ({ ...prev, [o.id]: { ...(prev[o.id] || { amount: '', discount_amount: '' }), method: v as PaymentMethod } }))}
                   >
                     <SelectTrigger className="h-9">
                       <SelectValue placeholder="Forma" />
@@ -306,7 +325,7 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
                   <Input
                     placeholder="Obs. (opcional)"
                     value={adding[o.id]?.notes || ''}
-                    onChange={(e) => setAdding(prev => ({ ...prev, [o.id]: { ...(prev[o.id] || { amount: '', method: 'dinheiro' }), notes: e.target.value } }))}
+                    onChange={(e) => setAdding(prev => ({ ...prev, [o.id]: { ...(prev[o.id] || { amount: '', discount_amount: '', method: 'dinheiro' }), notes: e.target.value } }))}
                     className="h-9 sm:col-span-2"
                   />
                   <Button className="h-9" onClick={() => handleAdd(o.id)}>

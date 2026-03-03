@@ -69,7 +69,7 @@ interface OrderDetailsProps {
   onAddMaterial?: (material: any) => void;
   onRemoveMaterial?: (id: string) => void;
   onUpdateMaterial?: (id: string, field: string, value: string) => void;
-  onAddPayment?: (payload: { order_id: string; amount: number; method: PaymentMethod; reference?: string | null; notes?: string | null }) => void;
+  onAddPayment?: (payload: { order_id: string; amount: number; discount_amount?: number | null; method: PaymentMethod; reference?: string | null; notes?: string | null }) => void;
   onDeletePayment?: (id: string) => void;
   isCreatingPayment?: boolean;
   isDeletingPayment?: boolean;
@@ -169,8 +169,9 @@ export function OrderDetails({
   };
   
   const [exitDate, setExitDate] = useState(formatDateToInput(order.exit_date));
-  const [paymentForm, setPaymentForm] = useState<{ amount: string; method: PaymentMethod; notes: string }>(() => ({
+  const [paymentForm, setPaymentForm] = useState<{ amount: string; discount_amount: string; method: PaymentMethod; notes: string }>(() => ({
     amount: '',
+    discount_amount: '',
     method: 'dinheiro',
     notes: '',
   }));
@@ -306,7 +307,9 @@ export function OrderDetails({
 
   const totalOS = (order.materials || []).reduce((acc, m) => acc + ((m.valor || 0) * (parseFloat(m.quantidade) || 0)), 0);
   const totalPaid = (order.payments || []).reduce((acc, p) => acc + (p.amount || 0), 0);
-  const pending = Math.max(totalOS - totalPaid, 0);
+  const totalDiscount = (order.payments || []).reduce((acc, p) => acc + (p.discount_amount || 0), 0);
+  const totalSettled = totalPaid + totalDiscount;
+  const pending = Math.max(totalOS - totalSettled, 0);
   const methodOptions: Array<{ value: PaymentMethod; label: string }> = [
     { value: 'dinheiro', label: 'DIN' },
     { value: 'pix', label: 'PIX' },
@@ -316,14 +319,17 @@ export function OrderDetails({
   const handleAddPayment = () => {
     if (!onAddPayment) return;
     const amount = parseFloat(paymentForm.amount || '');
+    const discountAmount = parseFloat(paymentForm.discount_amount || '0') || 0;
     if (!amount || amount <= 0) return;
+    if (discountAmount < 0) return;
     onAddPayment({
       order_id: order.id,
       amount,
+      discount_amount: discountAmount,
       method: paymentForm.method,
       notes: paymentForm.notes?.trim() || null,
     });
-    setPaymentForm((prev) => ({ ...prev, amount: '' }));
+    setPaymentForm((prev) => ({ ...prev, amount: '', discount_amount: '' }));
   };
 
   const handleSendWhatsAppPDF = async () => {
@@ -1035,7 +1041,8 @@ export function OrderDetails({
             <div className="text-right text-sm">
               <p>Total OS</p>
               <p className="font-semibold">R$ {totalOS.toFixed(2)}</p>
-              <p className="mt-1 text-emerald-600">Pago: R$ {totalPaid.toFixed(2)}</p>
+              <p className="mt-1 text-emerald-600">Recebido: R$ {totalPaid.toFixed(2)}</p>
+              <p className="mt-1 text-blue-600">Desconto: R$ {totalDiscount.toFixed(2)}</p>
               <p className={`mt-1 font-semibold ${pending > 0 ? 'text-amber-600' : 'text-muted-foreground'}`}>Pendente: R$ {pending.toFixed(2)}</p>
             </div>
           </div>
@@ -1049,6 +1056,7 @@ export function OrderDetails({
                   <div key={p.id} className="flex items-center justify-between text-sm">
                     <div>
                       <p className="font-medium">R$ {Number(p.amount || 0).toFixed(2)} <span className="text-muted-foreground">• {methodOptions.find(m => m.value === p.method)?.label || p.method}</span></p>
+                      {(p.discount_amount || 0) > 0 ? <p className="text-xs text-blue-600">Desconto: R$ {Number(p.discount_amount || 0).toFixed(2)}</p> : null}
                       {p.notes ? <p className="text-xs text-muted-foreground">Obs: {p.notes}</p> : null}
                     </div>
                     {onDeletePayment && (
@@ -1069,7 +1077,7 @@ export function OrderDetails({
           </div>
 
           {onAddPayment && (
-            <div className="grid grid-cols-1 sm:grid-cols-6 gap-2 pt-2 border-t">
+            <div className="grid grid-cols-1 sm:grid-cols-7 gap-2 pt-2 border-t">
               <Input
                 placeholder="Valor"
                 value={paymentForm.amount}
@@ -1077,6 +1085,16 @@ export function OrderDetails({
                 className="h-9 sm:col-span-2"
                 type="number"
                 min="0"
+                step="0.01"
+              />
+              <Input
+                placeholder="Desconto (R$)"
+                value={paymentForm.discount_amount}
+                onChange={(e) => setPaymentForm((prev) => ({ ...prev, discount_amount: e.target.value }))}
+                className="h-9"
+                type="number"
+                min="0"
+                step="0.01"
               />
               <Select
                 value={paymentForm.method}

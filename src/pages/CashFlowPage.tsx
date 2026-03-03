@@ -14,12 +14,37 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 export function CashFlowPage() {
-  const [selectedDate, setSelectedDate] = useState<string>(
-    new Date().toISOString().split('T')[0]
-  );
-  const [selectedMonth, setSelectedMonth] = useState<string>(
-    new Date().toISOString().slice(0, 7)
-  );
+  // Função para obter a data local em timezone de Paulo Afonso
+  const getLocalDate = () => {
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Fortaleza',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    const parts = formatter.formatToParts(now);
+    const day = parts.find(p => p.type === 'day')?.value || '01';
+    const month = parts.find(p => p.type === 'month')?.value || '01';
+    const year = parts.find(p => p.type === 'year')?.value || '2026';
+    return `${year}-${month}-${day}`;
+  };
+
+  const getLocalMonth = () => {
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Fortaleza',
+      year: 'numeric',
+      month: '2-digit'
+    });
+    const parts = formatter.formatToParts(now);
+    const month = parts.find(p => p.type === 'month')?.value || '01';
+    const year = parts.find(p => p.type === 'year')?.value || '2026';
+    return `${year}-${month}`;
+  };
+
+  const [selectedDate, setSelectedDate] = useState<string>(getLocalDate());
+  const [selectedMonth, setSelectedMonth] = useState<string>(getLocalMonth());
   const [activePeriod, setActivePeriod] = useState<'day' | 'week' | 'month'>('day');
   const [showForm, setShowForm] = useState(false);
   const [hideValues, setHideValues] = useState(false);
@@ -27,7 +52,7 @@ export function CashFlowPage() {
   // Quando volta para dia, sempre volta a hoje
   useEffect(() => {
     if (activePeriod === 'day') {
-      setSelectedDate(new Date().toISOString().split('T')[0]);
+      setSelectedDate(getLocalDate());
     }
   }, [activePeriod]);
   const { cashFlow, summary, isLoading, createEntry, deleteEntry, isCreating } = useCashFlow(selectedDate);

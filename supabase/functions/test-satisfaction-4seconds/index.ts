@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { sendWhatsAppText, normalizeBrPhone } from '../_shared/whatsapp.ts'
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -29,33 +30,8 @@ Estamos à disposição! 🏍️🔧
 Siga-nos no Instagram: @BandaraMotos`
 
 async function sendWhatsApp(phone: string, message: string) {
-  const ZAPI_INSTANCE_ID = Deno.env.get('ZAPI_INSTANCE_ID')!
-  const ZAPI_CLIENT_TOKEN = Deno.env.get('ZAPI_CLIENT_TOKEN')!
-  const ZAPI_TOKEN = Deno.env.get('ZAPI_TOKEN')!
-
-  const cleanPhone = phone.replace(/\D/g, '')
-  const formattedPhone = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`
-
-  const url = `https://api.z-api.io/instances/${ZAPI_INSTANCE_ID}/token/${ZAPI_TOKEN}/send-text`
-  
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Client-Token': ZAPI_CLIENT_TOKEN,
-    },
-    body: JSON.stringify({
-      phone: formattedPhone,
-      message: message,
-    }),
-  })
-
-  if (!response.ok) {
-    const error = await response.text()
-    throw new Error(`Z-API error: ${error}`)
-  }
-
-  return await response.json()
+  const formattedPhone = normalizeBrPhone(phone)
+  return await sendWhatsAppText(formattedPhone, message)
 }
 
 Deno.serve(async (req) => {

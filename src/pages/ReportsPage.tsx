@@ -312,8 +312,8 @@ export function ReportsPage() {
             isLoading={isLoading}
             period={period}
             onPeriodChange={(v) => setPeriod(v as any)}
-            onAddPayment={({ order_id, amount, method, reference, notes }) => {
-              createPayment({ order_id, amount, method, reference, notes });
+            onAddPayment={({ order_id, amount, discount_amount, method, reference, notes }) => {
+              createPayment({ order_id, amount, discount_amount, method, reference, notes });
             }}
             onDeletePayment={(id) => {
               deletePayment(id);
