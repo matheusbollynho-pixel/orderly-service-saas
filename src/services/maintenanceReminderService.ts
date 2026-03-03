@@ -365,15 +365,23 @@ export async function deleteMaintenanceKeyword(
   keywordId: string
 ): Promise<boolean> {
   try {
-    const { error } = await sb
+    console.log('🗑️ Tentando deletar keyword:', keywordId);
+    
+    const { data, error } = await sb
       .from('maintenance_keywords')
       .delete()
-      .eq('id', keywordId);
+      .eq('id', keywordId)
+      .select();
 
-    if (error) throw error;
+    if (error) {
+      console.error('❌ Erro ao deletar keyword:', error);
+      throw error;
+    }
+    
+    console.log('✅ Keyword deletada com sucesso:', data);
     return true;
   } catch (error) {
-    console.error('Erro ao deletar keyword:', error);
+    console.error('❌ Erro ao deletar keyword:', error);
     return false;
   }
 }

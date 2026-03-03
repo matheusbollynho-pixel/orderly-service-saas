@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Trash2, Plus, Edit2, Save, X } from 'lucide-react';
+import { toast } from 'sonner';
 import {
   getMaintenanceKeywords,
   updateMaintenanceKeyword,
@@ -99,16 +100,28 @@ export function MaintenanceKeywordsManager() {
   };
 
   const handleDelete = async (keywordId: string, keywordName: string) => {
-    if (!confirm(`Tem certeza que deseja excluir a palavra-chave "${keywordName}"?`)) {
+    if (!confirm(`Tem certeza que deseja excluir a palavra-chave "${keywordName}"?\n\nIsso irá remover a palavra-chave mas NÃO os lembretes já criados.`)) {
       return;
     }
 
+    console.log('🗑️ Iniciando exclusão da palavra-chave:', keywordName, keywordId);
+    
     const success = await deleteMaintenanceKeyword(keywordId);
+    
     if (success) {
-      setKeywords(keywords.filter((k) => k.id !== keywordId));
-      alert('Palavra-chave excluída com sucesso!');
+      // Atualizar a lista localmente
+      const updatedKeywords = keywords.filter((k) => k.id !== keywordId);
+      setKeywords(updatedKeywords);
+      
+      // Recarregar para garantir sincronização
+      const reloaded = await getMaintenanceKeywords();
+      if (reloaded.length > 0) {
+        setKeywords(reloaded);
+      }
+      
+      toast.success(`Palavra-chave "${keywordName}" excluída com sucesso!`);
     } else {
-      alert('Erro ao excluir palavra-chave');
+      toast.error('Erro ao excluir palavra-chave. Verifique o console (F12) para mais detalhes.');
     }
   };
 
