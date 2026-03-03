@@ -38,20 +38,25 @@ export interface MaintenanceReminderWithDetails extends MaintenanceReminder {
 }
 
 /**
- * Get all enabled maintenance keywords
+ * Get all maintenance keywords (enabled and disabled)
  */
 export async function getMaintenanceKeywords(): Promise<MaintenanceKeyword[]> {
   try {
+    console.log('🔍 Buscando TODAS as keywords (enabled e disabled)...');
     const { data, error } = await sb
       .from('maintenance_keywords')
       .select('*')
-      .eq('enabled', true)
       .order('keyword');
 
-    if (error) throw error;
+    if (error) {
+      console.error('❌ Erro ao buscar keywords:', error);
+      throw error;
+    }
+    
+    console.log('📋 Keywords encontradas:', data?.length || 0);
     return data || [];
   } catch (error) {
-    console.error('Erro ao buscar keywords:', error);
+    console.error('❌ Erro ao buscar keywords:', error);
     return [];
   }
 }

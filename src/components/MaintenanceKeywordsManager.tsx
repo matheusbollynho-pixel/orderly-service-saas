@@ -113,16 +113,24 @@ export function MaintenanceKeywordsManager() {
 
     console.log('🗑️ Iniciando exclusão da palavra-chave:', keywordName, keywordId);
     
+    // Remover da UI imediatamente
+    setKeywords(prev => prev.filter(k => k.id !== keywordId));
+    
     const success = await deleteMaintenanceKeyword(keywordId);
     
     if (success) {
       toast.success(`Palavra-chave "${keywordName}" excluída!`);
       
+      // Aguardar 500ms para dar tempo ao banco processar
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       // FORÇAR recarregamento completo da lista
-      console.log('🔄 Recarregando lista de keywords...');
+      console.log('🔄 Recarregando lista de keywords após exclusão...');
       await loadKeywords();
     } else {
       toast.error('Erro ao excluir palavra-chave. Verifique o console (F12) para mais detalhes.');
+      // Restaurar na UI se falhou
+      await loadKeywords();
     }
   };
 
