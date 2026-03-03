@@ -78,8 +78,8 @@ Deno.serve(async (req: Request) => {
       endpoint = isPdf ? 'send-document/pdf' : 'send-document';
     }
     
-    // ✅ UazAPI: https://free.uazapi.com
-    const defaultBase = 'https://free.uazapi.com';
+    // ✅ UazAPI: https://bandara.uazapi.com (instância PAGA)
+    const defaultBase = 'https://bandara.uazapi.com';
     const baseUrl = (Deno.env.get('WHATSAPP_BASE_URL') || defaultBase).replace(/\/$/, '');
     const textPathTemplate = Deno.env.get('WHATSAPP_TEXT_PATH') || '/instances/{instanceId}/send-text';
     const documentPathTemplate = Deno.env.get('WHATSAPP_DOCUMENT_PATH') || '/instances/{instanceId}/send-document';
