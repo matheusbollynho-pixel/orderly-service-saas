@@ -47,16 +47,11 @@ Deno.serve(async (req: Request) => {
 
     console.log('✅ Payload válido para:', payload.to);
 
-    // Ler configuração do provedor
-    const provider = (Deno.env.get('WHATSAPP_PROVIDER') || 'zapi').toLowerCase();
-    const isUazApi = provider === 'uazapi';
+    // ✅ Provider: UazAPI apenas
+    const INSTANCE_ID = Deno.env.get('UAZAPI_INSTANCE_ID') || '';
+    const ADMIN_TOKEN = Deno.env.get('UAZAPI_ADMIN_TOKEN') || '';
 
-    const INSTANCE_ID = isUazApi ? Deno.env.get('UAZAPI_INSTANCE_ID') : Deno.env.get('ZAPI_INSTANCE_ID');
-    const ADMIN_TOKEN = isUazApi
-      ? (Deno.env.get('UAZAPI_ADMIN_TOKEN') || '')
-      : (Deno.env.get('ZAPI_TOKEN') || '');
-
-    console.log(`📋 Provider: ${provider}, INSTANCE_ID: ${INSTANCE_ID?.substring(0, 8)}..., Token: ${ADMIN_TOKEN?.substring(0, 8)}...`);
+    console.log(`📋 Provider: UazAPI, INSTANCE_ID: ${INSTANCE_ID?.substring(0, 8)}..., Token: ${ADMIN_TOKEN?.substring(0, 8)}...`);
 
     if (!INSTANCE_ID) {
       console.error('❌ INSTANCE_ID não configurado no ambiente');
@@ -83,20 +78,12 @@ Deno.serve(async (req: Request) => {
       endpoint = isPdf ? 'send-document/pdf' : 'send-document';
     }
     
-    // ✅ FIXO: UazAPI usa https://free.uazapi.com, Z-API usa https://api.z-api.io
-    const defaultBase = isUazApi ? 'https://free.uazapi.com' : 'https://api.z-api.io';
+    // ✅ UazAPI: https://free.uazapi.com
+    const defaultBase = 'https://free.uazapi.com';
     const baseUrl = (Deno.env.get('WHATSAPP_BASE_URL') || defaultBase).replace(/\/$/, '');
-    
-    // Z-API espera token na query string (?apikey=), não no path
-    const textPathTemplate = Deno.env.get('WHATSAPP_TEXT_PATH') || (isUazApi 
-      ? '/instances/{instanceId}/send-text' 
-      : '/instances/{instanceId}/send-text?apikey={token}');
-    const documentPathTemplate = Deno.env.get('WHATSAPP_DOCUMENT_PATH') || (isUazApi
-      ? '/instances/{instanceId}/send-document'
-      : '/instances/{instanceId}/send-document?apikey={token}');
-    const documentPdfPathTemplate = Deno.env.get('WHATSAPP_DOCUMENT_PDF_PATH') || (isUazApi
-      ? '/instances/{instanceId}/send-document/pdf'
-      : '/instances/{instanceId}/send-document/pdf?apikey={token}');
+    const textPathTemplate = Deno.env.get('WHATSAPP_TEXT_PATH') || '/instances/{instanceId}/send-text';
+    const documentPathTemplate = Deno.env.get('WHATSAPP_DOCUMENT_PATH') || '/instances/{instanceId}/send-document';
+    const documentPdfPathTemplate = Deno.env.get('WHATSAPP_DOCUMENT_PDF_PATH') || '/instances/{instanceId}/send-document/pdf';
 
     const pathTemplate = endpoint === 'send-text'
       ? textPathTemplate
@@ -148,17 +135,9 @@ Deno.serve(async (req: Request) => {
       'Content-Type': 'application/json',
     };
 
-    // Para UazAPI, adicionar Admin-Token no header
-    if (isUazApi && ADMIN_TOKEN) {
+    // UazAPI: adicionar Admin-Token no header
+    if (ADMIN_TOKEN) {
       zHeaders['Admin-Token'] = ADMIN_TOKEN;
-    }
-
-    const authType = (Deno.env.get('WHATSAPP_AUTH_TYPE') || 'none').toLowerCase(); // none|bearer|header
-    const authHeader = Deno.env.get('WHATSAPP_AUTH_HEADER') || 'Authorization';
-    if (authType === 'bearer' && ADMIN_TOKEN) {
-      zHeaders[authHeader] = `Bearer ${ADMIN_TOKEN}`;
-    } else if (authType === 'header' && ADMIN_TOKEN) {
-      zHeaders[authHeader] = ADMIN_TOKEN;
     }
 
     // Timeout para a requisição à Z-API
