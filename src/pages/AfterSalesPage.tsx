@@ -59,6 +59,7 @@ export default function AfterSalesPage() {
   const [filterClient, setFilterClient] = useState('');
   const [expandUpcoming, setExpandUpcoming] = useState(true);
   const [birthdayFilterType, setBirthdayFilterType] = useState<'all' | 'upcoming' | 'active'>('all');
+  const [activeStatsFilter, setActiveStatsFilter] = useState<'all' | 'pending' | 'sent' | 'blocked' | 'due' | 'scheduled' | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
     clientId: string;
@@ -251,7 +252,39 @@ export default function AfterSalesPage() {
   const allowedReminders = maintenanceReminders.filter(
     (reminder) => reminder.order?.client?.autoriza_lembretes !== false
   );
-  const filteredAllowedReminders = allowedReminders.filter((reminder) => {
+  
+  // Aplicar filtro de estatísticas primeiro
+  let statsFilteredReminders = allowedReminders;
+  if (activeStatsFilter) {
+    switch (activeStatsFilter) {
+      case 'all':
+        statsFilteredReminders = allMaintenanceReminders;
+        break;
+      case 'pending':
+        statsFilteredReminders = allowedReminders.filter((r) => !r.reminder_sent_at);
+        break;
+      case 'sent':
+        statsFilteredReminders = allMaintenanceReminders.filter((r) => r.reminder_sent_at);
+        break;
+      case 'blocked':
+        statsFilteredReminders = allMaintenanceReminders.filter(
+          (r) => r.order?.client?.autoriza_lembretes === false
+        );
+        break;
+      case 'due':
+        statsFilteredReminders = allowedReminders.filter(
+          (r) => !r.reminder_sent_at && new Date(r.reminder_due_date) <= now
+        );
+        break;
+      case 'scheduled':
+        statsFilteredReminders = allowedReminders.filter(
+          (r) => !r.reminder_sent_at && new Date(r.reminder_due_date) > now
+        );
+        break;
+    }
+  }
+  
+  const filteredAllowedReminders = statsFilteredReminders.filter((reminder) => {
     const dueDate = new Date(reminder.reminder_due_date);
     if (filterStartDate) {
       const start = new Date(`${filterStartDate}T00:00:00`);
@@ -648,52 +681,119 @@ export default function AfterSalesPage() {
                   <p className="text-sm text-gray-600">Carregando lembretes...</p>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
+                    <button
+                      onClick={() => setActiveStatsFilter(activeStatsFilter === 'all' ? null : 'all')}
+                      className={`bg-gray-50 rounded-lg border p-4 text-left transition-all hover:shadow-md ${
+                        activeStatsFilter === 'all' ? 'border-gray-900 ring-2 ring-gray-900' : 'border-gray-200'
+                      }`}
+                    >
                       <div className="text-xs text-gray-500">Total criados</div>
                       <div className="text-2xl font-bold text-gray-900">
                         {totalAll}
                       </div>
-                    </div>
-                    <div className="bg-blue-50 rounded-lg border border-blue-200 p-4">
+                      <div className="text-xs text-gray-400 mt-1">Clique para filtrar</div>
+                    </button>
+                    <button
+                      onClick={() => setActiveStatsFilter(activeStatsFilter === 'pending' ? null : 'pending')}
+                      className={`bg-blue-50 rounded-lg border p-4 text-left transition-all hover:shadow-md ${
+                        activeStatsFilter === 'pending' ? 'border-blue-900 ring-2 ring-blue-900' : 'border-blue-200'
+                      }`}
+                    >
                       <div className="text-xs text-blue-600">Pendentes</div>
                       <div className="text-2xl font-bold text-blue-700">
                         {totalPending}
                       </div>
-                    </div>
-                    <div className="bg-emerald-50 rounded-lg border border-emerald-200 p-4">
+                      <div className="text-xs text-blue-400 mt-1">Clique para filtrar</div>
+                    </button>
+                    <button
+                      onClick={() => setActiveStatsFilter(activeStatsFilter === 'sent' ? null : 'sent')}
+                      className={`bg-emerald-50 rounded-lg border p-4 text-left transition-all hover:shadow-md ${
+                        activeStatsFilter === 'sent' ? 'border-emerald-900 ring-2 ring-emerald-900' : 'border-emerald-200'
+                      }`}
+                    >
                       <div className="text-xs text-emerald-600">Enviados</div>
                       <div className="text-2xl font-bold text-emerald-700">
                         {totalSent}
                       </div>
-                    </div>
-                    <div className="bg-amber-50 rounded-lg border border-amber-200 p-4">
+                      <div className="text-xs text-emerald-400 mt-1">Clique para filtrar</div>
+                    </button>
+                    <button
+                      onClick={() => setActiveStatsFilter(activeStatsFilter === 'blocked' ? null : 'blocked')}
+                      className={`bg-amber-50 rounded-lg border p-4 text-left transition-all hover:shadow-md ${
+                        activeStatsFilter === 'blocked' ? 'border-amber-900 ring-2 ring-amber-900' : 'border-amber-200'
+                      }`}
+                    >
                       <div className="text-xs text-amber-600">Bloqueados (não autorizados)</div>
                       <div className="text-2xl font-bold text-amber-700">
                         {totalBlocked}
                       </div>
-                    </div>
+                      <div className="text-xs text-amber-400 mt-1">Clique para filtrar</div>
+                    </button>
                   </div>
                 )}
                 {!maintenanceLoading && (
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
+                    <button
+                      onClick={() => setActiveStatsFilter(activeStatsFilter === 'pending' ? null : 'pending')}
+                      className={`bg-gray-50 rounded-lg border p-4 text-left transition-all hover:shadow-md ${
+                        activeStatsFilter === 'pending' ? 'border-gray-900 ring-2 ring-gray-900' : 'border-gray-200'
+                      }`}
+                    >
                       <div className="text-xs text-gray-500">Total criados (pendentes)</div>
                       <div className="text-2xl font-bold text-gray-900">
                         {filteredAllowedReminders.length}
                       </div>
-                    </div>
-                    <div className="bg-red-50 rounded-lg border border-red-200 p-4">
+                      <div className="text-xs text-gray-400 mt-1">Clique para filtrar</div>
+                    </button>
+                    <button
+                      onClick={() => setActiveStatsFilter(activeStatsFilter === 'due' ? null : 'due')}
+                      className={`bg-red-50 rounded-lg border p-4 text-left transition-all hover:shadow-md ${
+                        activeStatsFilter === 'due' ? 'border-red-900 ring-2 ring-red-900' : 'border-red-200'
+                      }`}
+                    >
                       <div className="text-xs text-red-600">Para envio agora</div>
                       <div className="text-2xl font-bold text-red-700">
                         {dueReminders.length}
                       </div>
-                    </div>
-                    <div className="bg-emerald-50 rounded-lg border border-emerald-200 p-4">
+                      <div className="text-xs text-red-400 mt-1">Clique para filtrar</div>
+                    </button>
+                    <button
+                      onClick={() => setActiveStatsFilter(activeStatsFilter === 'scheduled' ? null : 'scheduled')}
+                      className={`bg-emerald-50 rounded-lg border p-4 text-left transition-all hover:shadow-md ${
+                        activeStatsFilter === 'scheduled' ? 'border-emerald-900 ring-2 ring-emerald-900' : 'border-emerald-200'
+                      }`}
+                    >
                       <div className="text-xs text-emerald-600">Agendados</div>
                       <div className="text-2xl font-bold text-emerald-700">
                         {upcomingReminders.length}
                       </div>
+                      <div className="text-xs text-emerald-400 mt-1">Clique para filtrar</div>
+                    </button>
+                  </div>
+                )}
+                {activeStatsFilter && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Eye className="w-4 h-4 text-blue-600" />
+                      <span className="text-sm text-blue-900 font-medium">
+                        Filtro ativo: {
+                          activeStatsFilter === 'all' ? 'Todos' :
+                          activeStatsFilter === 'pending' ? 'Pendentes' :
+                          activeStatsFilter === 'sent' ? 'Enviados' :
+                          activeStatsFilter === 'blocked' ? 'Bloqueados' :
+                          activeStatsFilter === 'due' ? 'Para envio agora' :
+                          'Agendados'
+                        }
+                      </span>
                     </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setActiveStatsFilter(null)}
+                      className="text-blue-600 hover:text-blue-700 hover:bg-blue-100"
+                    >
+                      Limpar filtro
+                    </Button>
                   </div>
                 )}
                 {!maintenanceLoading && filteredAllowedReminders.length === 0 && (
