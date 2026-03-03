@@ -33,9 +33,16 @@ export function MaintenanceKeywordsManager() {
 
   const loadKeywords = async () => {
     setLoading(true);
-    const data = await getMaintenanceKeywords();
-    setKeywords(data);
-    setLoading(false);
+    try {
+      const data = await getMaintenanceKeywords();
+      console.log('📋 Keywords carregadas:', data.length);
+      setKeywords(data);
+    } catch (error) {
+      console.error('❌ Erro ao carregar keywords:', error);
+      toast.error('Erro ao carregar palavras-chave');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleEdit = (keyword: MaintenanceKeyword) => {
@@ -109,17 +116,11 @@ export function MaintenanceKeywordsManager() {
     const success = await deleteMaintenanceKeyword(keywordId);
     
     if (success) {
-      // Atualizar a lista localmente
-      const updatedKeywords = keywords.filter((k) => k.id !== keywordId);
-      setKeywords(updatedKeywords);
+      toast.success(`Palavra-chave "${keywordName}" excluída!`);
       
-      // Recarregar para garantir sincronização
-      const reloaded = await getMaintenanceKeywords();
-      if (reloaded.length > 0) {
-        setKeywords(reloaded);
-      }
-      
-      toast.success(`Palavra-chave "${keywordName}" excluída com sucesso!`);
+      // FORÇAR recarregamento completo da lista
+      console.log('🔄 Recarregando lista de keywords...');
+      await loadKeywords();
     } else {
       toast.error('Erro ao excluir palavra-chave. Verifique o console (F12) para mais detalhes.');
     }
