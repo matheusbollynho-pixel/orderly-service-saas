@@ -119,15 +119,14 @@ export async function sendWhatsAppDocument(params: {
   const caption = params.caption || 'Ordem de Serviço - Bandara Motos';
   const safeFileName = sanitizeFileName(params.fileName);
 
-  // Tenta enviar via URL assinada (storage). Se falhar, envia base64 direto.
+  // Fazer upload para Storage e enviar URL pública
   try {
     const fileUrl = await uploadBase64PdfToSupabaseStorage(params.base64, safeFileName);
     const res = await callEdgeFunction({ to: phone, fileUrl, caption, fileName: safeFileName });
     return !!res;
   } catch (error) {
-    console.warn('Falha ao enviar via URL, tentando base64 direto:', error);
-    const res = await callEdgeFunction({ to: phone, fileBase64: params.base64, caption, fileName: safeFileName });
-    return !!res;
+    console.error('Erro no upload/envio:', error);
+    throw error;
   }
 }
 

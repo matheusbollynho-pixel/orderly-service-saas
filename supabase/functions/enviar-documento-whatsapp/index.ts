@@ -12,6 +12,13 @@ interface RequestBody {
   caption?: string;     // legenda para o documento (opcional)
 }
 
+type AttemptResult = {
+  url: string;
+  status: number;
+  body: any;
+  headerType: string;
+};
+
 console.info('enviar-documento-whatsapp function iniciada');
 
 const allowedOrigin = Deno.env.get('CORS_ALLOWED_ORIGIN') ?? '*';
@@ -48,128 +55,83 @@ Deno.serve(async (req: Request) => {
     console.log('✅ Payload válido para:', payload.to);
 
     // ✅ Provider: UazAPI apenas
-    const INSTANCE_ID = Deno.env.get('UAZAPI_INSTANCE_ID') || '';
-    const ADMIN_TOKEN = Deno.env.get('UAZAPI_ADMIN_TOKEN') || '';
+    const INSTANCE_TOKEN = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
 
-    console.log(`📋 Provider: UazAPI, INSTANCE_ID: ${INSTANCE_ID?.substring(0, 8)}..., Token: ${ADMIN_TOKEN?.substring(0, 8)}...`);
+    console.log(`📋 Provider: UazAPI, Token: ${INSTANCE_TOKEN?.substring(0, 8)}...`);
 
-    if (!INSTANCE_ID) {
-      console.error('❌ INSTANCE_ID não configurado no ambiente');
-      return new Response(JSON.stringify({ error: 'Servidor não configurado (INSTANCE_ID ausente)' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders },
-      });
-    }
-
-    if (!ADMIN_TOKEN) {
-      console.error('❌ ADMIN_TOKEN não configurado no ambiente');
-      return new Response(JSON.stringify({ error: 'Servidor não configurado (ADMIN_TOKEN ausente)' }), {
+    if (!INSTANCE_TOKEN) {
+      console.error('❌ INSTANCE_TOKEN não configurado no ambiente');
+      return new Response(JSON.stringify({ error: 'Servidor não configurado (INSTANCE_TOKEN ausente)' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
       });
     }
     
-    // Determina o endpoint baseado no tipo de conteúdo
-    let endpoint = 'send-text'; // Default para mensagens de texto
-    
-    // Se houver fileUrl, usa send-document/pdf para PDFs
-    const isPdf = (payload.fileName || '').toLowerCase().endsWith('.pdf') || !!payload.fileBase64;
-    if (payload.fileUrl || payload.fileBase64) {
-      endpoint = isPdf ? 'send-document/pdf' : 'send-document';
-    }
-    
-    // ✅ UazAPI: https://bandara.uazapi.com (instância PAGA)
-    const defaultBase = 'https://bandara.uazapi.com';
-    const baseUrl = (Deno.env.get('WHATSAPP_BASE_URL') || defaultBase).replace(/\/$/, '');
-    const textPathTemplate = Deno.env.get('WHATSAPP_TEXT_PATH') || '/instances/{instanceId}/send-text';
-    const documentPathTemplate = Deno.env.get('WHATSAPP_DOCUMENT_PATH') || '/instances/{instanceId}/send-document';
-    const documentPdfPathTemplate = Deno.env.get('WHATSAPP_DOCUMENT_PDF_PATH') || '/instances/{instanceId}/send-document/pdf';
+    // Determina tipo do envio
+    const isTextOnly = !!payload.message && !payload.fileUrl && !payload.fileBase64;
 
-    const pathTemplate = endpoint === 'send-text'
-      ? textPathTemplate
-      : endpoint === 'send-document/pdf'
-        ? documentPdfPathTemplate
-        : documentPathTemplate;
+    // ✅ UazAPI: Configuração fixa conforme painel
+    const baseUrl = 'https://bandara.uazapi.com';
+    const endpointPath = isTextOnly ? '/send/text' : '/send/media';
+    const finalUrl = `${baseUrl}${endpointPath}`;
 
-    const path = pathTemplate
-      .replace('{instanceId}', encodeURIComponent(INSTANCE_ID))
-      .replace('{token}', encodeURIComponent(ADMIN_TOKEN));
-
-    const url = `${baseUrl}${path}`;
-    
-    console.log(`🚀 URL final: ${url.substring(0, 100)}...`);
-    const phoneField = Deno.env.get('WHATSAPP_PHONE_FIELD') || 'phone';
-    const messageField = Deno.env.get('WHATSAPP_MESSAGE_FIELD') || 'message';
-    const documentField = Deno.env.get('WHATSAPP_DOCUMENT_FIELD') || 'document';
-    const fileNameField = Deno.env.get('WHATSAPP_FILENAME_FIELD') || 'fileName';
-    const captionField = Deno.env.get('WHATSAPP_CAPTION_FIELD') || 'caption';
-
-    const zapiBody: Record<string, unknown> = {
-      [phoneField]: payload.to,
-    };
-    
     const safeFileName = (payload.fileName || 'documento.pdf')
       .replace(/[\s]+/g, '_')
       .replace(/[^a-zA-Z0-9_.-]/g, '');
 
-    if (payload.fileBase64) {
-      // Para enviar documento via Z-API em base64
-      const base64 = payload.fileBase64.startsWith('data:')
-        ? payload.fileBase64
-        : `data:application/pdf;base64,${payload.fileBase64}`;
-      zapiBody[documentField] = base64;
-      zapiBody[fileNameField] = safeFileName || 'documento.pdf';
-      if (payload.caption) zapiBody[captionField] = payload.caption;
-    } else if (payload.fileUrl) {
-      // Para enviar documento por URL
-      zapiBody[documentField] = payload.fileUrl;
-      const fileNameFromUrl = payload.fileUrl.split('?')[0].split('/').pop();
-      zapiBody[fileNameField] = safeFileName || fileNameFromUrl || 'documento.pdf';
-      if (payload.caption) zapiBody[captionField] = payload.caption;
-    } else if (payload.message) {
-      // Para enviar apenas texto
-      zapiBody[messageField] = payload.message;
-    }
-
-    const zHeaders: Record<string, string> = {
+    // Header conforme painel UazAPI
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      token: INSTANCE_TOKEN,
     };
 
-    // UazAPI: adicionar Admin-Token no header
-    if (ADMIN_TOKEN) {
-      zHeaders['Admin-Token'] = ADMIN_TOKEN;
+    let requestBody: Record<string, unknown> = {
+      number: payload.to,
+    };
+
+    if (payload.fileUrl) {
+      // Para /send/media: enviar URL pública como JSON
+      requestBody.file = payload.fileUrl;
+      requestBody.text = payload.caption || 'Documento';
+      const fileNameFromUrl = payload.fileUrl.split('?')[0].split('/').pop();
+      requestBody.fileName = safeFileName || fileNameFromUrl || 'documento.pdf';
+    } else if (payload.fileBase64) {
+      // Fallback: base64 (pode não funcionar em todos os providers)
+      let base64 = payload.fileBase64;
+      if (base64.startsWith('data:')) {
+        base64 = base64.split(',')[1];
+      }
+      requestBody.file = base64;
+      requestBody.fileName = safeFileName;
+      requestBody.text = payload.caption || 'Documento';
+    } else if (payload.message) {
+      // Para /send/text: usar JSON com text
+      requestBody.text = payload.message;
     }
 
-    // Timeout para a requisição à Z-API
+    console.log(`🚀 UazAPI ${endpointPath}:`, { number: requestBody.number, hasFile: !!requestBody.file, hasText: !!requestBody.text });
+    console.log('📤 Request body:', JSON.stringify(requestBody, null, 2));
+
     const controller = new AbortController();
-    const timeoutMs = 30000; // 30s (UazAPI pode ser lenta)
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const timeout = setTimeout(() => controller.abort(), 20000);
 
-    console.log('🚀 Chamando UazAPI em:', url);
-    const startTime = Date.now();
-
-    let zresp: Response;
+    let resp: Response;
     try {
-      zresp = await fetch(url, {
+      resp = await fetch(finalUrl, {
         method: 'POST',
-        headers: zHeaders,
-        body: JSON.stringify(zapiBody),
+        headers,
+        body: JSON.stringify(requestBody),
         signal: controller.signal,
       });
-      const duration = Date.now() - startTime;
-      console.log(`✅ UazAPI respondeu em ${duration}ms`);
     } catch (err: any) {
       clearTimeout(timeout);
-      const duration = Date.now() - startTime;
       if (err.name === 'AbortError') {
-        console.error(`❌ Timeout na UazAPI após ${duration}ms`);
-        return new Response(JSON.stringify({ error: 'Tempo esgotado na requisição à API WhatsApp' }), {
+        return new Response(JSON.stringify({ error: 'Tempo esgotado na requisição à UazAPI' }), {
           status: 504,
           headers: { 'Content-Type': 'application/json', ...corsHeaders },
         });
       }
-      console.error('Falha ao chamar API WhatsApp:', err);
-      return new Response(JSON.stringify({ error: 'Falha na chamada à API WhatsApp' }), {
+      return new Response(JSON.stringify({ error: 'Falha ao chamar UazAPI', detail: String(err) }), {
         status: 502,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
       });
@@ -177,19 +139,26 @@ Deno.serve(async (req: Request) => {
       clearTimeout(timeout);
     }
 
-    const text = await zresp.text().catch(() => '');
-    let zJson: any = null;
-    try { zJson = JSON.parse(text); } catch { zJson = { raw: text }; }
+    const raw = await resp.text().catch(() => '');
+    let parsed: any = null;
+    try { parsed = JSON.parse(raw); } catch { parsed = { raw }; }
 
-    console.log('WhatsApp API response:', { status: zresp.status, body: zJson });
+    console.log(`📥 UazAPI response status: ${resp.status}`);
+    console.log(`📥 UazAPI response body:`, JSON.stringify(parsed, null, 2));
 
-    if (!zresp.ok) {
-      console.error('API WhatsApp retornou erro', { status: zresp.status, body: zJson });
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: 'Erro da API WhatsApp', 
-        z_api_status: zresp.status, 
-        z_api_error: zJson 
+    if (!resp.ok) {
+      const hint = resp.status === 401
+        ? 'Token inválido. Configure UAZAPI_INSTANCE_TOKEN com o token da instância (não o admin token).'
+        : resp.status === 405
+          ? 'Rota inválida para sua instância. Verifique WHATSAPP_TEXT_PATH e base URL.'
+          : 'Erro da API WhatsApp';
+
+      return new Response(JSON.stringify({
+        success: false,
+        error: hint,
+        z_api_status: resp.status,
+        z_api_error: parsed,
+        used: { url: finalUrl, authHeader: 'token' },
       }), {
         status: 502,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
@@ -197,7 +166,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Se chegou aqui, sucesso
-    return new Response(JSON.stringify({ success: true, zapi: zJson }), {
+    return new Response(JSON.stringify({ success: true, zapi: parsed, used: { url: finalUrl, authHeader: 'token' } }), {
       status: 200,
       headers: { 'Content-Type': 'application/json', ...corsHeaders },
     });
