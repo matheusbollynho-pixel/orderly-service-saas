@@ -370,8 +370,7 @@ export function useServiceOrders() {
           method: payload.method,
           reference: payload.reference || null,
           notes: payload.notes || null,
-          // NOTA: finalized_by_staff_id será habilitado após executar migration 202603030003_add_staff_tracking.sql
-          // finalized_by_staff_id: payload.finalized_by_staff_id || null,
+          finalized_by_staff_id: payload.finalized_by_staff_id || null,
         })
         .select()
         .single();
