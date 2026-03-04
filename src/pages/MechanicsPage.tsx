@@ -6,6 +6,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Camera, X } from 'lucide-react';
+import { toast } from 'sonner';
 
 export function MechanicsPage() {
   const { mechanics, isLoading, createMechanic, updateMechanic, deleteMechanic } = useMechanics();
@@ -14,6 +17,24 @@ export function MechanicsPage() {
   const [commission, setCommission] = useState<number>(10);
   const [staffName, setStaffName] = useState('');
   const [staffRole, setStaffRole] = useState<'balconista' | 'dono' | 'outro'>('balconista');
+  const [staffPhoto, setStaffPhoto] = useState<string | null>(null);
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Foto muito grande! Máximo 2MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setStaffPhoto(reader.result as string);
+      toast.success('Foto carregada!');
+    };
+    reader.readAsDataURL(file);
+  };
 
   return (
     <div className="space-y-5">
@@ -81,7 +102,7 @@ export function MechanicsPage() {
         <h2 className="text-lg font-semibold">Atendentes de Balcão</h2>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 border rounded-xl">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 p-4 border rounded-xl">
         <div className="space-y-2">
           <Label>Nome</Label>
           <Input value={staffName} onChange={(e) => setStaffName(e.target.value)} placeholder="Ex: Maria" />
@@ -99,14 +120,47 @@ export function MechanicsPage() {
             </SelectContent>
           </Select>
         </div>
+        <div className="space-y-2">
+          <Label>Foto (opcional)</Label>
+          <div className="flex items-center gap-2">
+            {staffPhoto ? (
+              <div className="relative">
+                <Avatar className="h-10 w-10">
+                  <AvatarImage src={staffPhoto} />
+                  <AvatarFallback>{staffName.charAt(0)}</AvatarFallback>
+                </Avatar>
+                <button
+                  type="button"
+                  onClick={() => setStaffPhoto(null)}
+                  className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ) : null}
+            <label className="flex-1 cursor-pointer">
+              <div className="flex items-center justify-center gap-2 px-3 py-2 border rounded-md hover:bg-muted transition-colors">
+                <Camera className="h-4 w-4" />
+                <span className="text-sm">{staffPhoto ? 'Trocar' : 'Adicionar'}</span>
+              </div>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handlePhotoUpload}
+              />
+            </label>
+          </div>
+        </div>
         <div className="flex items-end">
           <Button
             className="w-full"
             onClick={() => {
               if (!staffName.trim()) return;
-              createMember({ name: staffName.trim(), role: staffRole });
+              createMember({ name: staffName.trim(), role: staffRole, photo_url: staffPhoto });
               setStaffName('');
               setStaffRole('balconista');
+              setStaffPhoto(null);
             }}
           >
             Cadastrar
@@ -123,15 +177,50 @@ export function MechanicsPage() {
           <div className="space-y-3">
             {members.map((m) => (
               <div key={m.id} className="flex items-center justify-between p-4 border rounded-xl">
-                <div>
-                  <p className="font-medium">{m.name}</p>
-                  <p className="text-sm text-muted-foreground">Função: {m.role}</p>
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-12 w-12">
+                    <AvatarImage src={m.photo_url || undefined} />
+                    <AvatarFallback className="bg-primary text-primary-foreground">
+                      {m.name.charAt(0).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="font-medium">{m.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      Função: {m.role === 'balconista' ? 'Balconista' : m.role === 'dono' ? 'Dono' : 'Outro'}
+                    </p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2">
                     <span className="text-sm">Ativo</span>
                     <Switch checked={m.active} onCheckedChange={(v) => updateMember({ id: m.id, active: Boolean(v) })} />
                   </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = 'image/*';
+                      input.onchange = (e: any) => {
+                        const file = e.target?.files?.[0];
+                        if (!file) return;
+                        if (file.size > 2 * 1024 * 1024) {
+                          toast.error('Foto muito grande! Máximo 2MB');
+                          return;
+                        }
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          updateMember({ id: m.id, photo_url: reader.result as string });
+                        };
+                        reader.readAsDataURL(file);
+                      };
+                      input.click();
+                    }}
+                  >
+                    {m.photo_url ? 'Trocar Foto' : 'Adicionar Foto'}
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"

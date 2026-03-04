@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -237,10 +238,13 @@ export default function PublicSatisfactionPage() {
             <CardContent className="pt-6 space-y-3">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Você está avaliando:</p>
               {atendimento && (
-                <div className="flex items-center gap-2">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-700 font-semibold text-sm">
-                    🎤
-                  </div>
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-12 w-12 border-2 border-blue-200">
+                    <AvatarImage src={atendimento.photo_url || undefined} />
+                    <AvatarFallback className="bg-blue-100 text-blue-700 font-semibold">
+                      {atendimento.name?.charAt(0)?.toUpperCase() || '🎤'}
+                    </AvatarFallback>
+                  </Avatar>
                   <div>
                     <p className="text-xs text-muted-foreground">Atendimento no Balcão</p>
                     <p className="font-medium">{atendimento.name || 'Equipe'}</p>
@@ -248,10 +252,13 @@ export default function PublicSatisfactionPage() {
                 </div>
               )}
               {mechanic && (
-                <div className="flex items-center gap-2">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-100 text-orange-700 font-semibold text-sm">
-                    🔧
-                  </div>
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-12 w-12 border-2 border-orange-200">
+                    <AvatarImage src={mechanic.photo_url || undefined} />
+                    <AvatarFallback className="bg-orange-100 text-orange-700 font-semibold">
+                      {mechanic.name?.charAt(0)?.toUpperCase() || '🔧'}
+                    </AvatarFallback>
+                  </Avatar>
                   <div>
                     <p className="text-xs text-muted-foreground">Mecânico Responsável</p>
                     <p className="font-medium">{mechanic.name || 'Oficina'}</p>
