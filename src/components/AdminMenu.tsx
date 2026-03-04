@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { cleanupOldPhotos } from '@/lib/photoService';
 import { sendTestSatisfactionSurvey, testSatisfactionSurveyWith4SecondDelay } from '@/services/whatsappService';
-import { Settings, Trash2, MessageCircle, Clock, Zap } from 'lucide-react';
+import { sendSatisfactionLinkToClient } from '@/lib/sendSatisfactionLink';
+import { supabase } from '@/integrations/supabase/client';
+import { Settings, Trash2, MessageCircle, Clock, Zap, Send, RotateCcw } from 'lucide-react';
 import { MaintenanceKeywordsManager } from './MaintenanceKeywordsManager';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -11,6 +13,12 @@ export const AdminMenu = () => {
   const [cleanupDays, setCleanupDays] = useState(100);
   const [isLoading, setIsLoading] = useState(false);
   const [showKeywordsManager, setShowKeywordsManager] = useState(false);
+  const [showSatisfactionForm, setShowSatisfactionForm] = useState(false);
+  const [satisfactionForm, setSatisfactionForm] = useState({
+    clientName: 'Matheus',
+    apelido: 'bollynho',
+    phone: '75988388629',
+  });
 
   // Não renderizar se usuário não está autenticado ou é usuário restrito
   if (!user || isRestrictedUser) {
@@ -61,6 +69,55 @@ export const AdminMenu = () => {
       }
     } catch (error) {
       alert(`❌ Erro: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSendSatisfactionLink = async () => {
+    setIsLoading(true);
+    try {
+      const result = await sendSatisfactionLinkToClient({
+        phone: satisfactionForm.phone,
+        clientName: satisfactionForm.clientName,
+        apelido: satisfactionForm.apelido,
+      });
+      
+      if (result.success) {
+        alert(`${result.message}\n\n✅ Link enviado com sucesso!`);
+        setShowSatisfactionForm(false);
+        setIsOpen(false);
+      } else {
+        alert(result.message);
+      }
+    } catch (error: any) {
+      alert(`❌ Erro: ${error?.message || 'Erro desconhecido'}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResetSatisfaction = async () => {
+    setIsLoading(true);
+    try {
+      const sb = supabase as any;
+      
+      // Deletar TODAS as satisfações respondidas
+      const { error: deleteError } = await sb
+        .from('satisfaction_ratings')
+        .delete()
+        .not('responded_at', 'is', null);
+
+      if (deleteError) {
+        alert(`❌ Erro ao deletar: ${deleteError.message}`);
+        setIsLoading(false);
+        return;
+      }
+
+      alert('✅ Todas as avaliações foram deletadas!');
+      
+    } catch (error: any) {
+      alert(`❌ Erro: ${error?.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -340,6 +397,162 @@ export const AdminMenu = () => {
               <Zap size={16} />
               Gerenciar Keywords
             </button>
+
+            <button
+              onClick={() => setShowSatisfactionForm(!showSatisfactionForm)}
+              style={{
+                width: '100%',
+                padding: '10px',
+                marginTop: '8px',
+                backgroundColor: '#4CAF50',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: 'bold',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                transition: 'background-color 0.3s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#45a049';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#4CAF50';
+              }}
+            >
+              <Send size={16} />
+              Enviar Link Satisfação
+            </button>
+
+            <button
+              onClick={handleResetSatisfaction}
+              disabled={isLoading}
+              style={{
+                width: '100%',
+                padding: '10px',
+                marginTop: '8px',
+                backgroundColor: isLoading ? '#ccc' : '#2196F3',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: isLoading ? 'not-allowed' : 'pointer',
+                fontSize: '13px',
+                fontWeight: 'bold',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                transition: 'background-color 0.3s',
+              }}
+              onMouseEnter={(e) => {
+                if (!isLoading) e.currentTarget.style.backgroundColor = '#1976D2';
+              }}
+              onMouseLeave={(e) => {
+                if (!isLoading) e.currentTarget.style.backgroundColor = '#2196F3';
+              }}
+            >
+              <RotateCcw size={16} />
+              {isLoading ? 'Resetando...' : 'Resetar Satisfação'}
+            </button>
+
+            {showSatisfactionForm && (
+              <div style={{
+                marginTop: '12px',
+                padding: '12px',
+                backgroundColor: '#f9f9f9',
+                borderRadius: '4px',
+                borderLeft: '4px solid #4CAF50',
+              }}>
+                <div style={{ marginBottom: '8px' }}>
+                  <label style={{ display: 'block', fontSize: '11px', color: '#666', marginBottom: '4px', fontWeight: '500' }}>
+                    Nome do Cliente:
+                  </label>
+                  <input
+                    type="text"
+                    value={satisfactionForm.clientName}
+                    onChange={(e) => setSatisfactionForm({ ...satisfactionForm, clientName: e.target.value })}
+                    placeholder="ex: Matheus"
+                    style={{
+                      width: '100%',
+                      padding: '6px',
+                      border: '1px solid #ddd',
+                      borderRadius: '3px',
+                      fontSize: '12px',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: '8px' }}>
+                  <label style={{ display: 'block', fontSize: '11px', color: '#666', marginBottom: '4px', fontWeight: '500' }}>
+                    Apelido:
+                  </label>
+                  <input
+                    type="text"
+                    value={satisfactionForm.apelido}
+                    onChange={(e) => setSatisfactionForm({ ...satisfactionForm, apelido: e.target.value })}
+                    placeholder="ex: bollynho"
+                    style={{
+                      width: '100%',
+                      padding: '6px',
+                      border: '1px solid #ddd',
+                      borderRadius: '3px',
+                      fontSize: '12px',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: '8px' }}>
+                  <label style={{ display: 'block', fontSize: '11px', color: '#666', marginBottom: '4px', fontWeight: '500' }}>
+                    Telefone:
+                  </label>
+                  <input
+                    type="text"
+                    value={satisfactionForm.phone}
+                    onChange={(e) => setSatisfactionForm({ ...satisfactionForm, phone: e.target.value })}
+                    placeholder="ex: 75988388629"
+                    style={{
+                      width: '100%',
+                      padding: '6px',
+                      border: '1px solid #ddd',
+                      borderRadius: '3px',
+                      fontSize: '12px',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                <button
+                  onClick={handleSendSatisfactionLink}
+                  disabled={isLoading}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    backgroundColor: isLoading ? '#ccc' : '#4CAF50',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '3px',
+                    cursor: isLoading ? 'not-allowed' : 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    transition: 'background-color 0.3s',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isLoading) e.currentTarget.style.backgroundColor = '#45a049';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isLoading) e.currentTarget.style.backgroundColor = '#4CAF50';
+                  }}
+                >
+                  {isLoading ? '⏳ Enviando...' : '✅ Enviar Agora'}
+                </button>
+              </div>
+            )}
           </div>
 
           <div style={{ marginTop: '12px', fontSize: '11px', color: '#999' }}>

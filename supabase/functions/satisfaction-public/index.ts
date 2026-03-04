@@ -50,22 +50,52 @@ Deno.serve(async (req) => {
 
       const { data: order } = await supabase
         .from('service_orders')
-        .select('id, client_name, equipment, problem_description, entry_date, client_phone')
+        .select('id, client_name, equipment, problem_description, entry_date, client_phone, mechanic_id, atendimento_id')
         .eq('id', row.order_id)
         .single()
 
-      const { data: mechanic } = row.mechanic_id
-        ? await supabase.from('mechanics').select('id, name').eq('id', row.mechanic_id).single()
+
+
+      // Se mechanic_id ou atendimento_id estão vazios no rating, usar da ordem
+      let mechanicId = row.mechanic_id
+      let atendimentoId = row.atendimento_id
+
+      if (!mechanicId || !atendimentoId) {
+        if (order) {
+          mechanicId = order.mechanic_id || mechanicId
+          atendimentoId = order.atendimento_id || atendimentoId
+        }
+
+        // Se conseguiu dados novos, atualizar no banco
+        if (mechanicId || atendimentoId) {
+          await supabase
+            .from('satisfaction_ratings')
+            .update({
+              mechanic_id: mechanicId,
+              atendimento_id: atendimentoId
+            })
+            .eq('id', row.id)
+        }
+      }
+
+      // Buscar dados de mecânico e atendimento
+      const { data: mechanic } = mechanicId
+        ? await supabase.from('mechanics').select('id, name').eq('id', mechanicId).single()
         : { data: null }
 
-      const { data: atendimento } = row.atendimento_id
-        ? await supabase.from('staff_members').select('id, name, photo_url').eq('id', row.atendimento_id).single()
+      const { data: atendimento } = atendimentoId
+        ? await supabase.from('staff_members').select('id, name, photo_url').eq('id', atendimentoId).single()
         : { data: null }
-
       return json({
         success: true,
         alreadyResponded: !!row.responded_at,
         rating: {
+
+
+
+
+
+
           atendimento_rating: row.atendimento_rating,
           servico_rating: row.servico_rating,
           comment: row.comment,
@@ -101,7 +131,7 @@ Deno.serve(async (req) => {
 
       const { data: existing, error: existingError } = await supabase
         .from('satisfaction_ratings')
-        .select('id, responded_at')
+        .select('id, responded_at, order_id, mechanic_id, atendimento_id')
         .eq('public_token', token)
         .limit(1)
 
@@ -113,6 +143,23 @@ Deno.serve(async (req) => {
         return json({ success: false, message: 'Esta avaliação já foi respondida.' }, 409)
       }
 
+      // Se mechanic_id ou atendimento_id estão vazios, buscar na ordem de serviço
+      let mechanicId = existing[0].mechanic_id
+      let atendimentoId = existing[0].atendimento_id
+
+      if (!mechanicId || !atendimentoId) {
+        const { data: order } = await supabase
+          .from('service_orders')
+          .select('mechanic_id, atendimento_id')
+          .eq('id', existing[0].order_id)
+          .single()
+
+        if (order) {
+          mechanicId = order.mechanic_id || mechanicId
+          atendimentoId = order.atendimento_id || atendimentoId
+        }
+      }
+
       const tags = normalizeTags(body?.tags)
 
       const { error: updateError } = await supabase
@@ -120,6 +167,8 @@ Deno.serve(async (req) => {
         .update({
           atendimento_rating: atendimentoRating,
           servico_rating: servicoRating,
+          mechanic_id: mechanicId,
+          atendimento_id: atendimentoId,
           tags,
           comment: body?.comment || null,
           recommends: typeof body?.recommends === 'boolean' ? body.recommends : null,

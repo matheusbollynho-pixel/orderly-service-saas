@@ -101,14 +101,26 @@ export default function PublicSatisfactionPage() {
         setLoading(true);
         setError(null);
 
-        const res = await fetch(`${supabaseUrl}/functions/v1/satisfaction-public?token=${encodeURIComponent(token || '')}`);
+        console.log('🔍 Carregando satisfação com token:', token);
+        console.log('📍 Supabase URL:', supabaseUrl);
+        
+        const url = `${supabaseUrl}/functions/v1/satisfaction-public?token=${encodeURIComponent(token || '')}`;
+        console.log('🌐 Chamando URL:', url);
+        
+        const res = await fetch(url);
+        console.log('📡 Response status:', res.status);
+        
         const data = await res.json();
+        console.log('📦 Response data:', data);
 
         if (!res.ok || !data?.success) {
-          setError(data?.message || 'Não foi possível carregar a avaliação');
+          const errorMsg = data?.message || 'Não foi possível carregar a avaliação';
+          console.error('❌ Erro:', errorMsg);
+          setError(errorMsg);
           return;
         }
 
+        console.log('✅ Dados carregados com sucesso');
         setOrder(data.order || null);
         setMechanic(data.mechanic || null);
         setAtendimento(data.atendimento || null);
@@ -123,6 +135,7 @@ export default function PublicSatisfactionPage() {
           setServicoTags(Array.isArray(data.rating.tags?.servico) ? data.rating.tags.servico : []);
         }
       } catch (e: any) {
+        console.error('❌ Erro ao carregar:', e);
         setError(e?.message || 'Erro ao carregar');
       } finally {
         setLoading(false);
@@ -367,47 +380,94 @@ export default function PublicSatisfactionPage() {
         </Card>
 
         {submitted && (
-          <Card>
-            <CardContent className="pt-6 space-y-3">
-              {isHighRating ? (
+          <Card className="border-green-200 bg-green-50">
+            <CardContent className="pt-6 space-y-4">
+              <div className="text-center space-y-2">
+                <div className="text-5xl">✅</div>
+                <p className="font-bold text-lg text-green-700">
+                  Avaliação enviada com sucesso!
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Obrigado {order?.client_name || 'cliente'}, sua opinião é muito importante para nós.
+                </p>
+              </div>
+
+              {isHighRating && (
                 <>
-                  <p className="font-medium text-green-700">
-                    Ficamos muito felizes, {order?.client_name || 'cliente'}! 🎉
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    O {mechanic?.name || 'mecânico'} vai adorar saber disso. Sua satisfação é o melhor prêmio para nossa equipe!
-                  </p>
+                  <div className="bg-white p-4 rounded-lg border border-green-100">
+                    <p className="font-medium text-green-700 mb-2">
+                      🎉 Ficamos muito felizes com sua avaliação!
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      O {mechanic?.name || 'mecânico'} vai adorar saber disso. Sua satisfação é o melhor prêmio para nossa equipe!
+                    </p>
+                  </div>
                   <Button
                     type="button"
                     variant="default"
-                    className="w-full"
-                    onClick={() => window.open('https://g.page/r/CeBandaraMotos/review', '_blank')}
+                    className="w-full bg-yellow-500 hover:bg-yellow-600"
+                    onClick={() => {
+                      // Link direto para adicionar review no Google Maps da Bandara Motos
+                      window.open('https://www.google.com/maps/place/BANDARA+MOTOS/@-9.4442483,-38.2225858,20.58z/data=!4m8!3m7!1s0x70931f554af5bb9:0x5e55e62aa8ccbf9b!8m2!3d-9.4442315!4d-38.2223837!9m1!1b1!16s%2Fg%2F11j1fh_bdh?entry=ttu&g_ep=EgoyMDI2MDMwMS4xIKXMDSoASAFQAw%3D%3D', '_blank');
+                    }}
                   >
                     ⭐ Avaliar no Google Maps
                   </Button>
                 </>
-              ) : isLowRating ? (
-                <>
-                  <p className="font-medium text-orange-700">
-                    Obrigado pelo feedback sincero, {order?.client_name || 'cliente'} 🙏
+              )}
+
+              {isLowRating && (
+                <div className="bg-white p-4 rounded-lg border border-orange-100">
+                  <p className="font-medium text-orange-700 mb-2">
+                    🙏 Obrigado pelo feedback sincero
                   </p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground mb-2">
                     Lamentamos que a experiência não tenha sido ideal. Nossa gerência analisará seu caso com atenção e entraremos em contato para resolver qualquer pendência.
                   </p>
                   <p className="text-xs text-muted-foreground font-medium">
                     Estamos comprometidos em melhorar. Obrigado por nos dar essa chance!
                   </p>
-                </>
-              ) : (
-                <>
-                  <p className="font-medium text-green-700">
-                    Obrigado! Sua avaliação foi registrada com sucesso. 💚
+                </div>
+              )}
+
+              {!isHighRating && !isLowRating && (
+                <div className="bg-white p-4 rounded-lg border border-blue-100">
+                  <p className="font-medium text-blue-700">
+                    💙 Obrigado pela sua avaliação!
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    Cada feedback nos ajuda a melhorar. Valorizamos sua opinião!
+                    Sua opinião nos ajuda a melhorar cada vez mais.
                   </p>
-                </>
+                </div>
               )}
+
+              <>
+                <div className="space-y-2 pt-2">
+                  <Button
+                    type="button"
+                    variant="default"
+                    className="w-full bg-pink-600 hover:bg-pink-700"
+                    onClick={() => window.open('https://www.instagram.com/bandaramotos/', '_blank')}
+                  >
+                    📸 Siga-nos no Instagram
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full text-sm"
+                    onClick={() => window.close()}
+                  >
+                    ✕ Fechar esta página
+                  </Button>
+                </div>
+
+                <div className="text-center pt-2 border-t">
+                  <p className="text-xs text-muted-foreground">
+                    📱 Bandara Motos • Paulo Afonso-BA<br/>
+                    (75) 98804-6356 • @BandaraMotos
+                  </p>
+                </div>
+              </>
             </CardContent>
           </Card>
         )}

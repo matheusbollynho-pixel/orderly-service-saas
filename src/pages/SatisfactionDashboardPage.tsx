@@ -66,48 +66,72 @@ export default function SatisfactionDashboardPage() {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, status: 'resolvido' } : r)));
   };
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
+  const reloadData = async () => {
+    setLoading(true);
 
-      const { data: ratingsData, error } = await supabase
-        .from('satisfaction_ratings')
-        .select('*')
-        .not('responded_at', 'is', null)
-        .order('responded_at', { ascending: false });
+    const { data: ratingsData, error } = await supabase
+      .from('satisfaction_ratings')
+      .select('*')
+      .not('responded_at', 'is', null)
+      .order('responded_at', { ascending: false });
 
-      if (error) {
-        console.error('Erro ao carregar avaliações:', error);
-        setRows([]);
-        setOrdersMap({});
-        setLoading(false);
-        return;
-      }
-
-      const ratings = (ratingsData || []) as RatingRow[];
-      setRows(ratings);
-
-      const orderIds = [...new Set(ratings.map((r) => r.order_id))];
-      if (!orderIds.length) {
-        setOrdersMap({});
-        setLoading(false);
-        return;
-      }
-
-      const { data: ordersData } = await supabase
-        .from('service_orders')
-        .select('id, client_name, client_phone, problem_description')
-        .in('id', orderIds);
-
-      const nextMap: Record<string, OrderLite> = {};
-      for (const o of ordersData || []) {
-        nextMap[o.id] = o as OrderLite;
-      }
-      setOrdersMap(nextMap);
+    if (error) {
+      console.error('Erro ao carregar avaliações:', error);
+      setRows([]);
+      setOrdersMap({});
       setLoading(false);
-    };
+      return;
+    }
 
-    load();
+    const ratings = (ratingsData || []) as RatingRow[];
+    setRows(ratings);
+
+    console.log('📊 [DASHBOARD] Avaliações respondidas recarregadas:', {
+      total: ratings.length,
+      comMechanico: ratings.filter(r => r.mechanic_id).length,
+      comAtendimento: ratings.filter(r => r.atendimento_id).length,
+    });
+
+    const orderIds = [...new Set(ratings.map((r) => r.order_id))];
+    if (!orderIds.length) {
+      setOrdersMap({});
+      setLoading(false);
+      return;
+    }
+
+    const { data: ordersData } = await supabase
+      .from('service_orders')
+      .select('id, client_name, client_phone, problem_description')
+      .in('id', orderIds);
+
+    const nextMap: Record<string, OrderLite> = {};
+    for (const o of ordersData || []) {
+      nextMap[o.id] = o as OrderLite;
+    }
+    setOrdersMap(nextMap);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    reloadData();
+
+    // Subscrever a mudanças em tempo real na tabela satisfaction_ratings
+    const channel = supabase
+      .channel('satisfaction_changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'satisfaction_ratings' },
+        () => {
+          console.log('📊 Mudança detectada em satisfaction_ratings, recarregando...');
+          reloadData();
+        }
+      )
+      .subscribe();
+
+    // Cleanup
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const serviceOptions = useMemo(() => {
@@ -179,9 +203,19 @@ export default function SatisfactionDashboardPage() {
       map.set(r.mechanic_id, arr);
     }
 
-    return Array.from(map.entries())
+    const result = Array.from(map.entries())
       .map(([id, notes]) => ({ id, avg: average(notes), count: notes.length }))
       .sort((a, b) => b.avg - a.avg);
+    
+    console.log('🔧 [DASHBOARD] Mechanic Ranking:', {
+      total: result.length,
+      scored_count: scored.length,
+      com_mechanic_id: scored.filter(r => r.mechanic_id).length,
+      com_servico_rating: scored.filter(r => r.servico_rating).length,
+      resultado: result
+    });
+    
+    return result;
   }, [scored]);
 
   const atendimentoRanking = useMemo(() => {
