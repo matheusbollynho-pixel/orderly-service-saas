@@ -44,6 +44,7 @@ export interface ServiceOrder {
   id: string;
   client_id?: string | null;
   motorcycle_id?: string | null;
+  atendimento_id?: string | null;
   client_name: string;
   client_cpf?: string;
   client_apelido?: string;
@@ -66,6 +67,38 @@ export interface ServiceOrder {
   checklist_items?: ChecklistItem[];
   materials?: Material[];
   payments?: Payment[];
+}
+
+export interface StaffMember {
+  id: string;
+  name: string;
+  role: 'balconista' | 'dono' | 'outro';
+  photo_url?: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SatisfactionRating {
+  id: string;
+  order_id: string;
+  client_id?: string | null;
+  atendimento_id?: string | null;
+  mechanic_id?: string | null;
+  atendimento_rating?: number | null;
+  servico_rating?: number | null;
+  tags: {
+    atendimento: string[];
+    servico: string[];
+  };
+  comment?: string | null;
+  recommends?: boolean | null;
+  status: 'pendente' | 'resolvido';
+  responded_at?: string | null;
+  public_token: string;
+  sent_at: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface BirthdayDiscount {

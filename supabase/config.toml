@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.send-satisfaction-survey]
 verify_jwt = false
+
+[functions.satisfaction-public]
+verify_jwt = false

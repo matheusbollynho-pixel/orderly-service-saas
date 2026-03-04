@@ -318,11 +318,128 @@ export type Database = {
           },
         ]
       }
+      staff_members: {
+        Row: {
+          id: string
+          name: string
+          role: "balconista" | "dono" | "outro"
+          photo_url: string | null
+          active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          role: "balconista" | "dono" | "outro"
+          photo_url?: string | null
+          active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          role?: "balconista" | "dono" | "outro"
+          photo_url?: string | null
+          active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      satisfaction_ratings: {
+        Row: {
+          id: string
+          order_id: string
+          client_id: string | null
+          atendimento_id: string | null
+          mechanic_id: string | null
+          atendimento_rating: number | null
+          servico_rating: number | null
+          tags: Json
+          comment: string | null
+          recommends: boolean | null
+          status: "pendente" | "resolvido"
+          responded_at: string | null
+          public_token: string
+          sent_at: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          order_id: string
+          client_id?: string | null
+          atendimento_id?: string | null
+          mechanic_id?: string | null
+          atendimento_rating?: number | null
+          servico_rating?: number | null
+          tags?: Json
+          comment?: string | null
+          recommends?: boolean | null
+          status?: "pendente" | "resolvido"
+          responded_at?: string | null
+          public_token: string
+          sent_at?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          order_id?: string
+          client_id?: string | null
+          atendimento_id?: string | null
+          mechanic_id?: string | null
+          atendimento_rating?: number | null
+          servico_rating?: number | null
+          tags?: Json
+          comment?: string | null
+          recommends?: boolean | null
+          status?: "pendente" | "resolvido"
+          responded_at?: string | null
+          public_token?: string
+          sent_at?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "satisfaction_ratings_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "service_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "satisfaction_ratings_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "satisfaction_ratings_atendimento_id_fkey"
+            columns: ["atendimento_id"]
+            isOneToOne: false
+            referencedRelation: "staff_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "satisfaction_ratings_mechanic_id_fkey"
+            columns: ["mechanic_id"]
+            isOneToOne: false
+            referencedRelation: "mechanics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       service_orders: {
         Row: {
           id: string
           client_id: string | null
           motorcycle_id: string | null
+          atendimento_id: string | null
           client_address: string
           client_apelido: string
           client_cpf: string
@@ -346,6 +463,7 @@ export type Database = {
           id?: string
           client_id?: string | null
           motorcycle_id?: string | null
+          atendimento_id?: string | null
           client_address: string
           client_apelido?: string
           client_cpf?: string
@@ -369,6 +487,7 @@ export type Database = {
           id?: string
           client_id?: string | null
           motorcycle_id?: string | null
+          atendimento_id?: string | null
           client_address?: string
           client_apelido?: string
           client_cpf?: string
@@ -401,6 +520,13 @@ export type Database = {
             columns: ["motorcycle_id"],
             isOneToOne: false,
             referencedRelation: "motorcycles",
+            referencedColumns: ["id"],
+          },
+          {
+            foreignKeyName: "service_orders_atendimento_id_fkey",
+            columns: ["atendimento_id"],
+            isOneToOne: false,
+            referencedRelation: "staff_members",
             referencedColumns: ["id"],
           },
         ]

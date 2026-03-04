@@ -1,9 +1,9 @@
-import { LayoutDashboard, Plus, ClipboardList, ChartBar, Users, LogOut, Heart, Wallet, Bolt, Circle } from 'lucide-react';
+import { LayoutDashboard, Plus, ClipboardList, ChartBar, Users, LogOut, Heart, Wallet, Bolt, Circle, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 
-type View = 'dashboard' | 'new' | 'express' | 'orders' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa';
+type View = 'dashboard' | 'new' | 'express' | 'orders' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa' | 'satisfacao';
 
 interface BottomNavProps {
   activeView: View;
@@ -32,6 +32,7 @@ export function BottomNav({ activeView, onViewChange, isAdmin }: BottomNavProps)
     ] : []),
     { id: 'mechanics' as const, label: 'Mecânicos', icon: Users },
     { id: 'pos-venda' as const, label: 'Pós-Venda', icon: Heart },
+    { id: 'satisfacao' as const, label: 'Satisfação', icon: Star },
   ];
 
   return (

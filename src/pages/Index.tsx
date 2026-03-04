@@ -15,6 +15,7 @@ import { MechanicsPage } from './MechanicsPage';
 import AfterSalesPage from './AfterSalesPage';
 import { CashFlowPage } from './CashFlowPage';
 import { ExpressCadastroPage } from './ExpressCadastroPage';
+import SatisfactionDashboardPage from './SatisfactionDashboardPage';
 import { BottomNav } from '@/components/BottomNav';
 import { EmptyState } from '@/components/EmptyState';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -23,7 +24,7 @@ import { Wrench, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { getMaintenanceKeywords, findKeywordInText, createMaintenanceReminder, rescheduleMaintenanceReminder } from '@/services/maintenanceReminderService';
 
-type View = 'dashboard' | 'new' | 'express' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa';
+type View = 'dashboard' | 'new' | 'express' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa' | 'satisfacao';
 
 export default function Index() {
   useRealtimeSync();
@@ -190,6 +191,7 @@ Retirada: ${retiradaInfo}`;
       const orderData = {
         client_id: savedClient.id, // Vincular com o cliente salvo
         motorcycle_id: primaryMotorcycleId,
+        atendimento_id: formData.servicos.atendimento_id || null,
         client_name: formData.client.name,
         client_cpf: formData.client.cpf || '',
         client_apelido: formData.client.apelido || '',
@@ -566,6 +568,10 @@ Retirada: ${retiradaInfo}`;
 
         {currentView === 'fluxo-caixa' && (
           <CashFlowPage />
+        )}
+
+        {currentView === 'satisfacao' && (
+          <SatisfactionDashboardPage />
         )}
 
         {currentView === 'new' && (

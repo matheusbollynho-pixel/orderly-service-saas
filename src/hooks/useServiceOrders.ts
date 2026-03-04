@@ -68,6 +68,7 @@ export function useServiceOrders() {
         .insert({
           client_id: order.client_id ?? null,
           motorcycle_id: order.motorcycle_id ?? null,
+          atendimento_id: order.atendimento_id ?? null,
           client_name: order.client_name,
           client_cpf: order.client_cpf ?? '',
           client_apelido: order.client_apelido ?? '',

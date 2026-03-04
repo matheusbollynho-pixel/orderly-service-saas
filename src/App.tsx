@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AdminMenu } from "@/components/AdminMenu";
 import Index from "./pages/Index";
@@ -10,6 +10,7 @@ import NotFound from "./pages/NotFound";
 import { LoginPage } from "./pages/LoginPage";
 import AfterSalesPage from "./pages/AfterSalesPage";
 import { CashFlowPage } from "./pages/CashFlowPage";
+import PublicSatisfactionPage from "./pages/PublicSatisfactionPage";
 import { useAuth } from "./hooks/useAuth";
 import { useEffect } from "react";
 import { cleanupOldPhotos } from "./lib/photoService";
@@ -24,6 +25,27 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+function AppRoutes() {
+  const location = useLocation();
+  const isPublicSatisfaction = location.pathname.startsWith('/avaliar/');
+
+  if (isPublicSatisfaction) {
+    return (
+      <Routes>
+        <Route path="/avaliar/:token" element={<PublicSatisfactionPage />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    );
+  }
+
+  return (
+    <>
+      <AdminMenu />
+      <AuthenticatedApp />
+    </>
+  );
+}
 
 function AuthenticatedApp() {
   const { user, loading } = useAuth();
@@ -72,9 +94,8 @@ const App = () => {
         <TooltipProvider>
           <Toaster />
           <Sonner />
-          <AdminMenu />
           <BrowserRouter>
-            <AuthenticatedApp />
+            <AppRoutes />
           </BrowserRouter>
         </TooltipProvider>
       </QueryClientProvider>

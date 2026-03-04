@@ -10,6 +10,7 @@ import { User, MapPin, Phone, Wrench, FileText, ArrowLeft, Truck, AlertCircle } 
 import { ClientSearch } from '@/components/ClientSearch';
 import { Client, Motorcycle } from '@/hooks/useClients';
 import { getMaintenanceKeywords, findKeywordInText, type MaintenanceKeyword } from '@/services/maintenanceReminderService';
+import { useTeamMembers } from '@/hooks/useTeamMembers';
 
 interface ClientData {
   name: string;
@@ -36,6 +37,7 @@ interface MotoData {
 
 interface ServicoData {
   descricao_geral: string;
+  atendimento_id?: string;
   quem_pega: 'cliente' | 'outro';
   nome_retirada?: string;
   telefone_retirada?: string;
@@ -55,6 +57,7 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting }: { onSubmit: any;
   const [activeTab, setActiveTab] = useState<'cliente' | 'motos' | 'servicos'>('cliente');
   const [maintenanceKeywords, setMaintenanceKeywords] = useState<MaintenanceKeyword[]>([]);
   const [detectedKeywords, setDetectedKeywords] = useState<MaintenanceKeyword[]>([]);
+  const { members: teamMembers } = useTeamMembers();
   
   const getTodayLocal = () => {
     const now = new Date();
@@ -67,6 +70,7 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting }: { onSubmit: any;
     motos: [{ placa: '', moto_info: '', equipment: '', model: '', year: '', color: '', km: '' }],
     servicos: {
       descricao_geral: '',
+      atendimento_id: '',
       quem_pega: 'cliente',
       nome_retirada: '',
       telefone_retirada: '',
@@ -201,7 +205,11 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting }: { onSubmit: any;
     onSubmit(formData);
   };
 
-  const isValid = formData.client.name && formData.client.cpf && formData.motos.every(m => m.placa);
+  const isValid =
+    formData.client.name &&
+    formData.client.cpf &&
+    (teamMembers.length === 0 || !!formData.servicos.atendimento_id) &&
+    formData.motos.every(m => m.placa);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5 max-w-4xl mx-auto p-6">
@@ -400,6 +408,25 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting }: { onSubmit: any;
               </div>
 
               <div className="space-y-3">
+                <Label className="flex items-center gap-2 font-semibold">
+                  <User className="h-5 w-5" /> Quem atendeu no balcão?
+                </Label>
+                <Select value={formData.servicos.atendimento_id || ''} onValueChange={(v) => updateField('servicos', 0, 'atendimento_id', v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o atendente" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {teamMembers.map((member) => (
+                      <SelectItem key={member.id} value={member.id}>
+                        {member.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {teamMembers.length === 0 && (
+                  <p className="text-xs text-amber-700">Nenhum atendente cadastrado. Cadastre em banco para habilitar ranking de atendimento.</p>
+                )}
+
                 <Label className="flex items-center gap-2 font-semibold">
                   Adesivo Bandara Motos?
                 </Label>
