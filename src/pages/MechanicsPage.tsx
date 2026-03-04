@@ -114,6 +114,17 @@ export function MechanicsPage() {
                     variant="outline"
                     size="sm"
                     onClick={() => {
+                      const novo = prompt('Nova comissão (%)', String(m.commission_rate));
+                      const val = novo ? parseFloat(novo) : NaN;
+                      if (!isNaN(val)) updateMechanic({ id: m.id, commission_rate: val });
+                    }}
+                  >
+                    Editar Comissão
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
                       const input = document.createElement('input');
                       input.type = 'file';
                       input.accept = 'image/*';
