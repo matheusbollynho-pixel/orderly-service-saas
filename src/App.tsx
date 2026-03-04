@@ -11,6 +11,7 @@ import { LoginPage } from "./pages/LoginPage";
 import AfterSalesPage from "./pages/AfterSalesPage";
 import { CashFlowPage } from "./pages/CashFlowPage";
 import PublicSatisfactionPage from "./pages/PublicSatisfactionPage";
+import PublicStoreSatisfactionPage from "./pages/PublicStoreSatisfactionPage";
 import { useAuth } from "./hooks/useAuth";
 import { useEffect } from "react";
 import { cleanupOldPhotos } from "./lib/photoService";
@@ -31,10 +32,12 @@ function AppRoutes() {
   const isPublicSatisfaction = location.pathname.startsWith('/avaliar/');
 
   if (isPublicSatisfaction) {
+    // IMPORTANTE: A rota mais específica (/loja) DEVE vir ANTES da genérica (/:token)
+    // para evitar que :token faça match com a palavra "loja"
     return (
       <Routes>
+        <Route path="/avaliar/loja" element={<PublicStoreSatisfactionPage />} />
         <Route path="/avaliar/:token" element={<PublicSatisfactionPage />} />
-        <Route path="*" element={<NotFound />} />
       </Routes>
     );
   }

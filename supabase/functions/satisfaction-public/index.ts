@@ -33,6 +33,83 @@ Deno.serve(async (req) => {
     const url = new URL(req.url)
 
     if (req.method === 'GET') {
+      const mode = url.searchParams.get('mode')
+
+      // Modo: Verificar se cliente tem avaliação pendente
+      if (mode === 'check-pending') {
+        const clientName = url.searchParams.get('client_name')
+        const clientPhone = url.searchParams.get('client_phone')
+
+        if (!clientName || !clientPhone) {
+          return json({ success: false, message: 'Nome e telefone são obrigatórios' }, 400)
+        }
+
+        // Buscar cliente por telefone ou nome
+        const { data: clients } = await supabase
+          .from('clients')
+          .select('id')
+          .or(`phone.eq.${clientPhone},name.ilike.%${clientName}%`)
+          .limit(1)
+
+        if (!clients || clients.length === 0) {
+          return json({ success: true, pending_token: null })
+        }
+
+        const clientId = clients[0].id
+
+        // Buscar OS mais recente desse cliente
+        const { data: orders } = await supabase
+          .from('service_orders')
+          .select('id')
+          .eq('client_id', clientId)
+          .order('entry_date', { ascending: false })
+          .limit(1)
+
+        if (!orders || orders.length === 0) {
+          return json({ success: true, pending_token: null })
+        }
+
+        const orderId = orders[0].id
+
+        // Buscar avaliação pendente dessa OS
+        const { data: ratings } = await supabase
+          .from('satisfaction_ratings')
+          .select('public_token, responded_at')
+          .eq('order_id', orderId)
+          .is('responded_at', null)
+          .limit(1)
+
+        if (ratings && ratings.length > 0) {
+          return json({ success: true, pending_token: ratings[0].public_token })
+        }
+
+        return json({ success: true, pending_token: null })
+      }
+
+      // Modo: Carregar lista de atendentes para o QR da loja
+      if (mode === 'store-metadata') {
+        console.log('🔍 Buscando staff members...')
+        const { data: staff_members, error: staffError } = await supabase
+          .from('staff_members')
+          .select('id, name')
+          .order('name')
+
+        console.log('📦 Staff members encontrados:', staff_members?.length || 0, 'Erro:', staffError)
+
+        const { data: mechanics, error: mechanicsError } = await supabase
+          .from('mechanics')
+          .select('id, name')
+          .order('name')
+
+        console.log('🔧 Mechanics encontrados:', mechanics?.length || 0, 'Erro:', mechanicsError)
+
+        return json({
+          success: true,
+          staff_members: staff_members || [],
+          mechanics: mechanics || [],
+        })
+      }
+
       const token = url.searchParams.get('token')
       if (!token) return json({ success: false, message: 'Token ausente' }, 400)
 
@@ -118,6 +195,131 @@ Deno.serve(async (req) => {
 
     if (req.method === 'POST') {
       const body = await req.json().catch(() => ({}))
+      const mode = body?.mode
+
+      // Modo: Criar walk-in (avaliação de balcão sem OS)
+      if (mode === 'create_walkin') {
+        console.log('🚀 Iniciando create_walkin...')
+        const clientName = body?.client_name
+        const clientPhone = body?.client_phone
+        const attendantType = body?.attendant_type
+        const attendantId = body?.attendant_id
+
+        console.log('Dados recebidos:', { clientName, clientPhone, attendantType, attendantId })
+
+        if (!clientName || !clientPhone) {
+          console.error('❌ Nome ou telefone faltando')
+          return json({ success: false, message: 'Nome e telefone são obrigatórios' }, 400)
+        }
+
+        // Buscar ou criar cliente
+        console.log('🔍 Buscando cliente por telefone:', clientPhone)
+        let clientId = null
+        const { data: existingClients, error: clientSearchError } = await supabase
+          .from('clients')
+          .select('id')
+          .eq('phone', clientPhone)
+          .limit(1)
+
+        console.log('Busca cliente:', { existingClients, clientSearchError })
+
+        if (clientSearchError) {
+          console.error('❌ Erro ao buscar cliente:', clientSearchError)
+          return json({ success: false, message: `Erro ao buscar cliente: ${clientSearchError.message}` }, 500)
+        }
+
+        if (existingClients && existingClients.length > 0) {
+          clientId = existingClients[0].id
+          console.log('✅ Cliente encontrado:', clientId)
+        } else {
+          console.log('➕ Criando novo cliente...')
+          
+          // Gerar CPF fictício baseado no telefone (pegar últimos 11 dígitos ou completar com zeros)
+          const phoneCPF = clientPhone.padStart(11, '0').slice(-11);
+          
+          const { data: newClient, error: createClientError } = await supabase
+            .from('clients')
+            .insert({
+              name: clientName,
+              phone: clientPhone,
+              cpf: phoneCPF, // CPF gerado do telefone
+            })
+            .select('id')
+            .single()
+
+          console.log('Novo cliente:', { newClient, createClientError })
+          
+          if (createClientError) {
+            console.error('❌ Erro ao criar cliente:', createClientError)
+            return json({ success: false, message: `Erro ao criar cliente: ${createClientError.message}` }, 500)
+          }
+          
+          clientId = newClient?.id
+        }
+
+        if (!clientId) {
+          console.error('❌ Falhou em obter client_id')
+          return json({ success: false, message: 'Erro ao buscar/criar cliente' }, 500)
+        }
+
+        console.log('🎫 Criando OS fictícia para client_id:', clientId)
+        // Criar OS fictícia para o walk-in (fallback se order_id for NOT NULL)
+        const { data: walkInOrder, error: orderError } = await supabase
+          .from('service_orders')
+          .insert({
+            client_id: clientId,
+            client_name: clientName,
+            client_phone: clientPhone,
+            equipment: 'Avaliação de balcão',
+            problem_description: 'Avaliação sem OS',
+            status: 'concluida',
+            entry_date: new Date().toISOString(),
+          })
+          .select('id')
+          .single()
+
+        const orderId = walkInOrder?.id
+
+        if (!orderId) {
+          return json({ success: false, message: 'Erro ao criar OS fictícia' }, 500)
+        }
+
+        // Gerar token único para walk-in
+        const publicToken = `walkin-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        console.log('🎟️ Token gerado:', publicToken)
+
+        // Criar satisfaction_rating
+        const ratingData: any = {
+          order_id: orderId,
+          client_id: clientId,
+          public_token: publicToken,
+          status: 'pendente',
+        }
+
+        // Se informou quem atendeu, preencher os IDs
+        if (attendantType && attendantId) {
+          if (attendantType === 'staff') {
+            ratingData.atendimento_id = attendantId
+          } else if (attendantType === 'mechanic') {
+            ratingData.mechanic_id = attendantId
+          }
+        }
+
+        const { data: newRating, error: ratingError } = await supabase
+          .from('satisfaction_ratings')
+          .insert(ratingData)
+          .select('id, public_token')
+          .single()
+
+        if (ratingError || !newRating) {
+          console.error('Erro ao criar rating walk-in:', ratingError)
+          return json({ success: false, message: 'Erro ao criar avaliação' }, 500)
+        }
+
+        return json({ success: true, token: newRating.public_token })
+      }
+
+      // Modo padrão: salvar resposta de avaliação
       const token = body?.token
 
       if (!token) return json({ success: false, message: 'Token ausente' }, 400)
@@ -147,7 +349,18 @@ Deno.serve(async (req) => {
       let mechanicId = existing[0].mechanic_id
       let atendimentoId = existing[0].atendimento_id
 
-      if (!mechanicId || !atendimentoId) {
+      // Se o cliente escolheu atendente agora (walk-in), sobrescrever
+      const attendantType = body?.attendant_type
+      const attendantId = body?.attendant_id
+
+      if (attendantType && attendantId) {
+        if (attendantType === 'staff') {
+          atendimentoId = attendantId
+        } else if (attendantType === 'mechanic') {
+          mechanicId = attendantId
+        }
+      } else if (!mechanicId || !atendimentoId) {
+        // Fallback: buscar na OS se ainda não tem
         const { data: order } = await supabase
           .from('service_orders')
           .select('mechanic_id, atendimento_id')

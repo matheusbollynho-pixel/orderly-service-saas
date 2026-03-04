@@ -86,6 +86,12 @@ export default function PublicSatisfactionPage() {
   const [order, setOrder] = useState<any>(null);
   const [mechanic, setMechanic] = useState<any>(null);
   const [atendimento, setAtendimento] = useState<any>(null);
+  const [isWalkIn, setIsWalkIn] = useState(false);
+
+  // Walk-in: lista de atendentes disponíveis
+  const [staffMembers, setStaffMembers] = useState<Array<{id: string, name: string}>>([]);
+  const [mechanics, setMechanics] = useState<Array<{id: string, name: string}>>([]);
+  const [selectedAttendant, setSelectedAttendant] = useState('');
 
   const [atendimentoRating, setAtendimentoRating] = useState(0);
   const [servicoRating, setServicoRating] = useState(0);
@@ -97,6 +103,14 @@ export default function PublicSatisfactionPage() {
 
   useEffect(() => {
     const load = async () => {
+      // Validar token antes de fazer a requisição
+      if (!token) {
+        console.error('❌ Token ausente na URL');
+        setError('Link inválido. Token não encontrado.');
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
         setError(null);
@@ -104,7 +118,7 @@ export default function PublicSatisfactionPage() {
         console.log('🔍 Carregando satisfação com token:', token);
         console.log('📍 Supabase URL:', supabaseUrl);
         
-        const url = `${supabaseUrl}/functions/v1/satisfaction-public?token=${encodeURIComponent(token || '')}`;
+        const url = `${supabaseUrl}/functions/v1/satisfaction-public?token=${encodeURIComponent(token)}`;
         console.log('🌐 Chamando URL:', url);
         
         const res = await fetch(url);
@@ -124,7 +138,23 @@ export default function PublicSatisfactionPage() {
         setOrder(data.order || null);
         setMechanic(data.mechanic || null);
         setAtendimento(data.atendimento || null);
+        setIsWalkIn(!!data.is_walk_in);
         setAlreadyResponded(!!data.alreadyResponded);
+
+        // Se é walk-in SEM atendente, carregar lista
+        if (data.is_walk_in && !data.mechanic && !data.atendimento) {
+          console.log('📋 Walk-in sem atendente, carregando lista...');
+          const metaRes = await fetch(`${supabaseUrl}/functions/v1/satisfaction-public?mode=store-metadata`);
+          const metaData = await metaRes.json();
+          console.log('📦 Metadata:', metaData);
+          if (metaData?.success) {
+            setStaffMembers(metaData.staff_members || []);
+            setMechanics(metaData.mechanics || []);
+            console.log('✅ Atendentes carregados:', metaData.staff_members?.length, 'staff,', metaData.mechanics?.length, 'mechanics');
+          }
+        } else {
+          console.log('ℹ️ Não é walk-in sem atendente:', { is_walk_in: data.is_walk_in, has_mechanic: !!data.mechanic, has_atendimento: !!data.atendimento });
+        }
 
         if (data.rating) {
           setAtendimentoRating(data.rating.atendimento_rating || 0);
@@ -168,8 +198,23 @@ export default function PublicSatisfactionPage() {
   };
 
   const handleSubmit = async () => {
-    if (!atendimentoRating || !servicoRating || !token) {
-      setError('Preencha as duas avaliações em estrelas.');
+    // Para walk-in: apenas atendimento é obrigatório
+    // Para OS normal: ambos são obrigatórios
+    if (isWalkIn) {
+      if (!atendimentoRating || !token) {
+        setError('Preencha a avaliação do atendimento em estrelas.');
+        return;
+      }
+    } else {
+      if (!atendimentoRating || !servicoRating || !token) {
+        setError('Preencha as duas avaliações em estrelas.');
+        return;
+      }
+    }
+
+    // Se walk-in sem atendente definido, validar seleção
+    if (isWalkIn && !atendimento && !mechanic && !selectedAttendant) {
+      setError('Selecione quem te atendeu no balcão.');
       return;
     }
 
@@ -177,20 +222,29 @@ export default function PublicSatisfactionPage() {
       setSaving(true);
       setError(null);
 
+      const payload: any = {
+        token,
+        atendimento_rating: atendimentoRating,
+        servico_rating: servicoRating || 0, // Para walk-in, usar 0 se não preencheu
+        tags: {
+          atendimento: atendimentoTags,
+          servico: servicoTags,
+        },
+        comment: comment?.trim() || null,
+        recommends,
+      };
+
+      // Incluir atendente selecionado se walk-in
+      if (isWalkIn && selectedAttendant) {
+        const [type, id] = selectedAttendant.split(':');
+        payload.attendant_type = type;
+        payload.attendant_id = id;
+      }
+
       const res = await fetch(`${supabaseUrl}/functions/v1/satisfaction-public`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          atendimento_rating: atendimentoRating,
-          servico_rating: servicoRating,
-          tags: {
-            atendimento: atendimentoTags,
-            servico: servicoTags,
-          },
-          comment: comment?.trim() || null,
-          recommends,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -242,7 +296,11 @@ export default function PublicSatisfactionPage() {
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-muted-foreground">
             <p>Cliente: <span className="font-medium text-foreground">{order?.client_name || '-'}</span></p>
-            <p>Moto/Equipamento: <span className="font-medium text-foreground">{order?.equipment || '-'}</span></p>
+            {isWalkIn ? (
+              <p>Atendimento: <span className="font-medium text-foreground">Balcão / Loja</span></p>
+            ) : (
+              <p>Moto/Equipamento: <span className="font-medium text-foreground">{order?.equipment || '-'}</span></p>
+            )}
           </CardContent>
         </Card>
 
@@ -284,6 +342,35 @@ export default function PublicSatisfactionPage() {
 
         <Card>
           <CardContent className="pt-6 space-y-6">
+            {/* DROPDOWN DE SELEÇÃO - Apenas para walk-in sem atendente */}
+            {(() => {
+              const shouldShow = isWalkIn && !atendimento && !mechanic && staffMembers.length > 0;
+              console.log('🔍 Dropdown visibility check:', {
+                isWalkIn,
+                atendimento: !!atendimento,
+                mechanic: !!mechanic,
+                staffCount: staffMembers.length,
+                shouldShow
+              });
+              return shouldShow;
+            })() && (
+              <div className="space-y-3 pb-4 border-b">
+                <p className="font-medium text-base">Quem te atendeu no balcão?</p>
+                <select
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  value={selectedAttendant}
+                  onChange={(e) => setSelectedAttendant(e.target.value)}
+                >
+                  <option value="">Selecione o atendente</option>
+                  {staffMembers.map((m) => (
+                    <option key={`staff-${m.id}`} value={`staff:${m.id}`}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {/* SEÇÃO BALCÃO */}
             <div className="space-y-3">
               <div className="flex items-center gap-2 pb-2">
@@ -295,7 +382,9 @@ export default function PublicSatisfactionPage() {
               </div>
               
               <p className="font-medium text-base">
-                {atendimento?.name 
+                {isWalkIn
+                  ? 'O que achou do nosso atendimento hoje?'
+                  : atendimento?.name 
                   ? `Como foi o atendimento de ${atendimento.name} no balcão?`
                   : 'Como foi o atendimento no balcão?'
                 }
@@ -313,9 +402,10 @@ export default function PublicSatisfactionPage() {
             </div>
 
             {/* DIVISOR VISUAL */}
-            <div className="border-t pt-6" />
+            {!isWalkIn && <div className="border-t pt-6" />}
 
-            {/* SEÇÃO OFICINA */}
+            {/* SEÇÃO OFICINA - Apenas para OS normais, não para walk-in */}
+            {!isWalkIn && (
             <div className="space-y-3">
               <div className="flex items-center gap-2 pb-2">
                 <div className="text-lg">🔧</div>
@@ -326,7 +416,9 @@ export default function PublicSatisfactionPage() {
               </div>
               
               <p className="font-medium text-base">
-                {mechanic?.name 
+                {isWalkIn
+                  ? 'O que achou do nosso serviço hoje?'
+                  : mechanic?.name 
                   ? `Como ficou o serviço de ${mechanic.name} na sua moto?`
                   : 'Como ficou o serviço na sua moto?'
                 }
@@ -342,12 +434,10 @@ export default function PublicSatisfactionPage() {
                 />
               )}
             </div>
-
-            {/* DIVISOR VISUAL */}
-            <div className="border-t pt-6" />
+            )}
 
             {/* SEÇÃO FINAL */}
-            <div className="space-y-4">
+            <div className="space-y-4 border-t pt-6">
               <div className="space-y-2">
                 <p className="font-medium">Recomendaria a Bandara Motos?</p>
                 <div className="flex gap-2">

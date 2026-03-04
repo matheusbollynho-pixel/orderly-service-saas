@@ -20,7 +20,15 @@ async function main() {
   // Primeiro, buscamos IDs reais de ordens, mecânicos e atendentes
   console.log('🔍 Buscando dados existentes...')
 
-  const { data: orders } = await sb.from('service_orders').select('id, mechanic_id, atendimento_id').limit(1)
+  // Buscar uma ordem que ainda não tenha avaliação
+  const { data: existingRatings } = await sb.from('satisfaction_ratings').select('order_id')
+  const usedOrderIds = existingRatings?.map(r => r.order_id) || []
+  
+  const { data: orders } = await sb.from('service_orders')
+    .select('id, mechanic_id, atendimento_id')
+    .not('id', 'in', `(${usedOrderIds.join(',') || 'none'})`)
+    .limit(1)
+  
   const { data: mechanics } = await sb.from('mechanics').select('id').limit(1)
   const { data: staff } = await sb.from('staff_members').select('id').limit(1)
 
@@ -43,12 +51,7 @@ async function main() {
     atendimento_id: staffId,
     public_token: testToken,
     status: 'pendente',
-    atendimento_rating: 5,
-    servico_rating: 5,
-    recommends: true,
-    tags: { atendimento: ['Educação', 'Rapidez'], servico: ['Qualidade', 'Bem Feito'] },
-    comment: 'Avaliação de teste - Excelente atendimento!',
-    responded_at: new Date().toISOString(),
+    // Não preencher responded_at para poder testar a avaliação
   }).select()
 
   if (error) {
