@@ -366,7 +366,7 @@ export function useServiceOrders() {
         .insert({
           order_id: payload.order_id,
           amount: payload.amount,
-          discount_amount: payload.discount_amount || null,
+          discount_amount: payload.discount_amount ?? 0,
           method: payload.method,
           reference: payload.reference || null,
           notes: payload.notes || null,
