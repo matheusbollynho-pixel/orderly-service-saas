@@ -30,7 +30,7 @@ export function BottomNav({ activeView, onViewChange, isAdmin }: BottomNavProps)
     ...(canAccessCashFlow ? [
       { id: 'fluxo-caixa' as const, label: 'Caixa', icon: Wallet }
     ] : []),
-    { id: 'mechanics' as const, label: 'Mecânicos', icon: Users },
+    { id: 'mechanics' as const, label: 'Equipe', icon: Users },
     { id: 'pos-venda' as const, label: 'Pós-Venda', icon: Heart },
     { id: 'satisfacao' as const, label: 'Satisfação', icon: Star },
   ];

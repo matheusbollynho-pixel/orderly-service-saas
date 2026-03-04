@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { useMechanics } from '@/hooks/useMechanics';
 import { useClients } from '@/hooks/useClients';
+import { useTeamMembers } from '@/hooks/useTeamMembers';
 import { generateOrderPDFBase64, generateOrderPDF } from '@/lib/pdfGenerator';
 import { sendWhatsAppDocument, sendWhatsAppText } from '@/lib/whatsappService';
 
@@ -69,7 +70,7 @@ interface OrderDetailsProps {
   onAddMaterial?: (material: any) => void;
   onRemoveMaterial?: (id: string) => void;
   onUpdateMaterial?: (id: string, field: string, value: string) => void;
-  onAddPayment?: (payload: { order_id: string; amount: number; discount_amount?: number | null; method: PaymentMethod; reference?: string | null; notes?: string | null }) => void;
+  onAddPayment?: (payload: { order_id: string; amount: number; discount_amount?: number | null; method: PaymentMethod; reference?: string | null; notes?: string | null; finalized_by_staff_id?: string | null }) => void;
   onDeletePayment?: (id: string) => void;
   isCreatingPayment?: boolean;
   isDeletingPayment?: boolean;
@@ -100,6 +101,7 @@ export function OrderDetails({
   isAdmin = false,
   canAccessPayments = true,
 }: OrderDetailsProps) {
+  const { members: teamMembers } = useTeamMembers();
   const { mechanics } = useMechanics();
   const { getClientById, getMotorcycleById, updateClientById, updateMotorcycleById } = useClients();
   const printRef = useRef<HTMLDivElement>(null);
@@ -169,11 +171,12 @@ export function OrderDetails({
   };
   
   const [exitDate, setExitDate] = useState(formatDateToInput(order.exit_date));
-  const [paymentForm, setPaymentForm] = useState<{ amount: string; discount_amount: string; method: PaymentMethod; notes: string }>(() => ({
+  const [paymentForm, setPaymentForm] = useState<{ amount: string; discount_amount: string; method: PaymentMethod; notes: string; finalized_by_staff_id: string }>(() => ({
     amount: '',
     discount_amount: '',
     method: 'dinheiro',
     notes: '',
+    finalized_by_staff_id: '',
   }));
   const [showFullClient, setShowFullClient] = useState(false);
   const [autorizaInstagram, setAutorizaInstagram] = useState(order.autoriza_instagram !== false ? true : false);
@@ -214,6 +217,16 @@ export function OrderDetails({
   const [expressTelefoneRetirada, setExpressTelefoneRetirada] = useState(retiradaInicial.telefone);
   const [expressCpfRetirada, setExpressCpfRetirada] = useState(retiradaInicial.cpf);
   const [expressEntryDate, setExpressEntryDate] = useState(formatDateToInput(order.entry_date));
+  const [expressAtendimentoId, setExpressAtendimentoId] = useState(order.atendimento_id || '');
+  const handleExpressAtendimentoChange = (value: string) => {
+    setExpressAtendimentoId(value);
+    if (onUpdateOrder) {
+      onUpdateOrder({
+        id: order.id,
+        atendimento_id: value || null,
+      });
+    }
+  };
   const toNoonISOString = (dateStr?: string) => {
     if (!dateStr) return null;
     const [year, month, day] = dateStr.split('-').map(Number);
@@ -250,8 +263,9 @@ export function OrderDetails({
     setExpressTelefoneRetirada(retirada.telefone);
     setExpressCpfRetirada(retirada.cpf);
     setExpressEntryDate(formatDateToInput(order.entry_date));
+    setExpressAtendimentoId(order.atendimento_id || '');
     setExpressFormInitialized(false);
-  }, [order.id, order.problem_description, order.client_phone, order.client_address]);
+  }, [order.id, order.problem_description, order.client_phone, order.client_address, order.atendimento_id]);
 
   useEffect(() => {
     const loadClientMoto = async () => {
@@ -328,8 +342,9 @@ export function OrderDetails({
       discount_amount: discountAmount,
       method: paymentForm.method,
       notes: paymentForm.notes?.trim() || null,
+      finalized_by_staff_id: paymentForm.finalized_by_staff_id || null,
     });
-    setPaymentForm((prev) => ({ ...prev, amount: '', discount_amount: '' }));
+    setPaymentForm((prev) => ({ ...prev, amount: '', discount_amount: '', finalized_by_staff_id: '' }));
   };
 
   const handleSendWhatsAppPDF = async () => {
@@ -773,6 +788,7 @@ export function OrderDetails({
 
                 onUpdateOrder({
                   id: order.id,
+                  atendimento_id: expressAtendimentoId || null,
                   problem_description: nextDescription,
                   client_name: expressClientName.trim(),
                   client_cpf: cleanCpf(expressClientCpf),
@@ -1077,47 +1093,67 @@ export function OrderDetails({
           </div>
 
           {onAddPayment && (
-            <div className="grid grid-cols-1 sm:grid-cols-7 gap-2 pt-2 border-t">
-              <Input
-                placeholder="Valor"
-                value={paymentForm.amount}
-                onChange={(e) => setPaymentForm((prev) => ({ ...prev, amount: e.target.value }))}
-                className="h-9 sm:col-span-2"
-                type="number"
-                min="0"
-                step="0.01"
-              />
-              <Input
-                placeholder="Desconto (R$)"
-                value={paymentForm.discount_amount}
-                onChange={(e) => setPaymentForm((prev) => ({ ...prev, discount_amount: e.target.value }))}
-                className="h-9"
-                type="number"
-                min="0"
-                step="0.01"
-              />
-              <Select
-                value={paymentForm.method}
-                onValueChange={(v) => setPaymentForm((prev) => ({ ...prev, method: v as PaymentMethod }))}
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Forma" />
-                </SelectTrigger>
-                <SelectContent>
-                  {methodOptions.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input
-                placeholder="Obs. (opcional)"
-                value={paymentForm.notes}
-                onChange={(e) => setPaymentForm((prev) => ({ ...prev, notes: e.target.value }))}
-                className="h-9 sm:col-span-2"
-              />
-              <Button className="h-9" onClick={handleAddPayment} disabled={isCreatingPayment || !paymentForm.amount}>
-                Adicionar
-              </Button>
+            <div className="space-y-3 pt-2 border-t">
+              {/* Quem vai finalizar o pagamento */}
+              <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                <Label className="text-sm font-semibold">💰 Quem vai finalizar o pagamento?</Label>
+                <Select value={paymentForm.finalized_by_staff_id || ''} onValueChange={(v) => setPaymentForm((prev) => ({ ...prev, finalized_by_staff_id: v }))}>
+                  <SelectTrigger className="h-9 mt-2">
+                    <SelectValue placeholder="Selecione o responsável" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {teamMembers.map((member) => (
+                      <SelectItem key={member.id} value={member.id}>
+                        {member.name} - {member.role === 'balconista' ? 'Balconista' : 'Outro'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Formulário de pagamento */}
+              <div className="grid grid-cols-1 sm:grid-cols-7 gap-2">
+                <Input
+                  placeholder="Valor"
+                  value={paymentForm.amount}
+                  onChange={(e) => setPaymentForm((prev) => ({ ...prev, amount: e.target.value }))}
+                  className="h-9 sm:col-span-2"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                />
+                <Input
+                  placeholder="Desconto (R$)"
+                  value={paymentForm.discount_amount}
+                  onChange={(e) => setPaymentForm((prev) => ({ ...prev, discount_amount: e.target.value }))}
+                  className="h-9"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                />
+                <Select
+                  value={paymentForm.method}
+                  onValueChange={(v) => setPaymentForm((prev) => ({ ...prev, method: v as PaymentMethod }))}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Forma" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {methodOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  placeholder="Obs. (opcional)"
+                  value={paymentForm.notes}
+                  onChange={(e) => setPaymentForm((prev) => ({ ...prev, notes: e.target.value }))}
+                  className="h-9 sm:col-span-2"
+                />
+                <Button className="h-9" onClick={handleAddPayment} disabled={isCreatingPayment || !paymentForm.amount}>
+                  Adicionar
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>

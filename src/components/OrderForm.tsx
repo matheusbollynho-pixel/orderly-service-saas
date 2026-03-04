@@ -38,6 +38,8 @@ interface MotoData {
 interface ServicoData {
   descricao_geral: string;
   atendimento_id?: string;
+  created_by_staff_id?: string;
+  finalized_by_staff_id?: string;
   quem_pega: 'cliente' | 'outro';
   nome_retirada?: string;
   telefone_retirada?: string;
@@ -71,6 +73,8 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting }: { onSubmit: any;
     servicos: {
       descricao_geral: '',
       atendimento_id: '',
+      created_by_staff_id: '',
+      finalized_by_staff_id: '',
       quem_pega: 'cliente',
       nome_retirada: '',
       telefone_retirada: '',
@@ -409,11 +413,11 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting }: { onSubmit: any;
 
               <div className="space-y-3">
                 <Label className="flex items-center gap-2 font-semibold">
-                  <User className="h-5 w-5" /> Quem atendeu no balcão?
+                  <User className="h-5 w-5" /> Quem está criando essa OS?
                 </Label>
                 <Select value={formData.servicos.atendimento_id || ''} onValueChange={(v) => updateField('servicos', 0, 'atendimento_id', v)}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecione o atendente" />
+                    <SelectValue placeholder="Selecione o responsável" />
                   </SelectTrigger>
                   <SelectContent>
                     {teamMembers.map((member) => (

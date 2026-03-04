@@ -114,8 +114,6 @@ Deno.serve(async (req) => {
       }
 
       const tags = normalizeTags(body?.tags)
-      const finalRating = (atendimentoRating + servicoRating) / 2
-      const nextStatus = finalRating < 3 ? 'pendente' : 'resolvido'
 
       const { error: updateError } = await supabase
         .from('satisfaction_ratings')
@@ -125,7 +123,7 @@ Deno.serve(async (req) => {
           tags,
           comment: body?.comment || null,
           recommends: typeof body?.recommends === 'boolean' ? body.recommends : null,
-          status: nextStatus,
+          status: 'pendente',
           responded_at: new Date().toISOString(),
         })
         .eq('id', existing[0].id)

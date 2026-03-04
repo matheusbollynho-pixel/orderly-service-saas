@@ -46,7 +46,16 @@ export default function SatisfactionDashboardPage() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [mechanicFilter, setMechanicFilter] = useState('all');
+  const [atendimentoFilter, setAtendimentoFilter] = useState('all');
   const [serviceFilter, setServiceFilter] = useState('all');
+
+  const clearFilters = () => {
+    setStartDate('');
+    setEndDate('');
+    setMechanicFilter('all');
+    setAtendimentoFilter('all');
+    setServiceFilter('all');
+  };
 
   const markResolved = async (id: string) => {
     await supabase
@@ -127,6 +136,8 @@ export default function SatisfactionDashboardPage() {
 
       if (mechanicFilter !== 'all' && r.mechanic_id !== mechanicFilter) return false;
 
+      if (atendimentoFilter !== 'all' && r.atendimento_id !== atendimentoFilter) return false;
+
       if (serviceFilter !== 'all') {
         const desc = ordersMap[r.order_id]?.problem_description || '';
         if (!desc.includes(serviceFilter)) return false;
@@ -134,7 +145,7 @@ export default function SatisfactionDashboardPage() {
 
       return true;
     });
-  }, [rows, startDate, endDate, mechanicFilter, serviceFilter, ordersMap]);
+  }, [rows, startDate, endDate, mechanicFilter, atendimentoFilter, serviceFilter, ordersMap]);
 
   const scored = useMemo(() => {
     return filtered.map((r) => ({
@@ -202,12 +213,18 @@ export default function SatisfactionDashboardPage() {
       <h2 className="text-lg font-semibold">Satisfação • Atendimento + Oficina</h2>
 
       <Card>
-        <CardContent className="pt-6 grid grid-cols-1 md:grid-cols-4 gap-3">
+        <CardContent className="pt-6 grid grid-cols-1 md:grid-cols-6 gap-3">
           <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
           <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
           <select className="h-10 rounded-md border px-3" value={mechanicFilter} onChange={(e) => setMechanicFilter(e.target.value)}>
             <option value="all">Todos os mecânicos</option>
             {mechanics.map((m) => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </select>
+          <select className="h-10 rounded-md border px-3" value={atendimentoFilter} onChange={(e) => setAtendimentoFilter(e.target.value)}>
+            <option value="all">Todos os atendentes</option>
+            {members.map((m) => (
               <option key={m.id} value={m.id}>{m.name}</option>
             ))}
           </select>
@@ -217,6 +234,7 @@ export default function SatisfactionDashboardPage() {
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
+          <Button variant="outline" onClick={clearFilters}>Limpar filtros</Button>
         </CardContent>
       </Card>
 

@@ -12,7 +12,7 @@ interface PaymentsTabProps {
   isLoading?: boolean;
   period: 'week' | 'month' | 'all';
   onPeriodChange: (p: 'week' | 'month' | 'all') => void;
-  onAddPayment: (payload: { order_id: string; amount: number; discount_amount?: number | null; method: PaymentMethod; reference?: string | null; notes?: string | null }) => void;
+  onAddPayment: (payload: { order_id: string; amount: number; discount_amount?: number | null; method: PaymentMethod; reference?: string | null; notes?: string | null; finalized_by_staff_id?: string | null }) => void;
   onDeletePayment: (id: string) => void;
   onUpdatePayment: (payload: { id: string; created_at?: string; amount?: number; discount_amount?: number | null; method?: PaymentMethod; notes?: string | null }) => void;
 }

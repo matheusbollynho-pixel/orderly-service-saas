@@ -1,8 +1,11 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { StaffMember } from '@/types/service-order';
+import { toast } from 'sonner';
 
 export function useTeamMembers() {
+  const queryClient = useQueryClient();
+
   const query = useQuery({
     queryKey: ['staff-members'],
     queryFn: async () => {
@@ -17,9 +20,75 @@ export function useTeamMembers() {
     },
   });
 
+  const createMember = useMutation({
+    mutationFn: async (payload: { name: string; role: StaffMember['role']; photo_url?: string | null }) => {
+      const { data, error } = await supabase
+        .from('staff_members')
+        .insert({
+          name: payload.name,
+          role: payload.role,
+          photo_url: payload.photo_url ?? null,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data as StaffMember;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['staff-members'] });
+      toast.success('Atendente cadastrado!');
+    },
+    onError: (e: any) => {
+      toast.error(`Erro ao cadastrar atendente: ${e?.message || 'Erro desconhecido'}`);
+    },
+  });
+
+  const updateMember = useMutation({
+    mutationFn: async ({ id, ...updates }: Partial<StaffMember> & { id: string }) => {
+      const { data, error } = await supabase
+        .from('staff_members')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data as StaffMember;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['staff-members'] });
+      toast.success('Atendente atualizado!');
+    },
+    onError: (e: any) => {
+      toast.error(`Erro ao atualizar atendente: ${e?.message || 'Erro desconhecido'}`);
+    },
+  });
+
+  const deleteMember = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('staff_members')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['staff-members'] });
+      toast.success('Atendente removido!');
+    },
+    onError: (e: any) => {
+      toast.error(`Erro ao remover atendente: ${e?.message || 'Erro desconhecido'}`);
+    },
+  });
+
   return {
     members: query.data ?? [],
     isLoading: query.isLoading,
     error: query.error,
+    createMember: createMember.mutate,
+    updateMember: updateMember.mutate,
+    deleteMember: deleteMember.mutate,
   };
 }

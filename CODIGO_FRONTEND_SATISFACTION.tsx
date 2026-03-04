@@ -1,3 +1,6 @@
+// src/pages/PublicSatisfactionPage.tsx
+// 📋 Página Pública de Satisfação - Nomes Dinâmicos Carregados do Banco
+
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -6,14 +9,20 @@ import { Textarea } from '@/components/ui/textarea';
 import { Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+// ✅ Tags específicas para BALCÃO
 const BALCAO_POSITIVE_TAGS = ['Educação', 'Rapidez', 'Transparência', 'Simpatia', 'Agilidade'];
 const BALCAO_IMPROVEMENT_TAGS = ['Demora no balcão', 'Falta de Atenção', 'Falta de Informação', 'Preço Caro', 'Não Entendia'];
 
+// ✅ Tags específicas para OFICINA
 const OFICINA_POSITIVE_TAGS = ['Qualidade', 'Prazo Cumprido', 'Moto Limpa', 'Bem Feito', 'Perfeição'];
 const OFICINA_IMPROVEMENT_TAGS = ['Problema não resolvido', 'Sujeira', 'Demora', 'Moto com Defeito', 'Peças Trocadas Sem Avisar'];
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
+/**
+ * 🏷️ Componente de Tags Dinâmicas
+ * Mostra tags diferentes baseado na área (balcão/oficina) e nota (positiva/melhoria)
+ */
 function TagPills({
   area,
   score,
@@ -59,6 +68,9 @@ function TagPills({
   );
 }
 
+/**
+ * ⭐ Componente de Estrelas Clicáveis
+ */
 function Stars({ value, onChange }: { value: number; onChange: (n: number) => void }) {
   return (
     <div className="flex items-center gap-2">
@@ -75,6 +87,15 @@ function Stars({ value, onChange }: { value: number; onChange: (n: number) => vo
   );
 }
 
+/**
+ * 📱 Página Principal de Satisfação Pública
+ * 
+ * Fluxo:
+ * 1. Carrega dados via token (GET)
+ * 2. Busca nomes do atendente e mecânico no banco
+ * 3. Cliente avalia e submete (POST)
+ * 4. Exibe mensagem personalizada baseada na nota
+ */
 export default function PublicSatisfactionPage() {
   const { token } = useParams();
   const [loading, setLoading] = useState(true);
@@ -82,10 +103,12 @@ export default function PublicSatisfactionPage() {
   const [error, setError] = useState<string | null>(null);
   const [alreadyResponded, setAlreadyResponded] = useState(false);
 
+  // 👥 Dados carregados do banco
   const [order, setOrder] = useState<any>(null);
-  const [mechanic, setMechanic] = useState<any>(null);
-  const [atendimento, setAtendimento] = useState<any>(null);
+  const [mechanic, setMechanic] = useState<any>(null);           // ✅ Nome do mecânico
+  const [atendimento, setAtendimento] = useState<any>(null);     // ✅ Nome do atendente
 
+  // ⭐ Avaliações e tags
   const [atendimentoRating, setAtendimentoRating] = useState(0);
   const [servicoRating, setServicoRating] = useState(0);
   const [atendimentoTags, setAtendimentoTags] = useState<string[]>([]);
@@ -94,12 +117,16 @@ export default function PublicSatisfactionPage() {
   const [recommends, setRecommends] = useState<boolean | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
+  /**
+   * 📥 Carrega dados via token (GET satisfaction-public)
+   */
   useEffect(() => {
     const load = async () => {
       try {
         setLoading(true);
         setError(null);
 
+        // Chama Edge Function com o token
         const res = await fetch(`${supabaseUrl}/functions/v1/satisfaction-public?token=${encodeURIComponent(token || '')}`);
         const data = await res.json();
 
@@ -108,11 +135,13 @@ export default function PublicSatisfactionPage() {
           return;
         }
 
+        // ✅ Popula os nomes carregados do banco de dados
         setOrder(data.order || null);
-        setMechanic(data.mechanic || null);
-        setAtendimento(data.atendimento || null);
+        setMechanic(data.mechanic || null);          // Nome do mecânico
+        setAtendimento(data.atendimento || null);    // Nome do atendente
         setAlreadyResponded(!!data.alreadyResponded);
 
+        // Se houver avaliação anterior, carrega
         if (data.rating) {
           setAtendimentoRating(data.rating.atendimento_rating || 0);
           setServicoRating(data.rating.servico_rating || 0);
@@ -131,19 +160,25 @@ export default function PublicSatisfactionPage() {
     load();
   }, [token]);
 
+  // Calcula nota final (média)
   const finalRating = useMemo(() => {
     if (!atendimentoRating || !servicoRating) return 0;
     return (atendimentoRating + servicoRating) / 2;
   }, [atendimentoRating, servicoRating]);
 
+  // Verifica se é nota alta (4-5 em ambas)
   const isHighRating = useMemo(() => {
     return atendimentoRating >= 4 && servicoRating >= 4;
   }, [atendimentoRating, servicoRating]);
 
+  // Verifica se é nota baixa (≤3 em alguma)
   const isLowRating = useMemo(() => {
     return atendimentoRating <= 3 || servicoRating <= 3;
   }, [atendimentoRating, servicoRating]);
 
+  /**
+   * Toggle de tags selecionadas
+   */
   const toggleTag = (scope: 'atendimento' | 'servico', tag: string) => {
     if (scope === 'atendimento') {
       setAtendimentoTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
@@ -153,6 +188,9 @@ export default function PublicSatisfactionPage() {
     setServicoTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
   };
 
+  /**
+   * 📤 Submete a avaliação (POST satisfaction-public)
+   */
   const handleSubmit = async () => {
     if (!atendimentoRating || !servicoRating || !token) {
       setError('Preencha as duas avaliações em estrelas.');
@@ -194,6 +232,7 @@ export default function PublicSatisfactionPage() {
     }
   };
 
+  // Estados de carregamento
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center">Carregando avaliação...</div>;
   }
@@ -222,6 +261,7 @@ export default function PublicSatisfactionPage() {
   return (
     <div className="min-h-screen bg-muted/20 px-4 py-6">
       <div className="mx-auto max-w-md space-y-4">
+        {/* Card de Informações da OS */}
         <Card>
           <CardHeader>
             <CardTitle>Bandara Motos • Avaliação</CardTitle>
@@ -232,6 +272,7 @@ export default function PublicSatisfactionPage() {
           </CardContent>
         </Card>
 
+        {/* Card identificando o atendente e mecânico */}
         {(atendimento || mechanic) && (
           <Card className="border-primary/20 bg-primary/5">
             <CardContent className="pt-6 space-y-3">
@@ -262,18 +303,21 @@ export default function PublicSatisfactionPage() {
           </Card>
         )}
 
+        {/* Card com o Formulário de Avaliação */}
         <Card>
           <CardContent className="pt-6 space-y-6">
-            {/* SEÇÃO BALCÃO */}
+            {/* ═══ SEÇÃO BALCÃO ═══ */}
             <div className="space-y-3">
               <div className="flex items-center gap-2 pb-2">
                 <div className="text-lg">🎤</div>
                 <div>
                   <p className="text-xs font-medium uppercase text-muted-foreground">Atendimento no Balcão</p>
+                  {/* ✅ NOME DINÂMICO DO ATENDENTE */}
                   <p className="font-medium">{atendimento?.name}</p>
                 </div>
               </div>
               
+              {/* ✅ PERGUNTA DINÂMICA COM NOME */}
               <p className="font-medium text-base">
                 {atendimento?.name 
                   ? `Como foi o atendimento de ${atendimento.name} no balcão?`
@@ -282,6 +326,7 @@ export default function PublicSatisfactionPage() {
               </p>
               <Stars value={atendimentoRating} onChange={setAtendimentoRating} />
               
+              {/* Tags específicas do balcão */}
               {atendimentoRating > 0 && (
                 <TagPills
                   area="balcao"
@@ -292,19 +337,21 @@ export default function PublicSatisfactionPage() {
               )}
             </div>
 
-            {/* DIVISOR VISUAL */}
+            {/* Divisor Visual */}
             <div className="border-t pt-6" />
 
-            {/* SEÇÃO OFICINA */}
+            {/* ═══ SEÇÃO OFICINA ═══ */}
             <div className="space-y-3">
               <div className="flex items-center gap-2 pb-2">
                 <div className="text-lg">🔧</div>
                 <div>
                   <p className="text-xs font-medium uppercase text-muted-foreground">Serviço na Oficina</p>
+                  {/* ✅ NOME DINÂMICO DO MECÂNICO */}
                   <p className="font-medium">{mechanic?.name}</p>
                 </div>
               </div>
               
+              {/* ✅ PERGUNTA DINÂMICA COM NOME */}
               <p className="font-medium text-base">
                 {mechanic?.name 
                   ? `Como ficou o serviço de ${mechanic.name} na sua moto?`
@@ -313,6 +360,7 @@ export default function PublicSatisfactionPage() {
               </p>
               <Stars value={servicoRating} onChange={setServicoRating} />
               
+              {/* Tags específicas da oficina */}
               {servicoRating > 0 && (
                 <TagPills
                   area="oficina"
@@ -323,10 +371,10 @@ export default function PublicSatisfactionPage() {
               )}
             </div>
 
-            {/* DIVISOR VISUAL */}
+            {/* Divisor Visual */}
             <div className="border-t pt-6" />
 
-            {/* SEÇÃO FINAL */}
+            {/* ═══ SEÇÃO FINAL ═══ */}
             <div className="space-y-4">
               <div className="space-y-2">
                 <p className="font-medium">Recomendaria a Bandara Motos?</p>
@@ -359,15 +407,18 @@ export default function PublicSatisfactionPage() {
           </CardContent>
         </Card>
 
+        {/* ═══ TELA DE SUCESSO CONDICIONAL ═══ */}
         {submitted && (
           <Card>
             <CardContent className="pt-6 space-y-3">
               {isHighRating ? (
+                // ✅ Nota alta (4-5 em ambas)
                 <>
                   <p className="font-medium text-green-700">
                     Ficamos muito felizes, {order?.client_name || 'cliente'}! 🎉
                   </p>
                   <p className="text-sm text-muted-foreground">
+                    {/* ✅ NOME DINÂMICO DO MECÂNICO */}
                     O {mechanic?.name || 'mecânico'} vai adorar saber disso. Sua satisfação é o melhor prêmio para nossa equipe!
                   </p>
                   <Button
@@ -380,6 +431,7 @@ export default function PublicSatisfactionPage() {
                   </Button>
                 </>
               ) : isLowRating ? (
+                // ⚠ Nota baixa (≤3 em alguma)
                 <>
                   <p className="font-medium text-orange-700">
                     Obrigado pelo feedback sincero, {order?.client_name || 'cliente'} 🙏
@@ -392,6 +444,7 @@ export default function PublicSatisfactionPage() {
                   </p>
                 </>
               ) : (
+                // 😊 Nota média
                 <>
                   <p className="font-medium text-green-700">
                     Obrigado! Sua avaliação foi registrada com sucesso. 💚

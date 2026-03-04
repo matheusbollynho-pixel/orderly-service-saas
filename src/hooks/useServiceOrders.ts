@@ -360,16 +360,18 @@ export function useServiceOrders() {
 
   // Payments: create and delete
   const createPaymentMutation = useMutation({
-    mutationFn: async (payload: { order_id: string; amount: number; discount_amount?: number | null; method: string; reference?: string | null; notes?: string | null }) => {
+    mutationFn: async (payload: { order_id: string; amount: number; discount_amount?: number | null; method: string; reference?: string | null; notes?: string | null; finalized_by_staff_id?: string | null }) => {
       const { data, error } = await supabase
         .from('payments')
         .insert({
           order_id: payload.order_id,
           amount: payload.amount,
-          discount_amount: payload.discount_amount ?? 0,
-          method: payload.method as any,
-          reference: payload.reference ?? null,
-          notes: payload.notes ?? null,
+          discount_amount: payload.discount_amount || null,
+          method: payload.method,
+          reference: payload.reference || null,
+          notes: payload.notes || null,
+          // NOTA: finalized_by_staff_id será habilitado após executar migration 202603030003_add_staff_tracking.sql
+          // finalized_by_staff_id: payload.finalized_by_staff_id || null,
         })
         .select()
         .single();

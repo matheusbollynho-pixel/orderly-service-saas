@@ -6,8 +6,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { createMaintenanceReminder } from '@/services/maintenanceReminderService';
+import { useTeamMembers } from '@/hooks/useTeamMembers';
 
 interface ExpressCadastroPageProps {
   onBack?: () => void;
@@ -23,6 +25,7 @@ export function ExpressCadastroPage({ onBack }: ExpressCadastroPageProps) {
     getClientMotorcycles,
   } = useClients();
   const { createOrder } = useServiceOrders();
+  const { members: teamMembers } = useTeamMembers();
   const [isSaving, setIsSaving] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -42,6 +45,7 @@ export function ExpressCadastroPage({ onBack }: ExpressCadastroPageProps) {
     cor: '',
   });
   const [serviceDescription, setServiceDescription] = useState('');
+  const [atendimentoId, setAtendimentoId] = useState('');
   const [autorizaLembretes, setAutorizaLembretes] = useState(true);
 
   const normalizePhone = (value: string) => value.replace(/\D/g, '');
@@ -189,6 +193,7 @@ export function ExpressCadastroPage({ onBack }: ExpressCadastroPageProps) {
               exit_date: null,
               equipment: `${savedMoto.marca} ${savedMoto.modelo}${savedMoto.placa ? ` (${savedMoto.placa})` : ''}`.trim(),
               problem_description: `${desc} (cadastro express)`,
+              atendimento_id: atendimentoId || null,
             },
             {
               onSuccess: async () => {
@@ -241,6 +246,7 @@ export function ExpressCadastroPage({ onBack }: ExpressCadastroPageProps) {
       setClient({ name: '', phone: '' });
       setMoto({ placa: '', marca: '', modelo: '', ano: '', cor: '' });
       setServiceDescription('');
+      setAtendimentoId('');
       setAutorizaLembretes(true);
     } finally {
       setIsSaving(false);
@@ -408,6 +414,21 @@ export function ExpressCadastroPage({ onBack }: ExpressCadastroPageProps) {
               placeholder="Trocar óleo, cabo, revisão..."
               className="h-11"
             />
+          </div>
+          <div className="space-y-2">
+            <Label>Quem está criando essa OS?</Label>
+            <Select value={atendimentoId} onValueChange={setAtendimentoId}>
+              <SelectTrigger className="h-11">
+                <SelectValue placeholder="Selecione o responsável" />
+              </SelectTrigger>
+              <SelectContent>
+                {teamMembers.map((member) => (
+                  <SelectItem key={member.id} value={member.id}>
+                    {member.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex items-center space-x-2">
             <Checkbox

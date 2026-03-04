@@ -94,5 +94,34 @@ CREATE INDEX IF NOT EXISTS satisfaction_ratings_mechanic_id_idx ON public.satisf
 CREATE INDEX IF NOT EXISTS satisfaction_ratings_status_idx ON public.satisfaction_ratings(status);
 CREATE INDEX IF NOT EXISTS satisfaction_ratings_responded_at_idx ON public.satisfaction_ratings(responded_at DESC);
 
-ALTER PUBLICATION supabase_realtime ADD TABLE public.staff_members;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.satisfaction_ratings;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_publication_rel pr
+    JOIN pg_class c ON c.oid = pr.prrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    JOIN pg_publication p ON p.oid = pr.prpubid
+    WHERE p.pubname = 'supabase_realtime'
+      AND n.nspname = 'public'
+      AND c.relname = 'staff_members'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.staff_members;
+  END IF;
+END$$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_publication_rel pr
+    JOIN pg_class c ON c.oid = pr.prrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    JOIN pg_publication p ON p.oid = pr.prpubid
+    WHERE p.pubname = 'supabase_realtime'
+      AND n.nspname = 'public'
+      AND c.relname = 'satisfaction_ratings'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.satisfaction_ratings;
+  END IF;
+END$$;

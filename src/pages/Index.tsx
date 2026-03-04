@@ -451,7 +451,7 @@ Retirada: ${retiradaInfo}`;
     );
   };
 
-  const handleAddPayment = (payload: { order_id: string; amount: number; discount_amount?: number | null; method: PaymentMethod; notes?: string | null }) => {
+  const handleAddPayment = (payload: { order_id: string; amount: number; discount_amount?: number | null; method: PaymentMethod; notes?: string | null; finalized_by_staff_id?: string | null }) => {
     createPayment(payload, {
       onSuccess: (saved: any) => {
         setSelectedOrder(prev => {
