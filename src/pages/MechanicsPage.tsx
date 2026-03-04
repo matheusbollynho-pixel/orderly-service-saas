@@ -102,7 +102,7 @@ export function MechanicsPage() {
         <h2 className="text-lg font-semibold">Atendentes de Balcão</h2>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 p-4 border rounded-xl">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 border rounded-xl">
         <div className="space-y-2">
           <Label>Nome</Label>
           <Input value={staffName} onChange={(e) => setStaffName(e.target.value)} placeholder="Ex: Maria" />
@@ -119,38 +119,6 @@ export function MechanicsPage() {
               <SelectItem value="outro">Outro</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-        <div className="space-y-2">
-          <Label>Foto (opcional)</Label>
-          <div className="flex items-center gap-2">
-            {staffPhoto ? (
-              <div className="relative">
-                <Avatar className="h-10 w-10">
-                  <AvatarImage src={staffPhoto} />
-                  <AvatarFallback>{staffName.charAt(0)}</AvatarFallback>
-                </Avatar>
-                <button
-                  type="button"
-                  onClick={() => setStaffPhoto(null)}
-                  className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            ) : null}
-            <label className="flex-1 cursor-pointer">
-              <div className="flex items-center justify-center gap-2 px-3 py-2 border rounded-md hover:bg-muted transition-colors">
-                <Camera className="h-4 w-4" />
-                <span className="text-sm">{staffPhoto ? 'Trocar' : 'Adicionar'}</span>
-              </div>
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handlePhotoUpload}
-              />
-            </label>
-          </div>
         </div>
         <div className="flex items-end">
           <Button
@@ -220,17 +188,6 @@ export function MechanicsPage() {
                     }}
                   >
                     {m.photo_url ? 'Trocar Foto' : 'Adicionar Foto'}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const novoNome = prompt('Novo nome', m.name)?.trim();
-                      if (!novoNome) return;
-                      updateMember({ id: m.id, name: novoNome });
-                    }}
-                  >
-                    Editar Nome
                   </Button>
                   <Button variant="destructive" size="sm" onClick={() => deleteMember(m.id)}>
                     Remover
