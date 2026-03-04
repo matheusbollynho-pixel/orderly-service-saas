@@ -118,6 +118,7 @@ export interface Mechanic {
   id: string;
   name: string;
   commission_rate: number; // percent e.g., 10.00
+  photo_url?: string | null;
   active: boolean;
   created_at: string;
   updated_at: string;

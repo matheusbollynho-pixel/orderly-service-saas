@@ -15,9 +15,27 @@ export function MechanicsPage() {
   const { members, isLoading: isLoadingMembers, createMember, updateMember, deleteMember } = useTeamMembers();
   const [name, setName] = useState('');
   const [commission, setCommission] = useState<number>(10);
+  const [mechanicPhoto, setMechanicPhoto] = useState<string | null>(null);
   const [staffName, setStaffName] = useState('');
   const [staffRole, setStaffRole] = useState<'balconista' | 'dono' | 'outro'>('balconista');
   const [staffPhoto, setStaffPhoto] = useState<string | null>(null);
+
+  const handleMechanicPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Foto muito grande! Máximo 2MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setMechanicPhoto(reader.result as string);
+      toast.success('Foto carregada!');
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -58,9 +76,10 @@ export function MechanicsPage() {
         <div className="flex items-end">
           <Button className="w-full" onClick={() => {
             if (!name.trim()) return;
-            createMechanic({ name: name.trim(), commission_rate: commission });
+            createMechanic({ name: name.trim(), commission_rate: commission, photo_url: mechanicPhoto });
             setName('');
             setCommission(10);
+            setMechanicPhoto(null);
           }}>Cadastrar</Button>
         </div>
       </div>
@@ -74,20 +93,48 @@ export function MechanicsPage() {
           <div className="space-y-3">
             {mechanics.map((m) => (
               <div key={m.id} className="flex items-center justify-between p-4 border rounded-xl">
-                <div>
-                  <p className="font-medium">{m.name}</p>
-                  <p className="text-sm text-muted-foreground">Comissão: {m.commission_rate}%</p>
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-12 w-12">
+                    <AvatarImage src={m.photo_url || undefined} />
+                    <AvatarFallback className="bg-primary text-primary-foreground">
+                      {m.name.charAt(0).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="font-medium">{m.name}</p>
+                    <p className="text-sm text-muted-foreground">Comissão: {m.commission_rate}%</p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2">
                     <span className="text-sm">Ativo</span>
                     <Switch checked={m.active} onCheckedChange={(v) => updateMechanic({ id: m.id, active: Boolean(v) })} />
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => {
-                    const novo = prompt('Nova comissão (%)', String(m.commission_rate));
-                    const val = novo ? parseFloat(novo) : NaN;
-                    if (!isNaN(val)) updateMechanic({ id: m.id, commission_rate: val });
-                  }}>Editar Comissão</Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = 'image/*';
+                      input.onchange = (e: any) => {
+                        const file = e.target?.files?.[0];
+                        if (!file) return;
+                        if (file.size > 2 * 1024 * 1024) {
+                          toast.error('Foto muito grande! Máximo 2MB');
+                          return;
+                        }
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          updateMechanic({ id: m.id, photo_url: reader.result as string });
+                        };
+                        reader.readAsDataURL(file);
+                      };
+                      input.click();
+                    }}
+                  >
+                    {m.photo_url ? 'Trocar Foto' : 'Adicionar Foto'}
+                  </Button>
                   <Button variant="destructive" size="sm" onClick={() => deleteMechanic(m.id)}>Remover</Button>
                 </div>
               </div>
