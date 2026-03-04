@@ -222,6 +222,31 @@ export function MechanicsPage() {
                     <span className="text-sm">Ativo</span>
                     <Switch checked={m.active} onCheckedChange={(v) => updateMember({ id: m.id, active: Boolean(v) })} />
                   </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = 'image/*';
+                      input.onchange = (e: any) => {
+                        const file = e.target?.files?.[0];
+                        if (!file) return;
+                        if (file.size > 2 * 1024 * 1024) {
+                          toast.error('Foto muito grande! Máximo 2MB');
+                          return;
+                        }
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          updateMember({ id: m.id, photo_url: reader.result as string });
+                        };
+                        reader.readAsDataURL(file);
+                      };
+                      input.click();
+                    }}
+                  >
+                    {m.photo_url ? 'Trocar Foto' : 'Adicionar Foto'}
+                  </Button>
                   <Button variant="destructive" size="sm" onClick={() => deleteMember(m.id)}>
                     Remover
                   </Button>
