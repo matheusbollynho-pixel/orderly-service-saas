@@ -71,7 +71,7 @@ export async function sendSatisfactionLinkToClient(params: {
     // Buscar ou criar satisfaction rating
     const { data: existingRating, error: ratingError } = await sb
       .from('satisfaction_ratings')
-      .select('id, public_token, responded_at')
+      .select('id, public_token, responded_at, atendimento_id, mechanic_id')
       .eq('order_id', targetOrder.id)
       .single();
 
@@ -111,6 +111,27 @@ export async function sendSatisfactionLinkToClient(params: {
       token = created?.public_token || newToken;
       ratingId = created?.id;
       console.log('✅ Rating criado:', { id: ratingId, token });
+    } else if (ratingId) {
+      // Garantir que avaliações de OS pronta sempre tenham atendente e mecânico preenchidos
+      const needsSync =
+        existingRating?.atendimento_id !== (targetOrder.atendimento_id || null) ||
+        existingRating?.mechanic_id !== (targetOrder.mechanic_id || null);
+
+      if (needsSync) {
+        const { error: syncError } = await sb
+          .from('satisfaction_ratings')
+          .update({
+            atendimento_id: targetOrder.atendimento_id || null,
+            mechanic_id: targetOrder.mechanic_id || null,
+          })
+          .eq('id', ratingId);
+
+        if (syncError) {
+          console.warn('⚠️ Não foi possível sincronizar atendente/mecânico no rating:', syncError);
+        } else {
+          console.log('🔄 Rating sincronizado com atendimento e mecânico da OS');
+        }
+      }
     }
 
     // Se já foi respondido

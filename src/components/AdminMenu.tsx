@@ -208,7 +208,7 @@ export const AdminMenu = () => {
           width: '50px',
           height: '50px',
           borderRadius: '50%',
-          backgroundColor: '#f5f5f5',
+          backgroundColor: '#1a1a1a',
           border: 'none',
           cursor: 'pointer',
           display: 'flex',
@@ -222,7 +222,7 @@ export const AdminMenu = () => {
         onMouseEnter={(e) => (e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)')}
         onMouseLeave={(e) => (e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)')}
       >
-        <Settings size={24} color="#333" />
+        <Settings size={24} color="#C1272D" />
       </button>
 
       {/* Menu Dropdown */}
@@ -233,23 +233,24 @@ export const AdminMenu = () => {
             position: 'absolute',
             top: '60px',
             right: '0',
-            backgroundColor: 'white',
-            border: '1px solid #ddd',
+            backgroundColor: 'rgba(18, 18, 18, 0.95)',
+            backdropFilter: 'blur(12px)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
             borderRadius: '8px',
             padding: '12px',
             minWidth: '250px',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
             zIndex: 1002,
           }}
         >
-          <div style={{ marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid #eee' }}>
-            <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', fontWeight: 'bold', color: '#333' }}>
+          <div style={{ marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+            <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', fontWeight: 'bold', color: '#e8e8e8' }}>
               ⚙️ Administração
             </h4>
           </div>
 
           <div style={{ marginBottom: '12px' }}>
-            <label style={{ display: 'block', fontSize: '12px', color: '#666', marginBottom: '6px', fontWeight: '500' }}>
+            <label style={{ display: 'block', fontSize: '12px', color: '#a1a1a1', marginBottom: '6px', fontWeight: '500' }}>
               Limpar fotos com X+ dias:
             </label>
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -264,12 +265,14 @@ export const AdminMenu = () => {
                 style={{
                   flex: 1,
                   padding: '8px',
-                  border: '1px solid #ddd',
+                  border: '1px solid rgba(255,255,255,0.2)',
                   borderRadius: '4px',
                   fontSize: '12px',
+                  backgroundColor: 'rgba(0,0,0,0.3)',
+                  color: '#e8e8e8',
                 }}
               />
-              <span style={{ padding: '8px', color: '#999', fontSize: '12px' }}>dias</span>
+              <span style={{ padding: '8px', color: '#a1a1a1', fontSize: '12px' }}>dias</span>
             </div>
           </div>
 
@@ -303,7 +306,7 @@ export const AdminMenu = () => {
             {isLoading ? 'Limpando...' : 'Limpar Fotos'}
           </button>
 
-          <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #eee' }}>
+          <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
             <button
               onClick={handleTestSatisfactionSurvey}
               disabled={isLoading}
@@ -463,12 +466,12 @@ export const AdminMenu = () => {
               <div style={{
                 marginTop: '12px',
                 padding: '12px',
-                backgroundColor: '#f9f9f9',
+                backgroundColor: 'rgba(76, 175, 80, 0.1)',
                 borderRadius: '4px',
                 borderLeft: '4px solid #4CAF50',
               }}>
                 <div style={{ marginBottom: '8px' }}>
-                  <label style={{ display: 'block', fontSize: '11px', color: '#666', marginBottom: '4px', fontWeight: '500' }}>
+                  <label style={{ display: 'block', fontSize: '11px', color: '#a1a1a1', marginBottom: '4px', fontWeight: '500' }}>
                     Nome do Cliente:
                   </label>
                   <input
@@ -479,16 +482,18 @@ export const AdminMenu = () => {
                     style={{
                       width: '100%',
                       padding: '6px',
-                      border: '1px solid #ddd',
+                      border: '1px solid rgba(255,255,255,0.2)',
                       borderRadius: '3px',
                       fontSize: '12px',
                       boxSizing: 'border-box',
+                      backgroundColor: 'rgba(0,0,0,0.3)',
+                      color: '#e8e8e8',
                     }}
                   />
                 </div>
 
                 <div style={{ marginBottom: '8px' }}>
-                  <label style={{ display: 'block', fontSize: '11px', color: '#666', marginBottom: '4px', fontWeight: '500' }}>
+                  <label style={{ display: 'block', fontSize: '11px', color: '#a1a1a1', marginBottom: '4px', fontWeight: '500' }}>
                     Apelido:
                   </label>
                   <input
@@ -499,16 +504,18 @@ export const AdminMenu = () => {
                     style={{
                       width: '100%',
                       padding: '6px',
-                      border: '1px solid #ddd',
+                      border: '1px solid rgba(255,255,255,0.2)',
                       borderRadius: '3px',
                       fontSize: '12px',
                       boxSizing: 'border-box',
+                      backgroundColor: 'rgba(0,0,0,0.3)',
+                      color: '#e8e8e8',
                     }}
                   />
                 </div>
 
                 <div style={{ marginBottom: '8px' }}>
-                  <label style={{ display: 'block', fontSize: '11px', color: '#666', marginBottom: '4px', fontWeight: '500' }}>
+                  <label style={{ display: 'block', fontSize: '11px', color: '#a1a1a1', marginBottom: '4px', fontWeight: '500' }}>
                     Telefone:
                   </label>
                   <input
@@ -519,10 +526,12 @@ export const AdminMenu = () => {
                     style={{
                       width: '100%',
                       padding: '6px',
-                      border: '1px solid #ddd',
+                      border: '1px solid rgba(255,255,255,0.2)',
                       borderRadius: '3px',
                       fontSize: '12px',
                       boxSizing: 'border-box',
+                      backgroundColor: 'rgba(0,0,0,0.3)',
+                      color: '#e8e8e8',
                     }}
                   />
                 </div>
@@ -555,7 +564,7 @@ export const AdminMenu = () => {
             )}
           </div>
 
-          <div style={{ marginTop: '12px', fontSize: '11px', color: '#999' }}>
+          <div style={{ marginTop: '12px', fontSize: '11px', color: '#6b6b6b' }}>
             📌 Limpa automaticamente todo dia à meia-noite
           </div>
         </div>

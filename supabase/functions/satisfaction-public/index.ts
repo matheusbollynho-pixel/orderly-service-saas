@@ -13,6 +13,8 @@ const CORS_HEADERS = {
   'Content-Type': 'application/json',
 }
 
+const QR_PLACEHOLDER_EQUIPMENT = '__QR_WALKIN_PLACEHOLDER__'
+
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: CORS_HEADERS })
 }
@@ -57,26 +59,13 @@ Deno.serve(async (req) => {
 
         const clientId = clients[0].id
 
-        // Buscar OS mais recente desse cliente
-        const { data: orders } = await supabase
-          .from('service_orders')
-          .select('id')
-          .eq('client_id', clientId)
-          .order('entry_date', { ascending: false })
-          .limit(1)
-
-        if (!orders || orders.length === 0) {
-          return json({ success: true, pending_token: null })
-        }
-
-        const orderId = orders[0].id
-
-        // Buscar avaliação pendente dessa OS
+        // Buscar avaliação pendente mais recente do cliente (com ou sem OS)
         const { data: ratings } = await supabase
           .from('satisfaction_ratings')
           .select('public_token, responded_at')
-          .eq('order_id', orderId)
+          .eq('client_id', clientId)
           .is('responded_at', null)
+          .order('created_at', { ascending: false })
           .limit(1)
 
         if (ratings && ratings.length > 0) {
@@ -91,7 +80,7 @@ Deno.serve(async (req) => {
         console.log('🔍 Buscando staff members...')
         const { data: staff_members, error: staffError } = await supabase
           .from('staff_members')
-          .select('id, name')
+          .select('id, name, photo_url')
           .order('name')
 
         console.log('📦 Staff members encontrados:', staff_members?.length || 0, 'Erro:', staffError)
@@ -125,11 +114,21 @@ Deno.serve(async (req) => {
 
       const row = rating[0]
 
-      const { data: order } = await supabase
-        .from('service_orders')
-        .select('id, client_name, equipment, problem_description, entry_date, client_phone, mechanic_id, atendimento_id')
-        .eq('id', row.order_id)
-        .single()
+      const { data: order } = row.order_id
+        ? await supabase
+            .from('service_orders')
+            .select('id, client_name, equipment, problem_description, entry_date, client_phone, mechanic_id, atendimento_id')
+            .eq('id', row.order_id)
+            .single()
+        : { data: null }
+
+      const { data: client } = row.client_id
+        ? await supabase
+            .from('clients')
+            .select('name, phone')
+            .eq('id', row.client_id)
+            .single()
+        : { data: null }
 
 
 
@@ -163,16 +162,15 @@ Deno.serve(async (req) => {
       const { data: atendimento } = atendimentoId
         ? await supabase.from('staff_members').select('id, name, photo_url').eq('id', atendimentoId).single()
         : { data: null }
+
+      // Detectar se é walk-in: sem OS vinculada ou OS técnica de placeholder
+      const isWalkIn = !row.order_id || order?.equipment === 'Avaliação de balcão' || order?.equipment === QR_PLACEHOLDER_EQUIPMENT;
+
       return json({
         success: true,
         alreadyResponded: !!row.responded_at,
+        is_walk_in: isWalkIn,
         rating: {
-
-
-
-
-
-
           atendimento_rating: row.atendimento_rating,
           servico_rating: row.servico_rating,
           comment: row.comment,
@@ -182,11 +180,11 @@ Deno.serve(async (req) => {
         },
         order: {
           id: order?.id,
-          client_name: order?.client_name,
-          equipment: order?.equipment,
+          client_name: isWalkIn ? (client?.name || order?.client_name) : order?.client_name,
+          equipment: isWalkIn ? 'Avaliação de balcão' : order?.equipment,
           problem_description: order?.problem_description,
           entry_date: order?.entry_date,
-          client_phone: order?.client_phone,
+          client_phone: isWalkIn ? (client?.phone || order?.client_phone) : order?.client_phone,
         },
         mechanic: mechanic || null,
         atendimento: atendimento || null,
@@ -262,35 +260,12 @@ Deno.serve(async (req) => {
           return json({ success: false, message: 'Erro ao buscar/criar cliente' }, 500)
         }
 
-        console.log('🎫 Criando OS fictícia para client_id:', clientId)
-        // Criar OS fictícia para o walk-in (fallback se order_id for NOT NULL)
-        const { data: walkInOrder, error: orderError } = await supabase
-          .from('service_orders')
-          .insert({
-            client_id: clientId,
-            client_name: clientName,
-            client_phone: clientPhone,
-            equipment: 'Avaliação de balcão',
-            problem_description: 'Avaliação sem OS',
-            status: 'concluida',
-            entry_date: new Date().toISOString(),
-          })
-          .select('id')
-          .single()
-
-        const orderId = walkInOrder?.id
-
-        if (!orderId) {
-          return json({ success: false, message: 'Erro ao criar OS fictícia' }, 500)
-        }
-
         // Gerar token único para walk-in
         const publicToken = `walkin-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
         console.log('🎟️ Token gerado:', publicToken)
 
-        // Criar satisfaction_rating
         const ratingData: any = {
-          order_id: orderId,
+          order_id: null,
           client_id: clientId,
           public_token: publicToken,
           status: 'pendente',
@@ -305,18 +280,57 @@ Deno.serve(async (req) => {
           }
         }
 
-        const { data: newRating, error: ratingError } = await supabase
+        let { data: newRating, error: ratingError } = await supabase
           .from('satisfaction_ratings')
           .insert(ratingData)
           .select('id, public_token')
           .single()
 
-        if (ratingError || !newRating) {
-          console.error('Erro ao criar rating walk-in:', ratingError)
-          return json({ success: false, message: 'Erro ao criar avaliação' }, 500)
+        // Fallback para bancos onde order_id ainda é NOT NULL.
+        // Importante: satisfaction_ratings possui UNIQUE(order_id), então
+        // cada avaliação precisa de uma OS placeholder própria.
+        if (ratingError && (ratingError.code === '23502' || `${ratingError.message || ''}`.toLowerCase().includes('order_id'))) {
+          console.warn('⚠️ order_id ainda obrigatório; criando OS placeholder por avaliação.')
+
+          const { data: createdPlaceholder, error: createPlaceholderError } = await supabase
+            .from('service_orders')
+            .insert({
+              client_id: null,
+              client_name: 'SISTEMA QR',
+              client_phone: '00000000000',
+              client_address: '',
+              equipment: QR_PLACEHOLDER_EQUIPMENT,
+              problem_description: `OS técnica para avaliação walk-in via QR (${publicToken}).`,
+              status: 'concluida',
+              entry_date: new Date().toISOString(),
+            })
+            .select('id')
+            .single()
+
+          if (createPlaceholderError || !createdPlaceholder?.id) {
+            console.error('❌ Erro ao criar OS placeholder:', createPlaceholderError)
+            return json({ success: false, message: 'Erro ao iniciar avaliação' }, 500)
+          }
+
+          const { data: retryRating, error: retryError } = await supabase
+            .from('satisfaction_ratings')
+            .insert({
+              ...ratingData,
+              order_id: createdPlaceholder.id,
+            })
+            .select('id, public_token')
+            .single()
+
+          newRating = retryRating
+          ratingError = retryError
         }
 
-        return json({ success: true, token: newRating.public_token })
+        if (ratingError || !newRating) {
+          console.error('❌ Erro ao criar rating walk-in:', ratingError)
+          return json({ success: false, message: `Erro ao criar avaliação: ${ratingError?.message || 'erro interno'}` }, 500)
+        }
+
+        return json({ success: true, token: newRating.public_token, client_id: clientId })
       }
 
       // Modo padrão: salvar resposta de avaliação
@@ -352,6 +366,8 @@ Deno.serve(async (req) => {
       // Se o cliente escolheu atendente agora (walk-in), sobrescrever
       const attendantType = body?.attendant_type
       const attendantId = body?.attendant_id
+      const mechanicType = body?.mechanic_type
+      const mechanicIdFromBody = body?.mechanic_id
 
       if (attendantType && attendantId) {
         if (attendantType === 'staff') {
@@ -359,7 +375,14 @@ Deno.serve(async (req) => {
         } else if (attendantType === 'mechanic') {
           mechanicId = attendantId
         }
-      } else if (!mechanicId || !atendimentoId) {
+      }
+
+      // Se selecionou mecânico separadamente (walk-in)
+      if (mechanicType === 'mechanic' && mechanicIdFromBody) {
+        mechanicId = mechanicIdFromBody
+      }
+
+      if ((!mechanicId || !atendimentoId) && existing[0].order_id) {
         // Fallback: buscar na OS se ainda não tem
         const { data: order } = await supabase
           .from('service_orders')

@@ -239,13 +239,13 @@ export function MaintenanceDebugPanel() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'pass':
-        return <CheckCircle className="w-5 h-5 text-green-600" />;
+        return <CheckCircle className="w-5 h-5 text-emerald-500" />;
       case 'fail':
-        return <XCircle className="w-5 h-5 text-red-600" />;
+        return <XCircle className="w-5 h-5 text-[#C1272D]" />;
       case 'warning':
-        return <AlertCircle className="w-5 h-5 text-yellow-600" />;
+        return <AlertCircle className="w-5 h-5 text-amber-500" />;
       case 'loading':
-        return <Loader className="w-5 h-5 text-blue-600 animate-spin" />;
+        return <Loader className="w-5 h-5 text-blue-400 animate-spin" />;
       default:
         return null;
     }
@@ -254,15 +254,15 @@ export function MaintenanceDebugPanel() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pass':
-        return 'bg-green-50 border-green-200';
+        return 'glass-card bg-emerald-500/10 border-emerald-500/50';
       case 'fail':
-        return 'bg-red-50 border-red-200';
+        return 'glass-card bg-[#C1272D]/10 border-[#C1272D]/50';
       case 'warning':
-        return 'bg-yellow-50 border-yellow-200';
+        return 'glass-card bg-amber-500/10 border-amber-500/50';
       case 'loading':
-        return 'bg-blue-50 border-blue-200';
+        return 'glass-card bg-blue-500/10 border-blue-500/50';
       default:
-        return 'bg-gray-50 border-gray-200';
+        return 'glass-card bg-gray-500/10 border-gray-500/50';
     }
   };
 
@@ -271,28 +271,28 @@ export function MaintenanceDebugPanel() {
       {/* Summary */}
       {autoTests.total > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <Card className="bg-blue-50 border-blue-200">
+          <Card className="glass-card bg-blue-500/10 border-blue-500/50">
             <CardContent className="pt-6">
-              <div className="text-2xl font-bold text-blue-600">{autoTests.total}</div>
-              <div className="text-xs text-blue-600">Testes Totais</div>
+              <div className="text-2xl font-bold text-blue-400">{autoTests.total}</div>
+              <div className="text-xs text-blue-300">Testes Totais</div>
             </CardContent>
           </Card>
-          <Card className="bg-green-50 border-green-200">
+          <Card className="glass-card bg-emerald-500/10 border-emerald-500/50">
             <CardContent className="pt-6">
-              <div className="text-2xl font-bold text-green-600">{autoTests.passed}</div>
-              <div className="text-xs text-green-600">✅ Passou</div>
+              <div className="text-2xl font-bold text-emerald-400">{autoTests.passed}</div>
+              <div className="text-xs text-emerald-300">✅ Passou</div>
             </CardContent>
           </Card>
-          <Card className="bg-red-50 border-red-200">
+          <Card className="glass-card bg-[#C1272D]/10 border-[#C1272D]/50">
             <CardContent className="pt-6">
-              <div className="text-2xl font-bold text-red-600">{autoTests.failed}</div>
-              <div className="text-xs text-red-600">❌ Falhou</div>
+              <div className="text-2xl font-bold text-[#C1272D]">{autoTests.failed}</div>
+              <div className="text-xs text-red-400">❌ Falhou</div>
             </CardContent>
           </Card>
-          <Card className="bg-yellow-50 border-yellow-200">
+          <Card className="glass-card bg-amber-500/10 border-amber-500/50">
             <CardContent className="pt-6">
-              <div className="text-2xl font-bold text-yellow-600">{autoTests.percentage}%</div>
-              <div className="text-xs text-yellow-600">Taxa de Sucesso</div>
+              <div className="text-2xl font-bold text-amber-400">{autoTests.percentage}%</div>
+              <div className="text-xs text-amber-300">Taxa de Sucesso</div>
             </CardContent>
           </Card>
         </div>
@@ -306,9 +306,9 @@ export function MaintenanceDebugPanel() {
               <div className="flex items-start gap-3">
                 {getStatusIcon(result.status)}
                 <div className="flex-1">
-                  <div className="font-semibold text-gray-900">{result.name}</div>
-                  <div className="text-sm text-gray-600">{result.message}</div>
-                  {result.details && <div className="text-xs text-gray-500 mt-1">{result.details}</div>}
+                  <div className="font-semibold text-foreground">{result.name}</div>
+                  <div className="text-sm text-muted-foreground">{result.message}</div>
+                  {result.details && <div className="text-xs text-muted-foreground mt-1">{result.details}</div>}
                 </div>
               </div>
             </CardContent>
@@ -318,7 +318,7 @@ export function MaintenanceDebugPanel() {
 
       {/* Actions */}
       <div className="flex gap-2">
-        <Button onClick={runTests} disabled={loading} className="bg-blue-600 hover:bg-blue-700">
+        <Button onClick={runTests} disabled={loading} className="bg-[#C1272D] hover:bg-red-700">
           {loading ? 'Testando...' : 'Executar Testes'}
         </Button>
         <Button onClick={() => window.open('https://app.supabase.com', '_blank')} variant="outline">
@@ -328,10 +328,10 @@ export function MaintenanceDebugPanel() {
 
       {/* Summary */}
       {autoTests.total > 0 && (
-        <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 text-sm">
-          <strong>Resumo:</strong> {autoTests.passed}/{autoTests.total} testes passaram ✅
+        <div className="p-3 glass-card bg-gray-500/10 rounded-lg border border-gray-500/50 text-sm">
+          <strong className="text-foreground">Resumo:</strong> <span className="text-muted-foreground">{autoTests.passed}/{autoTests.total} testes passaram ✅
           {autoTests.failed > 0 && ` | ${autoTests.failed} falhas ❌`}
-          {autoTests.warnings > 0 && ` | ${autoTests.warnings} avisos ⚠️`}
+          {autoTests.warnings > 0 && ` | ${autoTests.warnings} avisos ⚠️`}</span>
         </div>
       )}
     </div>

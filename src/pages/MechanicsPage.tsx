@@ -92,7 +92,9 @@ export function MechanicsPage() {
         ) : (
           <div className="space-y-3">
             {mechanics.map((m) => (
-              <div key={m.id} className="flex items-center justify-between p-4 border rounded-xl">
+              <div key={m.id} className={`flex items-center justify-between p-4 border rounded-xl transition-opacity ${
+                m.active ? '' : 'opacity-50 bg-gray-50'
+              }`}>
                 <div className="flex items-center gap-3">
                   <Avatar className="h-12 w-12">
                     <AvatarImage src={m.photo_url || undefined} />
@@ -101,7 +103,7 @@ export function MechanicsPage() {
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="font-medium">{m.name}</p>
+                    <p className="font-medium">{m.name} {!m.active && <span className="text-xs text-muted-foreground">(Inativo)</span>}</p>
                     <p className="text-sm text-muted-foreground">Comissão: {m.commission_rate}%</p>
                   </div>
                 </div>
@@ -202,7 +204,9 @@ export function MechanicsPage() {
         ) : (
           <div className="space-y-3">
             {members.map((m) => (
-              <div key={m.id} className="flex items-center justify-between p-4 border rounded-xl">
+              <div key={m.id} className={`flex items-center justify-between p-4 border rounded-xl transition-opacity ${
+                m.active ? '' : 'opacity-50 bg-gray-50'
+              }`}>
                 <div className="flex items-center gap-3">
                   <Avatar className="h-12 w-12">
                     <AvatarImage src={m.photo_url || undefined} />
@@ -211,7 +215,7 @@ export function MechanicsPage() {
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="font-medium">{m.name}</p>
+                    <p className="font-medium">{m.name} {!m.active && <span className="text-xs text-muted-foreground">(Inativo)</span>}</p>
                     <p className="text-sm text-muted-foreground">
                       Função: {m.role === 'balconista' ? 'Balconista' : m.role === 'dono' ? 'Dono' : 'Outro'}
                     </p>

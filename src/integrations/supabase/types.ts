@@ -351,7 +351,7 @@ export type Database = {
       satisfaction_ratings: {
         Row: {
           id: string
-          order_id: string
+          order_id: string | null
           client_id: string | null
           atendimento_id: string | null
           mechanic_id: string | null
@@ -369,7 +369,7 @@ export type Database = {
         }
         Insert: {
           id?: string
-          order_id: string
+          order_id?: string | null
           client_id?: string | null
           atendimento_id?: string | null
           mechanic_id?: string | null
@@ -387,7 +387,7 @@ export type Database = {
         }
         Update: {
           id?: string
-          order_id?: string
+          order_id?: string | null
           client_id?: string | null
           atendimento_id?: string | null
           mechanic_id?: string | null

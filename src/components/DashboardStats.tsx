@@ -1,90 +1,107 @@
 import { ServiceOrder, OrderStatus } from '@/types/service-order';
-import { ClipboardList, Clock, Loader2, CheckCircle2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { ClipboardList, Clock3, Loader2, CheckCircle2 } from 'lucide-react';
 
 interface DashboardStatsProps {
   orders: ServiceOrder[];
-  onStatusClick?: (status: OrderStatus) => void;
+  onStatusClick?: (status: OrderStatus | null) => void;
   activeFilter?: OrderStatus | null;
 }
 
-export function DashboardStats({ orders, onStatusClick, activeFilter }: DashboardStatsProps) {
-  const stats = {
-    total: orders.length,
-    abertas: orders.filter(o => o.status === 'aberta').length,
-    emAndamento: orders.filter(o => o.status === 'em_andamento').length,
-    concluidas: orders.filter(o => o.status === 'concluida').length,
-  };
+function MetricItem({
+  label,
+  value,
+  icon: Icon,
+  active = false,
+  iconClassName,
+}: {
+  label: string
+  value: string | number
+  icon: any
+  active?: boolean
+  iconClassName?: string
+}) {
+  return (
+    <div
+      className={cn(
+        'rounded-xl border p-4 transition-all',
+        active
+          ? 'border-primary/50 bg-primary/10 shadow-[0_0_0_1px_rgba(193,39,45,0.25)]'
+          : 'border-border/80 bg-muted/20 hover:border-border'
+      )}
+    >
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          {label}
+        </span>
+        <Icon className={cn('h-4 w-4 text-muted-foreground', iconClassName)} />
+      </div>
 
-  const handleClick = (status: OrderStatus) => {
-    if (onStatusClick) {
-      onStatusClick(status);
-    }
-  };
+      <span className="text-3xl md:text-4xl font-black tracking-tight leading-none text-foreground">
+        {value}
+      </span>
+    </div>
+  )
+}
+
+export function DashboardStats({ orders, onStatusClick, activeFilter }: DashboardStatsProps) {
+  const total = orders.length;
+  const abertas = orders.filter((o) => o.status === 'aberta').length;
+  const emAndamento = orders.filter((o) => o.status === 'em_andamento').length;
+  const concluidas = orders.filter((o) => o.status === 'concluida').length;
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <div 
-        className={`card-elevated p-4 animate-fade-in cursor-pointer transition-all ${!activeFilter ? 'ring-2 ring-primary' : 'hover:shadow-lg'}`}
-        onClick={() => onStatusClick && onStatusClick(null as any)}
-      >
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-            <ClipboardList className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-foreground">{stats.total}</p>
-            <p className="text-xs text-muted-foreground">Total</p>
-          </div>
-        </div>
-      </div>
+    <div className="space-y-4">
+      {/* Section: RESUMO */}
+      <section>
+        <h2 className="mb-3 text-[12px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+          <em>Resumo</em>
+        </h2>
 
-      <div 
-        className={`card-elevated p-4 animate-fade-in cursor-pointer transition-all ${activeFilter === 'aberta' ? 'ring-2 ring-status-open' : 'hover:shadow-lg'}`}
-        onClick={() => handleClick('aberta')}
-        style={{ animationDelay: '50ms' }}
-      >
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-status-open/10">
-            <Clock className="h-5 w-5 text-status-open" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-foreground">{stats.abertas}</p>
-            <p className="text-xs text-muted-foreground">Abertas</p>
-          </div>
-        </div>
-      </div>
-
-      <div 
-        className={`card-elevated p-4 animate-fade-in cursor-pointer transition-all ${activeFilter === 'em_andamento' ? 'ring-2 ring-status-progress' : 'hover:shadow-lg'}`}
-        onClick={() => handleClick('em_andamento')}
-        style={{ animationDelay: '100ms' }}
-      >
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-status-progress/10">
-            <Loader2 className="h-5 w-5 text-status-progress" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-foreground">{stats.emAndamento}</p>
-            <p className="text-xs text-muted-foreground">Em Andamento</p>
-          </div>
-        </div>
-      </div>
-
-      <div 
-        className={`card-elevated p-4 animate-fade-in cursor-pointer transition-all ${activeFilter === 'concluida' ? 'ring-2 ring-[hsl(var(--status-done))]' : 'hover:shadow-lg'}`}
-        onClick={() => handleClick('concluida')}
-        style={{ animationDelay: '150ms' }}
-      >
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[hsl(var(--status-done))]/10">
-            <CheckCircle2 className="h-5 w-5 text-[hsl(var(--status-done))]" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-foreground">{stats.concluidas}</p>
-            <p className="text-xs text-muted-foreground">Concluídas</p>
+        {/* Unified metrics card - grid of 4 */}
+        <div className="glass-card-elevated rounded-[8px] p-4 md:p-5">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+            <button 
+              onClick={() => onStatusClick?.(null)}
+              className={cn(
+                "text-left transition-transform hover:scale-[1.01]"
+              )}
+            >
+              <MetricItem label="Total" value={total} icon={ClipboardList} active={activeFilter === null} />
+            </button>
+            <button 
+              onClick={() => onStatusClick?.('aberta')}
+              className={cn(
+                "text-left transition-transform hover:scale-[1.01]"
+              )}
+            >
+              <MetricItem label="Abertas" value={abertas} icon={Clock3} active={activeFilter === 'aberta'} />
+            </button>
+            <button 
+              onClick={() => onStatusClick?.('em_andamento')}
+              className={cn(
+                "text-left transition-transform hover:scale-[1.01]"
+              )}
+            >
+              <MetricItem
+                label="EM ANDAMENTO"
+                value={emAndamento}
+                icon={Loader2}
+                iconClassName="text-[#C1272D] animate-spin"
+                active={activeFilter === 'em_andamento'}
+              />
+            </button>
+            <button 
+              onClick={() => onStatusClick?.('concluida')}
+              className={cn(
+                "text-left transition-transform hover:scale-[1.01]"
+              )}
+            >
+              <MetricItem label="CONCLUÍDAS" value={concluidas} icon={CheckCircle2} iconClassName="text-emerald-500" active={activeFilter === 'concluida'} />
+            </button>
           </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

@@ -171,6 +171,7 @@ export function OrderDetails({
   };
   
   const [exitDate, setExitDate] = useState(formatDateToInput(order.exit_date));
+  const [showExitDateEditor, setShowExitDateEditor] = useState(false);
   const [paymentForm, setPaymentForm] = useState<{ amount: string; discount_amount: string; method: PaymentMethod; notes: string; finalized_by_staff_id: string }>(() => ({
     amount: '',
     discount_amount: '',
@@ -236,6 +237,7 @@ export function OrderDetails({
 
   useEffect(() => {
     setExitDate(formatDateToInput(order.exit_date));
+    setShowExitDateEditor(false);
     setAutorizaInstagram(order.autoriza_instagram !== false ? true : false);
     setAutorizaLembretes(order.autoriza_lembretes !== false ? true : false);
   }, [order.id, order.exit_date, order.autoriza_instagram, order.autoriza_lembretes]);
@@ -319,9 +321,27 @@ export function OrderDetails({
     }
   };
 
+  const dispatchExitDateUpdate = (dateStr: string) => {
+    const timestamp = toNoonISOString(dateStr);
+    if (!timestamp) return;
+    const ev = new CustomEvent('order:updateExitDate', {
+      detail: { id: order.id, exit_date: timestamp }
+    });
+    window.dispatchEvent(ev);
+  };
+
   const totalOS = (order.materials || []).reduce((acc, m) => acc + ((m.valor || 0) * (parseFloat(m.quantidade) || 0)), 0);
   const totalPaid = (order.payments || []).reduce((acc, p) => acc + (p.amount || 0), 0);
   const totalDiscount = (order.payments || []).reduce((acc, p) => acc + (p.discount_amount || 0), 0);
+  const receivers = Array.from(
+    new Set(
+      (order.payments || [])
+        .map((p) => p.finalized_by_staff_id)
+        .filter((id): id is string => Boolean(id))
+    )
+  )
+    .map((id) => teamMembers.find((m) => m.id === id)?.name || 'Colaborador removido')
+    .join(', ');
   const totalSettled = totalPaid + totalDiscount;
   const pending = Math.max(totalOS - totalSettled, 0);
   const methodOptions: Array<{ value: PaymentMethod; label: string }> = [
@@ -336,6 +356,10 @@ export function OrderDetails({
     const discountAmount = parseFloat(paymentForm.discount_amount || '0') || 0;
     if (!amount || amount <= 0) return;
     if (discountAmount < 0) return;
+    if (!paymentForm.finalized_by_staff_id) {
+      alert('Selecione quem finalizou/recebeu o pagamento.');
+      return;
+    }
     onAddPayment({
       order_id: order.id,
       amount,
@@ -344,7 +368,7 @@ export function OrderDetails({
       notes: paymentForm.notes?.trim() || null,
       finalized_by_staff_id: paymentForm.finalized_by_staff_id || null,
     });
-    setPaymentForm((prev) => ({ ...prev, amount: '', discount_amount: '', finalized_by_staff_id: '' }));
+    setPaymentForm((prev) => ({ ...prev, amount: '', discount_amount: '' }));
   };
 
   const handleSendWhatsAppPDF = async () => {
@@ -505,6 +529,18 @@ export function OrderDetails({
                     alert('É necessário coletar a assinatura do cliente antes de concluir a ordem de serviço.');
                     return;
                   }
+
+                  if (value === 'concluida' && order.status !== 'concluida') {
+                    const today = formatDateToInput(new Date().toISOString());
+                    setExitDate(today);
+                    dispatchExitDateUpdate(today);
+                    setShowExitDateEditor(false);
+                  }
+
+                  if (value !== 'concluida') {
+                    setShowExitDateEditor(false);
+                  }
+
                   onStatusChange(value as OrderStatus);
                 }}
                 disabled={isUpdating}
@@ -551,23 +587,42 @@ export function OrderDetails({
           {order.status === 'concluida' && (
             <div className="flex flex-col gap-2 pt-2">
               <Label className="text-sm font-medium">📅 Data de Conclusão</Label>
-              <Input
-                type="date"
-                value={exitDate}
-                onChange={(e) => {
-                  setExitDate(e.target.value);
-                  // Converte a data para timestamp garantindo que fica no meio-dia (12:00) para evitar problemas de timezone
-                  const dateStr = e.target.value; // yyyy-MM-dd
-                  const [year, month, day] = dateStr.split('-').map(Number);
-                  // Cria data no meio-dia UTC para evitar virar o dia anterior em outros fusos
-                  const timestamp = new Date(year, month - 1, day, 12, 0, 0, 0).toISOString();
-                  const ev = new CustomEvent('order:updateExitDate', { 
-                    detail: { id: order.id, exit_date: timestamp } 
-                  });
-                  window.dispatchEvent(ev);
-                }}
-                className="h-8 text-sm"
-              />
+              {showExitDateEditor ? (
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="date"
+                    value={exitDate}
+                    onChange={(e) => {
+                      const dateStr = e.target.value;
+                      setExitDate(dateStr);
+                      dispatchExitDateUpdate(dateStr);
+                    }}
+                    className="h-8 text-sm"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowExitDateEditor(false)}
+                  >
+                    Fechar
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm text-muted-foreground">
+                    {exitDate ? formatDateDisplay(exitDate) : 'Não definida'}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowExitDateEditor(true)}
+                  >
+                    Alterar data
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
@@ -616,7 +671,7 @@ export function OrderDetails({
                 </div>
                 <div className="space-y-2">
                   <Label>Data de nascimento</Label>
-                  <Input type="date" value={expressClientBirthDate} onChange={(e) => setExpressClientBirthDate(e.target.value)} />
+                  <Input type="date" value={expressClientBirthDate} onChange={(e) => setExpressClientBirthDate(e.target.value)} className="bg-muted/50 border-border/50 text-foreground" />
                 </div>
               </div>
               <div className="space-y-2">
@@ -1057,9 +1112,10 @@ export function OrderDetails({
             <div className="text-right text-sm">
               <p>Total OS</p>
               <p className="font-semibold">R$ {totalOS.toFixed(2)}</p>
-              <p className="mt-1 text-emerald-600">Recebido: R$ {totalPaid.toFixed(2)}</p>
-              <p className="mt-1 text-blue-600">Desconto: R$ {totalDiscount.toFixed(2)}</p>
-              <p className={`mt-1 font-semibold ${pending > 0 ? 'text-amber-600' : 'text-muted-foreground'}`}>Pendente: R$ {pending.toFixed(2)}</p>
+              <p className="mt-1 text-emerald-500">Recebido: R$ {totalPaid.toFixed(2)}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Recebido por: {receivers || 'Não informado'}</p>
+              <p className="mt-1 text-[#C1272D]">Desconto: R$ {totalDiscount.toFixed(2)}</p>
+              <p className={`mt-1 font-semibold ${pending > 0 ? 'text-[#C1272D]' : 'text-muted-foreground'}`}>Pendente: R$ {pending.toFixed(2)}</p>
             </div>
           </div>
 
@@ -1072,7 +1128,8 @@ export function OrderDetails({
                   <div key={p.id} className="flex items-center justify-between text-sm">
                     <div>
                       <p className="font-medium">R$ {Number(p.amount || 0).toFixed(2)} <span className="text-muted-foreground">• {methodOptions.find(m => m.value === p.method)?.label || p.method}</span></p>
-                      {(p.discount_amount || 0) > 0 ? <p className="text-xs text-blue-600">Desconto: R$ {Number(p.discount_amount || 0).toFixed(2)}</p> : null}
+                      <p className="text-xs text-muted-foreground">Recebido por: {p.finalized_by_staff_id ? (teamMembers.find(m => m.id === p.finalized_by_staff_id)?.name || 'Colaborador removido') : 'Não informado'}</p>
+                      {(p.discount_amount || 0) > 0 ? <p className="text-xs text-[#C1272D]">Desconto: R$ {Number(p.discount_amount || 0).toFixed(2)}</p> : null}
                       {p.notes ? <p className="text-xs text-muted-foreground">Obs: {p.notes}</p> : null}
                     </div>
                     {onDeletePayment && (
@@ -1093,12 +1150,12 @@ export function OrderDetails({
           </div>
 
           {onAddPayment && (
-            <div className="space-y-3 pt-2 border-t">
+            <div className="space-y-3 pt-2 border-t border-border/30">
               {/* Quem vai finalizar o pagamento */}
-              <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
-                <Label className="text-sm font-semibold">💰 Quem vai finalizar o pagamento?</Label>
+              <div className="p-3 glass-card-elevated border border-border/50 rounded-lg">
+                <Label className="text-sm font-semibold text-foreground">💰 Quem vai finalizar o pagamento?</Label>
                 <Select value={paymentForm.finalized_by_staff_id || ''} onValueChange={(v) => setPaymentForm((prev) => ({ ...prev, finalized_by_staff_id: v }))}>
-                  <SelectTrigger className="h-9 mt-2">
+                  <SelectTrigger className="h-9 mt-2 bg-muted/50 border-border/50">
                     <SelectValue placeholder="Selecione o responsável" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1161,7 +1218,7 @@ export function OrderDetails({
       )}
 
       {/* Termos da Ordem de Serviço */}
-      <Card className="card-elevated border-blue-200 bg-blue-50">
+      <Card className="card-elevated glass-card-elevated border-border/50">
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
             <Checkbox
@@ -1170,7 +1227,7 @@ export function OrderDetails({
               onCheckedChange={handleTermsChange}
               className="mt-1"
             />
-            <label htmlFor="terms-checkbox" className="text-sm text-blue-900 leading-relaxed cursor-pointer">
+            <label htmlFor="terms-checkbox" className="text-sm text-foreground leading-relaxed cursor-pointer">
               <span className="font-semibold">Declaro que li e concordo com os termos da Ordem de Serviço</span>, incluindo o prazo de 30 dias para retirada da motocicleta e a taxa de estadia de R$ 6,00 por dia após esse prazo.
             </label>
           </div>

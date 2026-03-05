@@ -37,6 +37,7 @@ export interface Payment {
   method: PaymentMethod;
   reference?: string | null;
   notes?: string | null;
+  finalized_by_staff_id?: string | null;
   created_at: string;
 }
 
@@ -81,7 +82,7 @@ export interface StaffMember {
 
 export interface SatisfactionRating {
   id: string;
-  order_id: string;
+  order_id: string | null;
   client_id?: string | null;
   atendimento_id?: string | null;
   mechanic_id?: string | null;

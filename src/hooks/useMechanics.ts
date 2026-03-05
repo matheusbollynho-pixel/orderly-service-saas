@@ -12,6 +12,7 @@ export function useMechanics() {
       const { data, error } = await supabase
         .from('mechanics')
         .select('*')
+        .order('active', { ascending: false })
         .order('name', { ascending: true });
       if (error) throw error;
       return data as Mechanic[];

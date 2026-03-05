@@ -9,70 +9,108 @@
 
 @layer base {
   :root {
-    /* Primary - Professional Blue */
-    --background: 210 20% 98%;
-    --foreground: 222 47% 11%;
+    /* Bandara Motos - Dark Premium Industrial Theme */
+    --background: 0 0% 7%;
+    --foreground: 0 0% 91%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card: 0 0% 7%;
+    --card-foreground: 0 0% 91%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
+    --popover: 0 0% 10%;
+    --popover-foreground: 0 0% 91%;
 
-    --primary: 217 91% 50%;
+    --primary: 356 72% 45%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 215 20% 95%;
-    --secondary-foreground: 222 47% 11%;
+    --secondary: 0 0% 10%;
+    --secondary-foreground: 0 0% 75%;
 
-    --muted: 215 20% 94%;
-    --muted-foreground: 215 16% 47%;
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 44%;
 
-    --accent: 215 25% 92%;
-    --accent-foreground: 222 47% 11%;
+    --accent: 0 0% 13%;
+    --accent-foreground: 0 0% 91%;
 
-    --destructive: 0 84% 60%;
+    --destructive: 356 72% 45%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 215 20% 88%;
-    --input: 215 20% 88%;
-    --ring: 217 91% 50%;
+    --border: 0 0% 15%;
+    --input: 0 0% 13%;
+    --ring: 356 72% 45%;
 
-    --radius: 0.75rem;
+    --radius: 0.25rem;
 
     /* Status Colors */
     --status-open: 45 93% 47%;
     --status-open-foreground: 0 0% 100%;
-    --status-progress: 217 91% 50%;
+    --status-progress: 217 91% 60%;
     --status-progress-foreground: 0 0% 100%;
-    --status-done: 142 76% 36%;
+    --status-done: 142 76% 46%;
     --status-done-foreground: 0 0% 100%;
 
     /* Semantic */
-    --success: 142 76% 36%;
+    --success: 142 76% 46%;
     --success-foreground: 0 0% 100%;
-    --warning: 45 93% 47%;
-    --warning-foreground: 0 0% 100%;
+    --warning: 45 93% 55%;
+    --warning-foreground: 0 0% 7%;
 
     /* Sidebar */
-    --sidebar-background: 222 47% 11%;
-    --sidebar-foreground: 215 20% 90%;
-    --sidebar-primary: 217 91% 60%;
+    --sidebar-background: 0 0% 7%;
+    --sidebar-foreground: 0 0% 94%;
+    --sidebar-primary: 356 72% 45%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 217 30% 20%;
-    --sidebar-accent-foreground: 215 20% 90%;
-    --sidebar-border: 217 30% 25%;
-    --sidebar-ring: 217 91% 60%;
+    --sidebar-accent: 0 0% 12%;
+    --sidebar-accent-foreground: 0 0% 94%;
+    --sidebar-border: 0 0% 15%;
+    --sidebar-ring: 356 72% 45%;
 
     /* Custom Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(217, 91%, 50%), hsl(217, 91%, 60%));
-    --gradient-success: linear-gradient(135deg, hsl(142, 76%, 36%), hsl(142, 76%, 46%));
-    --gradient-warning: linear-gradient(135deg, hsl(45, 93%, 47%), hsl(45, 93%, 55%));
+    --gradient-primary: linear-gradient(135deg, hsl(356, 72%, 45%), hsl(356, 72%, 55%));
+    --gradient-success: linear-gradient(135deg, hsl(142, 76%, 46%), hsl(142, 76%, 56%));
+    --gradient-warning: linear-gradient(135deg, hsl(45, 93%, 55%), hsl(45, 93%, 65%));
     
     /* Shadows */
-    --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.08);
-    --shadow-elevated: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-    --shadow-modal: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+    --shadow-card: 0 2px 16px rgba(0, 0, 0, 0.4);
+    --shadow-elevated: 0 4px 32px rgba(0, 0, 0, 0.5);
+    --shadow-modal: 0 20px 25px -5px rgba(0, 0, 0, 0.6);
+  }
+
+  /* Light Theme */
+  :root:not(.dark) {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 7%;
+
+    --card: 0 0% 98%;
+    --card-foreground: 0 0% 7%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 7%;
+
+    --primary: 356 72% 45%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 20%;
+
+    --muted: 0 0% 93%;
+    --muted-foreground: 0 0% 45%;
+
+    --accent: 0 0% 91%;
+    --accent-foreground: 0 0% 10%;
+
+    --destructive: 356 72% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 90%;
+    --input: 0 0% 98%;
+    --ring: 356 72% 45%;
+
+    /* Sidebar Light */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 0 0% 7%;
+    --sidebar-accent: 0 0% 93%;
+    --sidebar-accent-foreground: 0 0% 10%;
+    --sidebar-border: 0 0% 90%;
   }
 
   /* iOS/Safari specific fixes */
@@ -94,45 +132,6 @@
   input, textarea {
     -webkit-appearance: none;
     border-radius: 0;
-  }
-
-  .dark {
-    --background: 222 47% 8%;
-    --foreground: 215 20% 95%;
-
-    --card: 222 47% 11%;
-    --card-foreground: 215 20% 95%;
-
-    --popover: 222 47% 11%;
-    --popover-foreground: 215 20% 95%;
-
-    --primary: 217 91% 60%;
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 217 30% 18%;
-    --secondary-foreground: 215 20% 95%;
-
-    --muted: 217 30% 18%;
-    --muted-foreground: 215 16% 60%;
-
-    --accent: 217 30% 20%;
-    --accent-foreground: 215 20% 95%;
-
-    --destructive: 0 62% 50%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 217 30% 22%;
-    --input: 217 30% 22%;
-    --ring: 217 91% 60%;
-
-    --sidebar-background: 222 47% 6%;
-    --sidebar-foreground: 215 20% 85%;
-    --sidebar-primary: 217 91% 60%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 217 30% 15%;
-    --sidebar-accent-foreground: 215 20% 85%;
-    --sidebar-border: 217 30% 18%;
-    --sidebar-ring: 217 91% 60%;
   }
 }
 
@@ -168,19 +167,19 @@
 @layer components {
   /* Status badge variants */
   .status-badge {
-    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium;
+    @apply inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-[0.1em] border;
   }
 
   .status-badge-open {
-    @apply bg-[hsl(var(--status-open)/0.15)] text-[hsl(var(--status-open))];
+    @apply bg-[hsl(var(--status-open)/0.18)] text-[hsl(var(--status-open))] border-[hsl(var(--status-open)/0.35)];
   }
 
   .status-badge-progress {
-    @apply bg-[hsl(var(--status-progress)/0.15)] text-[hsl(var(--status-progress))];
+    @apply bg-[hsl(var(--status-progress)/0.18)] text-[hsl(var(--status-progress))] border-[hsl(var(--status-progress)/0.35)];
   }
 
   .status-badge-done {
-    @apply bg-[hsl(var(--status-done)/0.15)] text-[hsl(var(--status-done))];
+    @apply bg-[hsl(var(--status-done)/0.18)] text-[hsl(var(--status-done))] border-[hsl(var(--status-done)/0.35)];
   }
 
   /* Card with shadow */
@@ -309,4 +308,69 @@
   th, td {
     padding: 0.4rem;
   }
+}
+
+/* Bandara Motos - Premium Red Glassmorphism */
+.glass-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.4);
+}
+
+.glass-card-elevated {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Thin icon hover to red */
+.icon-hover {
+  transition: color 0.2s ease;
+}
+.icon-hover:hover,
+.group:hover .icon-hover {
+  color: #C1272D;
+}
+
+/* Bottom nav safe area */
+.pb-safe {
+  padding-bottom: max(0.35rem, env(safe-area-inset-bottom));
+}
+
+/* Scrollbar hide */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Dark Premium Date Input Styling */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="month"],
+input[type="week"] {
+  color-scheme: dark;
+}
+
+/* Chrome/Edge Calendar Picker Styling */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.8) brightness(1.2);
+  cursor: pointer;
+}
+
+input[type="date"]::-webkit-outer-spin-button,
+input[type="date"]::-webkit-inner-spin-button {
+  display: none;
+}
+
+/* Firefox Calendar */
+input[type="date"]::placeholder {
+  color: var(--muted-foreground);
 }

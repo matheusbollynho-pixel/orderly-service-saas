@@ -1,8 +1,9 @@
-﻿import { FormEvent, useEffect, useState } from 'react';
+﻿import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Moon, Sun } from 'lucide-react';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
@@ -15,6 +16,10 @@ export default function PublicStoreSatisfactionPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [publicTheme, setPublicTheme] = useState<'dark' | 'light'>(() =>
+    document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+  );
+  const previousThemeRef = useRef<'dark' | 'light' | null>(null);
   
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -23,6 +28,28 @@ export default function PublicStoreSatisfactionPage() {
     // Apenas marca como carregado
     setLoading(false);
   }, []);
+
+  useEffect(() => {
+    if (!previousThemeRef.current) {
+      previousThemeRef.current = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+    }
+
+    return () => {
+      if (previousThemeRef.current === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (publicTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [publicTheme]);
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
@@ -52,9 +79,9 @@ export default function PublicStoreSatisfactionPage() {
         return;
       }
 
-      console.log('🚀 Criando walk-in sem atendente (cliente escolhe no questionário)...');
+      console.log('🚀 Criando avaliação walk-in...');
       
-      // Criar walk-in SEM atendente (cliente vai escolher no questionário)
+      // Criar avaliação walk-in e redirecionar para o questionário
       const createRes = await fetch(`${supabaseUrl}/functions/v1/satisfaction-public`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -68,12 +95,12 @@ export default function PublicStoreSatisfactionPage() {
       const createData = await createRes.json();
       
       if (!createRes.ok || !createData?.success || !createData?.token) {
-        console.error('❌ Erro ao criar walk-in:', createData?.message);
+        console.error('❌ Erro ao iniciar avaliação:', createData?.message);
         setError(createData?.message || 'Não foi possível iniciar a avaliação.');
         return;
       }
 
-      console.log('✅ Walk-in criado, redirecionando para questionário...');
+      console.log('✅ Avaliação criada, redirecionando...');
       navigate(`/avaliar/${createData.token}?origem=loja`);
     } catch (e: any) {
       console.error('❌ Erro:', e);
@@ -90,13 +117,26 @@ export default function PublicStoreSatisfactionPage() {
   return (
     <div className="min-h-screen bg-muted/20 px-4 py-8">
       <div className="mx-auto max-w-md space-y-4">
+        <div className="flex justify-end mb-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={() => setPublicTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+            className="h-9 w-9 border-border/60 bg-background/80 mt-12"
+            aria-label="Alternar tema"
+          >
+            {publicTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
+        </div>
+
         <Card>
-          <CardHeader>
-            <CardTitle>Bandara Motos • Avaliação no Balcão</CardTitle>
+          <CardHeader className="items-center p-3 pb-0 pt-4">
+            <img src="/bandara-logo.png" alt="Bandara Motos" className="h-48 w-auto" />
           </CardHeader>
-          <CardContent className="space-y-2 text-sm text-muted-foreground">
-            <p>Escaneou o QR Code? Identifique-se para continuar.</p>
-            <p>Tempo médio: menos de 1 minuto.</p>
+          <CardContent className="space-y-0 text-center pt-0 px-4 pb-4">
+            <p className="text-base font-semibold text-foreground -mt-3">Avaliação Bandara Motos</p>
+            <p className="text-sm text-muted-foreground">Identifique-se para iniciarmos sua avaliação em poucos segundos.</p>
           </CardContent>
         </Card>
 

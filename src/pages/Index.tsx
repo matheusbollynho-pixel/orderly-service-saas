@@ -8,6 +8,7 @@ import { ServiceOrder, OrderStatus, PaymentMethod } from '@/types/service-order'
 import { DashboardStats } from '@/components/DashboardStats';
 import { OrderCard } from '@/components/OrderCard';
 import { OrderForm } from '@/components/OrderForm';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { OrderDetails } from '@/components/OrderDetails';
 import { MaterialsPage } from './MaterialsPage';
 import { ReportsPage } from './ReportsPage';
@@ -503,10 +504,16 @@ Retirada: ${retiradaInfo}`;
   return (
     <div className="min-h-screen bg-background pb-24">
       {/* Header com Logo */}
-      <header className="sticky top-0 z-10 bg-white shadow-md border-b">
-        <div className="container max-w-lg md:max-w-3xl lg:max-w-6xl mx-auto px-4 py-3">
-          <div className="flex items-center justify-center">
-            <img src="/bandara-logo.png" alt="Bandara Motos" className="h-20 w-auto" />
+      <header className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border shadow-md">
+        <div className="container max-w-lg md:max-w-3xl lg:max-w-6xl mx-auto px-4 py-2">
+          <div className="flex items-center justify-between">
+            <div className="flex-1"></div>
+            <div className="flex items-center justify-center flex-1">
+              <img src="/bandara-logo.png" alt="Bandara Motos" className="h-32 w-auto" />
+            </div>
+            <div className="flex-1 flex justify-end">
+              <ThemeToggle />
+            </div>
           </div>
         </div>
       </header>

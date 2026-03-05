@@ -446,22 +446,22 @@ export default function AfterSalesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 p-4 pb-20">
+    <div className="min-h-screen bg-background p-4 pb-20">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-4">
             <Heart className="w-8 h-8 text-red-600" />
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Pós-Venda</h1>
-              <p className="text-gray-600">Gestão de campanhas e manutenção preventiva</p>
+              <h1 className="text-3xl font-bold text-foreground">Pós-Venda</h1>
+              <p className="text-muted-foreground">Gestão de campanhas e manutenção preventiva</p>
             </div>
           </div>
         </div>
 
         {/* Tabs */}
         <Tabs defaultValue="aniversario" className="mb-8">
-          <TabsList className={`grid w-full ${isRestrictedUser ? 'grid-cols-2' : 'grid-cols-3'} bg-white`}>
+          <TabsList className={`grid w-full ${isRestrictedUser ? 'grid-cols-2' : 'grid-cols-3'} glass-card`}>
             <TabsTrigger value="aniversario" className="gap-2">
               <Gift size={18} />
               Aniversário
@@ -484,54 +484,54 @@ export default function AfterSalesPage() {
           <TabsContent value="aniversario" className="space-y-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <Card 
-            className={`cursor-pointer transition-all ${
+            className={`cursor-pointer transition-all glass-card ${
               birthdayFilterType === 'upcoming' 
-                ? 'ring-2 ring-red-600 bg-red-50' 
-                : 'hover:border-red-300'
+                ? 'ring-2 ring-[#C1272D] bg-[#C1272D]/10' 
+                : 'hover:border-[#C1272D]/50'
             }`}
             onClick={() => setBirthdayFilterType('upcoming')}
           >
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Aniversários próximos</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Aniversários próximos</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-red-600">
+              <div className="text-3xl font-bold text-[#C1272D]">
                 {clients.filter(c => getDaysUntilBirthday(c.birth_date) !== null && getDaysUntilBirthday(c.birth_date)! <= 7).length}
               </div>
             </CardContent>
           </Card>
 
           <Card 
-            className={`cursor-pointer transition-all ${
+            className={`cursor-pointer transition-all glass-card ${
               birthdayFilterType === 'active' 
-                ? 'ring-2 ring-green-600 bg-green-50' 
-                : 'hover:border-green-300'
+                ? 'ring-2 ring-emerald-500 bg-emerald-500/10' 
+                : 'hover:border-emerald-500/50'
             }`}
             onClick={() => setBirthdayFilterType('active')}
           >
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Descontos ativos</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Descontos ativos</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-green-600">
+              <div className="text-3xl font-bold text-emerald-500">
                 {clients.filter(c => c.discount?.is_active).length}
               </div>
             </CardContent>
           </Card>
 
           <Card 
-            className={`cursor-pointer transition-all ${
+            className={`cursor-pointer transition-all glass-card ${
               birthdayFilterType === 'all' 
-                ? 'ring-2 ring-blue-600 bg-blue-50' 
-                : 'hover:border-blue-300'
+                ? 'ring-2 ring-blue-400 bg-blue-400/10' 
+                : 'hover:border-blue-400/50'
             }`}
             onClick={() => setBirthdayFilterType('all')}
           >
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Clientes cadastrados</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Clientes cadastrados</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-blue-600">
+              <div className="text-3xl font-bold text-blue-400">
                 {clients.length}
               </div>
             </CardContent>
@@ -541,10 +541,10 @@ export default function AfterSalesPage() {
         {/* Clients List */}
         <div className="space-y-4">
           {getFilteredBirthdayClients().length === 0 ? (
-            <Card>
+            <Card className="glass-card">
               <CardContent className="pt-6 text-center">
-                <Gift className="w-12 h-12 text-gray-300 mx-auto mb-2" />
-                <p className="text-gray-500">Nenhum cliente com data de nascimento cadastrada</p>
+                <Gift className="w-12 h-12 text-muted-foreground mx-auto mb-2" />
+                <p className="text-muted-foreground">Nenhum cliente com data de nascimento cadastrada</p>
               </CardContent>
             </Card>
           ) : (
@@ -556,21 +556,21 @@ export default function AfterSalesPage() {
               return (
                 <Card
                   key={client.id}
-                  className={`${
+                  className={`glass-card ${
                     client.discount?.is_active
-                      ? 'border-green-300 bg-green-50'
+                      ? 'border-emerald-500/50 bg-emerald-500/5'
                       : isUpcoming
-                      ? 'border-yellow-300 bg-yellow-50'
-                      : 'border-gray-200'
+                      ? 'border-[#C1272D]/50 bg-[#C1272D]/5'
+                      : 'border-border/50'
                   }`}
                 >
                   <CardContent className="pt-6">
                     <div className="flex items-start justify-between mb-4">
                       <div>
-                        <h3 className="font-semibold text-lg text-gray-900">{client.name}</h3>
-                        <p className="text-sm text-gray-600">{client.phone}</p>
+                        <h3 className="font-semibold text-lg text-foreground">{client.name}</h3>
+                        <p className="text-sm text-muted-foreground">{client.phone}</p>
                         {client.birth_date && (
-                          <p className="text-sm text-gray-500">
+                          <p className="text-sm text-muted-foreground">
                             📅 {new Date(client.birth_date + 'T00:00:00').toLocaleDateString('pt-BR', {
                               month: 'long',
                               day: 'numeric',
@@ -581,27 +581,27 @@ export default function AfterSalesPage() {
 
                       <div className="flex gap-2">
                         {client.discount?.is_active && (
-                          <Badge className="bg-green-600">15% OFF</Badge>
+                          <Badge className="bg-emerald-500">15% OFF</Badge>
                         )}
                         {isUpcoming && !client.discount && (
-                          <Badge className="bg-yellow-600">Próximo aniversário</Badge>
+                          <Badge className="bg-[#C1272D]">Próximo aniversário</Badge>
                         )}
                       </div>
                     </div>
 
                     {/* Discount Status */}
                     {client.discount?.is_active && (
-                      <div className="mb-4 p-3 bg-green-100 rounded-lg border border-green-300">
+                      <div className="mb-4 p-3 bg-emerald-500/10 rounded-lg border border-emerald-500/50">
                         <div className="flex items-center gap-2 mb-2">
-                          <CheckCircle className="w-4 h-4 text-green-600" />
-                          <span className="text-sm font-medium text-green-700">Desconto Ativo</span>
+                          <CheckCircle className="w-4 h-4 text-emerald-500" />
+                          <span className="text-sm font-medium text-emerald-400">Desconto Ativo</span>
                         </div>
-                        <p className="text-xs text-green-600">
+                        <p className="text-xs text-emerald-300">
                           Válido até {new Date(client.discount.expires_at).toLocaleDateString('pt-BR')}
                           ({daysUntilExpire} dias)
                         </p>
                         {client.discount.message_sent_at && (
-                          <p className="text-xs text-green-600 mt-1">
+                          <p className="text-xs text-emerald-300 mt-1">
                             ✓ Mensagem enviada em {new Date(client.discount.message_sent_at).toLocaleDateString('pt-BR')}
                           </p>
                         )}
@@ -621,7 +621,7 @@ export default function AfterSalesPage() {
                             })
                           }
                           disabled={sendingId === client.id}
-                          className="bg-red-600 hover:bg-red-700"
+                          className="bg-[#C1272D] hover:bg-red-700"
                         >
                           <Gift className="w-4 h-4 mr-2" />
                           {sendingId === client.id ? 'Enviando...' : 'Enviar Desconto'}
@@ -668,66 +668,66 @@ export default function AfterSalesPage() {
 
           {/* ABA: MANUTENÇÃO */}
           <TabsContent value="manutencao" className="space-y-8">
-            <div className="bg-white rounded-lg border border-gray-200">
-              <div className="p-6 border-b border-gray-200">
+            <div className="glass-card-elevated rounded-lg border border-border/50">
+              <div className="p-6 border-b border-border/50">
                 <div className="flex items-center gap-3 mb-2">
                   <Bell className="w-6 h-6 text-blue-600" />
-                  <h2 className="text-2xl font-bold text-gray-900">Monitoramento de Lembretes</h2>
+                  <h2 className="text-2xl font-bold text-foreground">Monitoramento de Lembretes</h2>
                 </div>
-                <p className="text-gray-600">Veja quais lembretes já estão prontos para envio e os próximos agendados</p>
+                <p className="text-muted-foreground">Veja quais lembretes já estão prontos para envio e os próximos agendados</p>
               </div>
               <div className="p-6 space-y-6">
                 {maintenanceLoading ? (
-                  <p className="text-sm text-gray-600">Carregando lembretes...</p>
+                  <p className="text-sm text-muted-foreground">Carregando lembretes...</p>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <button
                       onClick={() => setActiveStatsFilter(activeStatsFilter === 'all' ? null : 'all')}
-                      className={`bg-gray-50 rounded-lg border p-4 text-left transition-all hover:shadow-md ${
-                        activeStatsFilter === 'all' ? 'border-gray-900 ring-2 ring-gray-900' : 'border-gray-200'
+                      className={`bg-gray-500/10 rounded-lg border p-4 text-left transition-all hover:shadow-md glass-card ${
+                        activeStatsFilter === 'all' ? 'border-gray-400 ring-2 ring-gray-400' : 'border-gray-400/30'
                       }`}
                     >
-                      <div className="text-xs text-gray-500">Total criados</div>
-                      <div className="text-2xl font-bold text-gray-900">
+                      <div className="text-xs text-gray-400">Total criados</div>
+                      <div className="text-2xl font-bold text-gray-300">
                         {totalAll}
                       </div>
-                      <div className="text-xs text-gray-400 mt-1">Clique para filtrar</div>
+                      <div className="text-xs text-gray-500/70 mt-1">Clique para filtrar</div>
                     </button>
                     <button
                       onClick={() => setActiveStatsFilter(activeStatsFilter === 'pending' ? null : 'pending')}
-                      className={`bg-blue-50 rounded-lg border p-4 text-left transition-all hover:shadow-md ${
-                        activeStatsFilter === 'pending' ? 'border-blue-900 ring-2 ring-blue-900' : 'border-blue-200'
+                      className={`bg-blue-500/10 rounded-lg border p-4 text-left transition-all hover:shadow-md glass-card ${
+                        activeStatsFilter === 'pending' ? 'border-blue-500 ring-2 ring-blue-500' : 'border-blue-500/30'
                       }`}
                     >
-                      <div className="text-xs text-blue-600">Pendentes</div>
-                      <div className="text-2xl font-bold text-blue-700">
+                      <div className="text-xs text-blue-400">Pendentes</div>
+                      <div className="text-2xl font-bold text-blue-300">
                         {totalPending}
                       </div>
-                      <div className="text-xs text-blue-400 mt-1">Clique para filtrar</div>
+                      <div className="text-xs text-blue-500/70 mt-1">Clique para filtrar</div>
                     </button>
                     <button
                       onClick={() => setActiveStatsFilter(activeStatsFilter === 'sent' ? null : 'sent')}
-                      className={`bg-emerald-50 rounded-lg border p-4 text-left transition-all hover:shadow-md ${
-                        activeStatsFilter === 'sent' ? 'border-emerald-900 ring-2 ring-emerald-900' : 'border-emerald-200'
+                      className={`bg-emerald-500/10 rounded-lg border p-4 text-left transition-all hover:shadow-md glass-card ${
+                        activeStatsFilter === 'sent' ? 'border-emerald-500 ring-2 ring-emerald-500' : 'border-emerald-500/30'
                       }`}
                     >
-                      <div className="text-xs text-emerald-600">Enviados</div>
-                      <div className="text-2xl font-bold text-emerald-700">
+                      <div className="text-xs text-emerald-400">Enviados</div>
+                      <div className="text-2xl font-bold text-emerald-300">
                         {totalSent}
                       </div>
-                      <div className="text-xs text-emerald-400 mt-1">Clique para filtrar</div>
+                      <div className="text-xs text-emerald-500/70 mt-1">Clique para filtrar</div>
                     </button>
                     <button
                       onClick={() => setActiveStatsFilter(activeStatsFilter === 'blocked' ? null : 'blocked')}
-                      className={`bg-amber-50 rounded-lg border p-4 text-left transition-all hover:shadow-md ${
-                        activeStatsFilter === 'blocked' ? 'border-amber-900 ring-2 ring-amber-900' : 'border-amber-200'
+                      className={`bg-amber-500/10 rounded-lg border p-4 text-left transition-all hover:shadow-md glass-card ${
+                        activeStatsFilter === 'blocked' ? 'border-amber-500 ring-2 ring-amber-500' : 'border-amber-500/30'
                       }`}
                     >
-                      <div className="text-xs text-amber-600">Bloqueados (não autorizados)</div>
-                      <div className="text-2xl font-bold text-amber-700">
+                      <div className="text-xs text-amber-400">Bloqueados (não autorizados)</div>
+                      <div className="text-2xl font-bold text-amber-300">
                         {totalBlocked}
                       </div>
-                      <div className="text-xs text-amber-400 mt-1">Clique para filtrar</div>
+                      <div className="text-xs text-amber-500/70 mt-1">Clique para filtrar</div>
                     </button>
                   </div>
                 )}
@@ -735,47 +735,47 @@ export default function AfterSalesPage() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <button
                       onClick={() => setActiveStatsFilter(activeStatsFilter === 'pending' ? null : 'pending')}
-                      className={`bg-gray-50 rounded-lg border p-4 text-left transition-all hover:shadow-md ${
-                        activeStatsFilter === 'pending' ? 'border-gray-900 ring-2 ring-gray-900' : 'border-gray-200'
+                      className={`bg-gray-500/10 rounded-lg border p-4 text-left transition-all hover:shadow-md glass-card ${
+                        activeStatsFilter === 'pending' ? 'border-gray-400 ring-2 ring-gray-400' : 'border-gray-400/30'
                       }`}
                     >
-                      <div className="text-xs text-gray-500">Total criados (pendentes)</div>
-                      <div className="text-2xl font-bold text-gray-900">
+                      <div className="text-xs text-gray-400">Total criados (pendentes)</div>
+                      <div className="text-2xl font-bold text-gray-300">
                         {filteredAllowedReminders.length}
                       </div>
-                      <div className="text-xs text-gray-400 mt-1">Clique para filtrar</div>
+                      <div className="text-xs text-gray-500/70 mt-1">Clique para filtrar</div>
                     </button>
                     <button
                       onClick={() => setActiveStatsFilter(activeStatsFilter === 'due' ? null : 'due')}
-                      className={`bg-red-50 rounded-lg border p-4 text-left transition-all hover:shadow-md ${
-                        activeStatsFilter === 'due' ? 'border-red-900 ring-2 ring-red-900' : 'border-red-200'
+                      className={`bg-[#C1272D]/10 rounded-lg border p-4 text-left transition-all hover:shadow-md glass-card ${
+                        activeStatsFilter === 'due' ? 'border-[#C1272D] ring-2 ring-[#C1272D]' : 'border-[#C1272D]/30'
                       }`}
                     >
-                      <div className="text-xs text-red-600">Para envio agora</div>
-                      <div className="text-2xl font-bold text-red-700">
+                      <div className="text-xs text-[#C1272D]">Para envio agora</div>
+                      <div className="text-2xl font-bold text-red-400">
                         {dueReminders.length}
                       </div>
-                      <div className="text-xs text-red-400 mt-1">Clique para filtrar</div>
+                      <div className="text-xs text-[#C1272D]/70 mt-1">Clique para filtrar</div>
                     </button>
                     <button
                       onClick={() => setActiveStatsFilter(activeStatsFilter === 'scheduled' ? null : 'scheduled')}
-                      className={`bg-emerald-50 rounded-lg border p-4 text-left transition-all hover:shadow-md ${
-                        activeStatsFilter === 'scheduled' ? 'border-emerald-900 ring-2 ring-emerald-900' : 'border-emerald-200'
+                      className={`bg-emerald-500/10 rounded-lg border p-4 text-left transition-all hover:shadow-md glass-card ${
+                        activeStatsFilter === 'scheduled' ? 'border-emerald-500 ring-2 ring-emerald-500' : 'border-emerald-500/30'
                       }`}
                     >
-                      <div className="text-xs text-emerald-600">Agendados</div>
-                      <div className="text-2xl font-bold text-emerald-700">
+                      <div className="text-xs text-emerald-400">Agendados</div>
+                      <div className="text-2xl font-bold text-emerald-300">
                         {upcomingReminders.length}
                       </div>
-                      <div className="text-xs text-emerald-400 mt-1">Clique para filtrar</div>
+                      <div className="text-xs text-emerald-500/70 mt-1">Clique para filtrar</div>
                     </button>
                   </div>
                 )}
                 {activeStatsFilter && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center justify-between">
+                  <div className="bg-blue-500/10 border border-blue-500/50 rounded-lg p-3 flex items-center justify-between glass-card">
                     <div className="flex items-center gap-2">
-                      <Eye className="w-4 h-4 text-blue-600" />
-                      <span className="text-sm text-blue-900 font-medium">
+                      <Eye className="w-4 h-4 text-blue-400" />
+                      <span className="text-sm text-blue-300 font-medium">
                         Filtro ativo: {
                           activeStatsFilter === 'all' ? 'Todos' :
                           activeStatsFilter === 'pending' ? 'Pendentes' :
@@ -797,62 +797,67 @@ export default function AfterSalesPage() {
                   </div>
                 )}
                 {!maintenanceLoading && filteredAllowedReminders.length === 0 && (
-                  <p className="text-sm text-gray-600">Nenhum lembrete pendente encontrado.</p>
+                  <p className="text-sm text-muted-foreground">Nenhum lembrete pendente encontrado.</p>
                 )}
                 {!maintenanceLoading && (
                   <div className="space-y-2">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                       <div>
-                        <label className="text-xs text-gray-600">Período (início)</label>
+                        <label className="text-xs text-muted-foreground">Período (início)</label>
                         <Input
                           type="date"
                           value={filterStartDate}
                           onChange={(e) => setFilterStartDate(e.target.value)}
+                          className="bg-muted/50 border-border/50 text-foreground"
                         />
                       </div>
                       <div>
-                        <label className="text-xs text-gray-600">Período (fim)</label>
+                        <label className="text-xs text-muted-foreground">Período (fim)</label>
                         <Input
                           type="date"
                           value={filterEndDate}
                           onChange={(e) => setFilterEndDate(e.target.value)}
+                          className="bg-muted/50 border-border/50 text-foreground"
                         />
                       </div>
                       <div>
-                        <label className="text-xs text-gray-600">Palavra-chave</label>
+                        <label className="text-xs text-muted-foreground">Palavra-chave</label>
                         <Input
                           type="text"
                           value={filterKeyword}
                           onChange={(e) => setFilterKeyword(e.target.value)}
                           placeholder="Ex: óleo"
+                          className="bg-muted/50 border-border/50 text-foreground"
                         />
                       </div>
                       <div>
-                        <label className="text-xs text-gray-600">Cliente (nome ou telefone)</label>
+                        <label className="text-xs text-muted-foreground">Cliente (nome ou telefone)</label>
                         <Input
                           type="text"
                           value={filterClient}
                           onChange={(e) => setFilterClient(e.target.value)}
                           placeholder="Ex: João ou 9999"
+                          className="bg-muted/50 border-border/50 text-foreground"
                         />
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
                       <div>
-                        <label className="text-xs text-gray-600">Reprocessar últimos dias</label>
+                        <label className="text-xs text-muted-foreground">Reprocessar últimos dias</label>
                         <Input
                           type="number"
                           min={1}
                           value={backfillDays}
                           onChange={(e) => setBackfillDays(parseInt(e.target.value || '1', 10))}
+                          className="bg-muted/50 border-border/50 text-foreground"
                         />
                       </div>
                       <div className="flex gap-2">
                         <Button
                           onClick={handleBackfillReminders}
                           disabled={backfillLoading}
-                          className="bg-blue-600 hover:bg-blue-700"
+                          className="bg-[#C1272D] hover:bg-red-700"
                         >
                           {backfillLoading ? 'Reprocessando...' : 'Reprocessar vendas'}
                         </Button>
@@ -883,21 +888,21 @@ export default function AfterSalesPage() {
                         Pendentes para envio ({dueReminders.length})
                       </h3>
                       {dueReminders.length === 0 ? (
-                        <p className="text-sm text-gray-600">Nenhum lembrete pendente para envio.</p>
+                        <p className="text-sm text-muted-foreground">Nenhum lembrete pendente para envio.</p>
                       ) : (
-                        <div className="divide-y">
+                        <div className="divide-y divide-border/50">
                           {dueReminders.map((reminder) => (
                             <div key={reminder.id} className="py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                               <div>
-                                <div className="font-semibold text-gray-900">{reminder.order?.client_name ?? 'Cliente'}</div>
-                                <div className="text-sm text-gray-600">{reminder.order?.client_phone ?? reminder.client_phone ?? ''}</div>
-                                <div className="text-sm text-gray-600">
-                                  Palavra-chave: <strong>{reminder.keyword?.keyword ?? '—'}</strong>
+                                <div className="font-semibold text-foreground">{reminder.order?.client_name ?? 'Cliente'}</div>
+                                <div className="text-sm text-muted-foreground">{reminder.order?.client_phone ?? reminder.client_phone ?? ''}</div>
+                                <div className="text-sm text-muted-foreground">
+                                  Palavra-chave: <strong className="text-foreground">{reminder.keyword?.keyword ?? '—'}</strong>
                                 </div>
                               </div>
-                              <div className="text-sm text-gray-600">
+                              <div className="text-sm text-muted-foreground">
                                 <div>Serviço: {new Date(reminder.service_date).toLocaleDateString('pt-BR')}</div>
-                                <div className="text-red-600">Lembrete: {new Date(reminder.reminder_due_date).toLocaleDateString('pt-BR')}</div>
+                                <div className="text-[#C1272D]">Lembrete: {new Date(reminder.reminder_due_date).toLocaleDateString('pt-BR')}</div>
                               </div>
                             </div>
                           ))}
@@ -964,13 +969,13 @@ export default function AfterSalesPage() {
           {/* ABA: DEBUG */}
           {!isRestrictedUser && (
             <TabsContent value="debug" className="space-y-6">
-              <div className="bg-white rounded-lg border border-gray-200">
-                <div className="p-6 border-b border-gray-200">
+              <div className="glass-card-elevated rounded-lg border border-border/50">
+                <div className="p-6 border-b border-border/50">
                   <div className="flex items-center gap-3 mb-2">
-                    <Wrench className="w-6 h-6 text-purple-600" />
-                    <h2 className="text-2xl font-bold text-gray-900">Painel de Debug</h2>
+                    <Wrench className="w-6 h-6 text-purple-400" />
+                    <h2 className="text-2xl font-bold text-foreground">Painel de Debug</h2>
                   </div>
-                  <p className="text-gray-600">Verifyque se todos os componentes estão funcionando corretamente</p>
+                  <p className="text-muted-foreground">Verifique se todos os componentes estão funcionando corretamente</p>
                 </div>
                 <div className="p-6">
                   <MaintenanceDebugPanel />

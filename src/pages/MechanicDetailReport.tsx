@@ -1,14 +1,17 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useServiceOrders } from '@/hooks/useServiceOrders';
 import { useMechanics } from '@/hooks/useMechanics';
 import { Mechanic } from '@/types/service-order';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
-import { ArrowLeft, Calendar, Check, X } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar as DateCalendar } from '@/components/ui/calendar';
+import { ArrowLeft, Calendar as CalendarIcon, ChevronDown, Check, X } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import type { DateRange } from 'react-day-picker';
 
 interface MechanicDetailReportProps {
   onBack: () => void;
@@ -20,7 +23,14 @@ export function MechanicDetailReport({ onBack }: MechanicDetailReportProps) {
   const [selectedMechanicId, setSelectedMechanicId] = useState<string>('');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [showPaid, setShowPaid] = useState<boolean>(false);
+
+  useEffect(() => {
+    setStartDate(dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : '');
+    setEndDate(dateRange?.to ? format(dateRange.to, 'yyyy-MM-dd') : '');
+  }, [dateRange]);
 
   const selectedMechanic = useMemo(() => {
     return mechanics.find(m => m.id === selectedMechanicId);
@@ -124,11 +134,11 @@ export function MechanicDetailReport({ onBack }: MechanicDetailReportProps) {
       {/* Filtros */}
       <Card>
         <CardContent className="p-4 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+            <div className="space-y-2 md:col-span-4">
               <Label>Mecânico</Label>
               <Select value={selectedMechanicId} onValueChange={setSelectedMechanicId}>
-                <SelectTrigger>
+                <SelectTrigger className="h-10">
                   <SelectValue placeholder="Selecione um mecânico" />
                 </SelectTrigger>
                 <SelectContent>
@@ -141,26 +151,54 @@ export function MechanicDetailReport({ onBack }: MechanicDetailReportProps) {
               </Select>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 md:col-span-8">
               <Label className="flex items-center gap-2">
-                <Calendar className="h-4 w-4" /> Data Inicial
+                <CalendarIcon className="h-4 w-4" /> Período
               </Label>
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
-            </div>
+              <div className="flex gap-2 items-center">
+                <Popover open={showDatePicker} onOpenChange={setShowDatePicker}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="h-10 w-full justify-between">
+                      <span className="flex items-center gap-2">
+                        <CalendarIcon className="h-4 w-4" />
+                        {dateRange?.from ? (
+                          dateRange.to ? (
+                            <>{format(dateRange.from, 'dd/MM/yyyy')} até {format(dateRange.to, 'dd/MM/yyyy')}</>
+                          ) : (
+                            <>{format(dateRange.from, 'dd/MM/yyyy')}</>
+                          )
+                        ) : (
+                          'Selecione o período'
+                        )}
+                      </span>
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <DateCalendar
+                      initialFocus
+                      mode="range"
+                      selected={dateRange}
+                      onSelect={setDateRange}
+                      numberOfMonths={1}
+                      locale={ptBR}
+                    />
+                  </PopoverContent>
+                </Popover>
 
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <Calendar className="h-4 w-4" /> Data Final
-              </Label>
-              <Input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
+                <Button
+                  variant="outline"
+                  className="h-10"
+                  onClick={() => {
+                    setDateRange(undefined);
+                    setStartDate('');
+                    setEndDate('');
+                    setShowDatePicker(false);
+                  }}
+                >
+                  Limpar
+                </Button>
+              </div>
             </div>
           </div>
           

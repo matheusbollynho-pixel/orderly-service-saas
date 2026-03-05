@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AdminMenu } from "@/components/AdminMenu";
+import { ThemeProvider } from "@/hooks/useTheme";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import { LoginPage } from "./pages/LoginPage";
@@ -12,6 +13,7 @@ import AfterSalesPage from "./pages/AfterSalesPage";
 import { CashFlowPage } from "./pages/CashFlowPage";
 import PublicSatisfactionPage from "./pages/PublicSatisfactionPage";
 import PublicStoreSatisfactionPage from "./pages/PublicStoreSatisfactionPage";
+import PublicSatisfactionFeedPage from "./pages/PublicSatisfactionFeedPage";
 import { useAuth } from "./hooks/useAuth";
 import { useEffect } from "react";
 import { cleanupOldPhotos } from "./lib/photoService";
@@ -30,6 +32,15 @@ const queryClient = new QueryClient({
 function AppRoutes() {
   const location = useLocation();
   const isPublicSatisfaction = location.pathname.startsWith('/avaliar/');
+  const isPublicFeed = location.pathname.startsWith('/avaliacoes/');
+
+  if (isPublicFeed) {
+    return (
+      <Routes>
+        <Route path="/avaliacoes/feed" element={<PublicSatisfactionFeedPage />} />
+      </Routes>
+    );
+  }
 
   if (isPublicSatisfaction) {
     // IMPORTANTE: A rota mais específica (/loja) DEVE vir ANTES da genérica (/:token)
@@ -92,17 +103,19 @@ function AuthenticatedApp() {
 const App = () => {
   console.log('🎨 App renderizando');
   return (
-    <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <AppRoutes />
-          </BrowserRouter>
-        </TooltipProvider>
-      </QueryClientProvider>
-    </ErrorBoundary>
+    <ThemeProvider>
+      <ErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <AppRoutes />
+            </BrowserRouter>
+          </TooltipProvider>
+        </QueryClientProvider>
+      </ErrorBoundary>
+    </ThemeProvider>
   );
 };
 

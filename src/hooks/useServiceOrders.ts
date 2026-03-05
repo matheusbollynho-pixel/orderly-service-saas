@@ -3,6 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { ServiceOrder, ChecklistItem, OrderStatus, DEFAULT_CHECKLIST_ITEMS } from '@/types/service-order';
 import { toast } from 'sonner';
 
+const QR_PLACEHOLDER_EQUIPMENT = '__QR_WALKIN_PLACEHOLDER__';
+
 
 export function useServiceOrders() {
   const queryClient = useQueryClient();
@@ -37,8 +39,15 @@ export function useServiceOrders() {
         data = fullQuery.data as any[];
       }
       
+      // Remover ordens técnicas usadas apenas para fluxo de avaliação QR
+      const visibleOrders = (data as any[]).filter((order) => {
+        if (order?.equipment === QR_PLACEHOLDER_EQUIPMENT) return false;
+        if (order?.equipment === 'Avaliação de balcão' && order?.problem_description === 'Avaliação sem OS') return false;
+        return true;
+      });
+
       // Mapear os dados do cliente para o objeto de ordem
-      return (data as any[]).map(order => {
+      return visibleOrders.map(order => {
         const clientData = Array.isArray(order.clients) ? order.clients[0] : order.clients;
         return {
           ...order,

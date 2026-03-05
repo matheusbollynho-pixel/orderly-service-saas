@@ -217,20 +217,20 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting }: { onSubmit: any;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5 max-w-4xl mx-auto p-6">
-      <div className="flex items-center gap-3 pb-4 border-b">
+      <div className="flex items-center gap-3 pb-4 border-b border-border/50">
         <Button type="button" variant="ghost" size="icon" onClick={onCancel}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-blue-700 bg-clip-text text-transparent">
+        <h2 className="text-2xl font-bold bg-gradient-to-r from-[#C1272D] to-red-600 bg-clip-text text-transparent">
           Nova OS - Bandara Motos
         </h2>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab as any}>
-        <TabsList className="grid w-full grid-cols-3 bg-muted p-1 rounded-xl">
-          <TabsTrigger value="cliente" className="data-[state=active]:bg-background">Cliente</TabsTrigger>
-          <TabsTrigger value="motos" className="data-[state=active]:bg-background">Motos</TabsTrigger>
-          <TabsTrigger value="servicos" className="data-[state=active]:bg-background">Serviços</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-3 bg-muted/30 p-1 rounded-xl border border-border/30">
+          <TabsTrigger value="cliente" className="data-[state=active]:bg-muted/50 data-[state=active]:border-border/50 data-[state=active]:border rounded-lg">Cliente</TabsTrigger>
+          <TabsTrigger value="motos" className="data-[state=active]:bg-muted/50 data-[state=active]:border-border/50 data-[state=active]:border rounded-lg">Motos</TabsTrigger>
+          <TabsTrigger value="servicos" className="data-[state=active]:bg-muted/50 data-[state=active]:border-border/50 data-[state=active]:border rounded-lg">Serviços</TabsTrigger>
         </TabsList>
 
         {/* ABA CLIENTE */}
@@ -257,7 +257,7 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting }: { onSubmit: any;
             </div>
             <div className="space-y-2">
               <Label className="font-semibold">Data de Nascimento (opcional)</Label>
-              <Input type="date" value={formData.client.birth_date || ''} onChange={(e) => updateField('client', 0, 'birth_date', e.target.value)} className="h-12" />
+              <Input type="date" value={formData.client.birth_date || ''} onChange={(e) => updateField('client', 0, 'birth_date', e.target.value)} className="h-12 bg-muted/50 border-border/50 text-foreground" />
             </div>
             <div className="space-y-2">
               <Label className="font-semibold">Instagram (opcional)</Label>
@@ -284,10 +284,6 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting }: { onSubmit: any;
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label className="font-semibold">Número (opcional)</Label>
-              <Input placeholder="123" value={formData.client.numero || ''} onChange={(e) => updateField('client', 0, 'numero', e.target.value)} className="h-12" />
-            </div>
             <div className="space-y-2 md:col-span-2">
               <Label className="flex items-center gap-2 font-semibold"><MapPin className="h-4 w-4" /> Endereço</Label>
               <Input placeholder="Rua das Flores, 123, Centro - Paulo Afonso/BA" value={formData.client.address} onChange={(e) => updateField('client', 0, 'address', e.target.value)} className="h-12" />
@@ -354,14 +350,14 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting }: { onSubmit: any;
         <TabsContent value="servicos" className="space-y-4 pt-4">
           <div className="space-y-6">
             {/* Datas de Entrada */}
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="p-4 glass-card-elevated border border-border/50 rounded-lg">
               <div className="space-y-2">
                 <Label className="font-semibold">📅 Data de Entrada *</Label>
                 <Input
                   type="date"
                   value={formData.servicos.entry_date || ''}
                   onChange={(e) => updateField('servicos', 0, 'entry_date', e.target.value)}
-                  className="h-12"
+                  className="h-12 bg-muted/50 border-border/50 text-foreground"
                 />
               </div>
             </div>
@@ -485,7 +481,7 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting }: { onSubmit: any;
         </TabsContent>
       </Tabs>
 
-      <Button type="submit" className="w-full h-14 text-xl font-bold bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800" disabled={!isValid || isSubmitting}>
+      <Button type="submit" className="w-full h-14 text-xl font-bold bg-gradient-to-r from-[#C1272D] to-red-600 hover:from-red-700 hover:to-red-800 text-white shadow-lg hover:shadow-xl transition-all duration-300" disabled={!isValid || isSubmitting}>
         {isSubmitting ? '⏳ Criando OS...' : '🚀 Finalizar OS Bandara Motos'}
       </Button>
     </form>

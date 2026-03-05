@@ -68,18 +68,18 @@ export function MaterialsNote({
 
   return (
     <div className="mt-8 space-y-4">
-      <div className="bg-gradient-to-r from-orange-100 via-yellow-50 to-orange-50 rounded-lg border-2 border-orange-300 p-6 shadow-md">
-        <h3 className="text-xl font-bold text-orange-900 mb-1">📋 Peças e Serviços</h3>
-        <p className="text-sm text-orange-700 mb-4">Materiais e peças utilizadas</p>
+      <div className="glass-card-elevated rounded-lg border border-border/50 p-6 shadow-md">
+        <h3 className="text-xl font-bold text-foreground mb-1">📋 Peças e Serviços</h3>
+        <p className="text-sm text-muted-foreground mb-4">Materiais e peças utilizadas</p>
 
         {materiais.length === 0 ? (
-          <div className="text-center py-6 text-orange-600">
+          <div className="text-center py-6 text-muted-foreground">
             <p className="text-sm">Nenhum material adicionado ainda</p>
           </div>
         ) : (
           <div className="space-y-2 mb-4">
             {/* Cabeçalho simplificado */}
-            <div className="grid grid-cols-12 gap-2 bg-orange-200 p-2 rounded font-semibold text-xs text-orange-900">
+            <div className="grid grid-cols-12 gap-2 bg-[#C1272D]/10 p-2 rounded font-semibold text-xs text-foreground">
               <div className="col-span-1"></div>
               <div className="col-span-7">DESCRIÇÃO</div>
               <div className="col-span-2">QTD/VALOR</div>
@@ -90,20 +90,20 @@ export function MaterialsNote({
             {materiais.map((material) => (
               <div key={material.id}>
                 <div 
-                  className="grid grid-cols-12 gap-2 bg-white p-2 rounded border border-orange-200 items-center hover:bg-orange-50 cursor-pointer"
+                  className="grid grid-cols-12 gap-2 bg-muted/30 p-2 rounded border border-border/50 items-center hover:bg-muted/50 cursor-pointer"
                   onClick={() => setExpandedId(expandedId === material.id ? null : material.id)}
                 >
                   <div className="col-span-1 flex justify-center">
                     {expandedId === material.id ? (
-                      <ChevronUp className="h-4 w-4 text-orange-600" />
+                      <ChevronUp className="h-4 w-4 text-[#C1272D]" />
                     ) : (
-                      <ChevronDown className="h-4 w-4 text-orange-600" />
+                      <ChevronDown className="h-4 w-4 text-[#C1272D]" />
                     )}
                   </div>
-                  <div className="col-span-7 text-sm font-medium text-orange-900">
+                  <div className="col-span-7 text-sm font-medium text-foreground">
                     {material.descricao}
                   </div>
-                  <div className="col-span-2 text-sm text-orange-800">
+                  <div className="col-span-2 text-sm text-muted-foreground">
                     {material.quantidade} × R$ {parseFloat(String(material.valor)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                   <div className="col-span-2 flex justify-end">
@@ -116,7 +116,7 @@ export function MaterialsNote({
                         onRemoveMaterial(material.id);
                       }}
                       disabled={disabled}
-                      className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                      className="h-7 w-7 p-0 text-[#C1272D] hover:text-red-600 hover:bg-red-50/10"
                     >
                       <Trash2 className="h-3 w-3" />
                     </Button>
@@ -125,12 +125,12 @@ export function MaterialsNote({
 
                 {/* Detalhe expandível */}
                 {expandedId === material.id && (
-                  <div className="bg-orange-50 border border-orange-200 border-t-0 p-3 rounded-b space-y-3">
+                  <div className="bg-muted/50 border border-border/50 border-t-0 p-3 rounded-b space-y-3">
                     <div className="flex gap-2 items-end">
                       <div className="w-16">
-                        <label className="text-xs font-semibold text-orange-900 block mb-1">Quantidade</label>
+                        <label className="text-xs font-semibold text-foreground block mb-1">Quantidade</label>
                         <Select value={material.quantidade || '01'} onValueChange={(value) => onUpdateMaterial(material.id, 'quantidade', value)}>
-                          <SelectTrigger className="h-8 text-xs text-center">
+                          <SelectTrigger className="h-8 text-xs text-center bg-muted/50 border-border/50">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -141,13 +141,13 @@ export function MaterialsNote({
                         </Select>
                       </div>
                       <div className="w-24">
-                        <label className="text-xs font-semibold text-orange-900 block mb-1">Valor (R$)</label>
+                        <label className="text-xs font-semibold text-foreground block mb-1">Valor (R$)</label>
                         <Input
                           type="number"
                           value={material.valor}
                           onChange={(e) => onUpdateMaterial(material.id, 'valor', e.target.value)}
                           disabled={disabled}
-                          className="h-8 text-xs text-right"
+                          className="h-8 text-xs text-right bg-muted/50 border-border/50"
                           placeholder="0,00"
                         />
                       </div>
@@ -160,14 +160,14 @@ export function MaterialsNote({
                         disabled={disabled}
                         className="h-4 w-4"
                       />
-                      <span className="text-xs font-medium">Serviço</span>
+                      <span className="text-xs font-medium text-foreground">Serviço</span>
                     </div>
 
                     {material.is_service && (
                       <div>
-                        <label className="text-xs font-semibold text-orange-900 block mb-1">Mecânico</label>
+                        <label className="text-xs font-semibold text-foreground block mb-1">Mecânico</label>
                         <Select value={material.mechanic_id || 'none'} onValueChange={(value) => onUpdateMaterial(material.id, 'mechanic_id', value === 'none' ? '' : value)} disabled={disabled}>
-                          <SelectTrigger className="h-8 text-xs">
+                          <SelectTrigger className="h-8 text-xs bg-muted/50 border-border/50">
                             <SelectValue placeholder="Nenhum" />
                           </SelectTrigger>
                           <SelectContent>
@@ -185,7 +185,7 @@ export function MaterialsNote({
             ))}
 
             {/* Total */}
-            <div className="grid grid-cols-12 gap-2 bg-orange-300 p-2 rounded font-bold text-orange-900 text-xs mt-2">
+            <div className="grid grid-cols-12 gap-2 bg-[#C1272D]/20 p-2 rounded font-bold text-foreground text-xs mt-2">
               <div className="col-span-9">TOTAL:</div>
               <div className="col-span-3 text-right">
                 R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -195,14 +195,14 @@ export function MaterialsNote({
         )}
 
         {!disabled && (
-          <div className="border-t border-orange-300 pt-4 space-y-3">
-            <h4 className="font-semibold text-orange-900 text-sm">Adicionar novo material</h4>
+          <div className="border-t border-border/30 pt-4 space-y-3">
+            <h4 className="font-semibold text-foreground text-sm">Adicionar novo material</h4>
             <div className="space-y-3">
               <div className="flex gap-2 items-end">
                 <div className="w-16">
-                  <label className="text-xs font-semibold text-orange-900 block mb-1">Qtd</label>
+                  <label className="text-xs font-semibold text-foreground block mb-1">Qtd</label>
                   <Select value={newMaterial.quantidade || '01'} onValueChange={(value) => setNewMaterial({ ...newMaterial, quantidade: value })}>
-                    <SelectTrigger className="h-8 text-xs text-center">
+                    <SelectTrigger className="h-8 text-xs text-center bg-muted/50 border-border/50">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -213,24 +213,24 @@ export function MaterialsNote({
                   </Select>
                 </div>
                 <div className="flex-1">
-                  <label className="text-xs font-semibold text-orange-900 block mb-1">Descrição</label>
+                  <label className="text-xs font-semibold text-foreground block mb-1">Descrição</label>
                   <Input
                     placeholder="Descrição"
                     value={newMaterial.descricao}
                     onChange={(e) => setNewMaterial({ ...newMaterial, descricao: e.target.value })}
                     disabled={disabled}
-                    className="h-8"
+                    className="h-8 bg-muted/50 border-border/50"
                   />
                 </div>
                 <div className="w-24">
-                  <label className="text-xs font-semibold text-orange-900 block mb-1">Valor (R$)</label>
+                  <label className="text-xs font-semibold text-foreground block mb-1">Valor (R$)</label>
                   <Input
                     type="number"
                     placeholder="0,00"
                     value={newMaterial.valor}
                     onChange={(e) => setNewMaterial({ ...newMaterial, valor: e.target.value })}
                     disabled={disabled}
-                    className="h-8 text-xs text-right"
+                    className="h-8 text-xs text-right bg-muted/50 border-border/50"
                   />
                 </div>
               </div>
@@ -242,14 +242,14 @@ export function MaterialsNote({
                     disabled={disabled}
                     className="h-4 w-4"
                   />
-                  <span className="text-xs font-medium leading-none">Serviço</span>
+                  <span className="text-xs font-medium leading-none text-foreground">Serviço</span>
                 </div>
               </div>
               {newMaterial.is_service && (
                 <div>
-                  <label className="text-xs font-semibold text-orange-900 block mb-1">Mecânico</label>
+                  <label className="text-xs font-semibold text-foreground block mb-1">Mecânico</label>
                   <Select value={newMaterial.mechanic_id || 'none'} onValueChange={(value) => setNewMaterial({ ...newMaterial, mechanic_id: value === 'none' ? undefined : value })} disabled={disabled}>
-                    <SelectTrigger className="h-8" disabled={disabled}>
+                    <SelectTrigger className="h-8 bg-muted/50 border-border/50" disabled={disabled}>
                       <SelectValue placeholder="Nenhum" />
                     </SelectTrigger>
                     <SelectContent>
@@ -266,7 +266,7 @@ export function MaterialsNote({
                   type="button"
                   onClick={handleAddMaterial}
                   disabled={disabled || loadingAdd}
-                  className="h-8 bg-orange-600 hover:bg-orange-700"
+                  className="h-8 bg-[#C1272D] hover:bg-red-700"
                 >
                   {loadingAdd ? 'Salvando...' : '+ Adicionar'}
                 </Button>

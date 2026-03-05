@@ -25,55 +25,55 @@ export function OrderCard({ order, onClick }: OrderCardProps) {
 
   return (
     <Card 
-      className="card-elevated cursor-pointer transition-all hover:shadow-elevated active:scale-[0.99] animate-slide-up"
+      className="glass-card-elevated cursor-pointer border border-border/80 transition-all hover:border-primary/35 hover:shadow-elevated active:scale-[0.995] animate-slide-up rounded-[8px]"
       onClick={onClick}
     >
-      <CardContent className="p-4">
+      <CardContent className="p-4 md:p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-2">
-              <h3 className="font-semibold text-foreground truncate">{order.client_name}</h3>
+            <div className="flex items-center gap-2 mb-2.5">
+              <h3 className="font-bold text-foreground truncate text-[18px] tracking-[0.02em]">{order.client_name}</h3>
               <StatusBadge status={order.status} />
               {isExpress && (
-                <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                <span className="text-[9px] font-semibold uppercase tracking-[0.12em] px-2 py-0.5 rounded-full bg-[#C1272D]/20 text-[#C1272D] border border-[#C1272D]/40">
                   Express
                 </span>
               )}
             </div>
             
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Wrench className="h-3.5 w-3.5 flex-shrink-0" />
-                <span className="truncate">{order.equipment}</span>
+                <Wrench className="h-3.5 w-3.5 flex-shrink-0 text-[#C1272D]" />
+                <span className="truncate text-[13px]">{order.equipment}</span>
               </div>
               
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
-                <span className="truncate">{order.client_address}</span>
+                <span className="truncate text-[13px]">{order.client_address}</span>
               </div>
               
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Phone className="h-3.5 w-3.5 flex-shrink-0" />
-                <span>{order.client_phone}</span>
+                <span className="text-[13px]">{order.client_phone}</span>
               </div>
             </div>
 
             {totalItems > 0 && (
-              <div className="mt-3">
+              <div className="mt-3.5">
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="text-muted-foreground">Progresso</span>
-                  <span className="font-medium text-foreground">{completedItems}/{totalItems}</span>
+                  <span className="font-semibold text-foreground">{completedItems}/{totalItems}</span>
                 </div>
-                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                <div className="h-1.5 bg-muted/70 rounded-full overflow-hidden">
                   <div 
-                    className="h-full bg-primary rounded-full transition-all duration-300"
+                    className="h-full rounded-full transition-all duration-300 bg-gradient-to-r from-[#C1272D] to-red-500"
                     style={{ width: `${progress}%` }}
                   />
                 </div>
               </div>
             )}
 
-            <p className="text-xs text-muted-foreground mt-3">
+            <p className="text-xs text-muted-foreground mt-3.5">
               {(() => {
                 const createdAt = toSafeDate(order.created_at);
                 return createdAt
@@ -83,11 +83,11 @@ export function OrderCard({ order, onClick }: OrderCardProps) {
             </p>
           </div>
           
-          <div className="flex flex-col items-end gap-2">
-            <ChevronRight className="h-5 w-5 text-muted-foreground mt-1" />
+          <div className="flex flex-col items-end gap-2 min-w-[78px]">
+            <ChevronRight className="h-4.5 w-4.5 text-muted-foreground/70 mt-1" />
             {order.entry_date && (
               <div className="flex flex-col items-end gap-0.5">
-                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Entrada</span>
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.12em]">Entrada</span>
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Calendar className="h-3 w-3" />
                   <span>
@@ -101,7 +101,7 @@ export function OrderCard({ order, onClick }: OrderCardProps) {
             )}
             {order.status === 'concluida' && order.exit_date && (
               <div className="flex flex-col items-end gap-0.5">
-                <span className="text-[10px] font-medium text-[hsl(var(--status-done))] uppercase tracking-wide">Concluído</span>
+                <span className="text-[10px] font-semibold text-[hsl(var(--status-done))] uppercase tracking-[0.12em]">Concluído</span>
                 <div className="flex items-center gap-1 text-xs text-[hsl(var(--status-done))]">
                   <Calendar className="h-3 w-3" />
                   <span className="font-medium">

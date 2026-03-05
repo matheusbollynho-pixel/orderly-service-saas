@@ -1,17 +1,20 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Star } from 'lucide-react';
+import { Moon, Star, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const BALCAO_POSITIVE_TAGS = ['Educação', 'Rapidez', 'Transparência', 'Simpatia', 'Agilidade'];
-const BALCAO_IMPROVEMENT_TAGS = ['Demora no balcão', 'Falta de Atenção', 'Falta de Informação', 'Preço Caro', 'Não Entendia'];
+const BALCAO_IMPROVEMENT_TAGS = ['Demora no balcão', 'Falta de Atenção', 'Falta de Informação', 'Não Entendia'];
 
 const OFICINA_POSITIVE_TAGS = ['Qualidade', 'Prazo Cumprido', 'Moto Limpa', 'Bem Feito', 'Perfeição'];
 const OFICINA_IMPROVEMENT_TAGS = ['Problema não resolvido', 'Sujeira', 'Demora', 'Moto com Defeito', 'Peças Trocadas Sem Avisar'];
+
+const STORE_POSITIVE_TAGS = ['Atendimento rápido', 'Mecânico atencioso', 'Preço justo', 'Loja organizada', 'Serviço de confiança'];
+const STORE_IMPROVEMENT_TAGS = ['Demora no atendimento', 'Preço elevado', 'Falta de peças', 'Dificuldade de contato', 'Ambiente desconfortável'];
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
@@ -21,7 +24,7 @@ function TagPills({
   selected,
   onToggle,
 }: {
-  area: 'balcao' | 'oficina';
+  area: 'balcao' | 'oficina' | 'store';
   score: number;
   selected: string[];
   onToggle: (tag: string) => void;
@@ -29,15 +32,20 @@ function TagPills({
   const isPositive = score >= 4;
   const options = area === 'balcao' 
     ? (isPositive ? BALCAO_POSITIVE_TAGS : BALCAO_IMPROVEMENT_TAGS)
-    : (isPositive ? OFICINA_POSITIVE_TAGS : OFICINA_IMPROVEMENT_TAGS);
+    : area === 'oficina'
+    ? (isPositive ? OFICINA_POSITIVE_TAGS : OFICINA_IMPROVEMENT_TAGS)
+    : (isPositive ? STORE_POSITIVE_TAGS : STORE_IMPROVEMENT_TAGS);
 
   const title = area === 'balcao' 
     ? (isPositive ? '✓ O que você achou bom no atendimento?' : '⚠ O que poderia melhorar no atendimento?')
-    : (isPositive ? '✓ O que você achou bom no serviço?' : '⚠ O que poderia melhorar no serviço?');
+    : area === 'oficina'
+    ? (isPositive ? '✓ O que você achou bom no serviço?' : '⚠ O que poderia melhorar no serviço?')
+    : (isPositive ? '✓ Elogios' : '⚠ Melhorias');
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 mt-4">
       <p className="text-sm font-medium text-muted-foreground">{title}</p>
+      <p className="text-xs text-muted-foreground">Selecione os motivos:</p>
       <div className="flex flex-wrap gap-2">
         {options.map((tag) => {
           const active = selected.includes(tag);
@@ -47,8 +55,10 @@ function TagPills({
               type="button"
               onClick={() => onToggle(tag)}
               className={cn(
-                'rounded-full border px-3 py-1 text-sm transition-colors',
-                active ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background hover:bg-muted'
+                'rounded-full border px-4 py-2 text-sm transition-all font-medium',
+                active 
+                  ? 'border-primary bg-primary text-primary-foreground shadow-md scale-105' 
+                  : 'border-border bg-background hover:bg-muted hover:border-primary/50'
               )}
             >
               {tag}
@@ -89,17 +99,48 @@ export default function PublicSatisfactionPage() {
   const [isWalkIn, setIsWalkIn] = useState(false);
 
   // Walk-in: lista de atendentes disponíveis
-  const [staffMembers, setStaffMembers] = useState<Array<{id: string, name: string}>>([]);
-  const [mechanics, setMechanics] = useState<Array<{id: string, name: string}>>([]);
+  const [staffMembers, setStaffMembers] = useState<Array<{id: string, name: string, photo_url?: string}>>([]);
+  const [mechanics, setMechanics] = useState<Array<{id: string, name: string, photo_url?: string}>>([]);
   const [selectedAttendant, setSelectedAttendant] = useState('');
+  const [wantsAttendantReview, setWantsAttendantReview] = useState<boolean | null>(null);
+  const [wantsMechanicReview, setWantsMechanicReview] = useState<boolean | null>(null);
+  const [selectedMechanic, setSelectedMechanic] = useState('');
 
   const [atendimentoRating, setAtendimentoRating] = useState(0);
   const [servicoRating, setServicoRating] = useState(0);
+  const [storeRating, setStoreRating] = useState(0);
   const [atendimentoTags, setAtendimentoTags] = useState<string[]>([]);
   const [servicoTags, setServicoTags] = useState<string[]>([]);
+  const [storeTags, setStoreTags] = useState<string[]>([]);
   const [comment, setComment] = useState('');
   const [recommends, setRecommends] = useState<boolean | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const [publicTheme, setPublicTheme] = useState<'dark' | 'light'>(() =>
+    document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+  );
+  const previousThemeRef = useRef<'dark' | 'light' | null>(null);
+
+  useEffect(() => {
+    if (!previousThemeRef.current) {
+      previousThemeRef.current = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+    }
+
+    return () => {
+      if (previousThemeRef.current === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (publicTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [publicTheme]);
 
   useEffect(() => {
     const load = async () => {
@@ -188,34 +229,102 @@ export default function PublicSatisfactionPage() {
     return atendimentoRating <= 3 || servicoRating <= 3;
   }, [atendimentoRating, servicoRating]);
 
-  const toggleTag = (scope: 'atendimento' | 'servico', tag: string) => {
+  // Resetar tags de atendimento quando rating mudar de categoria (positivo <-> negativo)
+  useEffect(() => {
+    if (atendimentoRating === 0) return; // Não resetar se rating for zerado
+    
+    const isCurrentPositive = atendimentoRating >= 4;
+    const wasPreviousPositive = atendimentoTags.length > 0 && 
+      (atendimentoTags.some(tag => BALCAO_POSITIVE_TAGS.includes(tag)) || 
+       atendimentoTags.some(tag => BALCAO_IMPROVEMENT_TAGS.includes(tag)));
+    
+    // Se temos tags e a categoria mudou, resetar
+    if (atendimentoTags.length > 0) {
+      setAtendimentoTags([]);
+    }
+  }, [atendimentoRating]);
+
+  // Resetar tags de serviço quando rating mudar de categoria (positivo <-> negativo)
+  useEffect(() => {
+    if (servicoRating === 0) return; // Não resetar se rating for zerado
+    
+    if (servicoTags.length > 0) {
+      setServicoTags([]);
+    }
+  }, [servicoRating]);
+
+  // Resetar tags da loja quando rating mudar de categoria (positivo <-> negativo)
+  useEffect(() => {
+    if (storeRating === 0) return; // Não resetar se rating for zerado
+    
+    if (storeTags.length > 0) {
+      setStoreTags([]);
+    }
+  }, [storeRating]);
+
+  const toggleTag = (scope: 'atendimento' | 'servico' | 'store', tag: string) => {
     if (scope === 'atendimento') {
       setAtendimentoTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
       return;
     }
 
-    setServicoTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
+    if (scope === 'servico') {
+      setServicoTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
+      return;
+    }
+
+    if (scope === 'store') {
+      setStoreTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
+    }
   };
 
   const handleSubmit = async () => {
-    // Para walk-in: apenas atendimento é obrigatório
-    // Para OS normal: ambos são obrigatórios
+    // Validação básica de estrelas
     if (isWalkIn) {
-      if (!atendimentoRating || !token) {
-        setError('Preencha a avaliação do atendimento em estrelas.');
+      // Walk-in: validar apenas se escolheu avaliar balconista ou mecânico
+      const hasAttendantReview = wantsAttendantReview === true && selectedAttendant;
+      const hasMechanicReview = wantsMechanicReview === true && selectedMechanic;
+      
+      // Se escolheu avaliar balconista mas não selecionou
+      if (wantsAttendantReview === true && !selectedAttendant) {
+        setError('Selecione o balconista que te atendeu.');
+        return;
+      }
+      
+      // Se escolheu avaliar mecânico mas não selecionou
+      if (wantsMechanicReview === true && !selectedMechanic) {
+        setError('Selecione o mecânico que te atendeu.');
+        return;
+      }
+
+      // Se escolheu avaliar balconista, precisa dar nota
+      if (hasAttendantReview && !atendimentoRating) {
+        setError('Preencha a avaliação do balconista em estrelas.');
+        return;
+      }
+
+      // Se escolheu avaliar mecânico, precisa dar nota
+      if (hasMechanicReview && !servicoRating) {
+        setError('Preencha a avaliação do mecânico em estrelas.');
+        return;
+      }
+
+      // Permitir enviar apenas comentário se não quis avaliar ninguém
+      if (!hasAttendantReview && !hasMechanicReview && !comment?.trim()) {
+        setError('Escreva um comentário ou escolha avaliar um colaborador.');
+        return;
+      }
+
+      if (!token) {
+        setError('Token inválido.');
         return;
       }
     } else {
+      // OS normal: ambos obrigatórios
       if (!atendimentoRating || !servicoRating || !token) {
         setError('Preencha as duas avaliações em estrelas.');
         return;
       }
-    }
-
-    // Se walk-in sem atendente definido, validar seleção
-    if (isWalkIn && !atendimento && !mechanic && !selectedAttendant) {
-      setError('Selecione quem te atendeu no balcão.');
-      return;
     }
 
     try {
@@ -226,9 +335,11 @@ export default function PublicSatisfactionPage() {
         token,
         atendimento_rating: atendimentoRating,
         servico_rating: servicoRating || 0, // Para walk-in, usar 0 se não preencheu
+        store_rating: storeRating || 0, // Avaliação geral da loja
         tags: {
           atendimento: atendimentoTags,
           servico: servicoTags,
+          store: storeTags,
         },
         comment: comment?.trim() || null,
         recommends,
@@ -239,6 +350,15 @@ export default function PublicSatisfactionPage() {
         const [type, id] = selectedAttendant.split(':');
         payload.attendant_type = type;
         payload.attendant_id = id;
+      }
+
+      // Incluir mecânico selecionado se walk-in e optou por avaliar
+      if (isWalkIn && selectedMechanic) {
+        const [type, id] = selectedMechanic.split(':');
+        if (type === 'mechanic') {
+          payload.mechanic_type = type;
+          payload.mechanic_id = id;
+        }
       }
 
       const res = await fetch(`${supabaseUrl}/functions/v1/satisfaction-public`, {
@@ -274,8 +394,18 @@ export default function PublicSatisfactionPage() {
     return (
       <div className="min-h-screen bg-muted/20 px-4 py-8">
         <div className="mx-auto max-w-md">
-          <Card>
-            <CardHeader>
+          <Card className="border-border/70 shadow-lg shadow-black/20 dark:shadow-black/50">
+            <CardHeader className="relative">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => setPublicTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+                className="absolute right-6 top-5 h-9 w-9 border-border/60 bg-background/80"
+                aria-label="Alternar tema"
+              >
+                {publicTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              </Button>
               <CardTitle>Avaliação já registrada ✅</CardTitle>
             </CardHeader>
             <CardContent>
@@ -290,161 +420,355 @@ export default function PublicSatisfactionPage() {
   return (
     <div className="min-h-screen bg-muted/20 px-4 py-6">
       <div className="mx-auto max-w-md space-y-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Bandara Motos • Avaliação</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm text-muted-foreground">
-            <p>Cliente: <span className="font-medium text-foreground">{order?.client_name || '-'}</span></p>
-            {isWalkIn ? (
-              <p>Atendimento: <span className="font-medium text-foreground">Balcão / Loja</span></p>
-            ) : (
-              <p>Moto/Equipamento: <span className="font-medium text-foreground">{order?.equipment || '-'}</span></p>
-            )}
-          </CardContent>
-        </Card>
+        {!submitted && (
+          <>
+            <Card className="bg-card/95 backdrop-blur-sm border border-border/70 shadow-lg shadow-black/15 dark:shadow-black/45">
+              <CardHeader className="relative items-center pt-5 pb-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setPublicTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+                  className="absolute right-3 top-16 h-9 w-9 border-border/60 bg-background/80"
+                  aria-label="Alternar tema"
+                >
+                  {publicTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                </Button>
+                <img src="/bandara-logo.png" alt="Bandara Motos" className="h-32 w-auto" />
+                <p className="-mt-3 text-sm font-semibold uppercase tracking-[0.18em] leading-none text-[#C1272D]">AVALIAÇÃO BANDARA MOTOS</p>
+              </CardHeader>
+              <CardContent className="pt-2 pb-4 text-center">
+                <p className="inline-flex flex-wrap items-center justify-center gap-1 rounded-md border border-border/60 bg-muted/40 px-3 py-1.5 text-sm text-zinc-400">
+                  Cliente: <span className="font-medium text-foreground">{order?.client_name || '-'}</span>
+                  <span className="px-2 text-zinc-500">·</span>
+                  Telefone: <span className="font-medium text-foreground">{order?.client_phone || '-'}</span>
+                </p>
+              </CardContent>
+            </Card>
 
-        {(atendimento || mechanic) && (
-          <Card className="border-primary/20 bg-primary/5">
+            {(!isWalkIn || atendimento || mechanic) && (
+          <Card className="shadow-lg shadow-black/20 dark:shadow-black/45">
             <CardContent className="pt-6 space-y-3">
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Você está avaliando:</p>
-              {atendimento && (
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-12 w-12 border-2 border-blue-200">
-                    <AvatarImage src={atendimento.photo_url || undefined} />
-                    <AvatarFallback className="bg-blue-100 text-blue-700 font-semibold">
-                      {atendimento.name?.charAt(0)?.toUpperCase() || '🎤'}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Atendimento no Balcão</p>
-                    <p className="font-medium">{atendimento.name || 'Equipe'}</p>
+              <div className="flex items-center justify-around px-4">
+                {(atendimento || !isWalkIn) && (
+                  <div className="flex flex-col items-center gap-2">
+                    <Avatar className="h-16 w-16 border-2 border-blue-200">
+                      <AvatarImage src={atendimento?.photo_url || undefined} />
+                      <AvatarFallback className="bg-blue-100 text-blue-700 font-semibold text-lg">
+                        {atendimento?.name?.charAt(0)?.toUpperCase() || '🎤'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="text-center">
+                      <p className="text-xs text-muted-foreground">Balconista</p>
+                      <p className="font-medium text-sm">{atendimento?.name || 'Não definido'}</p>
+                    </div>
                   </div>
-                </div>
-              )}
-              {mechanic && (
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-12 w-12 border-2 border-orange-200">
-                    <AvatarImage src={mechanic.photo_url || undefined} />
-                    <AvatarFallback className="bg-orange-100 text-orange-700 font-semibold">
-                      {mechanic.name?.charAt(0)?.toUpperCase() || '🔧'}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Mecânico Responsável</p>
-                    <p className="font-medium">{mechanic.name || 'Oficina'}</p>
+                )}
+                {(mechanic || !isWalkIn) && (
+                  <div className="flex flex-col items-center gap-2">
+                    <Avatar className="h-16 w-16 border-2 border-orange-200">
+                      <AvatarImage src={mechanic?.photo_url || undefined} />
+                      <AvatarFallback className="bg-orange-100 text-orange-700 font-semibold text-lg">
+                        {mechanic?.name?.charAt(0)?.toUpperCase() || '🔧'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="text-center">
+                      <p className="text-xs text-muted-foreground">Mecânico</p>
+                      <p className="font-medium text-sm">{mechanic?.name || 'Não definido'}</p>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </CardContent>
           </Card>
         )}
 
-        <Card>
+        <Card className="border-border/70 shadow-lg shadow-black/20 dark:shadow-black/50">
           <CardContent className="pt-6 space-y-6">
-            {/* DROPDOWN DE SELEÇÃO - Apenas para walk-in sem atendente */}
-            {(() => {
-              const shouldShow = isWalkIn && !atendimento && !mechanic && staffMembers.length > 0;
-              console.log('🔍 Dropdown visibility check:', {
-                isWalkIn,
-                atendimento: !!atendimento,
-                mechanic: !!mechanic,
-                staffCount: staffMembers.length,
-                shouldShow
-              });
-              return shouldShow;
-            })() && (
-              <div className="space-y-3 pb-4 border-b">
-                <p className="font-medium text-base">Quem te atendeu no balcão?</p>
-                <select
-                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                  value={selectedAttendant}
-                  onChange={(e) => setSelectedAttendant(e.target.value)}
-                >
-                  <option value="">Selecione o atendente</option>
-                  {staffMembers.map((m) => (
-                    <option key={`staff-${m.id}`} value={`staff:${m.id}`}>
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            {isWalkIn ? (
+              <>
+                {/* LAYOUT QR CODE (WALK-IN) */}
+                
+                {/* PERGUNTA SE QUER AVALIAR BALCONISTA */}
+                <div className="space-y-3 pb-4 border-b">
+                  <p className="font-medium text-base">Quer avaliar um balconista?</p>
+                  <div className="flex gap-2">
+                    <Button 
+                      type="button" 
+                      variant={wantsAttendantReview === true ? "default" : "outline"}
+                      onClick={() => setWantsAttendantReview(true)}
+                      className="flex-1 shadow-md shadow-black/15 dark:shadow-black/40 border-border/70"
+                    >
+                      {wantsAttendantReview === true && "✓ "}
+                      Sim
+                    </Button>
+                    <Button 
+                      type="button" 
+                      variant={wantsAttendantReview === false ? "default" : "outline"}
+                      onClick={() => {
+                        setWantsAttendantReview(false);
+                        setSelectedAttendant(null);
+                        setAtendimentoRating(0);
+                        setAtendimentoTags([]);
+                      }}
+                      className="flex-1 shadow-md shadow-black/15 dark:shadow-black/40 border-border/70"
+                    >
+                      {wantsAttendantReview === false && "✓ "}
+                      Não
+                    </Button>
+                  </div>
+                </div>
+
+                {/* SELEÇÃO DE BALCONISTA */}
+                {wantsAttendantReview === true && staffMembers.length > 0 && !selectedAttendant && (
+                  <div className="space-y-3 pb-4 border-b">
+                    <p className="font-medium text-base">Quem te atendeu no balcão?</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {staffMembers.map((staff) => {
+                        const isSelected = selectedAttendant === `staff:${staff.id}`;
+                        return (
+                          <button
+                            key={`staff-${staff.id}`}
+                            type="button"
+                            onClick={() => setSelectedAttendant(`staff:${staff.id}`)}
+                            className={cn(
+                              'flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all',
+                              isSelected
+                                ? 'border-primary bg-primary/5 shadow-md'
+                                : 'border-border hover:border-primary/50 hover:bg-muted/50'
+                            )}
+                          >
+                            <Avatar className="h-16 w-16 border-2 border-blue-200">
+                              <AvatarImage src={staff.photo_url || undefined} />
+                              <AvatarFallback className="bg-blue-100 text-blue-700 font-semibold text-lg">
+                                {staff.name?.charAt(0)?.toUpperCase() || '👤'}
+                              </AvatarFallback>
+                            </Avatar>
+                            <p className="text-sm font-medium text-center leading-tight">{staff.name}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* AVALIAÇÃO DO BALCONISTA */}
+                {wantsAttendantReview === true && selectedAttendant && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 pb-2">
+                      <div className="text-lg">🎤</div>
+                      <div>
+                        <p className="text-xs font-medium uppercase text-muted-foreground">Atendimento no Balcão</p>
+                        <p className="font-medium">
+                          {staffMembers.find(s => selectedAttendant === `staff:${s.id}`)?.name || 'Balcão / Loja'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <p className="font-medium text-base">O que achou do nosso atendimento hoje?</p>
+                    <Stars value={atendimentoRating} onChange={setAtendimentoRating} />
+
+                    {atendimentoRating > 0 && (
+                      <TagPills
+                        area="balcao"
+                        score={atendimentoRating}
+                        selected={atendimentoTags}
+                        onToggle={(tag) => toggleTag('atendimento', tag)}
+                      />
+                    )}
+                  </div>
+                )}
+
+                {/* PERGUNTA SE QUER AVALIAR MECÂNICO */}
+                <div className="space-y-3 pt-4 border-t">
+                  <p className="font-medium text-base">Quer avaliar um mecânico também?</p>
+                  <div className="flex gap-2">
+                    <Button 
+                      type="button" 
+                      variant={wantsMechanicReview === true ? "default" : "outline"}
+                      onClick={() => setWantsMechanicReview(true)}
+                      className="flex-1 shadow-md shadow-black/15 dark:shadow-black/40 border-border/70"
+                    >
+                      {wantsMechanicReview === true && "✓ "}
+                      Sim
+                    </Button>
+                    <Button 
+                      type="button" 
+                      variant={wantsMechanicReview === false ? "default" : "outline"}
+                      onClick={() => {
+                        setWantsMechanicReview(false);
+                        setSelectedMechanic(null);
+                        setServicoRating(0);
+                        setServicoTags([]);
+                      }}
+                      className="flex-1 shadow-md shadow-black/15 dark:shadow-black/40 border-border/70"
+                    >
+                      {wantsMechanicReview === false && "✓ "}
+                      Não
+                    </Button>
+                  </div>
+                </div>
+
+                {/* SELEÇÃO DE MECÂNICO */}
+                {wantsMechanicReview === true && mechanics.length > 0 && !selectedMechanic && (
+                  <div className="space-y-3 pt-4 border-t">
+                    <p className="font-medium text-base">Qual mecânico te atendeu?</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {mechanics.map((mec) => {
+                        const isSelected = selectedMechanic === `mechanic:${mec.id}`;
+                        return (
+                          <button
+                            key={`mechanic-${mec.id}`}
+                            type="button"
+                            onClick={() => setSelectedMechanic(`mechanic:${mec.id}`)}
+                            className={cn(
+                              'flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all',
+                              isSelected
+                                ? 'border-primary bg-primary/5 shadow-md'
+                                : 'border-border hover:border-primary/50 hover:bg-muted/50'
+                            )}
+                          >
+                            <Avatar className="h-16 w-16 border-2 border-orange-200">
+                              <AvatarImage src={mec.photo_url || undefined} />
+                              <AvatarFallback className="bg-orange-100 text-orange-700 font-semibold text-lg">
+                                {mec.name?.charAt(0)?.toUpperCase() || '🔧'}
+                              </AvatarFallback>
+                            </Avatar>
+                            <p className="text-sm font-medium text-center leading-tight">{mec.name}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* AVALIAÇÃO DO MECÂNICO */}
+                {wantsMechanicReview === true && selectedMechanic && (
+                  <div className="space-y-3 pt-4 border-t">
+                    <div className="flex items-center gap-2 pb-2">
+                      <div className="text-lg">🔧</div>
+                      <div>
+                        <p className="text-xs font-medium uppercase text-muted-foreground">Serviço na Oficina</p>
+                        <p className="font-medium">
+                          {mechanics.find(m => selectedMechanic === `mechanic:${m.id}`)?.name || 'Mecânico'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <p className="font-medium text-base">Como foi o serviço do mecânico?</p>
+                    <Stars value={servicoRating} onChange={setServicoRating} />
+
+                    {servicoRating > 0 && (
+                      <TagPills
+                        area="oficina"
+                        score={servicoRating}
+                        selected={servicoTags}
+                        onToggle={(tag) => toggleTag('servico', tag)}
+                      />
+                    )}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {/* LAYOUT OS PRONTA */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 pb-2">
+                    <div className="text-lg">🎤</div>
+                    <div>
+                      <p className="text-xs font-medium uppercase text-muted-foreground">Atendimento no Balcão</p>
+                      <p className="font-medium">{atendimento?.name || 'Não informado'}</p>
+                    </div>
+                  </div>
+
+                  <p className="font-medium text-base">
+                    {atendimento?.name
+                      ? `Como foi o atendimento de ${atendimento.name} no balcão?`
+                      : 'Como foi o atendimento no balcão?'}
+                  </p>
+                  <Stars value={atendimentoRating} onChange={setAtendimentoRating} />
+
+                  {atendimentoRating > 0 && (
+                    <TagPills
+                      area="balcao"
+                      score={atendimentoRating}
+                      selected={atendimentoTags}
+                      onToggle={(tag) => toggleTag('atendimento', tag)}
+                    />
+                  )}
+                </div>
+
+                <div className="border-t pt-6" />
+
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 pb-2">
+                    <div className="text-lg">🔧</div>
+                    <div>
+                      <p className="text-xs font-medium uppercase text-muted-foreground">Serviço na Oficina</p>
+                      <p className="font-medium">{mechanic?.name || 'Não informado'}</p>
+                    </div>
+                  </div>
+
+                  <p className="font-medium text-base">
+                    {mechanic?.name
+                      ? `Como ficou o serviço de ${mechanic.name} na sua moto?`
+                      : 'Como ficou o serviço na sua moto?'}
+                  </p>
+                  <Stars value={servicoRating} onChange={setServicoRating} />
+
+                  {servicoRating > 0 && (
+                    <TagPills
+                      area="oficina"
+                      score={servicoRating}
+                      selected={servicoTags}
+                      onToggle={(tag) => toggleTag('servico', tag)}
+                    />
+                  )}
+                </div>
+              </>
             )}
 
-            {/* SEÇÃO BALCÃO */}
-            <div className="space-y-3">
+            {/* AVALIAÇÃO GERAL DA LOJA - sempre visível em ambos os fluxos */}
+            <div className="space-y-3 pt-6 border-t">
               <div className="flex items-center gap-2 pb-2">
-                <div className="text-lg">🎤</div>
+                <div className="text-lg">🏪</div>
                 <div>
-                  <p className="text-xs font-medium uppercase text-muted-foreground">Atendimento no Balcão</p>
-                  <p className="font-medium">{atendimento?.name}</p>
+                  <p className="text-xs font-medium uppercase text-muted-foreground">Experiência Geral</p>
+                  <p className="font-medium">Bandara Motos</p>
                 </div>
               </div>
-              
-              <p className="font-medium text-base">
-                {isWalkIn
-                  ? 'O que achou do nosso atendimento hoje?'
-                  : atendimento?.name 
-                  ? `Como foi o atendimento de ${atendimento.name} no balcão?`
-                  : 'Como foi o atendimento no balcão?'
-                }
-              </p>
-              <Stars value={atendimentoRating} onChange={setAtendimentoRating} />
-              
-              {atendimentoRating > 0 && (
+              <p className="font-medium text-base">Como foi sua experiência na loja?</p>
+              <Stars value={storeRating} onChange={setStoreRating} />
+              {storeRating > 0 && (
                 <TagPills
-                  area="balcao"
-                  score={atendimentoRating}
-                  selected={atendimentoTags}
-                  onToggle={(tag) => toggleTag('atendimento', tag)}
+                  area="store"
+                  score={storeRating}
+                  selected={storeTags}
+                  onToggle={(tag) => toggleTag('store', tag)}
                 />
               )}
             </div>
 
-            {/* DIVISOR VISUAL */}
-            {!isWalkIn && <div className="border-t pt-6" />}
-
-            {/* SEÇÃO OFICINA - Apenas para OS normais, não para walk-in */}
-            {!isWalkIn && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 pb-2">
-                <div className="text-lg">🔧</div>
-                <div>
-                  <p className="text-xs font-medium uppercase text-muted-foreground">Serviço na Oficina</p>
-                  <p className="font-medium">{mechanic?.name}</p>
-                </div>
-              </div>
-              
-              <p className="font-medium text-base">
-                {isWalkIn
-                  ? 'O que achou do nosso serviço hoje?'
-                  : mechanic?.name 
-                  ? `Como ficou o serviço de ${mechanic.name} na sua moto?`
-                  : 'Como ficou o serviço na sua moto?'
-                }
-              </p>
-              <Stars value={servicoRating} onChange={setServicoRating} />
-              
-              {servicoRating > 0 && (
-                <TagPills
-                  area="oficina"
-                  score={servicoRating}
-                  selected={servicoTags}
-                  onToggle={(tag) => toggleTag('servico', tag)}
-                />
-              )}
-            </div>
-            )}
-
-            {/* SEÇÃO FINAL */}
+            {/* SEÇÃO FINAL - sempre visível */}
             <div className="space-y-4 border-t pt-6">
               <div className="space-y-2">
                 <p className="font-medium">Recomendaria a Bandara Motos?</p>
                 <div className="flex gap-2">
-                  <Button type="button" variant={recommends === true ? 'default' : 'outline'} onClick={() => setRecommends(true)}>
+                  <Button
+                    type="button"
+                    variant={recommends === true ? 'default' : 'outline'}
+                    onClick={() => setRecommends(true)}
+                    className="shadow-md shadow-black/15 dark:shadow-black/40 border-border/70"
+                  >
                     Sim
                   </Button>
-                  <Button type="button" variant={recommends === false ? 'default' : 'outline'} onClick={() => setRecommends(false)}>
+                  <Button
+                    type="button"
+                    variant={recommends === false ? 'default' : 'outline'}
+                    onClick={() => setRecommends(false)}
+                    className="shadow-md shadow-black/15 dark:shadow-black/40 border-border/70"
+                  >
                     Não
                   </Button>
                 </div>
@@ -457,6 +781,7 @@ export default function PublicSatisfactionPage() {
                   onChange={(e) => setComment(e.target.value)}
                   placeholder="Escreva um elogio ou ponto de melhoria..."
                   rows={4}
+                  className="shadow-md shadow-black/15 dark:shadow-black/40 border-border/70 bg-background/95"
                 />
               </div>
 
@@ -468,9 +793,11 @@ export default function PublicSatisfactionPage() {
             </div>
           </CardContent>
         </Card>
+          </>
+        )}
 
         {submitted && (
-          <Card className="border-green-200 bg-green-50">
+          <Card className="border-green-200 bg-green-50 shadow-lg shadow-black/20 dark:shadow-black/45">
             <CardContent className="pt-6 space-y-4">
               <div className="text-center space-y-2">
                 <div className="text-5xl">✅</div>
@@ -484,12 +811,12 @@ export default function PublicSatisfactionPage() {
 
               {isHighRating && (
                 <>
-                  <div className="bg-white p-4 rounded-lg border border-green-100">
+                  <div className="bg-white p-4 rounded-lg border border-green-100 shadow-md shadow-black/15">
                     <p className="font-medium text-green-700 mb-2">
                       🎉 Ficamos muito felizes com sua avaliação!
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      O {mechanic?.name || 'mecânico'} vai adorar saber disso. Sua satisfação é o melhor prêmio para nossa equipe!
+                      Nossa equipe vai adorar saber disso. Sua satisfação é o melhor prêmio para nós!
                     </p>
                   </div>
                   <Button

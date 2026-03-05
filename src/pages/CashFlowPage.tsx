@@ -456,7 +456,7 @@ export function CashFlowPage() {
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="max-w-xs"
+              className="max-w-xs bg-muted/50 border-border/50 text-foreground"
             />
             <span className="text-sm text-muted-foreground">
               {formatDisplayDate(selectedDate)}

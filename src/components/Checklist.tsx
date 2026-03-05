@@ -34,33 +34,24 @@ const getItemType = (label: string): 'checkbox' | 'yesno' | 'rating' | 'textarea
 };
 
 const getItemColor = (itemType?: string, completed?: boolean) => {
-  if (completed) return 'bg-green-50 border-green-300';
+  if (completed) return 'glass-card-elevated border-emerald-500/30 bg-emerald-500/5';
   
   switch (itemType) {
     case 'yesno':
-      return 'bg-blue-50 border-blue-300';
+      return 'glass-card border-border/50';
     case 'rating':
-      return 'bg-purple-50 border-purple-300';
+      return 'glass-card border-border/50';
     case 'textarea':
-      return 'bg-amber-50 border-amber-300';
+      return 'glass-card border-border/50';
     default:
-      return 'bg-card border-border';
+      return 'glass-card border-border/50';
   }
 };
 
 const getLabelColor = (itemType?: string, completed?: boolean) => {
-  if (completed) return 'text-green-900';
+  if (completed) return 'text-emerald-400';
   
-  switch (itemType) {
-    case 'yesno':
-      return 'text-blue-900';
-    case 'rating':
-      return 'text-purple-900';
-    case 'textarea':
-      return 'text-amber-900';
-    default:
-      return 'text-foreground';
-  }
+  return 'text-foreground';
 };
 
 export function Checklist({ items, onItemToggle, onRatingChange, onObservationsChange, disabled, orderId = '' }: ChecklistProps) {
@@ -244,7 +235,7 @@ export function Checklist({ items, onItemToggle, onRatingChange, onObservationsC
                       disabled={disabled}
                       className={cn(
                         "h-8 px-3 text-xs font-medium",
-                        item.completed && 'bg-green-600 hover:bg-green-700 text-white'
+                        item.completed && 'bg-emerald-600 hover:bg-emerald-700 text-white'
                       )}
                     >
                       Sim
@@ -388,10 +379,10 @@ export function Checklist({ items, onItemToggle, onRatingChange, onObservationsC
 
       {/* Observações separadas no final */}
       {observationItem && (
-        <div className="pt-4 border-t space-y-2">
+        <div className="pt-4 border-t border-border/30 space-y-2">
           <label 
             htmlFor={observationItem.id}
-            className="text-sm font-medium block text-amber-900"
+            className="text-sm font-medium block text-foreground"
           >
             {observationItem.label}
           </label>
@@ -401,7 +392,7 @@ export function Checklist({ items, onItemToggle, onRatingChange, onObservationsC
             value={observationItem.observations || ''}
             onChange={(e) => onObservationsChange?.(observationItem.id, e.target.value)}
             disabled={disabled}
-            className="resize-none min-h-[120px] bg-amber-50 border-amber-300"
+            className="resize-none min-h-[120px] bg-muted/50 border-border/50 text-foreground"
           />
         </div>
       )}

@@ -12,7 +12,7 @@ export function useTeamMembers() {
       const { data, error } = await supabase
         .from('staff_members')
         .select('*')
-        .eq('active', true)
+        .order('active', { ascending: false })
         .order('name', { ascending: true });
 
       if (error) throw error;
