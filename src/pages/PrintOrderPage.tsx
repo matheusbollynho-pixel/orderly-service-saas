@@ -3,7 +3,9 @@ import { useEffect, useState } from "react"
 import { supabase } from "@/integrations/supabase/client"
 import { NotaBalcao } from "@/components/NotaBalcao"
 import { Button } from "@/components/ui/button"
-import { Printer } from "lucide-react"
+import { Printer, Download, MessageCircle, Loader2 } from "lucide-react"
+import { generateOrderPDFFromNotaBalcao, downloadOrderPDFFromNotaBalcao } from "@/lib/pdfGeneratorNotaBalcao"
+import { sendWhatsAppDocument } from "@/services/whatsappService"
 
 interface ChecklistItem {
   name: string
@@ -57,6 +59,9 @@ export function PrintOrderPage() {
   const [saveToken, setSaveToken] = useState(0)
   const [resetToken, setResetToken] = useState(0)
   const [saveMessage, setSaveMessage] = useState("")
+  const [isDownloading, setIsDownloading] = useState(false)
+  const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false)
+  const [orderData, setOrderData] = useState<any>(null)
 
   useEffect(() => {
     const loadOrder = async () => {
@@ -277,6 +282,13 @@ export function PrintOrderPage() {
           signatureChecklist: (order as any)?.signature_data || null,
           signatureCliente: (order as any)?.delivery_signature_data || null,
         })
+        
+        // Salvar dados da order para download/WhatsApp
+        setOrderData({
+          id: order.id,
+          client_name: order.client_name,
+          client_phone: order.client_phone,
+        })
       } catch (error) {
         console.error("Erro ao carregar OS:", error)
       } finally {
@@ -301,6 +313,55 @@ export function PrintOrderPage() {
     setResetToken((prev) => prev + 1)
     setSaveMessage("Layout resetado.")
     window.setTimeout(() => setSaveMessage(""), 2500)
+  }
+
+  const handleDownloadPDF = async () => {
+    try {
+      setIsDownloading(true)
+      const fileName = `OS-${orderData?.id?.slice(0, 8)?.toUpperCase() || 'DOCUMENTO'}.pdf`
+      await downloadOrderPDFFromNotaBalcao('nota-balcao-print-container', fileName)
+      setSaveMessage("PDF baixado com sucesso!")
+      window.setTimeout(() => setSaveMessage(""), 2500)
+    } catch (error: any) {
+      console.error('Erro ao baixar PDF:', error)
+      alert('Erro ao gerar PDF. Tente novamente.')
+    } finally {
+      setIsDownloading(false)
+    }
+  }
+
+  const handleSendWhatsApp = async () => {
+    try {
+      if (!orderData?.client_phone) {
+        alert('Telefone do cliente não encontrado.')
+        return
+      }
+
+      setIsSendingWhatsApp(true)
+      const fileName = `OS-${orderData?.id?.slice(0, 8)?.toUpperCase() || 'DOCUMENTO'}.pdf`
+      const { base64 } = await generateOrderPDFFromNotaBalcao('nota-balcao-print-container', fileName)
+      
+      const cleanPhone = orderData.client_phone.replace(/\D/g, '')
+      if (cleanPhone.length < 10 || cleanPhone.length > 11) {
+        alert('Telefone do cliente inválido para WhatsApp.')
+        return
+      }
+
+      await sendWhatsAppDocument({
+        phone: cleanPhone,
+        base64,
+        fileName,
+        caption: `Olá, ${orderData.client_name}! Sua Ordem de Serviço está pronta. Segue em anexo. Obrigado pela preferência!`,
+      })
+
+      setSaveMessage("PDF enviado via WhatsApp com sucesso!")
+      window.setTimeout(() => setSaveMessage(""), 2500)
+    } catch (error: any) {
+      console.error('Erro ao enviar WhatsApp:', error)
+      alert(error.message || 'Erro ao enviar PDF. Tente novamente.')
+    } finally {
+      setIsSendingWhatsApp(false)
+    }
   }
 
   if (loading) {
@@ -351,6 +412,34 @@ export function PrintOrderPage() {
             </Button>
 
             <Button
+              onClick={handleDownloadPDF}
+              variant="outline"
+              disabled={isDownloading}
+              className="gap-2"
+            >
+              {isDownloading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              Baixar PDF
+            </Button>
+
+            <Button
+              onClick={handleSendWhatsApp}
+              variant="outline"
+              disabled={isSendingWhatsApp}
+              className="gap-2"
+            >
+              {isSendingWhatsApp ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <MessageCircle className="w-4 h-4" />
+              )}
+              WhatsApp
+            </Button>
+
+            <Button
               onClick={handlePrint}
               className="gap-2 bg-[#C1272D] hover:bg-[#a02024] text-white"
             >
@@ -368,13 +457,15 @@ export function PrintOrderPage() {
 
       {/* Área de pré-visualização */}
       <div className="py-8 print:py-0">
-        <NotaBalcao
-          data={notaData}
-          editable={editMode}
-          saveToken={saveToken}
-          resetToken={resetToken}
-          layoutStorageKey="nota-balcao-layout-v1"
-        />
+        <div id="nota-balcao-print-container">
+          <NotaBalcao
+            data={notaData}
+            editable={editMode}
+            saveToken={saveToken}
+            resetToken={resetToken}
+            layoutStorageKey="nota-balcao-layout-v1"
+          />
+        </div>
       </div>
 
       {/* Estilos de impressão */}

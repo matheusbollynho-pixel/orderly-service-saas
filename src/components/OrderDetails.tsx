@@ -40,6 +40,7 @@ import { useMechanics } from '@/hooks/useMechanics';
 import { useClients } from '@/hooks/useClients';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
 import { generateOrderPDFBase64, generateOrderPDF } from '@/lib/pdfGenerator';
+import { generateOrderPDFFromNotaBalcao, downloadOrderPDFFromNotaBalcao } from '@/lib/pdfGeneratorNotaBalcao';
 import { sendWhatsAppDocument, sendWhatsAppText } from '@/lib/whatsappService';
 
 import { formatDistanceToNow, format } from 'date-fns';
