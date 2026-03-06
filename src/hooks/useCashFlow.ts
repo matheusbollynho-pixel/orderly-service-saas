@@ -94,10 +94,10 @@ export function useCashFlow(selectedDate?: string) {
         retiradas,
       } as CashFlowSummary;
     },
-    gcTime: 0,
-    staleTime: 0,
-    refetchInterval: 4000,
-    refetchOnWindowFocus: true,
+    gcTime: 5 * 60 * 1000, // 5 minutos
+    staleTime: 30 * 1000, // 30 segundos - sync entre dispositivos
+    refetchInterval: 20000, // 20 segundos - balanceado
+    refetchOnWindowFocus: true, // Atualiza ao trocar de aba
     refetchOnReconnect: true,
   });
 
@@ -309,8 +309,10 @@ export function useCashFlowPeriod(period: 'week' | 'month', selectedMonth?: stri
         retiradas,
       } as CashFlowPeriodSummary;
     },
-    refetchInterval: 4000,
-    refetchOnWindowFocus: true,
+    staleTime: 30 * 1000, // 30 segundos - sync entre dispositivos
+    gcTime: 5 * 60 * 1000, // 5 minutos
+    refetchInterval: 20000, // 20 segundos - balanceado
+    refetchOnWindowFocus: true, // Atualiza ao trocar de aba
     refetchOnReconnect: true,
   });
 

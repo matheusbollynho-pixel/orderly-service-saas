@@ -34,7 +34,10 @@ import {
   UserCheck,
   Calendar,
   Eye,
-  EyeOff
+  EyeOff,
+  Edit2,
+  Save,
+  X
 } from 'lucide-react';
 import { useMechanics } from '@/hooks/useMechanics';
 import { useClients } from '@/hooks/useClients';
@@ -115,6 +118,8 @@ export function OrderDetails({
   );
   const [isSendingPDF, setIsSendingPDF] = useState(false);
   const [isSendingText, setIsSendingText] = useState(false);
+  const [isEditingServicesTodo, setIsEditingServicesTodo] = useState(false);
+  const [editedServicesTodo, setEditedServicesTodo] = useState(order.problem_description || '');
 
   // Sincronizar com dados da OS
   useEffect(() => {
@@ -122,6 +127,7 @@ export function OrderDetails({
     setTermsAccepted(order.terms_accepted === true);
     setDeliveryTermsAccepted(order.delivery_terms_accepted === true);
     setDeliverySignatureData(order.delivery_signature_data ?? null);
+    setEditedServicesTodo(order.problem_description || '');
     // Se tem assinatura, vai para materiais
     if (order.signature_data) {
       setActiveTab('materiais');
@@ -223,6 +229,24 @@ export function OrderDetails({
   
   const [exitDate, setExitDate] = useState(formatDateToInput(order.exit_date));
   const [showExitDateEditor, setShowExitDateEditor] = useState(false);
+
+  // Função para salvar a edição do campo "O que fazer"
+  const handleSaveServicesTodo = () => {
+    if (onUpdateOrder && order.id) {
+      onUpdateOrder({
+        id: order.id,
+        problem_description: editedServicesTodo,
+      });
+      setIsEditingServicesTodo(false);
+      alert('✅ Descrição do serviço atualizada com sucesso!');
+    }
+  };
+
+  // Função para cancelar a edição
+  const handleCancelEditServicesTodo = () => {
+    setEditedServicesTodo(order.problem_description || '');
+    setIsEditingServicesTodo(false);
+  };
   const [paymentForm, setPaymentForm] = useState<{ amount: string; discount_amount: string; method: PaymentMethod; notes: string; finalized_by_staff_id: string }>(() => ({
     amount: '',
     discount_amount: '',
@@ -1237,9 +1261,58 @@ export function OrderDetails({
           
           <div className="flex items-start gap-3">
             <FileText className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-xs text-muted-foreground">O que fazer na moto?</p>
-              <p className="text-sm text-foreground">{order.problem_description?.split('\n\nRetirada:')[0] || order.problem_description}</p>
+            <div className="flex-1">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-xs text-muted-foreground">O que fazer na moto?</p>
+                {!isEditingServicesTodo ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2"
+                    onClick={() => setIsEditingServicesTodo(true)}
+                  >
+                    <Edit2 className="h-3.5 w-3.5 mr-1" />
+                    Editar
+                  </Button>
+                ) : (
+                  <div className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-green-600 hover:text-green-700"
+                      onClick={handleSaveServicesTodo}
+                      disabled={isUpdating}
+                    >
+                      {isUpdating ? (
+                        <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                      ) : (
+                        <Save className="h-3.5 w-3.5 mr-1" />
+                      )}
+                      Salvar
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2"
+                      onClick={handleCancelEditServicesTodo}
+                    >
+                      <X className="h-3.5 w-3.5 mr-1" />
+                      Cancelar
+                    </Button>
+                  </div>
+                )}
+              </div>
+              {isEditingServicesTodo ? (
+                <Textarea
+                  value={editedServicesTodo}
+                  onChange={(e) => setEditedServicesTodo(e.target.value)}
+                  placeholder="Descreva o que fazer na moto"
+                  rows={4}
+                  className="mt-2"
+                />
+              ) : (
+                <p className="text-sm text-foreground">{order.problem_description?.split('\n\nRetirada:')[0] || order.problem_description}</p>
+              )}
             </div>
           </div>
         </CardContent>

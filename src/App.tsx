@@ -19,6 +19,7 @@ import { DebugOrderPage } from "./pages/DebugOrderPage";
 import { useAuth } from "./hooks/useAuth";
 import { useEffect } from "react";
 import { cleanupOldPhotos } from "./lib/photoService";
+import { useLocalSync } from "./hooks/useLocalSync";
 
 console.log('📦 App.tsx importado');
 
@@ -26,7 +27,9 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
-      refetchOnWindowFocus: false,
+      refetchOnWindowFocus: true, // Sincroniza ao voltar para a aba
+      staleTime: 2 * 60 * 1000, // 2 minutos - balanceado para sync
+      gcTime: 10 * 60 * 1000, // 10 minutos - mantém cache em memória
     },
   },
 });
@@ -105,6 +108,18 @@ function AuthenticatedApp() {
 }
 
 const App = () => {
+  
+  // Inicializar sistema de sincronização local
+  const { status: syncStatus } = useLocalSync();
+  
+  useEffect(() => {
+    if (syncStatus.isReady) {
+      console.log('✅ Sistema de sincronização local ativo');
+      console.log('📡 Broadcast Channel:', syncStatus.broadcastChannelActive ? 'Ativo' : 'Inativo');
+      console.log('⚙️ Service Worker:', syncStatus.serviceWorkerActive ? 'Ativo' : 'Inativo');
+    }
+  }, [syncStatus]);
+  
   console.log('🎨 App renderizando');
   return (
     <ThemeProvider>

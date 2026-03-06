@@ -21,7 +21,7 @@ export function useRealtimeSync() {
           queryClient.invalidateQueries({ queryKey: ['cash-flow-summary'] });
           queryClient.invalidateQueries({ queryKey: ['cash-flow-period'] });
         }
-      }, 250);
+      }, 300); // 300ms - rápido para sync entre dispositivos
     };
 
     const channel = supabase

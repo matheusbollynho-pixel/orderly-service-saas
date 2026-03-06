@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { ServiceOrder, ChecklistItem, OrderStatus, DEFAULT_CHECKLIST_ITEMS } from '@/types/service-order';
 import { toast } from 'sonner';
@@ -10,31 +9,8 @@ const QR_PLACEHOLDER_EQUIPMENT = '__QR_WALKIN_PLACEHOLDER__';
 export function useServiceOrders() {
   const queryClient = useQueryClient();
 
-  // ============ REALTIME SUBSCRIPTION ============
-  useEffect(() => {
-    // Escutar mudanças em tempo real na tabela service_orders
-    const subscription = supabase
-      .channel('realtime:service_orders')
-      .on(
-        'postgres_changes',
-        {
-          event: '*', // INSERT, UPDATE, DELETE
-          schema: 'public',
-          table: 'service_orders',
-        },
-        (payload) => {
-          console.log('📡 Mudança em tempo real detectada:', payload);
-          // Invalidar cache para refetch automático
-          queryClient.invalidateQueries({ queryKey: ['service-orders'] });
-        }
-      )
-      .subscribe();
-
-    // Cleanup: unsubscribe ao desmontar
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [queryClient]);
+  // NOTA: Realtime sync está centralizado em useRealtimeSync para melhor performance
+  // Removido daqui para evitar subscriptions duplicadas
 
   const ordersQuery = useQuery({
     queryKey: ['service-orders'],
@@ -89,10 +65,11 @@ export function useServiceOrders() {
         };
       }) as ServiceOrder[];
     },
-    // Otimizações de performance
-    staleTime: 30000, // Considera dados "frescos" por 30 segundos
-    refetchInterval: 15000, // Refetch apenas a cada 15 segundos (reduzido de 4s)
-    refetchOnWindowFocus: true,
+    // Otimizações balanceadas (performance + sync entre dispositivos)
+    staleTime: 30 * 1000, // 30s - atualiza rápido entre dispositivos
+    gcTime: 5 * 60 * 1000, // 5 minutos - mantém cache
+    refetchInterval: 20000, // 20 segundos - sync rápida
+    refetchOnWindowFocus: true, // Atualiza ao trocar de aba
     refetchOnReconnect: true,
     // Retry apenas 1 vez em caso de erro
     retry: 1,
