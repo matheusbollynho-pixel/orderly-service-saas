@@ -303,12 +303,24 @@ export function PrintOrderPage() {
 
   // Detectar se veio de redirect e auto-executar ação
   useEffect(() => {
+    console.log('[PrintOrderPage] Auto-action useEffect triggered', {
+      loading,
+      hasNotaData: !!notaData,
+      sendWhatsApp: location.state?.sendWhatsApp,
+      autoDownload: location.state?.autoDownload,
+      isSendingWhatsApp,
+      isDownloading,
+      autoAction
+    });
+    
     if (!loading && notaData && location.state?.sendWhatsApp && !isSendingWhatsApp && autoAction !== 'whatsapp') {
+      console.log('[PrintOrderPage] Triggering auto WhatsApp send');
       setAutoAction('whatsapp')
       setTimeout(() => {
         handleSendWhatsApp()
       }, 500)
     } else if (!loading && notaData && location.state?.autoDownload && !isDownloading && autoAction !== 'download') {
+      console.log('[PrintOrderPage] Triggering auto download');
       setAutoAction('download')
       setTimeout(() => {
         handleDownloadPDF()
@@ -333,14 +345,17 @@ export function PrintOrderPage() {
   }
 
   const handleDownloadPDF = async () => {
+    console.log('[PrintOrderPage] handleDownloadPDF called');
     try {
       setIsDownloading(true)
       const fileName = `OS-${orderData?.id?.slice(0, 8)?.toUpperCase() || 'DOCUMENTO'}.pdf`
+      console.log('[PrintOrderPage] Downloading:', fileName);
       await downloadOrderPDFFromNotaBalcao('nota-balcao-print-container', fileName)
       setSaveMessage("PDF baixado com sucesso!")
       window.setTimeout(() => setSaveMessage(""), 2500)
+      console.log('[PrintOrderPage] Download completed');
     } catch (error: any) {
-      console.error('Erro ao baixar PDF:', error)
+      console.error('[PrintOrderPage] Erro ao baixar PDF:', error)
       alert('Erro ao gerar PDF. Tente novamente.')
     } finally {
       setIsDownloading(false)
@@ -348,22 +363,27 @@ export function PrintOrderPage() {
   }
 
   const handleSendWhatsApp = async () => {
+    console.log('[PrintOrderPage] handleSendWhatsApp called');
     try {
       if (!orderData?.client_phone) {
+        console.warn('[PrintOrderPage] Phone not found');
         alert('Telefone do cliente não encontrado.')
         return
       }
 
       setIsSendingWhatsApp(true)
       const fileName = `OS-${orderData?.id?.slice(0, 8)?.toUpperCase() || 'DOCUMENTO'}.pdf`
+      console.log('[PrintOrderPage] Generating PDF for WhatsApp:', fileName);
       const { base64 } = await generateOrderPDFFromNotaBalcao('nota-balcao-print-container', fileName)
       
       const cleanPhone = orderData.client_phone.replace(/\D/g, '')
       if (cleanPhone.length < 10 || cleanPhone.length > 11) {
+        console.warn('[PrintOrderPage] Invalid phone:', cleanPhone);
         alert('Telefone do cliente inválido para WhatsApp.')
         return
       }
 
+      console.log('[PrintOrderPage] Sending via WhatsApp to:', cleanPhone);
       await sendWhatsAppDocument({
         phone: cleanPhone,
         base64,
@@ -373,8 +393,9 @@ export function PrintOrderPage() {
 
       setSaveMessage("PDF enviado via WhatsApp com sucesso!")
       window.setTimeout(() => setSaveMessage(""), 2500)
+      console.log('[PrintOrderPage] WhatsApp send completed');
     } catch (error: any) {
-      console.error('Erro ao enviar WhatsApp:', error)
+      console.error('[PrintOrderPage] Erro ao enviar WhatsApp:', error)
       alert(error.message || 'Erro ao enviar PDF. Tente novamente.')
     } finally {
       setIsSendingWhatsApp(false)

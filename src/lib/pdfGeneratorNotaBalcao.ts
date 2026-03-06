@@ -11,11 +11,14 @@ export async function generateOrderPDFFromNotaBalcao(
   fileName: string = 'ordem-servico.pdf'
 ): Promise<{ fileName: string; base64: string }> {
   try {
+    console.log(`[pdfGenerator] Procurando elemento com ID: ${elementId}`);
     const element = document.getElementById(elementId);
     if (!element) {
+      console.error(`[pdfGenerator] Elemento não encontrado: ${elementId}`);
       throw new Error(`Elemento com ID "${elementId}" não encontrado`);
     }
 
+    console.log('[pdfGenerator] Elemento encontrado, iniciando html2canvas...');
     // Capturar elemento como canvas
     const canvas = await html2canvas(element, {
       scale: 2,
@@ -23,6 +26,7 @@ export async function generateOrderPDFFromNotaBalcao(
       logging: false,
       backgroundColor: '#ffffff',
     });
+    console.log('[pdfGenerator] html2canvas concluído com sucesso');
 
     // Criar PDF a partir do canvas
     const imgData = canvas.toDataURL('image/png');
@@ -53,13 +57,14 @@ export async function generateOrderPDFFromNotaBalcao(
 
     // Gerar base64
     const base64 = pdf.output('datauristring').split(',')[1];
+    console.log(`[pdfGenerator] PDF gerado com sucesso. Base64 length: ${base64.length}`);
 
     return {
       fileName,
       base64,
     };
   } catch (error) {
-    console.error('Erro ao gerar PDF do NotaBalcao:', error);
+    console.error('[pdfGenerator] Erro ao gerar PDF do NotaBalcao:', error);
     throw new Error('Falha ao gerar PDF. Tente novamente.');
   }
 }
@@ -72,11 +77,13 @@ export async function downloadOrderPDFFromNotaBalcao(
   fileName: string = 'ordem-servico.pdf'
 ): Promise<void> {
   try {
+    console.log('[pdfGenerator] Iniciando download de PDF');
     const { fileName: finalName, base64 } = await generateOrderPDFFromNotaBalcao(
       elementId,
       fileName
     );
 
+    console.log('[pdfGenerator] Criando link de download');
     // Criar link de download
     const link = document.createElement('a');
     link.href = `data:application/pdf;base64,${base64}`;
@@ -84,8 +91,9 @@ export async function downloadOrderPDFFromNotaBalcao(
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    console.log('[pdfGenerator] Download iniciado com sucesso');
   } catch (error) {
-    console.error('Erro ao fazer download:', error);
+    console.error('[pdfGenerator] Erro ao fazer download:', error);
     throw error;
   }
 }
