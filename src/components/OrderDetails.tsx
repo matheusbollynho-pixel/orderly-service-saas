@@ -1,5 +1,4 @@
 import { useRef, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { ServiceOrder, OrderStatus, STATUS_LABELS, PaymentMethod } from '@/types/service-order';
 import { StatusBadge } from './StatusBadge';
 import { Checklist } from './Checklist';
@@ -41,7 +40,6 @@ import { useMechanics } from '@/hooks/useMechanics';
 import { useClients } from '@/hooks/useClients';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
 import { generateOrderPDFBase64, generateOrderPDF } from '@/lib/pdfGenerator';
-import { generateOrderPDFFromNotaBalcao, downloadOrderPDFFromNotaBalcao } from '@/lib/pdfGeneratorNotaBalcao';
 import { sendWhatsAppDocument, sendWhatsAppText } from '@/lib/whatsappService';
 
 import { formatDistanceToNow, format } from 'date-fns';
@@ -430,9 +428,35 @@ export function OrderDetails({
       alert('É necessário coletar a assinatura do cliente antes de enviar o PDF.');
       return;
     }
-    // Para enviar pelo WhatsApp com novo PDF, redirecionar para página de impressão
-    // Passar um estado indicando que deve enviar via WhatsApp após renderizar
-    navigate(`/print/${order.id}`, { state: { sendWhatsApp: true, clientPhone: order.client_phone, clientName: order.client_name } });
+    
+    try {
+      setIsSendingPDF(true)
+      
+      // Gerar PDF a partir do gerador antigo
+      const base64 = await generateOrderPDFBase64(order)
+      
+      const cleanPhone = order.client_phone?.replace(/\D/g, '') || ''
+      if (cleanPhone.length < 10 || cleanPhone.length > 11) {
+        alert('Telefone do cliente inválido para WhatsApp.')
+        return
+      }
+
+      const fileName = `OS-${order.id?.slice(0, 8)?.toUpperCase() || 'DOCUMENTO'}.pdf`
+      
+      await sendWhatsAppDocument({
+        phone: cleanPhone,
+        base64,
+        fileName,
+        caption: `Olá, ${order.client_name}! Sua Ordem de Serviço está pronta. Segue em anexo. Obrigado pela preferência!`,
+      })
+
+      alert('✅ PDF enviado para WhatsApp com sucesso!')
+    } catch (error: any) {
+      console.error('Erro ao enviar WhatsApp:', error)
+      alert(error.message || 'Erro ao enviar PDF. Tente novamente.')
+    } finally {
+      setIsSendingPDF(false)
+    }
   };
 
   const handleSignatureSave = (signature: string) => {
@@ -478,13 +502,20 @@ export function OrderDetails({
     }
   };
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     if (!order.signature_data) {
       alert('É necessário coletar a assinatura do cliente antes de gerar o PDF.');
       return;
     }
-    // Redirecionar para página de impressão para usar o novo PDF com NotaBalcao
-    navigate(`/print/${order.id}`);
+    
+    try {
+      // Usar o gerador antigo que já funciona bem
+      await generateOrderPDF(order)
+      alert('✅ PDF baixado com sucesso!')
+    } catch (error: any) {
+      console.error('Erro ao baixar PDF:', error)
+      alert('Erro ao gerar PDF. Tente novamente.')
+    }
   };
 
   const renderSignatureSection = () => (
