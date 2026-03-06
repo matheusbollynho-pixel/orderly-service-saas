@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom"
+import { useParams, useLocation } from "react-router-dom"
 import { useEffect, useState } from "react"
 import { supabase } from "@/integrations/supabase/client"
 import { NotaBalcao } from "@/components/NotaBalcao"
@@ -53,6 +53,7 @@ interface NotaBalcaoData {
 
 export function PrintOrderPage() {
   const { id } = useParams<{ id: string }>()
+  const location = useLocation()
   const [loading, setLoading] = useState(true)
   const [notaData, setNotaData] = useState<NotaBalcaoData | null>(null)
   const [editMode, setEditMode] = useState(false)
@@ -62,6 +63,7 @@ export function PrintOrderPage() {
   const [isDownloading, setIsDownloading] = useState(false)
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false)
   const [orderData, setOrderData] = useState<any>(null)
+  const [autoAction, setAutoAction] = useState<'download' | 'whatsapp' | null>(null)
 
   useEffect(() => {
     const loadOrder = async () => {
@@ -298,6 +300,21 @@ export function PrintOrderPage() {
 
     loadOrder()
   }, [id])
+
+  // Detectar se veio de redirect e auto-executar ação
+  useEffect(() => {
+    if (!loading && notaData && location.state?.sendWhatsApp && !isSendingWhatsApp && autoAction !== 'whatsapp') {
+      setAutoAction('whatsapp')
+      setTimeout(() => {
+        handleSendWhatsApp()
+      }, 500)
+    } else if (!loading && notaData && location.state?.autoDownload && !isDownloading && autoAction !== 'download') {
+      setAutoAction('download')
+      setTimeout(() => {
+        handleDownloadPDF()
+      }, 500)
+    }
+  }, [loading, notaData, location.state?.sendWhatsApp, location.state?.autoDownload, isSendingWhatsApp, isDownloading, autoAction])
 
   const handlePrint = () => {
     window.print()

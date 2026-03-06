@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ServiceOrder, OrderStatus, STATUS_LABELS, PaymentMethod } from '@/types/service-order';
 import { StatusBadge } from './StatusBadge';
 import { Checklist } from './Checklist';
@@ -428,30 +429,10 @@ export function OrderDetails({
       alert('É necessário coletar a assinatura do cliente antes de enviar o PDF.');
       return;
     }
-    const cleanPhone = order.client_phone?.replace(/\D/g, '') || '';
-    if (cleanPhone.length < 10 || cleanPhone.length > 11) {
-      alert('Telefone do cliente inválido para WhatsApp.');
-      return;
-    }
-
-    try {
-      setIsSendingPDF(true);
-      const { fileName, base64 } = generateOrderPDFBase64(order);
-      
-      await sendWhatsAppDocument({
-        phone: cleanPhone,
-        base64,
-        fileName,
-        caption: `Olá, ${order.client_name}! Ótima notícia: sua moto está pronta. Segue o PDF com itens e serviços. Muito obrigado pela preferência!`,
-      });
-
-      alert('✅ PDF enviado com sucesso via WhatsApp!');
-    } catch (error: any) {
-      console.error('Erro ao enviar PDF:', error);
-      alert(error.message || 'Erro ao enviar o PDF. Tente novamente.');
-    } finally {
-      setIsSendingPDF(false);
-    }
+    // Para enviar pelo WhatsApp com novo PDF, redirecionar para página de impressão
+    const navigate = useNavigate();
+    // Passar um estado indicando que deve enviar via WhatsApp após renderizar
+    navigate(`/print/${order.id}`, { state: { sendWhatsApp: true, clientPhone: order.client_phone, clientName: order.client_name } });
   };
 
   const handleSignatureSave = (signature: string) => {
@@ -498,16 +479,13 @@ export function OrderDetails({
   };
 
   const handleDownloadPDF = () => {
+    const navigate = useNavigate();
     if (!order.signature_data) {
       alert('É necessário coletar a assinatura do cliente antes de gerar o PDF.');
       return;
     }
-    try {
-      generateOrderPDF(order);
-    } catch (error: any) {
-      console.error('Erro ao baixar PDF:', error);
-      alert('Erro ao gerar PDF. Tente novamente.');
-    }
+    // Redirecionar para página de impressão para usar o novo PDF com NotaBalcao
+    navigate(`/print/${order.id}`);
   };
 
   const renderSignatureSection = () => (
