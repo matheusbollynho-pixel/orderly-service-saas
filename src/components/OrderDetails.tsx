@@ -1480,31 +1480,43 @@ export function OrderDetails({
       <div id="nota-balcao-print-container" style={{ display: 'none' }}>
         <NotaBalcao
           data={{
-            client: {
-              name: order.client_name || '',
-              email: order.client_email || '',
-              phone: order.client_phone || '',
-              city: order.client_city || '',
-              address: order.client_address || '',
+            osId: order.id || '',
+            dataEntrada: order.created_at ? new Date(order.created_at).toLocaleDateString('pt-BR') : '',
+            dataConclusao: order.updated_at ? new Date(order.updated_at).toLocaleDateString('pt-BR') : '',
+            cliente: {
+              nome: order.client_name || '',
+              telefone: order.client_phone || '',
+              endereco: order.client_address || '',
             },
-            vehicle: {
-              brand: order.vehicle_brand || '',
-              model: order.vehicle_model || '',
-              year: order.vehicle_year || 0,
-              plate: order.vehicle_plate || '',
-              color: order.vehicle_color || '',
-              equipment: order.vehicle_equipment || '',
-              km: order.km || 0,
+            veiculo: {
+              marca: order.vehicle_brand || '',
+              modelo: order.vehicle_model || '',
+              ano: String(order.vehicle_year || ''),
+              cor: order.vehicle_color || '',
+              placa: order.vehicle_plate || '',
+              km: String(order.km || 0),
             },
-            checklist: order.checklist_items || [],
-            services: order.materials || [],
-            totals: {
-              subtotal: order.subtotal || 0,
-              discount: order.discount_amount || 0,
-              total: order.total || 0,
-            },
-            observation: order.observation || '',
-            status: order.status,
+            checklist: (order.checklist_items || []).map((item: any) => ({
+              name: item.name || '',
+              checked: item.completed || false,
+              rating: item.rating,
+            })),
+            observacoesChecklist: '',
+            servicosRealizar: order.observation || '',
+            retiradaInfo: '',
+            itens: (order.materials || []).map((item: any) => ({
+              description: item.description || '',
+              quantity: item.quantity || 0,
+              unitPrice: item.unit_price || 0,
+              total: (item.quantity || 0) * (item.unit_price || 0),
+            })),
+            subtotal: order.subtotal || 0,
+            desconto: order.discount_amount || 0,
+            totalPago: order.total || 0,
+            observacaoPagamento: '',
+            status: order.status || '',
+            signatureChecklist: order.signature_data || null,
+            signatureCliente: order.signature_data || null,
           }}
         />
       </div>
