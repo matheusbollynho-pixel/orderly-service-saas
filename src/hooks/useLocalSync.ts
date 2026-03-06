@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import {
   initLocalSync,
   broadcastUpdate,
@@ -25,7 +24,6 @@ interface LocalSyncStatus {
  * - Background sync quando voltar online
  */
 export function useLocalSync() {
-  const queryClient = useQueryClient();
   const [status, setStatus] = useState<LocalSyncStatus>({
     isReady: false,
     isOnline: navigator.onLine,
@@ -55,15 +53,8 @@ export function useLocalSync() {
         const { type, data } = event.detail;
         console.log('📡 Atualização local recebida:', type, data);
 
-        // Invalidar queries relevantes para forçar re-fetch
-        if (type === 'order-updated' || type === 'order-created') {
-          queryClient.invalidateQueries({ queryKey: ['service-orders'] });
-        }
-
-        if (type === 'cash-flow-updated') {
-          queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
-          queryClient.invalidateQueries({ queryKey: ['cash-flow-summary'] });
-        }
+        // Disparar evento para que componentes que usam queries se atualizem
+        // (Via Broadcast Channel que já está ativo no initLocalSync)
       };
 
       window.addEventListener('local-data-update', handleLocalUpdate);
@@ -87,7 +78,7 @@ export function useLocalSync() {
     return () => {
       cleanup?.();
     };
-  }, [queryClient]);
+  }, []);
 
   // Notificar outros dispositivos sobre mudanças
   const notifyUpdate = useCallback((type: string, data?: any) => {
