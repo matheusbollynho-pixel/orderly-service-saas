@@ -1477,7 +1477,18 @@ export function OrderDetails({
       </div>
 
       {/* NotaBalcao renderizada escondida para geração de PDF */}
-      <div id="nota-balcao-print-container" style={{ display: 'none' }}>
+      <div 
+        id="nota-balcao-print-container" 
+        style={{ 
+          position: 'absolute',
+          left: '-9999px',
+          top: '0',
+          width: '210mm',
+          minHeight: '297mm',
+          backgroundColor: 'white',
+          visibility: 'hidden'
+        }}
+      >
         <NotaBalcao
           data={{
             osId: order.id || '',

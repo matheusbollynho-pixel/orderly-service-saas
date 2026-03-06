@@ -28,6 +28,14 @@ export async function generateOrderPDFFromNotaBalcao(
     });
     console.log('[pdfGenerator v2] html2canvas concluído com sucesso');
 
+    // Validar dimensões do canvas
+    if (!canvas || canvas.width === 0 || canvas.height === 0) {
+      console.error('[pdfGenerator v2] Canvas inválido:', { width: canvas?.width, height: canvas?.height });
+      throw new Error('Elemento não possui dimensões válidas para gerar PDF');
+    }
+
+    console.log('[pdfGenerator v2] Canvas válido:', { width: canvas.width, height: canvas.height });
+
     // Converter canvas para JPEG (mais compatível que PNG com jsPDF)
     const imgData = canvas.toDataURL('image/jpeg', 0.95);
     const pdf = new jsPDF({
