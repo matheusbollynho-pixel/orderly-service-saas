@@ -431,8 +431,8 @@ export function OrderDetails({
     try {
       setIsSendingPDF(true)
       
-      // Gerar PDF a partir do gerador antigo
-      const base64 = await generateOrderPDFBase64(order)
+      // Gerar PDF e extrair base64 do objeto retornado
+      const pdfData = generateOrderPDFBase64(order)
       
       const cleanPhone = order.client_phone?.replace(/\D/g, '') || ''
       if (cleanPhone.length < 10 || cleanPhone.length > 11) {
@@ -440,12 +440,10 @@ export function OrderDetails({
         return
       }
 
-      const fileName = `OS-${order.id?.slice(0, 8)?.toUpperCase() || 'DOCUMENTO'}.pdf`
-      
       await sendWhatsAppDocument({
         phone: cleanPhone,
-        base64,
-        fileName,
+        base64: pdfData.base64,
+        fileName: pdfData.fileName,
         caption: `Olá, ${order.client_name}! Sua Ordem de Serviço está pronta. Segue em anexo. Obrigado pela preferência!`,
       })
 
