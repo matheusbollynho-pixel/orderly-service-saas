@@ -148,6 +148,12 @@ export async function uploadBase64PdfToSupabaseStorage(
   fileName: string,
   bucket = 'public-files' // criar bucket público ou configurar políticas de acesso
 ): Promise<string> {
+  // Validação: garantir que recebemos uma string
+  if (typeof base64Data !== 'string') {
+    console.error('❌ base64Data não é uma string:', typeof base64Data, base64Data);
+    throw new Error(`Base64 inválido: esperado string, recebido ${typeof base64Data}`);
+  }
+
   if (!base64Data.startsWith('data:')) {
     // assumir apenas base64 puro sem prefixo data:
     base64Data = `data:application/pdf;base64,${base64Data}`;
