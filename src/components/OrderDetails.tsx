@@ -101,7 +101,6 @@ export function OrderDetails({
   isAdmin = false,
   canAccessPayments = true,
 }: OrderDetailsProps) {
-  const navigate = useNavigate();
   const { members: teamMembers } = useTeamMembers();
   const { mechanics } = useMechanics();
   const { getClientById, getMotorcycleById, updateClientById, updateMotorcycleById } = useClients();
