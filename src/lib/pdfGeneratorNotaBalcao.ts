@@ -11,14 +11,14 @@ export async function generateOrderPDFFromNotaBalcao(
   fileName: string = 'ordem-servico.pdf'
 ): Promise<{ fileName: string; base64: string }> {
   try {
-    console.log(`[pdfGenerator] Procurando elemento com ID: ${elementId}`);
+    console.log(`[pdfGenerator v2] Procurando elemento com ID: ${elementId}`);
     const element = document.getElementById(elementId);
     if (!element) {
-      console.error(`[pdfGenerator] Elemento não encontrado: ${elementId}`);
+      console.error(`[pdfGenerator v2] Elemento não encontrado: ${elementId}`);
       throw new Error(`Elemento com ID "${elementId}" não encontrado`);
     }
 
-    console.log('[pdfGenerator] Elemento encontrado, iniciando html2canvas...');
+    console.log('[pdfGenerator v2] Elemento encontrado, iniciando html2canvas...');
     // Capturar elemento como canvas
     const canvas = await html2canvas(element, {
       scale: 2,
@@ -26,7 +26,7 @@ export async function generateOrderPDFFromNotaBalcao(
       logging: false,
       backgroundColor: '#ffffff',
     });
-    console.log('[pdfGenerator] html2canvas concluído com sucesso');
+    console.log('[pdfGenerator v2] html2canvas concluído com sucesso');
 
     // Converter canvas para JPEG (mais compatível que PNG com jsPDF)
     const imgData = canvas.toDataURL('image/jpeg', 0.95);
@@ -57,14 +57,14 @@ export async function generateOrderPDFFromNotaBalcao(
 
     // Gerar base64
     const base64 = pdf.output('datauristring').split(',')[1];
-    console.log(`[pdfGenerator] PDF gerado com sucesso. Base64 length: ${base64.length}`);
+    console.log(`[pdfGenerator v2] PDF gerado com sucesso. Base64 length: ${base64.length}`);
 
     return {
       fileName,
       base64,
     };
   } catch (error) {
-    console.error('[pdfGenerator] Erro ao gerar PDF do NotaBalcao:', error);
+    console.error('[pdfGenerator v2] Erro ao gerar PDF do NotaBalcao:', error);
     throw new Error('Falha ao gerar PDF. Tente novamente.');
   }
 }
@@ -77,13 +77,13 @@ export async function downloadOrderPDFFromNotaBalcao(
   fileName: string = 'ordem-servico.pdf'
 ): Promise<void> {
   try {
-    console.log('[pdfGenerator] Iniciando download de PDF');
+    console.log('[pdfGenerator v2] Iniciando download de PDF');
     const { fileName: finalName, base64 } = await generateOrderPDFFromNotaBalcao(
       elementId,
       fileName
     );
 
-    console.log('[pdfGenerator] Criando link de download');
+    console.log('[pdfGenerator v2] Criando link de download');
     // Criar link de download
     const link = document.createElement('a');
     link.href = `data:application/pdf;base64,${base64}`;
