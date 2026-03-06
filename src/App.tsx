@@ -107,9 +107,8 @@ function AuthenticatedApp() {
   );
 }
 
-const App = () => {
-  
-  // Inicializar sistema de sincronização local
+function AppContent() {
+  // Inicializar sistema de sincronização local (dentro do QueryClientProvider)
   const { status: syncStatus } = useLocalSync();
   
   useEffect(() => {
@@ -119,7 +118,11 @@ const App = () => {
       console.log('⚙️ Service Worker:', syncStatus.serviceWorkerActive ? 'Ativo' : 'Inativo');
     }
   }, [syncStatus]);
-  
+
+  return <AppRoutes />;
+}
+
+const App = () => {
   console.log('🎨 App renderizando');
   return (
     <ThemeProvider>
@@ -129,7 +132,7 @@ const App = () => {
             <Toaster />
             <Sonner />
             <BrowserRouter>
-              <AppRoutes />
+              <AppContent />
             </BrowserRouter>
           </TooltipProvider>
         </QueryClientProvider>
