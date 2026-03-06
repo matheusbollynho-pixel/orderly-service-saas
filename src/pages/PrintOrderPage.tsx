@@ -64,6 +64,7 @@ export function PrintOrderPage() {
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false)
   const [orderData, setOrderData] = useState<any>(null)
   const [autoAction, setAutoAction] = useState<'download' | 'whatsapp' | null>(null)
+  const [autoActionExecuted, setAutoActionExecuted] = useState(false)
 
   useEffect(() => {
     const loadOrder = async () => {
@@ -377,37 +378,49 @@ export function PrintOrderPage() {
 
   // Detectar se veio de redirect e auto-executar ação
   useEffect(() => {
-    if (!loading && notaData && location.state?.sendWhatsApp && autoAction !== 'whatsapp') {
+    if (!loading && notaData && location.state?.sendWhatsApp && !autoActionExecuted) {
       console.log('[PrintOrderPage] Triggering auto WhatsApp send');
       setAutoAction('whatsapp')
+      setAutoActionExecuted(true)
     }
-  }, [loading, notaData, location.state?.sendWhatsApp, autoAction])
+  }, [loading, notaData, location.state?.sendWhatsApp, autoActionExecuted])
 
   useEffect(() => {
-    if (!loading && notaData && location.state?.autoDownload && autoAction !== 'download') {
+    if (!loading && notaData && location.state?.autoDownload && !autoActionExecuted) {
       console.log('[PrintOrderPage] Triggering auto download');
       setAutoAction('download')
+      setAutoActionExecuted(true)
     }
-  }, [loading, notaData, location.state?.autoDownload, autoAction])
+  }, [loading, notaData, location.state?.autoDownload, autoActionExecuted])
 
   // Executar ações quando autoAction muda
   useEffect(() => {
-    if (autoAction === 'whatsapp' && !isSendingWhatsApp) {
+    if (autoAction === 'whatsapp' && !isSendingWhatsApp && autoActionExecuted) {
       const timer = setTimeout(() => {
         handleSendWhatsApp()
+          .finally(() => {
+            // Resetar após conclusão
+            setAutoAction(null)
+            setAutoActionExecuted(false)
+          })
       }, 500)
       return () => clearTimeout(timer)
     }
-  }, [autoAction, handleSendWhatsApp, isSendingWhatsApp])
+  }, [autoAction, handleSendWhatsApp, isSendingWhatsApp, autoActionExecuted])
 
   useEffect(() => {
-    if (autoAction === 'download' && !isDownloading) {
+    if (autoAction === 'download' && !isDownloading && autoActionExecuted) {
       const timer = setTimeout(() => {
         handleDownloadPDF()
+          .finally(() => {
+            // Resetar após conclusão
+            setAutoAction(null)
+            setAutoActionExecuted(false)
+          })
       }, 500)
       return () => clearTimeout(timer)
     }
-  }, [autoAction, handleDownloadPDF, isDownloading])
+  }, [autoAction, handleDownloadPDF, isDownloading, autoActionExecuted])
 
   if (loading) {
     return (
