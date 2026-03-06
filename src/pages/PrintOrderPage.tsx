@@ -1,5 +1,5 @@
 import { useParams, useLocation } from "react-router-dom"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { supabase } from "@/integrations/supabase/client"
 import { NotaBalcao } from "@/components/NotaBalcao"
 import { Button } from "@/components/ui/button"
@@ -303,30 +303,37 @@ export function PrintOrderPage() {
 
   // Detectar se veio de redirect e auto-executar ação
   useEffect(() => {
-    console.log('[PrintOrderPage] Auto-action useEffect triggered', {
-      loading,
-      hasNotaData: !!notaData,
-      sendWhatsApp: location.state?.sendWhatsApp,
-      autoDownload: location.state?.autoDownload,
-      isSendingWhatsApp,
-      isDownloading,
-      autoAction
-    });
-    
-    if (!loading && notaData && location.state?.sendWhatsApp && !isSendingWhatsApp && autoAction !== 'whatsapp') {
+    if (!loading && notaData && location.state?.sendWhatsApp && autoAction !== 'whatsapp') {
       console.log('[PrintOrderPage] Triggering auto WhatsApp send');
       setAutoAction('whatsapp')
-      setTimeout(() => {
-        handleSendWhatsApp()
-      }, 500)
-    } else if (!loading && notaData && location.state?.autoDownload && !isDownloading && autoAction !== 'download') {
+    }
+  }, [loading, notaData, location.state?.sendWhatsApp, autoAction])
+
+  useEffect(() => {
+    if (!loading && notaData && location.state?.autoDownload && autoAction !== 'download') {
       console.log('[PrintOrderPage] Triggering auto download');
       setAutoAction('download')
-      setTimeout(() => {
+    }
+  }, [loading, notaData, location.state?.autoDownload, autoAction])
+
+  // Executar ações quando autoAction muda
+  useEffect(() => {
+    if (autoAction === 'whatsapp' && !isSendingWhatsApp) {
+      const timer = setTimeout(() => {
+        handleSendWhatsApp()
+      }, 500)
+      return () => clearTimeout(timer)
+    }
+  }, [autoAction, handleSendWhatsApp, isSendingWhatsApp])
+
+  useEffect(() => {
+    if (autoAction === 'download' && !isDownloading) {
+      const timer = setTimeout(() => {
         handleDownloadPDF()
       }, 500)
+      return () => clearTimeout(timer)
     }
-  }, [loading, notaData, location.state?.sendWhatsApp, location.state?.autoDownload, isSendingWhatsApp, isDownloading, autoAction])
+  }, [autoAction, handleDownloadPDF, isDownloading])
 
   const handlePrint = () => {
     window.print()
@@ -344,7 +351,7 @@ export function PrintOrderPage() {
     window.setTimeout(() => setSaveMessage(""), 2500)
   }
 
-  const handleDownloadPDF = async () => {
+  const handleDownloadPDF = useCallback(async () => {
     console.log('[PrintOrderPage] handleDownloadPDF called');
     try {
       setIsDownloading(true)
@@ -360,9 +367,9 @@ export function PrintOrderPage() {
     } finally {
       setIsDownloading(false)
     }
-  }
+  }, [orderData?.id])
 
-  const handleSendWhatsApp = async () => {
+  const handleSendWhatsApp = useCallback(async () => {
     console.log('[PrintOrderPage] handleSendWhatsApp called');
     try {
       if (!orderData?.client_phone) {
@@ -400,7 +407,7 @@ export function PrintOrderPage() {
     } finally {
       setIsSendingWhatsApp(false)
     }
-  }
+  }, [orderData?.client_phone, orderData?.client_name, orderData?.id])
 
   if (loading) {
     return (
