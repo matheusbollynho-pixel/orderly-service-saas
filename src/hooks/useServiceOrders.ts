@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { ServiceOrder, ChecklistItem, OrderStatus, DEFAULT_CHECKLIST_ITEMS } from '@/types/service-order';
 import { toast } from 'sonner';
@@ -9,11 +10,39 @@ const QR_PLACEHOLDER_EQUIPMENT = '__QR_WALKIN_PLACEHOLDER__';
 export function useServiceOrders() {
   const queryClient = useQueryClient();
 
+  // ============ REALTIME SUBSCRIPTION ============
+  useEffect(() => {
+    // Escutar mudanças em tempo real na tabela service_orders
+    const subscription = supabase
+      .channel('realtime:service_orders')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'service_orders',
+        },
+        (payload) => {
+          console.log('📡 Mudança em tempo real detectada:', payload);
+          // Invalidar cache para refetch automático
+          queryClient.invalidateQueries({ queryKey: ['service-orders'] });
+        }
+      )
+      .subscribe();
+
+    // Cleanup: unsubscribe ao desmontar
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [queryClient]);
+
   const ordersQuery = useQuery({
     queryKey: ['service-orders'],
     queryFn: async () => {
       let data: any[] | null = null;
 
+      // Otimização: buscar apenas as últimas 10 OS (as mais usadas)
+      // Usuários buscam por filtro para ordens mais antigas
       const fullQuery = await supabase
         .from('service_orders')
         .select(`
@@ -23,15 +52,18 @@ export function useServiceOrders() {
           payments (*),
           clients:client_id (autoriza_lembretes, autoriza_instagram)
         `)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(10);
 
       if (fullQuery.error) {
         console.error('❌ Erro na query completa de ordens. Aplicando fallback simples:', fullQuery.error);
 
+        // Fallback: buscar apenas dados básicos
         const fallbackQuery = await supabase
           .from('service_orders')
           .select('*')
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
+          .limit(10);
 
         if (fallbackQuery.error) throw fallbackQuery.error;
         data = fallbackQuery.data as any[];
@@ -57,10 +89,14 @@ export function useServiceOrders() {
         };
       }) as ServiceOrder[];
     },
-    // Fallback para manter celular/PC sincronizados mesmo sem evento realtime
-    refetchInterval: 4000,
+    // Otimizações de performance
+    staleTime: 30000, // Considera dados "frescos" por 30 segundos
+    refetchInterval: 15000, // Refetch apenas a cada 15 segundos (reduzido de 4s)
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
+    // Retry apenas 1 vez em caso de erro
+    retry: 1,
+    retryDelay: 1000,
   });
 
   const createOrderMutation = useMutation({
@@ -132,10 +168,13 @@ export function useServiceOrders() {
 
   const updateOrderMutation = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<ServiceOrder> & { id: string }) => {
-      // Filtrar campos que pertencem à tabela clients, não a service_orders
-      const clientFields = ['autoriza_lembretes', 'autoriza_instagram'];
+      // Filtrar campos que não pertencem à tabela service_orders
+      const nonServiceOrderFields = [
+        'autoriza_lembretes',
+        'autoriza_instagram',
+      ];
       const serviceOrderUpdates = Object.fromEntries(
-        Object.entries(updates).filter(([key]) => !clientFields.includes(key))
+        Object.entries(updates).filter(([key]) => !nonServiceOrderFields.includes(key))
       );
 
       // Se não há campos para atualizar em service_orders, apenas retornar

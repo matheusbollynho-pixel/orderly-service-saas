@@ -297,7 +297,7 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting }: { onSubmit: any;
             <div key={index} className="border rounded-xl p-6 space-y-4 bg-card shadow-sm">
               <div className="flex justify-between items-center">
                 <h3 className="text-xl font-semibold">Moto {index + 1}</h3>
-                {index > 0 && <Button type="button" variant="ghost" size="sm" onClick={() => {
+                {formData.motos.length > 1 && <Button type="button" variant="ghost" size="sm" onClick={() => {
                   const newMotos = formData.motos.filter((_, i) => i !== index);
                   setFormData({ ...formData, motos: newMotos.length ? newMotos : [formData.motos[0]] });
                 }}>Remover</Button>}

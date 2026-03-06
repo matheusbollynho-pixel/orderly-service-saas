@@ -106,22 +106,36 @@ export function OrderDetails({
   const { getClientById, getMotorcycleById, updateClientById, updateMotorcycleById } = useClients();
   const printRef = useRef<HTMLDivElement>(null);
   const [showSignature, setShowSignature] = useState(false);
+  const [showDeliverySignature, setShowDeliverySignature] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(order.terms_accepted ?? false);
-  const [activeTab, setActiveTab] = useState<'checklist' | 'materiais'>('checklist');
+  const [deliveryTermsAccepted, setDeliveryTermsAccepted] = useState(order.delivery_terms_accepted ?? false);
+  const [deliverySignatureData, setDeliverySignatureData] = useState(order.delivery_signature_data ?? null);
+  const [activeTab, setActiveTab] = useState<'checklist' | 'materiais'>(
+    order.signature_data ? 'materiais' : 'checklist'
+  );
   const [isSendingPDF, setIsSendingPDF] = useState(false);
   const [isSendingText, setIsSendingText] = useState(false);
 
   // Sincronizar com dados da OS
   useEffect(() => {
-    console.log('🔄 Sincronizando termsAccepted:', order.terms_accepted, 'para order:', order.id);
-    console.log('📋 Order completo:', order);
-    setTermsAccepted(order.terms_accepted === true); // Garantir que é boolean true/false
-  }, [order.id, order.terms_accepted]);
+    console.log('🔄 Sincronizando dados da OS:', order.id);
+    setTermsAccepted(order.terms_accepted === true);
+    setDeliveryTermsAccepted(order.delivery_terms_accepted === true);
+    setDeliverySignatureData(order.delivery_signature_data ?? null);
+    // Se tem assinatura, vai para materiais
+    if (order.signature_data) {
+      setActiveTab('materiais');
+    }
+  }, [order.id, order.terms_accepted, order.delivery_terms_accepted, order.delivery_signature_data, order.signature_data]);
 
   // Função para atualizar termsAccepted e salvar no Supabase
   const handleTermsChange = (checked: boolean) => {
     console.log('✅ Termos alterados para:', checked);
     setTermsAccepted(checked);
+    // Abrir automaticamente a janela de assinatura quando aceitar os termos
+    if (checked) {
+      setShowSignature(true);
+    }
     // Salvar os termos no banco de dados (se o campo existir)
     if (onUpdateOrder && order.id) {
       try {
@@ -137,6 +151,43 @@ export function OrderDetails({
       }
     }
   };
+
+  // Função para atualizar deliveryTermsAccepted e salvar no Supabase
+  const handleDeliveryTermsChange = (checked: boolean) => {
+    console.log('✅ Termos de entrega alterados para:', checked);
+    setDeliveryTermsAccepted(checked);
+    if (checked) {
+      setShowDeliverySignature(true);
+    }
+    if (onUpdateOrder && order.id) {
+      try {
+        onUpdateOrder({
+          id: order.id,
+          delivery_terms_accepted: checked,
+        });
+      } catch (e) {
+        console.warn('❌ Não foi possível salvar delivery_terms_accepted:', e);
+      }
+    }
+  };
+
+  // Função para salvar assinatura de entrega
+  const handleDeliverySignatureSave = (signature: string) => {
+    console.log('✅ Assinatura de entrega coletada');
+    setDeliverySignatureData(signature);
+    setShowDeliverySignature(false);
+    if (onUpdateOrder && order.id) {
+      try {
+        onUpdateOrder({
+          id: order.id,
+          delivery_signature_data: signature,
+        });
+      } catch (e) {
+        console.warn('❌ Não foi possível salvar delivery_signature_data:', e);
+      }
+    }
+  };
+
   const [usarAutorizacao, setUsarAutorizacao] = useState<boolean>(() => {
     const retiradaInfo = order.problem_description?.match(/Retirada: (.+?)(?:\n|$)/)?.[1] || 'Cliente';
     return retiradaInfo !== 'Cliente';
@@ -180,7 +231,7 @@ export function OrderDetails({
     finalized_by_staff_id: '',
   }));
   const [showFullClient, setShowFullClient] = useState(false);
-  const [autorizaInstagram, setAutorizaInstagram] = useState(order.autoriza_instagram !== false ? true : false);
+  const [autorizaInstagram, setAutorizaInstagram] = useState(!!order.autoriza_instagram);
   const [autorizaLembretes, setAutorizaLembretes] = useState(order.autoriza_lembretes !== false ? true : false);
   const isExpress = (order.problem_description || '').toLowerCase().includes('cadastro express');
   const stripExpressMarker = (text?: string | null) =>
@@ -202,7 +253,7 @@ export function OrderDetails({
   const [expressClientCpf, setExpressClientCpf] = useState(order.client_cpf || '');
   const [expressClientApelido, setExpressClientApelido] = useState(order.client_apelido || '');
   const [expressClientInstagram, setExpressClientInstagram] = useState(order.client_instagram || '');
-  const [expressClientAutorizaInstagram, setExpressClientAutorizaInstagram] = useState(order.autoriza_instagram !== false ? true : false);
+  const [expressClientAutorizaInstagram, setExpressClientAutorizaInstagram] = useState(!!order.autoriza_instagram);
   const [expressClientAutorizaLembretes, setExpressClientAutorizaLembretes] = useState(order.autoriza_lembretes !== false ? true : false);
   const [expressClientBirthDate, setExpressClientBirthDate] = useState(formatDateToInput(order.client_birth_date || null));
   const [expressMotoPlaca, setExpressMotoPlaca] = useState('');
@@ -238,7 +289,7 @@ export function OrderDetails({
   useEffect(() => {
     setExitDate(formatDateToInput(order.exit_date));
     setShowExitDateEditor(false);
-    setAutorizaInstagram(order.autoriza_instagram !== false ? true : false);
+    setAutorizaInstagram(!!order.autoriza_instagram);
     setAutorizaLembretes(order.autoriza_lembretes !== false ? true : false);
   }, [order.id, order.exit_date, order.autoriza_instagram, order.autoriza_lembretes]);
 
@@ -409,6 +460,8 @@ export function OrderDetails({
     }
     onSignatureSave(signature);
     setShowSignature(false);
+    // Mudar para aba de Peças e Serviços após salvar assinatura
+    setActiveTab('materiais');
   };
 
   const handleSendWhatsAppTest = async () => {
@@ -455,6 +508,130 @@ export function OrderDetails({
       alert('Erro ao gerar PDF. Tente novamente.');
     }
   };
+
+  const renderSignatureSection = () => (
+    <div className="space-y-3 pt-4 border-t border-border/50 mt-4">
+      <h3 className="font-semibold text-foreground text-base">📋 Inspeção do Veículo</h3>
+      
+      <div className="rounded-lg border border-border/50 p-3 bg-muted/20">
+        <div className="flex items-start gap-3">
+          <Checkbox
+            id="terms-checkbox"
+            checked={termsAccepted}
+            onCheckedChange={handleTermsChange}
+            className="mt-1"
+          />
+          <label htmlFor="terms-checkbox" className="text-sm text-foreground leading-relaxed cursor-pointer">
+            <span className="font-semibold">Declaro que o checklist de inspeção do veículo foi realizado e conferido no ato do atendimento, estando ciente das condições registradas e autorizando a execução dos serviços descritos nesta Ordem de Serviço.</span> Estou ciente do prazo de até 30 dias para retirada da motocicleta após a conclusão do serviço. Após esse período, será cobrada taxa de estadia no valor de R$ 6,00 por dia. O não comparecimento para retirada poderá caracterizar abandono do veículo, nos termos da legislação vigente.
+          </label>
+        </div>
+      </div>
+
+      <p className="text-xs text-muted-foreground text-center">
+        Após 90 dias sem retirada e sem contato do proprietário, o veículo poderá ser considerado abandonado.
+      </p>
+
+      {termsAccepted && (
+        <>
+          {showSignature ? (
+            <SignaturePad
+              onSave={handleSignatureSave}
+              initialValue={order.signature_data}
+            />
+          ) : order.signature_data ? (
+            <>
+              <label className="text-sm font-medium text-foreground">Assinatura do Cliente</label>
+              <div className="rounded-lg border border-border overflow-hidden bg-white">
+                <img
+                  src={order.signature_data}
+                  alt="Assinatura do cliente"
+                  className="w-full h-32 object-contain"
+                />
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowSignature(true)}
+                className="w-full"
+              >
+                Nova Assinatura
+              </Button>
+            </>
+          ) : (
+            <Button
+              variant="outline"
+              onClick={() => setShowSignature(true)}
+              className="w-full"
+            >
+              Coletar Assinatura
+            </Button>
+          )}
+        </>
+      )}
+    </div>
+  );
+
+  const renderDeliverySection = () => (
+    <div className="space-y-3 pt-4 border-t border-border/50 mt-4">
+      <h3 className="font-semibold text-foreground text-base">📋 Termo de Entrega do Veículo</h3>
+      
+      <div className="rounded-lg border border-border/50 p-3 bg-muted/20">
+        <div className="flex items-start gap-3">
+          <Checkbox
+            id="delivery-terms-checkbox"
+            checked={deliveryTermsAccepted}
+            onCheckedChange={handleDeliveryTermsChange}
+            className="mt-1"
+          />
+          <label htmlFor="delivery-terms-checkbox" className="text-sm text-foreground leading-relaxed cursor-pointer">
+            <span className="font-semibold">Declaro que recebi nesta data a motocicleta referente a esta Ordem de Serviço, após a execução dos serviços descritos.</span> Confirmo que o veículo foi entregue, conferido e encontra-se em condições de uso, não constatando irregularidades aparentes no ato da entrega.
+          </label>
+        </div>
+      </div>
+
+      <label className="text-sm font-medium text-foreground">Assinatura do Cliente (Entrega)</label>
+      {showDeliverySignature ? (
+        <SignaturePad
+          onSave={handleDeliverySignatureSave}
+          initialValue={deliverySignatureData}
+        />
+      ) : deliverySignatureData ? (
+        <>
+          <div className="rounded-lg border border-border overflow-hidden bg-white">
+            <img
+              src={deliverySignatureData}
+              alt="Assinatura de entrega do cliente"
+              className="w-full h-32 object-contain"
+            />
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowDeliverySignature(true)}
+            className="w-full"
+          >
+            Nova Assinatura de Entrega
+          </Button>
+        </>
+      ) : (
+        <Button
+          variant="outline"
+          onClick={() => {
+            if (!deliveryTermsAccepted) {
+              alert('Por favor, confirme que leu e concorda com o termo de entrega do veículo antes de coletar a assinatura.');
+              return;
+            }
+            setShowDeliverySignature(true);
+          }}
+          disabled={!deliveryTermsAccepted}
+          className="w-full"
+          title={!deliveryTermsAccepted ? 'É necessário aceitar o termo de entrega antes de assinar' : ''}
+        >
+          Coletar Assinatura de Entrega
+        </Button>
+      )}
+    </div>
+  );
 
   return (
     <>
@@ -543,7 +720,7 @@ export function OrderDetails({
 
                   onStatusChange(value as OrderStatus);
                 }}
-                disabled={isUpdating}
+                disabled={isUpdating || order.status === 'concluida'}
               >
                 <SelectTrigger className="w-[140px] h-8 text-sm">
                   <SelectValue />
@@ -554,6 +731,9 @@ export function OrderDetails({
                   <SelectItem value="concluida">Concluída</SelectItem>
                 </SelectContent>
               </Select>
+              {order.status === 'concluida' && (
+                <span className="text-xs text-emerald-600 font-medium">✓ Finalizada</span>
+              )}
             </div>
           </div>
           <div className="flex items-center justify-between gap-3">
@@ -1086,6 +1266,7 @@ export function OrderDetails({
                     orderId={order.id}
                   />
                 )}
+                {renderSignatureSection()}
               </TabsContent>
             ) : null}
 
@@ -1099,6 +1280,14 @@ export function OrderDetails({
           </Tabs>
         </CardContent>
       </Card>
+
+      {isExpress && !showCompleteForm && (
+        <Card className="card-elevated">
+          <CardContent className="p-4">
+            {renderSignatureSection()}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Pagamentos */}
       {canAccessPayments !== false && (
@@ -1217,71 +1406,16 @@ export function OrderDetails({
       </Card>
       )}
 
-      {/* Termos da Ordem de Serviço */}
-      <Card className="card-elevated glass-card-elevated border-border/50">
-        <CardContent className="p-4">
-          <div className="flex items-start gap-3">
-            <Checkbox
-              id="terms-checkbox"
-              checked={termsAccepted}
-              onCheckedChange={handleTermsChange}
-              className="mt-1"
-            />
-            <label htmlFor="terms-checkbox" className="text-sm text-foreground leading-relaxed cursor-pointer">
-              <span className="font-semibold">Declaro que li e concordo com os termos da Ordem de Serviço</span>, incluindo o prazo de 30 dias para retirada da motocicleta e a taxa de estadia de R$ 6,00 por dia após esse prazo.
-            </label>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Termo de Entrega do Veículo */}
+      {canAccessPayments && (
+        <Card className="card-elevated">
+          <CardContent className="p-4">
+            {renderDeliverySection()}
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Signature */}
-      <Card className="card-elevated">
-        <CardContent className="p-4">
-          {order.signature_data ? (
-            <div className="space-y-3">
-              <label className="text-sm font-medium text-foreground">
-                Assinatura do Cliente
-              </label>
-              <div className="rounded-lg border border-border overflow-hidden bg-white">
-                <img 
-                  src={order.signature_data} 
-                  alt="Assinatura do cliente" 
-                  className="w-full h-32 object-contain"
-                />
-              </div>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => setShowSignature(true)}
-                className="w-full"
-              >
-                Nova Assinatura
-              </Button>
-            </div>
-          ) : showSignature ? (
-            <SignaturePad 
-              onSave={handleSignatureSave}
-              initialValue={order.signature_data}
-            />
-          ) : (
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                if (!termsAccepted) {
-                  alert('Por favor, confirme que leu e concorda com os termos da Ordem de Serviço antes de coletar a assinatura.');
-                  return;
-                }
-                setShowSignature(true);
-              }}
-              disabled={!termsAccepted}
-              className="w-full"
-              title={!termsAccepted ? 'É necessário aceitar os termos antes de assinar' : ''}
-            >
-              Coletar Assinatura
-            </Button>
-          )}
-        </CardContent>
-      </Card>
+      {/* Termos incorporados à seção de assinatura */}
 
       </div>
 

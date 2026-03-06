@@ -170,8 +170,8 @@ export function MaintenanceKeywordsManager() {
 
       {/* Form para adicionar ou editar */}
       {(isAdding || editing) && (
-        <div className="bg-blue-50 p-6 rounded-lg border border-blue-200 space-y-4">
-          <h3 className="font-semibold text-lg">
+        <div className="bg-blue-500/10 dark:bg-blue-500/20 p-6 rounded-lg border border-blue-500/30 space-y-4">
+          <h3 className="font-semibold text-lg text-foreground">
             {editing ? 'Editar Palavra-chave' : 'Adicionar Nova Palavra-chave'}
           </h3>
 
@@ -231,7 +231,7 @@ export function MaintenanceKeywordsManager() {
               placeholder="Use {days} e {keyword} como variáveis"
               rows={3}
             />
-            <p className="text-xs text-gray-600 mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               Variáveis: {`{days}`} = dias desde serviço, {`{keyword}`} = nome da
               palavra-chave
             </p>
@@ -254,31 +254,31 @@ export function MaintenanceKeywordsManager() {
       {/* Lista de keywords */}
       <div className="grid gap-4">
         {filteredKeywords.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
+          <div className="text-center py-8 text-muted-foreground">
             {keywords.length === 0 ? 'Nenhuma palavra-chave cadastrada' : 'Nenhuma palavra-chave encontrada'}
           </div>
         ) : (
           filteredKeywords.map((keyword) => (
             <div
               key={keyword.id}
-              className="bg-white p-4 rounded-lg border border-gray-200 flex justify-between items-start"
+              className="bg-card border border-border/50 p-4 rounded-lg flex justify-between items-start"
             >
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-lg">{keyword.keyword}</h3>
+                  <h3 className="font-bold text-lg text-foreground">{keyword.keyword}</h3>
                   {!keyword.enabled && (
-                    <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded">
+                    <span className="bg-red-500/10 dark:bg-red-500/20 text-red-600 dark:text-red-400 text-xs px-2 py-1 rounded">
                       Desativado
                     </span>
                   )}
                 </div>
-                <p className="text-sm text-gray-600 mt-1">
+                <p className="text-sm text-muted-foreground mt-1">
                   {keyword.description}
                 </p>
-                <p className="text-sm text-blue-600 mt-2">
+                <p className="text-sm text-blue-600 dark:text-blue-400 mt-2">
                   ⏱️ Lembrete após {keyword.reminder_days} dias
                 </p>
-                <p className="text-xs text-gray-500 mt-2 italic">
+                <p className="text-xs text-muted-foreground mt-2 italic">
                   "{keyword.reminder_message}"
                 </p>
               </div>

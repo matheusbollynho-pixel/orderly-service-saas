@@ -255,20 +255,23 @@ export function Checklist({ items, onItemToggle, onRatingChange, onObservationsC
                     </Button>
                   </div>
                 ) : itemType === 'rating' ? (
-                  <div className="flex gap-1">
+                  <div className="flex gap-1" key={`rating-${item.id}-${item.rating}`}>
                     {[1, 2, 3, 4, 5].map((star) => (
                       <button
-                        key={star}
-                        onClick={() => onRatingChange?.(item.id, star)}
+                        key={`star-${star}`}
+                        onClick={() => {
+                          console.log(`⭐ Clicou em estrela ${star} para item ${item.id}, rating atual: ${item.rating}`);
+                          onRatingChange?.(item.id, star);
+                        }}
                         disabled={disabled}
-                        className="transition-transform hover:scale-110"
+                        className="transition-transform hover:scale-110 cursor-pointer"
                       >
                         <Star
                           className={cn(
                             "h-5 w-5",
                             (item.rating ?? 0) >= star
                               ? 'fill-yellow-400 text-yellow-400'
-                              : 'text-gray-300'
+                              : 'text-muted-foreground'
                           )}
                         />
                       </button>
@@ -380,12 +383,53 @@ export function Checklist({ items, onItemToggle, onRatingChange, onObservationsC
       {/* Observações separadas no final */}
       {observationItem && (
         <div className="pt-4 border-t border-border/30 space-y-2">
-          <label 
-            htmlFor={observationItem.id}
-            className="text-sm font-medium block text-foreground"
-          >
-            {observationItem.label}
-          </label>
+          <div className="flex items-center justify-between gap-2">
+            <label 
+              htmlFor={observationItem.id}
+              className="text-sm font-medium block text-foreground"
+            >
+              {observationItem.label}
+            </label>
+
+            {!disabled && (
+              <label className="cursor-pointer">
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  capture="environment"
+                  onChange={(e) => {
+                    const files = e.currentTarget.files;
+                    if (files) {
+                      Array.from(files).forEach((file) => {
+                        handleGeneralPhotoUpload(file);
+                      });
+                    }
+                  }}
+                  className="hidden"
+                  disabled={uploadingGeneral}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="gap-2"
+                  disabled={uploadingGeneral}
+                  asChild
+                >
+                  <span>
+                    {uploadingGeneral ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <ImageIcon className="h-4 w-4" />
+                    )}
+                    📸 Adicionar Fotos
+                  </span>
+                </Button>
+              </label>
+            )}
+          </div>
+
           <Textarea
             id={observationItem.id}
             placeholder="Digite suas observações aqui..."
@@ -394,11 +438,39 @@ export function Checklist({ items, onItemToggle, onRatingChange, onObservationsC
             disabled={disabled}
             className="resize-none min-h-[120px] bg-muted/50 border-border/50 text-foreground"
           />
+
+          {generalPhotos.length > 0 && (
+            <div className="grid grid-cols-3 gap-2 pt-2">
+              {generalPhotos.map((photo) => (
+                <div key={photo.id} className="relative group">
+                  <img
+                    src={photo.photo_url}
+                    alt="Foto da ordem"
+                    className="w-full h-24 object-cover rounded-md border border-border cursor-pointer hover:opacity-90 transition-opacity"
+                    onClick={() => window.open(photo.photo_url, '_blank')}
+                  />
+                  {!disabled && (
+                    <button
+                      onClick={() => handleDeletePhoto(photo.id, photo.storage_path, 'geral')}
+                      disabled={deletingPhotoId === photo.id}
+                      className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                    >
+                      {deletingPhotoId === photo.id ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <X className="h-3 w-3" />
+                      )}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {/* Fotos Gerais da Ordem */}
-      {!disabled && (
+      {!observationItem && !disabled && (
         <div className="pt-4 border-t space-y-3">
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium text-foreground">

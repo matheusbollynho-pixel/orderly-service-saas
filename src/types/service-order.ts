@@ -60,6 +60,8 @@ export interface ServiceOrder {
   status: OrderStatus;
   signature_data: string | null;
   terms_accepted?: boolean; // Se aceitou os termos da OS
+  delivery_terms_accepted?: boolean;
+  delivery_signature_data?: string | null;
   entry_date?: string;
   exit_date?: string | null;
   created_at: string;

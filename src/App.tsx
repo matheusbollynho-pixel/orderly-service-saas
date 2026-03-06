@@ -14,6 +14,8 @@ import { CashFlowPage } from "./pages/CashFlowPage";
 import PublicSatisfactionPage from "./pages/PublicSatisfactionPage";
 import PublicStoreSatisfactionPage from "./pages/PublicStoreSatisfactionPage";
 import PublicSatisfactionFeedPage from "./pages/PublicSatisfactionFeedPage";
+import { PrintOrderPage } from "./pages/PrintOrderPage";
+import { DebugOrderPage } from "./pages/DebugOrderPage";
 import { useAuth } from "./hooks/useAuth";
 import { useEffect } from "react";
 import { cleanupOldPhotos } from "./lib/photoService";
@@ -95,6 +97,8 @@ function AuthenticatedApp() {
       <Route path="/" element={<Index />} />
       <Route path="/pos-venda" element={<AfterSalesPage />} />
       <Route path="/fluxo-caixa" element={<CashFlowPage />} />
+      <Route path="/debug-os/:id" element={<DebugOrderPage />} />
+      <Route path="/imprimir-os/:id" element={<PrintOrderPage />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

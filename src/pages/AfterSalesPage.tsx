@@ -57,7 +57,7 @@ export default function AfterSalesPage() {
   const [filterEndDate, setFilterEndDate] = useState('');
   const [filterKeyword, setFilterKeyword] = useState('');
   const [filterClient, setFilterClient] = useState('');
-  const [expandUpcoming, setExpandUpcoming] = useState(true);
+  const [expandUpcoming, setExpandUpcoming] = useState(false);
   const [birthdayFilterType, setBirthdayFilterType] = useState<'all' | 'upcoming' | 'active'>('all');
   const [activeStatsFilter, setActiveStatsFilter] = useState<'all' | 'pending' | 'sent' | 'blocked' | 'due' | 'scheduled' | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -306,11 +306,14 @@ export default function AfterSalesPage() {
     }
     return true;
   });
-  const dueReminders = filteredAllowedReminders.filter(
-    (reminder) => new Date(reminder.reminder_due_date) <= now
+  // Split filtered reminders into due and upcoming only when not using stats filters
+  const displayedReminders = activeStatsFilter ? statsFilteredReminders : filteredAllowedReminders;
+  
+  const dueReminders = displayedReminders.filter(
+    (reminder) => new Date(reminder.reminder_due_date) <= now && !reminder.reminder_sent_at
   );
-  const upcomingReminders = filteredAllowedReminders.filter(
-    (reminder) => new Date(reminder.reminder_due_date) > now
+  const upcomingReminders = displayedReminders.filter(
+    (reminder) => new Date(reminder.reminder_due_date) > now && !reminder.reminder_sent_at
   );
 
   const totalAll = allMaintenanceReminders.length;
@@ -881,86 +884,130 @@ export default function AfterSalesPage() {
                     </p>
                   </div>
                 )}
-                {!maintenanceLoading && filteredAllowedReminders.length > 0 && (
+                {!maintenanceLoading && displayedReminders.length > 0 && (
                   <div className="space-y-6">
-                    <div>
-                      <h3 className="text-sm font-semibold text-red-600 mb-3">
-                        Pendentes para envio ({dueReminders.length})
-                      </h3>
-                      {dueReminders.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">Nenhum lembrete pendente para envio.</p>
-                      ) : (
-                        <div className="divide-y divide-border/50">
-                          {dueReminders.map((reminder) => (
-                            <div key={reminder.id} className="py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                              <div>
-                                <div className="font-semibold text-foreground">{reminder.order?.client_name ?? 'Cliente'}</div>
-                                <div className="text-sm text-muted-foreground">{reminder.order?.client_phone ?? reminder.client_phone ?? ''}</div>
-                                <div className="text-sm text-muted-foreground">
-                                  Palavra-chave: <strong className="text-foreground">{reminder.keyword?.keyword ?? '—'}</strong>
-                                </div>
+                    {/* Mostrar dados conforme o filtro ativo */}
+                    {!activeStatsFilter || activeStatsFilter === 'pending' || activeStatsFilter === 'due' || activeStatsFilter === 'scheduled' ? (
+                      <>
+                        {/* Mostrar "Pendentes para envio" apenas se não estamos filtrando por "Enviados" ou "Bloqueados" */}
+                        {activeStatsFilter !== 'sent' && activeStatsFilter !== 'blocked' && activeStatsFilter !== 'all' && (
+                          <div>
+                            <h3 className="text-sm font-semibold text-red-600 mb-3">
+                              Pendentes para envio ({dueReminders.length})
+                            </h3>
+                            {dueReminders.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">Nenhum lembrete pendente para envio.</p>
+                            ) : (
+                              <div className="divide-y divide-border/50">
+                                {dueReminders.map((reminder) => (
+                                  <div key={reminder.id} className="py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                                    <div>
+                                      <div className="font-semibold text-foreground">{reminder.order?.client_name ?? 'Cliente'}</div>
+                                      <div className="text-sm text-muted-foreground">{reminder.order?.client_phone ?? reminder.client_phone ?? ''}</div>
+                                      <div className="text-sm text-muted-foreground">
+                                        Palavra-chave: <strong className="text-foreground">{reminder.keyword?.keyword ?? '—'}</strong>
+                                      </div>
+                                    </div>
+                                    <div className="text-sm text-muted-foreground">
+                                      <div>Serviço: {new Date(reminder.service_date).toLocaleDateString('pt-BR')}</div>
+                                      <div className="text-[#C1272D]">Lembrete: {new Date(reminder.reminder_due_date).toLocaleDateString('pt-BR')}</div>
+                                    </div>
+                                  </div>
+                                ))}
                               </div>
-                              <div className="text-sm text-muted-foreground">
-                                <div>Serviço: {new Date(reminder.service_date).toLocaleDateString('pt-BR')}</div>
-                                <div className="text-[#C1272D]">Lembrete: {new Date(reminder.reminder_due_date).toLocaleDateString('pt-BR')}</div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                            )}
+                          </div>
+                        )}
 
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-sm font-semibold text-emerald-600">
-                          Próximos agendados ({upcomingReminders.length})
+                        {/* Mostrar "Próximos agendados" apenas se não estamos filtrando por "Enviados" ou "Bloqueados" */}
+                        {activeStatsFilter !== 'sent' && activeStatsFilter !== 'blocked' && activeStatsFilter !== 'all' && (
+                          <div>
+                            <div className="flex items-center justify-between mb-3">
+                              <h3 className="text-sm font-semibold text-emerald-600">
+                                Próximos agendados ({upcomingReminders.length})
+                              </h3>
+                              <button
+                                onClick={() => setExpandUpcoming(!expandUpcoming)}
+                                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+                                title={expandUpcoming ? 'Minimizar' : 'Expandir'}
+                              >
+                                {expandUpcoming ? (
+                                  <Eye className="w-4 h-4 text-gray-600" />
+                                ) : (
+                                  <EyeOff className="w-4 h-4 text-gray-600" />
+                                )}
+                              </button>
+                            </div>
+                            {upcomingReminders.length === 0 ? (
+                              <p className="text-sm text-gray-600">Nenhum lembrete agendado.</p>
+                            ) : expandUpcoming ? (
+                              <div className="divide-y">
+                                {upcomingReminders.map((reminder) => (
+                                  <div key={reminder.id} className="py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                                    <div>
+                                      <div className="font-semibold text-gray-900">{reminder.order?.client_name ?? 'Cliente'}</div>
+                                      <div className="text-sm text-gray-600">{reminder.order?.client_phone ?? reminder.client_phone ?? ''}</div>
+                                      <div className="text-sm text-gray-600">
+                                        Palavra-chave: <strong>{reminder.keyword?.keyword ?? '—'}</strong>
+                                      </div>
+                                    </div>
+                                    <div className="text-sm text-gray-600">
+                                      <div>Serviço: {new Date(reminder.service_date).toLocaleDateString('pt-BR')}</div>
+                                      <div className="text-emerald-600">Lembrete: {new Date(reminder.reminder_due_date).toLocaleDateString('pt-BR')}</div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      /* Mostrar lista única quando filtro é "Enviados", "Bloqueados" ou "Todos" */
+                      <div>
+                        <h3 className="text-sm font-semibold text-foreground mb-3">
+                          {activeStatsFilter === 'sent' ? 'Lembretes Enviados' :
+                           activeStatsFilter === 'blocked' ? 'Lembretes Bloqueados' :
+                           'Todos os Lembretes'} ({displayedReminders.length})
                         </h3>
-                        <button
-                          onClick={() => setExpandUpcoming(!expandUpcoming)}
-                          className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
-                          title={expandUpcoming ? 'Minimizar' : 'Expandir'}
-                        >
-                          {expandUpcoming ? (
-                            <Eye className="w-4 h-4 text-gray-600" />
-                          ) : (
-                            <EyeOff className="w-4 h-4 text-gray-600" />
-                          )}
-                        </button>
-                      </div>
-                      {upcomingReminders.length === 0 ? (
-                        <p className="text-sm text-gray-600">Nenhum lembrete agendado.</p>
-                      ) : expandUpcoming ? (
-                        <div className="divide-y">
-                          {upcomingReminders.map((reminder) => (
-                            <div key={reminder.id} className="py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                              <div>
-                                <div className="font-semibold text-gray-900">{reminder.order?.client_name ?? 'Cliente'}</div>
-                                <div className="text-sm text-gray-600">{reminder.order?.client_phone ?? reminder.client_phone ?? ''}</div>
-                                <div className="text-sm text-gray-600">
-                                  Palavra-chave: <strong>{reminder.keyword?.keyword ?? '—'}</strong>
+                        {displayedReminders.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">Nenhum lembrete encontrado.</p>
+                        ) : (
+                          <div className="divide-y divide-border/50">
+                            {displayedReminders.map((reminder) => (
+                              <div key={reminder.id} className="py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                                <div>
+                                  <div className="font-semibold text-foreground">{reminder.order?.client_name ?? 'Cliente'}</div>
+                                  <div className="text-sm text-muted-foreground">{reminder.order?.client_phone ?? reminder.client_phone ?? ''}</div>
+                                  <div className="text-sm text-muted-foreground">
+                                    Palavra-chave: <strong className="text-foreground">{reminder.keyword?.keyword ?? '—'}</strong>
+                                  </div>
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                  <div>Serviço: {new Date(reminder.service_date).toLocaleDateString('pt-BR')}</div>
+                                  <div className={activeStatsFilter === 'sent' ? 'text-emerald-600' : 'text-amber-600'}>
+                                    Lembrete: {new Date(reminder.reminder_due_date).toLocaleDateString('pt-BR')}
+                                    {reminder.reminder_sent_at && ` (${new Date(reminder.reminder_sent_at).toLocaleDateString('pt-BR')})`}
+                                  </div>
                                 </div>
                               </div>
-                              <div className="text-sm text-gray-600">
-                                <div>Serviço: {new Date(reminder.service_date).toLocaleDateString('pt-BR')}</div>
-                                <div className="text-emerald-600">Lembrete: {new Date(reminder.reminder_due_date).toLocaleDateString('pt-BR')}</div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="bg-white rounded-lg border border-gray-200">
-              <div className="p-6 border-b border-gray-200">
+            <div className="glass-card-elevated rounded-lg border border-border/50">
+              <div className="p-6 border-b border-border/50">
                 <div className="flex items-center gap-3 mb-2">
                   <Zap className="w-6 h-6 text-purple-600" />
-                  <h2 className="text-2xl font-bold text-gray-900">Palavras-chave de Manutenção</h2>
+                  <h2 className="text-2xl font-bold text-foreground">Palavras-chave de Manutenção</h2>
                 </div>
-                <p className="text-gray-600">Adicione, edite ou desative palavras-chave para lembretes automáticos</p>
+                <p className="text-muted-foreground">Adicione, edite ou desative palavras-chave para lembretes automáticos</p>
               </div>
               <MaintenanceKeywordsManager />
             </div>

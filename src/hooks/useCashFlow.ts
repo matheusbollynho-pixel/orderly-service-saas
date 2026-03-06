@@ -104,10 +104,10 @@ export function useCashFlow(selectedDate?: string) {
   // Criar entrada manual
   const createEntryMutation = useMutation({
     mutationFn: async (entry: Omit<CashFlow, 'id' | 'created_at' | 'created_by'>) => {
-      const dateToInsert = entry.date || date;
+      const dateToInsert = getLocalDate();
       console.log('💾 Preparando para salvar:', {
         dateReceived: entry.date,
-        dateFallback: date,
+        dateEnforced: dateToInsert,
         dateToInsert,
         description: entry.description,
         amount: entry.amount,

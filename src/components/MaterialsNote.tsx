@@ -30,6 +30,7 @@ export function MaterialsNote({
   loadingDelete = false
 }: MaterialsNoteProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editingValues, setEditingValues] = useState<Record<string, string>>({});
   const [newMaterial, setNewMaterial] = useState({
     quantidade: '01',
     descricao: '',
@@ -142,12 +143,29 @@ export function MaterialsNote({
                       </div>
                       <div className="w-24">
                         <label className="text-xs font-semibold text-foreground block mb-1">Valor (R$)</label>
-                        <Input
-                          type="number"
-                          value={material.valor}
-                          onChange={(e) => onUpdateMaterial(material.id, 'valor', e.target.value)}
+                        <input
+                          type="text"
+                          value={editingValues[material.id] !== undefined ? editingValues[material.id] : material.valor}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                              setEditingValues(prev => ({ ...prev, [material.id]: value }));
+                            }
+                          }}
+                          onBlur={(e) => {
+                            const value = e.target.value;
+                            if (editingValues[material.id] !== undefined && value !== String(material.valor)) {
+                              onUpdateMaterial(material.id, 'valor', value);
+                            }
+                            setEditingValues(prev => {
+                              const newValues = { ...prev };
+                              delete newValues[material.id];
+                              return newValues;
+                            });
+                          }}
                           disabled={disabled}
-                          className="h-8 text-xs text-right bg-muted/50 border-border/50"
+                          inputMode="decimal"
+                          className="h-8 text-xs text-right bg-muted/50 border-border/50 flex w-full rounded-md border border-input bg-transparent px-3 py-1 shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                           placeholder="0,00"
                         />
                       </div>

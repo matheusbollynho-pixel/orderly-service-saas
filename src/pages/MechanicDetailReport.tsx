@@ -138,7 +138,7 @@ export function MechanicDetailReport({ onBack }: MechanicDetailReportProps) {
             <div className="space-y-2 md:col-span-4">
               <Label>Mecânico</Label>
               <Select value={selectedMechanicId} onValueChange={setSelectedMechanicId}>
-                <SelectTrigger className="h-10">
+                <SelectTrigger className="bg-background text-foreground border-input">
                   <SelectValue placeholder="Selecione um mecânico" />
                 </SelectTrigger>
                 <SelectContent>
@@ -158,7 +158,7 @@ export function MechanicDetailReport({ onBack }: MechanicDetailReportProps) {
               <div className="flex gap-2 items-center">
                 <Popover open={showDatePicker} onOpenChange={setShowDatePicker}>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" className="h-10 w-full justify-between">
+                    <Button variant="outline" className="h-10 w-full justify-between bg-background text-foreground border-input">
                       <span className="flex items-center gap-2">
                         <CalendarIcon className="h-4 w-4" />
                         {dateRange?.from ? (
@@ -188,7 +188,7 @@ export function MechanicDetailReport({ onBack }: MechanicDetailReportProps) {
 
                 <Button
                   variant="outline"
-                  className="h-10"
+                  className="h-10 bg-background text-foreground border-input"
                   onClick={() => {
                     setDateRange(undefined);
                     setStartDate('');
@@ -230,21 +230,21 @@ export function MechanicDetailReport({ onBack }: MechanicDetailReportProps) {
         <Card>
           <CardContent className="p-4 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <p className="text-xs text-blue-600 font-medium">Total de OS</p>
-                <p className="text-2xl font-bold text-blue-900">{filteredOrders.length}</p>
+              <div className="bg-blue-500/10 dark:bg-blue-500/20 p-4 rounded-lg border border-blue-500/20">
+                <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Total de OS</p>
+                <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{filteredOrders.length}</p>
               </div>
-              <div className="bg-green-50 p-4 rounded-lg">
-                <p className="text-xs text-green-600 font-medium">Faturado (Serviços)</p>
-                <p className="text-2xl font-bold text-green-900">R$ {totalServicos.toFixed(2)}</p>
+              <div className="bg-green-500/10 dark:bg-green-500/20 p-4 rounded-lg border border-green-500/20">
+                <p className="text-xs text-green-600 dark:text-green-400 font-medium">Faturado (Serviços)</p>
+                <p className="text-2xl font-bold text-green-900 dark:text-green-100">R$ {totalServicos.toFixed(2)}</p>
               </div>
-              <div className="bg-purple-50 p-4 rounded-lg">
-                <p className="text-xs text-purple-600 font-medium">Vendido (Peças)</p>
-                <p className="text-2xl font-bold text-purple-900">R$ {totalPecas.toFixed(2)}</p>
+              <div className="bg-purple-500/10 dark:bg-purple-500/20 p-4 rounded-lg border border-purple-500/20">
+                <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">Vendido (Peças)</p>
+                <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">R$ {totalPecas.toFixed(2)}</p>
               </div>
-              <div className="bg-orange-50 p-4 rounded-lg">
-                <p className="text-xs text-orange-600 font-medium">Comissão a Pagar</p>
-                <p className="text-2xl font-bold text-orange-900">R$ {totalComissao.toFixed(2)}</p>
+              <div className="bg-orange-500/10 dark:bg-orange-500/20 p-4 rounded-lg border border-orange-500/20">
+                <p className="text-xs text-orange-600 dark:text-orange-400 font-medium">Comissão a Pagar</p>
+                <p className="text-2xl font-bold text-orange-900 dark:text-orange-100">R$ {totalComissao.toFixed(2)}</p>
               </div>
             </div>
           </CardContent>
@@ -311,7 +311,7 @@ export function MechanicDetailReport({ onBack }: MechanicDetailReportProps) {
                           {servicosFiltrados.map((m, i) => (
                             <div
                               key={i}
-                              className={`flex items-center justify-between text-sm p-2 rounded border ${m.paid_at ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 border-transparent'}`}
+                              className={`flex items-center justify-between text-sm p-2 rounded border ${m.paid_at ? 'bg-green-500/10 dark:bg-green-500/20 text-green-700 dark:text-green-300 border-green-200 dark:border-green-500/30' : 'bg-muted/50 border-border/50'}`}
                             >
                               <div className="flex-1">
                                 <span className="opacity-80">{m.descricao} ({m.quantidade})</span>

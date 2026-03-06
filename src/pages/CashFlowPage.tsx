@@ -48,6 +48,7 @@ export function CashFlowPage() {
   const [activePeriod, setActivePeriod] = useState<'day' | 'week' | 'month'>('day');
   const [showForm, setShowForm] = useState(false);
   const [hideValues, setHideValues] = useState(false);
+  const [entrySourceFilter, setEntrySourceFilter] = useState<'all' | 'without-os' | 'os-only'>('all');
   
   // Quando volta para dia, sempre volta a hoje
   useEffect(() => {
@@ -61,6 +62,7 @@ export function CashFlowPage() {
 
   const [formData, setFormData] = useState({
     type: 'entrada' as CashFlowType,
+    saidaDestination: 'oficina' as 'oficina' | 'balcao',
     amount: '',
     description: '',
     category: '',
@@ -78,34 +80,44 @@ export function CashFlowPage() {
       return;
     }
 
-    const dateToUse = formData.transactionDate || selectedDate;
+    if (formData.type === 'saida' && !formData.saidaDestination) {
+      toast.error('Selecione se a saída foi para Oficina ou Balcão');
+      return;
+    }
+
+    const todayDate = getLocalDate();
     
     // Log para debug
     console.log('🔍 Salvando transação:', {
       descricao: formData.description,
       valor: formData.amount,
-      data: dateToUse,
+      data: todayDate,
       dataSelecionada: selectedDate,
       dataTipada: formData.transactionDate,
+      regra: 'sempre_salvar_no_dia_atual',
     });
 
     createEntry({
       type: formData.type,
       amount: parseFloat(formData.amount),
       description: formData.description,
-      category: formData.category,
+      category:
+        formData.type === 'saida'
+          ? (formData.saidaDestination === 'oficina' ? 'Saída - Oficina' : 'Saída - Balcão')
+          : formData.category,
       payment_method: formData.payment_method,
-      date: dateToUse,
+      date: todayDate,
       notes: formData.notes,
     });
 
-    // Mostrar aviso se for de outro dia
-    if (formData.transactionDate && formData.transactionDate !== selectedDate) {
-      toast.info(`Transação salva em ${formatDisplayDate(formData.transactionDate)}. Selecione essa data para visualizar.`);
+    if (selectedDate !== todayDate) {
+      toast.info('Por segurança, novos lançamentos são registrados apenas na data de hoje.');
+      setSelectedDate(todayDate);
     }
 
     setFormData({
       type: 'entrada',
+      saidaDestination: 'oficina',
       amount: '',
       description: '',
       category: '',
@@ -157,7 +169,29 @@ export function CashFlowPage() {
     return format(date, 'MMMM/yyyy', { locale: ptBR });
   };
 
-  const renderSummaryCards = (summaryData: any, isLoadingData: boolean) => {
+  const isOrderEntry = (entry: any) => {
+    // Entrada vinda de OS (order_id ou payment_id)
+    if (entry?.type === 'entrada' && (!!entry?.order_id || !!entry?.payment_id)) {
+      return true;
+    }
+    // Saída para Oficina
+    if (entry?.type === 'saida' && entry?.category?.includes('Oficina')) {
+      return true;
+    }
+    return false;
+  };
+
+  const applyEntryFilter = (transactions: any[]) => {
+    if (entrySourceFilter === 'all') return transactions;
+    if (entrySourceFilter === 'os-only') {
+      return transactions.filter((entry) => isOrderEntry(entry));
+    }
+
+    // without-os: remove apenas entradas vindas de OS e saídas para Oficina
+    return transactions.filter((entry) => !isOrderEntry(entry));
+  };
+
+  const renderSummaryCards = (transactions: any[], isLoadingData: boolean) => {
     if (isLoadingData) {
       return (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -172,7 +206,14 @@ export function CashFlowPage() {
       );
     }
 
-    if (!summaryData) return null;
+    const entradas = transactions.filter(e => e.type === 'entrada');
+    const saidas = transactions.filter(e => e.type === 'saida');
+    const retiradas = transactions.filter(e => e.type === 'retirada');
+
+    const total_entradas = entradas.reduce((sum, e) => sum + e.amount, 0);
+    const total_saidas = saidas.reduce((sum, e) => sum + e.amount, 0);
+    const total_retiradas = retiradas.reduce((sum, e) => sum + e.amount, 0);
+    const saldo = total_entradas - total_saidas;
 
     return (
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -184,7 +225,7 @@ export function CashFlowPage() {
                   Total Entradas
                 </p>
                 <h3 className="text-2xl font-bold text-green-600">
-                  {hideValues ? '****' : formatCurrency(summaryData.total_entradas)}
+                  {hideValues ? '****' : formatCurrency(total_entradas)}
                 </h3>
               </div>
               <ArrowUpCircle className="h-12 w-12 text-green-600 opacity-20" />
@@ -200,7 +241,7 @@ export function CashFlowPage() {
                   Total Saídas
                 </p>
                 <h3 className="text-2xl font-bold text-red-600">
-                  {hideValues ? '****' : formatCurrency(summaryData.total_saidas)}
+                  {hideValues ? '****' : formatCurrency(total_saidas)}
                 </h3>
               </div>
               <ArrowDownCircle className="h-12 w-12 text-red-600 opacity-20" />
@@ -216,7 +257,7 @@ export function CashFlowPage() {
                   Total Retiradas
                 </p>
                 <h3 className="text-2xl font-bold text-orange-600">
-                  {hideValues ? '****' : formatCurrency(summaryData.total_retiradas)}
+                  {hideValues ? '****' : formatCurrency(total_retiradas)}
                 </h3>
               </div>
               <ArrowDownCircle className="h-12 w-12 text-orange-600 opacity-20" />
@@ -233,15 +274,15 @@ export function CashFlowPage() {
                 </p>
                 <h3
                   className={`text-2xl font-bold ${
-                    summaryData.saldo >= 0 ? 'text-blue-600' : 'text-red-600'
+                    saldo >= 0 ? 'text-blue-600' : 'text-red-600'
                   }`}
                 >
-                  {hideValues ? '****' : formatCurrency(summaryData.saldo)}
+                  {hideValues ? '****' : formatCurrency(saldo)}
                 </h3>
               </div>
               <DollarSign
                 className={`h-12 w-12 opacity-20 ${
-                  summaryData.saldo >= 0 ? 'text-blue-600' : 'text-red-600'
+                  saldo >= 0 ? 'text-blue-600' : 'text-red-600'
                 }`}
               />
             </div>
@@ -251,8 +292,8 @@ export function CashFlowPage() {
     );
   };
 
-  const renderPaymentMethodCards = () => {
-    if (!cashFlow || cashFlow.length === 0) return null;
+  const renderPaymentMethodCards = (transactions: any[]) => {
+    if (!transactions || transactions.length === 0) return null;
 
     // Calcular saldo por forma de pagamento (apenas entradas - saídas)
     const paymentMethods = {
@@ -261,7 +302,7 @@ export function CashFlowPage() {
       cartao: 0,
     };
 
-    cashFlow.forEach((entry) => {
+    transactions.forEach((entry) => {
       const method = (entry.payment_method || 'dinheiro') as keyof typeof paymentMethods;
       const amount = entry.amount || 0;
 
@@ -357,6 +398,11 @@ export function CashFlowPage() {
                       {entry.category}
                     </p>
                   )}
+                  {entry.type === 'saida' && (entry.category?.includes('Oficina') || entry.category?.includes('Balcão')) && (
+                    <p className="text-xs font-medium text-amber-500 mb-1">
+                      Destino: {entry.category.includes('Oficina') ? 'Oficina' : 'Balcão'}
+                    </p>
+                  )}
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
                     <span>{formatTime(entry.created_at)}</span>
                     {entry.payment_method && (
@@ -408,6 +454,27 @@ export function CashFlowPage() {
     );
   };
 
+  const renderEntrySourceFilter = () => (
+    <div className="w-full md:w-[280px]">
+      <Label htmlFor="entry-source-filter" className="text-xs text-muted-foreground">
+        Mostrar entradas
+      </Label>
+      <Select
+        value={entrySourceFilter}
+        onValueChange={(value: 'all' | 'without-os' | 'os-only') => setEntrySourceFilter(value)}
+      >
+        <SelectTrigger id="entry-source-filter" className="mt-1">
+          <SelectValue placeholder="Selecione o filtro" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Tudo (Oficina + Balcão)</SelectItem>
+          <SelectItem value="without-os">Somente Balcão</SelectItem>
+          <SelectItem value="os-only">Somente Oficina</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  );
+
   return (
     <div className="space-y-6 pb-20">
       {/* Header */}
@@ -450,17 +517,20 @@ export function CashFlowPage() {
         {/* Daily Tab */}
         <TabsContent value="day" className="space-y-6">
           {/* Date Selector */}
-          <div className="flex items-center gap-2">
-            <Calendar className="h-5 w-5 text-muted-foreground" />
-            <Input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="max-w-xs bg-muted/50 border-border/50 text-foreground"
-            />
-            <span className="text-sm text-muted-foreground">
-              {formatDisplayDate(selectedDate)}
-            </span>
+          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-muted-foreground" />
+              <Input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="max-w-xs bg-muted/50 border-border/50 text-foreground"
+              />
+              <span className="text-sm text-muted-foreground">
+                {formatDisplayDate(selectedDate)}
+              </span>
+            </div>
+            {renderEntrySourceFilter()}
           </div>
 
           {/* Form */}
@@ -478,20 +548,19 @@ export function CashFlowPage() {
                     {/* Quantidade */}
                     <div className="col-span-1">
                       <Label htmlFor="quantity">Qtd</Label>
-                      <Input
+                      <input
                         id="quantity"
-                        type="number"
-                        step="0.01"
+                        type="text"
                         placeholder="1"
                         value={formData.quantity}
                         onChange={(e) => {
-                          let value = e.target.value;
-                          if (value === '') {
-                            value = '1';
+                          const value = e.target.value;
+                          if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                            setFormData({ ...formData, quantity: value });
                           }
-                          setFormData({ ...formData, quantity: value });
                         }}
-                        className="[&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        inputMode="decimal"
+                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                       />
                     </div>
 
@@ -535,7 +604,11 @@ export function CashFlowPage() {
                       <Select
                         value={formData.type}
                         onValueChange={(value: CashFlowType) =>
-                          setFormData({ ...formData, type: value })
+                          setFormData({
+                            ...formData,
+                            type: value,
+                            saidaDestination: value === 'saida' ? formData.saidaDestination : 'oficina',
+                          })
                         }
                       >
                         <SelectTrigger id="type">
@@ -547,21 +620,49 @@ export function CashFlowPage() {
                           <SelectItem value="retirada">Retirada</SelectItem>
                         </SelectContent>
                       </Select>
+                      
+                      {/* Saída Destination Selector - below select */}
+                      {formData.type === 'saida' && (
+                        <div className="mt-2 flex gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={formData.saidaDestination === 'oficina' ? 'default' : 'outline'}
+                            onClick={() => setFormData({ ...formData, saidaDestination: 'oficina' })}
+                            className="flex-1"
+                          >
+                            Oficina
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={formData.saidaDestination === 'balcao' ? 'default' : 'outline'}
+                            onClick={() => setFormData({ ...formData, saidaDestination: 'balcao' })}
+                            className="flex-1"
+                          >
+                            Balcão
+                          </Button>
+                        </div>
+                      )}
                     </div>
 
                     {/* Valor */}
                     <div className="col-span-2">
                       <Label htmlFor="amount">Valor</Label>
-                      <Input
+                      <input
                         id="amount"
-                        type="number"
-                        step="0.01"
+                        type="text"
                         placeholder="0.00"
                         value={formData.amount}
-                        onChange={(e) =>
-                          setFormData({ ...formData, amount: e.target.value })
-                        }
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                            setFormData({ ...formData, amount: value });
+                          }
+                        }}
+                        inputMode="decimal"
                         required
+                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                       />
                     </div>
                   </div>
@@ -584,27 +685,41 @@ export function CashFlowPage() {
           )}
 
           {/* Summary Cards */}
-          {renderSummaryCards(summary, isLoading)}
+          {renderSummaryCards(applyEntryFilter(cashFlow), isLoading)}
 
           {/* Payment Method Cards */}
-          {renderPaymentMethodCards()}
+          {renderPaymentMethodCards(applyEntryFilter(cashFlow))}
 
           {/* Transactions List */}
           <div className="space-y-4">
             <h2 className="text-lg font-semibold">Transações do Dia</h2>
-            {renderTransactionsList(cashFlow)}
+            {renderTransactionsList(applyEntryFilter(cashFlow))}
           </div>
         </TabsContent>
 
         {/* Weekly Tab */}
         <TabsContent value="week" className="space-y-6">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Calendar className="h-5 w-5" />
-            <span>Semana: {formatWeekDisplay()}</span>
+          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Calendar className="h-5 w-5" />
+              <span>Semana: {formatWeekDisplay()}</span>
+            </div>
+            {renderEntrySourceFilter()}
           </div>
 
           {/* Summary Cards */}
-          {renderSummaryCards(weeklySummary, weeklyLoading)}
+          {renderSummaryCards(
+            applyEntryFilter(
+              weeklySummary
+                ? [
+                    ...weeklySummary.entradas,
+                    ...weeklySummary.saidas,
+                    ...weeklySummary.retiradas,
+                  ]
+                : []
+            ),
+            weeklyLoading
+          )}
 
           {/* Transactions List */}
           <div className="space-y-4">
@@ -613,7 +728,8 @@ export function CashFlowPage() {
               ...weeklySummary.entradas,
               ...weeklySummary.saidas,
               ...weeklySummary.retiradas,
-            ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())) : (
+            ].filter((entry) => applyEntryFilter([entry]).length > 0)
+             .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())) : (
               <div className="flex justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
               </div>
@@ -624,21 +740,35 @@ export function CashFlowPage() {
         {/* Monthly Tab */}
         <TabsContent value="month" className="space-y-6">
           {/* Month Selector */}
-          <div className="flex items-center gap-2">
-            <Calendar className="h-5 w-5 text-muted-foreground" />
-            <Input
-              type="month"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="max-w-xs"
-            />
-            <span className="text-sm text-muted-foreground">
-              {formatMonthDisplay(selectedMonth)}
-            </span>
+          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-muted-foreground" />
+              <Input
+                type="month"
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="max-w-xs"
+              />
+              <span className="text-sm text-muted-foreground">
+                {formatMonthDisplay(selectedMonth)}
+              </span>
+            </div>
+            {renderEntrySourceFilter()}
           </div>
 
           {/* Summary Cards */}
-          {renderSummaryCards(monthlySummary, monthlyLoading)}
+          {renderSummaryCards(
+            applyEntryFilter(
+              monthlySummary
+                ? [
+                    ...monthlySummary.entradas,
+                    ...monthlySummary.saidas,
+                    ...monthlySummary.retiradas,
+                  ]
+                : []
+            ),
+            monthlyLoading
+          )}
 
           {/* Transactions List */}
           <div className="space-y-4">
@@ -647,7 +777,8 @@ export function CashFlowPage() {
               ...monthlySummary.entradas,
               ...monthlySummary.saidas,
               ...monthlySummary.retiradas,
-            ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())) : (
+            ].filter((entry) => applyEntryFilter([entry]).length > 0)
+             .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())) : (
               <div className="flex justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
               </div>

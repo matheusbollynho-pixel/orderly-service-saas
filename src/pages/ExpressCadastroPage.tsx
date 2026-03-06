@@ -13,9 +13,10 @@ import { useTeamMembers } from '@/hooks/useTeamMembers';
 
 interface ExpressCadastroPageProps {
   onBack?: () => void;
+  onOrderCreated?: (orderId: string) => void;
 }
 
-export function ExpressCadastroPage({ onBack }: ExpressCadastroPageProps) {
+export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroPageProps) {
   const {
     upsertClient,
     upsertMotorcycle,
@@ -196,7 +197,7 @@ export function ExpressCadastroPage({ onBack }: ExpressCadastroPageProps) {
               atendimento_id: atendimentoId || null,
             },
             {
-              onSuccess: async () => {
+              onSuccess: async (newOrder: any) => {
                 // Process maintenance keywords from problem description
                 if (autorizaLembretes && savedClient?.id) {
                   const problemDesc = `${desc} (cadastro express)`;
@@ -230,6 +231,10 @@ export function ExpressCadastroPage({ onBack }: ExpressCadastroPageProps) {
                       console.error('Erro ao criar lembrete de manutenção:', err);
                     }
                   }
+                }
+                // Redirecionar para a OS criada
+                if (onOrderCreated && newOrder?.id) {
+                  onOrderCreated(newOrder.id);
                 }
                 resolve();
               },

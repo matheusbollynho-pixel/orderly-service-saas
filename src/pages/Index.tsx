@@ -169,7 +169,20 @@ export default function Index() {
         }
       }
 
-      const equipmentArray = formData.motos.map((m: any) => m.equipment ? `${m.equipment} (${m.placa})` : m.placa).join(', ');
+      const equipmentArray = formData.motos
+        .map((m: any) => {
+          const base = (m?.equipment || '').trim() || m?.placa || '';
+          const rawKm = String(m?.km || '').trim();
+          const kmFormatted = rawKm
+            ? /km/i.test(rawKm)
+              ? rawKm
+              : `${rawKm} km`
+            : '';
+
+          const withKm = [base, kmFormatted].filter(Boolean).join(' ');
+          return withKm ? `${withKm} (${m.placa})` : m.placa;
+        })
+        .join(', ');
       
       // Montar informação de retirada
       let retiradaInfo = '';
@@ -241,7 +254,9 @@ Retirada: ${retiradaInfo}`;
           }
           
           toast.success('Cliente, motos e OS salvos com sucesso! 🎉');
-          setCurrentView('new');
+          // Redirecionar para a OS criada
+          setSelectedOrder(newOrder);
+          setCurrentView('details');
         },
         onError: (error: any) => {
           console.error('❌ Erro na mutation:', error);
@@ -311,14 +326,14 @@ Retirada: ${retiradaInfo}`;
   };
   
   const handleChecklistRating = (id: string, rating: number) => {
-    // Update the checklist item with rating
-    updateChecklistItem({ id, completed: true });
+    // Update the checklist item with rating (sem marcar como completed)
+    updateChecklistItem({ id, rating });
     setSelectedOrder(prev => {
       if (!prev) return null;
       return {
         ...prev,
         checklist_items: prev.checklist_items?.map(item =>
-          item.id === id ? { ...item, rating, completed: true } : item
+          item.id === id ? { ...item, rating } : item
         ) ?? [],
       };
     });
@@ -590,7 +605,19 @@ Retirada: ${retiradaInfo}`;
         )}
 
         {currentView === 'express' && (
-          <ExpressCadastroPage onBack={() => setCurrentView('dashboard')} />
+          <ExpressCadastroPage 
+            onBack={() => setCurrentView('dashboard')} 
+            onOrderCreated={(orderId) => {
+              // Buscar a OS criada e redirecionar para detalhes
+              const createdOrder = orders.find(o => o.id === orderId);
+              if (createdOrder) {
+                setSelectedOrder(createdOrder);
+                setCurrentView('details');
+              } else {
+                setCurrentView('dashboard');
+              }
+            }}
+          />
         )}
 
         {currentView === 'orders' && (

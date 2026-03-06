@@ -453,6 +453,8 @@ export type Database = {
           status: Database["public"]["Enums"]["order_status"]
           signature_data: string | null
           terms_accepted: boolean
+          delivery_terms_accepted: boolean
+          delivery_signature_data: string | null
           entry_date: string | null
           exit_date: string | null
           mechanic_id: string | null
@@ -477,6 +479,8 @@ export type Database = {
           status?: Database["public"]["Enums"]["order_status"]
           signature_data?: string | null
           terms_accepted?: boolean
+          delivery_terms_accepted?: boolean
+          delivery_signature_data?: string | null
           entry_date?: string | null
           exit_date?: string | null
           mechanic_id?: string | null
@@ -501,6 +505,8 @@ export type Database = {
           status?: Database["public"]["Enums"]["order_status"]
           signature_data?: string | null
           terms_accepted?: boolean
+          delivery_terms_accepted?: boolean
+          delivery_signature_data?: string | null
           entry_date?: string | null
           exit_date?: string | null
           mechanic_id?: string | null
