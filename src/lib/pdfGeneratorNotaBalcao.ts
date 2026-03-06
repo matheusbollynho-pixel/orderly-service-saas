@@ -28,8 +28,8 @@ export async function generateOrderPDFFromNotaBalcao(
     });
     console.log('[pdfGenerator] html2canvas concluído com sucesso');
 
-    // Criar PDF a partir do canvas
-    const imgData = canvas.toDataURL('image/png');
+    // Converter canvas para JPEG (mais compatível que PNG com jsPDF)
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
     const pdf = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
@@ -45,13 +45,13 @@ export async function generateOrderPDFFromNotaBalcao(
     let position = 0;
 
     // Adicionar imagem ao PDF, criando múltiplas páginas se necessário
-    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
     heightLeft -= pageHeight;
 
     while (heightLeft > 0) {
       position = heightLeft - imgHeight;
       pdf.addPage();
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
       heightLeft -= pageHeight;
     }
 
