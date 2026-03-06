@@ -98,7 +98,7 @@ function AuthenticatedApp() {
       <Route path="/pos-venda" element={<AfterSalesPage />} />
       <Route path="/fluxo-caixa" element={<CashFlowPage />} />
       <Route path="/debug-os/:id" element={<DebugOrderPage />} />
-      <Route path="/imprimir-os/:id" element={<PrintOrderPage />} />
+      <Route path="/print/:id" element={<PrintOrderPage />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
