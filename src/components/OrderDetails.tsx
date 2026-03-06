@@ -40,9 +40,7 @@ import { useMechanics } from '@/hooks/useMechanics';
 import { useClients } from '@/hooks/useClients';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
 import { generateOrderPDFBase64, generateOrderPDF } from '@/lib/pdfGenerator';
-import { generateOrderPDFFromNotaBalcao } from '@/lib/pdfGeneratorNotaBalcao';
 import { sendWhatsAppDocument, sendWhatsAppText } from '@/lib/whatsappService';
-import { NotaBalcao } from './NotaBalcao';
 
 import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -433,11 +431,8 @@ export function OrderDetails({
     try {
       setIsSendingPDF(true)
       
-      // Gerar PDF usando o novo NotaBalcao generator
-      const pdfData = await generateOrderPDFFromNotaBalcao(
-        'nota-balcao-print-container',
-        `OS-${order.id?.slice(0, 8)?.toUpperCase() || 'DOCUMENTO'}.pdf`
-      )
+      // Usar o gerador antigo que funciona
+      const pdfData = generateOrderPDFBase64(order)
       
       const cleanPhone = order.client_phone?.replace(/\D/g, '') || ''
       if (cleanPhone.length < 10 || cleanPhone.length > 11) {
@@ -511,20 +506,8 @@ export function OrderDetails({
     }
     
     try {
-      // Usar o novo gerador NotaBalcao
-      const pdfData = await generateOrderPDFFromNotaBalcao(
-        'nota-balcao-print-container',
-        `OS-${order.id?.slice(0, 8)?.toUpperCase() || 'DOCUMENTO'}.pdf`
-      )
-      
-      // Criar link de download
-      const link = document.createElement('a')
-      link.href = `data:application/pdf;base64,${pdfData.base64}`
-      link.download = pdfData.fileName
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      
+      // Usar o gerador antigo que funciona
+      generateOrderPDF(order)
       alert('✅ PDF baixado com sucesso!')
     } catch (error: any) {
       console.error('Erro ao baixar PDF:', error)
@@ -1474,65 +1457,6 @@ export function OrderDetails({
             Enviar PDF via WhatsApp
           </Button>
         </div>
-      </div>
-
-      {/* NotaBalcao renderizada escondida para geração de PDF */}
-      <div 
-        id="nota-balcao-print-container" 
-        style={{ 
-          position: 'fixed',
-          left: '0',
-          top: '0',
-          width: '210mm',
-          minHeight: '297mm',
-          backgroundColor: 'white',
-          opacity: 0,
-          pointerEvents: 'none',
-          zIndex: -1,
-          overflow: 'hidden'
-        }}
-      >
-        <NotaBalcao
-          data={{
-            osId: order.id || '',
-            dataEntrada: order.created_at ? new Date(order.created_at).toLocaleDateString('pt-BR') : '',
-            dataConclusao: order.updated_at ? new Date(order.updated_at).toLocaleDateString('pt-BR') : '',
-            cliente: {
-              nome: order.client_name || '',
-              telefone: order.client_phone || '',
-              endereco: order.client_address || '',
-            },
-            veiculo: {
-              marca: order.vehicle_brand || '',
-              modelo: order.vehicle_model || '',
-              ano: String(order.vehicle_year || ''),
-              cor: order.vehicle_color || '',
-              placa: order.vehicle_plate || '',
-              km: String(order.km || 0),
-            },
-            checklist: (order.checklist_items || []).map((item: any) => ({
-              name: item.name || '',
-              checked: item.completed || false,
-              rating: item.rating,
-            })),
-            observacoesChecklist: '',
-            servicosRealizar: order.observation || '',
-            retiradaInfo: '',
-            itens: (order.materials || []).map((item: any) => ({
-              description: item.description || '',
-              quantity: item.quantity || 0,
-              unitPrice: item.unit_price || 0,
-              total: (item.quantity || 0) * (item.unit_price || 0),
-            })),
-            subtotal: order.subtotal || 0,
-            desconto: order.discount_amount || 0,
-            totalPago: order.total || 0,
-            observacaoPagamento: '',
-            status: order.status || '',
-            signatureChecklist: order.signature_data || null,
-            signatureCliente: order.signature_data || null,
-          }}
-        />
       </div>
     </>
   );
