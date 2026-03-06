@@ -1480,13 +1480,16 @@ export function OrderDetails({
       <div 
         id="nota-balcao-print-container" 
         style={{ 
-          position: 'absolute',
-          left: '-9999px',
+          position: 'fixed',
+          left: '0',
           top: '0',
           width: '210mm',
           minHeight: '297mm',
           backgroundColor: 'white',
-          visibility: 'hidden'
+          opacity: 0,
+          pointerEvents: 'none',
+          zIndex: -1,
+          overflow: 'hidden'
         }}
       >
         <NotaBalcao

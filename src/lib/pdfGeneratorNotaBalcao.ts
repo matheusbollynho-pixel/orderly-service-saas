@@ -18,13 +18,19 @@ export async function generateOrderPDFFromNotaBalcao(
       throw new Error(`Elemento com ID "${elementId}" não encontrado`);
     }
 
-    console.log('[pdfGenerator v2] Elemento encontrado, iniciando html2canvas...');
+    console.log('[pdfGenerator v2] Elemento encontrado, aguardando renderização...');
+    // Aguardar um pouco para garantir que o elemento esteja completamente renderizado
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    console.log('[pdfGenerator v2] Iniciando html2canvas...');
     // Capturar elemento como canvas
     const canvas = await html2canvas(element, {
       scale: 2,
       useCORS: true,
-      logging: false,
+      logging: true,
       backgroundColor: '#ffffff',
+      windowWidth: element.scrollWidth,
+      windowHeight: element.scrollHeight,
     });
     console.log('[pdfGenerator v2] html2canvas concluído com sucesso');
 
