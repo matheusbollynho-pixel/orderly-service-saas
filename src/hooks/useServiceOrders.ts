@@ -41,8 +41,8 @@ export function useServiceOrders() {
     queryFn: async () => {
       let data: any[] | null = null;
 
-      // Otimização: buscar apenas as últimas 10 OS (as mais usadas)
-      // Usuários buscam por filtro para ordens mais antigas
+      // Otimização: buscar as últimas 500 OS (aumentado para incluir histórico)
+      // Usuários conseguem buscar por filtro para qualquer período
       const fullQuery = await supabase
         .from('service_orders')
         .select(`
@@ -53,17 +53,17 @@ export function useServiceOrders() {
           clients:client_id (autoriza_lembretes, autoriza_instagram)
         `)
         .order('created_at', { ascending: false })
-        .limit(10);
+        .limit(500);
 
       if (fullQuery.error) {
         console.error('❌ Erro na query completa de ordens. Aplicando fallback simples:', fullQuery.error);
 
-        // Fallback: buscar apenas dados básicos
+        // Fallback: buscar apenas dados básicos (500 registros)
         const fallbackQuery = await supabase
           .from('service_orders')
           .select('*')
           .order('created_at', { ascending: false })
-          .limit(10);
+          .limit(500);
 
         if (fallbackQuery.error) throw fallbackQuery.error;
         data = fallbackQuery.data as any[];
