@@ -40,7 +40,9 @@ import { useMechanics } from '@/hooks/useMechanics';
 import { useClients } from '@/hooks/useClients';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
 import { generateOrderPDFBase64, generateOrderPDF } from '@/lib/pdfGenerator';
+import { generateOrderPDFFromNotaBalcao } from '@/lib/pdfGeneratorNotaBalcao';
 import { sendWhatsAppDocument, sendWhatsAppText } from '@/lib/whatsappService';
+import { NotaBalcao } from './NotaBalcao';
 
 import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -431,8 +433,11 @@ export function OrderDetails({
     try {
       setIsSendingPDF(true)
       
-      // Gerar PDF e extrair base64 do objeto retornado
-      const pdfData = generateOrderPDFBase64(order)
+      // Gerar PDF usando o novo NotaBalcao generator
+      const pdfData = await generateOrderPDFFromNotaBalcao(
+        'nota-balcao-print-container',
+        `OS-${order.id?.slice(0, 8)?.toUpperCase() || 'DOCUMENTO'}.pdf`
+      )
       
       const cleanPhone = order.client_phone?.replace(/\D/g, '') || ''
       if (cleanPhone.length < 10 || cleanPhone.length > 11) {
@@ -506,8 +511,20 @@ export function OrderDetails({
     }
     
     try {
-      // Usar o gerador antigo que já funciona bem
-      await generateOrderPDF(order)
+      // Usar o novo gerador NotaBalcao
+      const pdfData = await generateOrderPDFFromNotaBalcao(
+        'nota-balcao-print-container',
+        `OS-${order.id?.slice(0, 8)?.toUpperCase() || 'DOCUMENTO'}.pdf`
+      )
+      
+      // Criar link de download
+      const link = document.createElement('a')
+      link.href = `data:application/pdf;base64,${pdfData.base64}`
+      link.download = pdfData.fileName
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
       alert('✅ PDF baixado com sucesso!')
     } catch (error: any) {
       console.error('Erro ao baixar PDF:', error)
@@ -1457,6 +1474,39 @@ export function OrderDetails({
             Enviar PDF via WhatsApp
           </Button>
         </div>
+      </div>
+
+      {/* NotaBalcao renderizada escondida para geração de PDF */}
+      <div id="nota-balcao-print-container" style={{ display: 'none' }}>
+        <NotaBalcao
+          data={{
+            client: {
+              name: order.client_name || '',
+              email: order.client_email || '',
+              phone: order.client_phone || '',
+              city: order.client_city || '',
+              address: order.client_address || '',
+            },
+            vehicle: {
+              brand: order.vehicle_brand || '',
+              model: order.vehicle_model || '',
+              year: order.vehicle_year || 0,
+              plate: order.vehicle_plate || '',
+              color: order.vehicle_color || '',
+              equipment: order.vehicle_equipment || '',
+              km: order.km || 0,
+            },
+            checklist: order.checklist_items || [],
+            services: order.materials || [],
+            totals: {
+              subtotal: order.subtotal || 0,
+              discount: order.discount_amount || 0,
+              total: order.total || 0,
+            },
+            observation: order.observation || '',
+            status: order.status,
+          }}
+        />
       </div>
     </>
   );
