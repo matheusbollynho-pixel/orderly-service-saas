@@ -94,6 +94,12 @@ export function NotaBalcao({
   layoutStorageKey = "nota-balcao-layout-v1",
   onLayoutSaved,
 }: NotaBalcaoProps) {
+  // Guard clause: se dados essenciais estão faltando, renderizar placeholder
+  if (!data?.cliente || !data?.veiculo) {
+    console.warn('⚠️ NotaBalcao: dados incompletos', { cliente: data?.cliente, veiculo: data?.veiculo });
+    return <div style={{ display: 'none' }}>Carregando...</div>;
+  }
+
   const [positions, setPositions] = useState<LayoutPositions>({})
   const [sizes, setSizes] = useState<LayoutSizes>({})
   const [selectedId, setSelectedId] = useState<string | null>(null)
