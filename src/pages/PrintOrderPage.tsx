@@ -1,5 +1,5 @@
 import { useParams, useLocation } from "react-router-dom"
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { supabase } from "@/integrations/supabase/client"
 import { NotaBalcao } from "@/components/NotaBalcao"
 import { Button } from "@/components/ui/button"
@@ -63,8 +63,7 @@ export function PrintOrderPage() {
   const [isDownloading, setIsDownloading] = useState(false)
   const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false)
   const [orderData, setOrderData] = useState<any>(null)
-  const [autoAction, setAutoAction] = useState<'download' | 'whatsapp' | null>(null)
-  const [autoActionExecuted, setAutoActionExecuted] = useState(false)
+  const autoActionRef = useRef<{ executed: boolean; action: string | null }>({ executed: false, action: null })
 
   useEffect(() => {
     const loadOrder = async () => {
@@ -376,51 +375,32 @@ export function PrintOrderPage() {
     window.setTimeout(() => setSaveMessage(""), 2500)
   }
 
-  // Detectar se veio de redirect e auto-executar ação
+  // Detectar se veio de redirect e auto-executar ação (apenas uma vez)
   useEffect(() => {
-    if (!loading && notaData && location.state?.sendWhatsApp && !autoActionExecuted) {
-      console.log('[PrintOrderPage] Triggering auto WhatsApp send');
-      setAutoAction('whatsapp')
-      setAutoActionExecuted(true)
+    // Só executar se os dados estão carregados e ainda não foi executado
+    if (loading || !notaData || autoActionRef.current.executed) {
+      return
     }
-  }, [loading, notaData, location.state?.sendWhatsApp, autoActionExecuted])
 
-  useEffect(() => {
-    if (!loading && notaData && location.state?.autoDownload && !autoActionExecuted) {
-      console.log('[PrintOrderPage] Triggering auto download');
-      setAutoAction('download')
-      setAutoActionExecuted(true)
-    }
-  }, [loading, notaData, location.state?.autoDownload, autoActionExecuted])
-
-  // Executar ações quando autoAction muda
-  useEffect(() => {
-    if (autoAction === 'whatsapp' && !isSendingWhatsApp && autoActionExecuted) {
-      const timer = setTimeout(() => {
+    // Verificar se há uma ação de auto-envio
+    if (location.state?.sendWhatsApp) {
+      console.log('[PrintOrderPage] Auto-triggering WhatsApp send');
+      autoActionRef.current.executed = true
+      autoActionRef.current.action = 'whatsapp'
+      
+      setTimeout(() => {
         handleSendWhatsApp()
-          .finally(() => {
-            // Resetar após conclusão
-            setAutoAction(null)
-            setAutoActionExecuted(false)
-          })
       }, 500)
-      return () => clearTimeout(timer)
-    }
-  }, [autoAction, handleSendWhatsApp, isSendingWhatsApp, autoActionExecuted])
-
-  useEffect(() => {
-    if (autoAction === 'download' && !isDownloading && autoActionExecuted) {
-      const timer = setTimeout(() => {
+    } else if (location.state?.autoDownload) {
+      console.log('[PrintOrderPage] Auto-triggering PDF download');
+      autoActionRef.current.executed = true
+      autoActionRef.current.action = 'download'
+      
+      setTimeout(() => {
         handleDownloadPDF()
-          .finally(() => {
-            // Resetar após conclusão
-            setAutoAction(null)
-            setAutoActionExecuted(false)
-          })
       }, 500)
-      return () => clearTimeout(timer)
     }
-  }, [autoAction, handleDownloadPDF, isDownloading, autoActionExecuted])
+  }, [loading, notaData, location.state?.sendWhatsApp, location.state?.autoDownload, handleSendWhatsApp, handleDownloadPDF])
 
   if (loading) {
     return (
