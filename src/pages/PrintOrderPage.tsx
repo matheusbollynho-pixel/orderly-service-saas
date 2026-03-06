@@ -301,56 +301,6 @@ export function PrintOrderPage() {
     loadOrder()
   }, [id])
 
-  // Detectar se veio de redirect e auto-executar ação
-  useEffect(() => {
-    if (!loading && notaData && location.state?.sendWhatsApp && autoAction !== 'whatsapp') {
-      console.log('[PrintOrderPage] Triggering auto WhatsApp send');
-      setAutoAction('whatsapp')
-    }
-  }, [loading, notaData, location.state?.sendWhatsApp, autoAction])
-
-  useEffect(() => {
-    if (!loading && notaData && location.state?.autoDownload && autoAction !== 'download') {
-      console.log('[PrintOrderPage] Triggering auto download');
-      setAutoAction('download')
-    }
-  }, [loading, notaData, location.state?.autoDownload, autoAction])
-
-  // Executar ações quando autoAction muda
-  useEffect(() => {
-    if (autoAction === 'whatsapp' && !isSendingWhatsApp) {
-      const timer = setTimeout(() => {
-        handleSendWhatsApp()
-      }, 500)
-      return () => clearTimeout(timer)
-    }
-  }, [autoAction, handleSendWhatsApp, isSendingWhatsApp])
-
-  useEffect(() => {
-    if (autoAction === 'download' && !isDownloading) {
-      const timer = setTimeout(() => {
-        handleDownloadPDF()
-      }, 500)
-      return () => clearTimeout(timer)
-    }
-  }, [autoAction, handleDownloadPDF, isDownloading])
-
-  const handlePrint = () => {
-    window.print()
-  }
-
-  const handleSaveLayout = () => {
-    setSaveToken((prev) => prev + 1)
-    setSaveMessage("Layout salvo com sucesso.")
-    window.setTimeout(() => setSaveMessage(""), 2500)
-  }
-
-  const handleResetLayout = () => {
-    setResetToken((prev) => prev + 1)
-    setSaveMessage("Layout resetado.")
-    window.setTimeout(() => setSaveMessage(""), 2500)
-  }
-
   const handleDownloadPDF = useCallback(async () => {
     console.log('[PrintOrderPage] handleDownloadPDF called');
     try {
@@ -408,6 +358,56 @@ export function PrintOrderPage() {
       setIsSendingWhatsApp(false)
     }
   }, [orderData?.client_phone, orderData?.client_name, orderData?.id])
+
+  const handlePrint = () => {
+    window.print()
+  }
+
+  const handleSaveLayout = () => {
+    setSaveToken((prev) => prev + 1)
+    setSaveMessage("Layout salvo com sucesso.")
+    window.setTimeout(() => setSaveMessage(""), 2500)
+  }
+
+  const handleResetLayout = () => {
+    setResetToken((prev) => prev + 1)
+    setSaveMessage("Layout resetado.")
+    window.setTimeout(() => setSaveMessage(""), 2500)
+  }
+
+  // Detectar se veio de redirect e auto-executar ação
+  useEffect(() => {
+    if (!loading && notaData && location.state?.sendWhatsApp && autoAction !== 'whatsapp') {
+      console.log('[PrintOrderPage] Triggering auto WhatsApp send');
+      setAutoAction('whatsapp')
+    }
+  }, [loading, notaData, location.state?.sendWhatsApp, autoAction])
+
+  useEffect(() => {
+    if (!loading && notaData && location.state?.autoDownload && autoAction !== 'download') {
+      console.log('[PrintOrderPage] Triggering auto download');
+      setAutoAction('download')
+    }
+  }, [loading, notaData, location.state?.autoDownload, autoAction])
+
+  // Executar ações quando autoAction muda
+  useEffect(() => {
+    if (autoAction === 'whatsapp' && !isSendingWhatsApp) {
+      const timer = setTimeout(() => {
+        handleSendWhatsApp()
+      }, 500)
+      return () => clearTimeout(timer)
+    }
+  }, [autoAction, handleSendWhatsApp, isSendingWhatsApp])
+
+  useEffect(() => {
+    if (autoAction === 'download' && !isDownloading) {
+      const timer = setTimeout(() => {
+        handleDownloadPDF()
+      }, 500)
+      return () => clearTimeout(timer)
+    }
+  }, [autoAction, handleDownloadPDF, isDownloading])
 
   if (loading) {
     return (

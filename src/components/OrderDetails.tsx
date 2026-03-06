@@ -103,6 +103,7 @@ export function OrderDetails({
   isAdmin = false,
   canAccessPayments = true,
 }: OrderDetailsProps) {
+  const navigate = useNavigate();
   const { members: teamMembers } = useTeamMembers();
   const { mechanics } = useMechanics();
   const { getClientById, getMotorcycleById, updateClientById, updateMotorcycleById } = useClients();
@@ -430,7 +431,6 @@ export function OrderDetails({
       return;
     }
     // Para enviar pelo WhatsApp com novo PDF, redirecionar para página de impressão
-    const navigate = useNavigate();
     // Passar um estado indicando que deve enviar via WhatsApp após renderizar
     navigate(`/print/${order.id}`, { state: { sendWhatsApp: true, clientPhone: order.client_phone, clientName: order.client_name } });
   };
@@ -479,7 +479,6 @@ export function OrderDetails({
   };
 
   const handleDownloadPDF = () => {
-    const navigate = useNavigate();
     if (!order.signature_data) {
       alert('É necessário coletar a assinatura do cliente antes de gerar o PDF.');
       return;
