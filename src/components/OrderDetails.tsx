@@ -897,13 +897,10 @@ export function OrderDetails({
             </div>
           )}
         </CardContent>
-              {/* Rodapé com ID da OS */}
-              <div style={{textAlign: 'center', fontSize: '12px', color: '#aaa', marginTop: '-12px', marginBottom: '8px', letterSpacing: '1px'}}>
-                OS ID: {order.id}
-              </div>
+              {/* Rodapé com ID da OS removido para evitar duplicidade */}
       </Card>
 
-      {/* ID da OS movido para dentro da caixa de datas */}
+      {/* ID da OS movido para dentro da caixa de datas - duplicidade removida */}
 
       {isExpress && (
         <Card className="card-elevated">
