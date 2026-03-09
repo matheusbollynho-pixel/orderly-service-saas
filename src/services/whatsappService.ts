@@ -204,6 +204,17 @@ export async function sendTestSatisfactionSurvey(): Promise<{ success: boolean; 
   try {
     const supabase = getSupabase();
 
+    // Buscar token público da satisfação
+    const { data: satisfactionData, error: satisfactionError } = await supabase
+      .from('satisfaction_ratings')
+      .select('public_token')
+      .eq('order_id', order.id)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    let satisfactionToken = satisfactionData && satisfactionData.length > 0 ? satisfactionData[0].public_token : null;
+    let satisfactionLink = satisfactionToken ? `https://orderly-service.vercel.app/avaliar/${satisfactionToken}` : '';
+
     const SATISFACTION_MESSAGE = `Olá! Tudo bem? 😊
 
 Aqui é da *Bandara Motos*.
@@ -214,6 +225,8 @@ Queremos saber:
 
 *De 0 a 10*, o quanto você indicaria a Bandara Motos para um amigo? ⭐
 
+Responda rapidinho aqui: ${satisfactionLink}
+
 Se precisar de algo, é só responder essa mensagem.
 Estamos à disposição! 🏍️🔧
 
@@ -221,7 +234,8 @@ Siga-nos no Instagram: @BandaraMotos`;
 
     const { data: orders, error } = await supabase
       .from('service_orders')
-      .select('id, client_name, client_phone')
+      .select('id, client_name, client_phone, status')
+      .eq('status', 'concluida_entregue')
       .ilike('client_name', '%Matheus%')
       .order('created_at', { ascending: false })
       .limit(1);

@@ -8,7 +8,7 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 )
 
-const APP_BASE_URL = (Deno.env.get('APP_BASE_URL') || 'https://bandara-motos.com').replace(/\/$/, '')
+const APP_BASE_URL = (Deno.env.get('APP_BASE_URL') || 'https://orderly-service.vercel.app').replace(/\/$/, '')
 
 function buildSatisfactionMessage(clientName: string, link: string) {
   return `Olá, ${clientName || 'cliente'}! 👋
@@ -164,26 +164,39 @@ Deno.serve(async (req) => {
       .from('service_orders')
       .select('id, client_id, atendimento_id, mechanic_id, client_name, client_phone, satisfaction_survey_sent_at')
       .in('id', orderIds)
-      .is('satisfaction_survey_sent_at', null)
       .not('client_phone', 'is', null)
 
-    console.log(`📝 Ordens sem pesquisa: ${orders?.length || 0}`)
+    // Proteção: só envia se não foi enviado nas últimas 24h
+    const now = Date.now();
+    const ordersToSend = (orders || []).filter(order => {
+      if (!order.satisfaction_survey_sent_at) return true;
+      const lastSent = new Date(order.satisfaction_survey_sent_at).getTime();
+      return (now - lastSent) > 24 * 60 * 60 * 1000;
+    });
+
+    console.log(`📝 Ordens para enviar: ${ordersToSend.length}`);
 
     const results = []
-    for (const order of orders || []) {
+    for (const order of ordersToSend) {
       try {
         const ratingRow = await ensureSatisfactionRow(order)
         const link = `${APP_BASE_URL}/avaliar/${ratingRow.public_token}`
         const message = buildSatisfactionMessage(order.client_name, link)
 
         await sendWhatsApp(order.client_phone, message)
-        
+
         await supabase
           .from('service_orders')
           .update({ satisfaction_survey_sent_at: new Date().toISOString() })
           .eq('id', order.id)
-        
-        results.push({ name: order.client_name, success: true })
+
+        results.push({
+          name: order.client_name,
+          success: true,
+          order_id: order.id,
+          public_token: ratingRow.public_token,
+          link
+        })
       } catch (error) {
         console.error(`❌ Erro: ${error.message}`)
         results.push({ name: order.client_name, success: false, error: error.message })
