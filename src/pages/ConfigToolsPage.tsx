@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
+import { useServiceOrders } from '@/hooks/useServiceOrders';
 import { useAuth } from '@/hooks/useAuth';
 import { MaintenanceKeywordsManager } from '@/components/MaintenanceKeywordsManager';
 import { Settings, Trash2, MessageCircle, Clock, Zap, Send, RotateCcw } from 'lucide-react';
@@ -9,9 +10,11 @@ export default function ConfigToolsPage() {
   const [showKeywords, setShowKeywords] = useState(false);
   const [removeOsId, setRemoveOsId] = useState("");
 
-  function handleRemoveConcluidaEntregue(osId: string) {
-    // TODO: implementar lógica de remoção
-    alert(`Remover status de Concluída e Entregue da OS: ${osId}`);
+  const { updateOrderMutation } = useServiceOrders();
+
+  function handleAlterarParaAberta(osId: string) {
+    if (!osId.trim()) return;
+    updateOrderMutation.mutate({ id: osId, status: 'aberta' });
   }
 
   if (!user || isRestrictedUser) {
@@ -45,8 +48,8 @@ export default function ConfigToolsPage() {
         <div className="w-full flex flex-col gap-2">
           <label htmlFor="removeOsId" className="text-xs text-neutral-400 mb-1 font-medium">ID da OS para tirar de Concluída e Entregue:</label>
           <input id="removeOsId" type="text" value={removeOsId} onChange={e => setRemoveOsId(e.target.value)} placeholder="Cole o ID da OS aqui" className="w-full p-2 border border-white/20 rounded text-xs bg-black/30 text-neutral-200 mb-2" />
-          <Button variant="default" className="w-full flex items-center gap-2" disabled={!removeOsId.trim()} onClick={() => handleRemoveConcluidaEntregue(removeOsId)}>
-            <Settings size={18} /> Tirar OS de Concluída e Entregue
+          <Button variant="default" className="w-full flex items-center gap-2" disabled={!removeOsId.trim() || updateOrderMutation.isLoading} onClick={() => handleAlterarParaAberta(removeOsId)}>
+            <Settings size={18} /> Alterar OS para "Aberta"
           </Button>
         </div>
       </div>
