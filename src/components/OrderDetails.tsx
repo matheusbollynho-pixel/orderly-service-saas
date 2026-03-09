@@ -819,10 +819,7 @@ export function OrderDetails({
               {(() => {
                 const atendente = teamMembers.find(tm => tm.id === order.atendimento_id);
                 if (!atendente) return 'Não definido';
-                if (atendente.name === 'Matheus') {
-                  return <span className="text-red-500">{atendente.name}</span>;
-                }
-                return atendente.name;
+                return <span className="text-red-500">{atendente.name}</span>;
               })()}
             </span>
           </div>
