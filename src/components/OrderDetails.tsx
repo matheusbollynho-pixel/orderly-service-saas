@@ -70,7 +70,7 @@ interface OrderDetailsProps {
   onChecklistItemObservations?: (id: string, observations: string) => void;
   onSignatureSave: (signature: string) => void;
   onDelete: () => void;
-  onAddMaterial?: (material: any) => void;
+  onAddMaterial?: (material: { id: string; name: string; quantity: number }) => void;
   onRemoveMaterial?: (id: string) => void;
   onUpdateMaterial?: (id: string, field: string, value: string) => void;
   onAddPayment?: (payload: { order_id: string; amount: number; discount_amount?: number | null; method: PaymentMethod; reference?: string | null; notes?: string | null; finalized_by_staff_id?: string | null }) => void;
@@ -108,13 +108,16 @@ export function OrderDetails({
   const { mechanics } = useMechanics();
   const { getClientById, getMotorcycleById, updateClientById, updateMotorcycleById } = useClients();
   const printRef = useRef<HTMLDivElement>(null);
+  // Corrigido: declarar isExpress apenas uma vez, usando problem_description
+  const isExpress = (order.problem_description || '').toLowerCase().includes('cadastro express');
   const [showSignature, setShowSignature] = useState(false);
   const [showDeliverySignature, setShowDeliverySignature] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(order.terms_accepted ?? false);
   const [deliveryTermsAccepted, setDeliveryTermsAccepted] = useState(order.delivery_terms_accepted ?? false);
   const [deliverySignatureData, setDeliverySignatureData] = useState(order.delivery_signature_data ?? null);
+  const [signatureData, setSignatureData] = useState(order.signature_data ?? null);
   const [activeTab, setActiveTab] = useState<'checklist' | 'materiais'>(
-    order.signature_data ? 'materiais' : 'checklist'
+    isExpress ? 'materiais' : (order.signature_data ? 'materiais' : 'checklist')
   );
   const [isSendingPDF, setIsSendingPDF] = useState(false);
   const [isSendingText, setIsSendingText] = useState(false);
@@ -124,15 +127,17 @@ export function OrderDetails({
   // Sincronizar com dados da OS
   useEffect(() => {
     console.log('🔄 Sincronizando dados da OS:', order.id);
-    setTermsAccepted(order.terms_accepted === true);
-    setDeliveryTermsAccepted(order.delivery_terms_accepted === true);
+    // Sincronizar assinatura do checklist
+    setSignatureData(order.signature_data ?? null);
     setDeliverySignatureData(order.delivery_signature_data ?? null);
+    setTermsAccepted(order.terms_accepted ?? false);
+    setDeliveryTermsAccepted(order.delivery_terms_accepted ?? false);
     setEditedServicesTodo(order.problem_description || '');
     // Se tem assinatura, vai para materiais
     if (order.signature_data) {
       setActiveTab('materiais');
     }
-  }, [order.id, order.terms_accepted, order.delivery_terms_accepted, order.delivery_signature_data, order.signature_data]);
+  }, [order.id, order.terms_accepted, order.delivery_terms_accepted, order.delivery_signature_data, order.signature_data, order.problem_description]);
 
   // Função para atualizar termsAccepted e salvar no Supabase
   const handleTermsChange = (checked: boolean) => {
@@ -257,7 +262,6 @@ export function OrderDetails({
   const [showFullClient, setShowFullClient] = useState(false);
   const [autorizaInstagram, setAutorizaInstagram] = useState(!!order.autoriza_instagram);
   const [autorizaLembretes, setAutorizaLembretes] = useState(order.autoriza_lembretes !== false ? true : false);
-  const isExpress = (order.problem_description || '').toLowerCase().includes('cadastro express');
   const stripExpressMarker = (text?: string | null) =>
     (text || '').replace(/serviço rápido \(cadastro express\)/i, '').replace(/cadastro express/gi, '').trim();
   const parseRetirada = (text?: string | null) => {
@@ -342,7 +346,7 @@ export function OrderDetails({
     setExpressEntryDate(formatDateToInput(order.entry_date));
     setExpressAtendimentoId(order.atendimento_id || '');
     setExpressFormInitialized(false);
-  }, [order.id, order.problem_description, order.client_phone, order.client_address, order.atendimento_id]);
+  }, [order.id, order.problem_description, order.client_phone, order.client_address, order.atendimento_id, order.autoriza_instagram, order.autoriza_lembretes, order.client_apelido, order.client_birth_date, order.client_cpf, order.client_instagram, order.client_name, order.entry_date]);
 
   useEffect(() => {
     const loadClientMoto = async () => {
@@ -447,7 +451,7 @@ export function OrderDetails({
   };
 
   const handleSendWhatsAppPDF = async () => {
-    if (!order.signature_data) {
+    if (!order.signature_data && !isExpress) {
       alert('É necessário coletar a assinatura do cliente antes de enviar o PDF.');
       return;
     }
@@ -472,9 +476,13 @@ export function OrderDetails({
       })
 
       alert('✅ PDF enviado para WhatsApp com sucesso!')
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erro ao enviar WhatsApp:', error)
-      alert(error.message || 'Erro ao enviar PDF. Tente novamente.')
+      if (error instanceof Error) {
+        alert(error.message || 'Erro ao enviar PDF. Tente novamente.')
+      } else {
+        alert('Erro ao enviar PDF. Tente novamente.')
+      }
     } finally {
       setIsSendingPDF(false)
     }
@@ -487,6 +495,18 @@ export function OrderDetails({
     }
     onSignatureSave(signature);
     setShowSignature(false);
+    setSignatureData(signature);
+    // Salva assinatura no banco
+    if (onUpdateOrder && order.id) {
+      try {
+        onUpdateOrder({
+          id: order.id,
+          signature_data: signature,
+        });
+      } catch (e) {
+        console.warn('❌ Não foi possível salvar signature_data:', e);
+      }
+    }
     // Mudar para aba de Peças e Serviços após salvar assinatura
     setActiveTab('materiais');
   };
@@ -515,16 +535,20 @@ export function OrderDetails({
       });
       
       alert('✅ Mensagem de teste enviada com sucesso!');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erro ao enviar mensagem:', error);
-      alert(error.message || 'Erro ao enviar mensagem. Tente novamente.');
+      if (error instanceof Error) {
+        alert(error.message || 'Erro ao enviar mensagem. Tente novamente.');
+      } else {
+        alert('Erro ao enviar mensagem. Tente novamente.');
+      }
     } finally {
       setIsSendingText(false);
     }
   };
 
   const handleDownloadPDF = async () => {
-    if (!order.signature_data) {
+    if (!order.signature_data && !isExpress) {
       alert('É necessário coletar a assinatura do cliente antes de gerar o PDF.');
       return;
     }
@@ -533,7 +557,7 @@ export function OrderDetails({
       // Usar o gerador antigo que funciona
       generateOrderPDF(order)
       alert('✅ PDF baixado com sucesso!')
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Erro ao baixar PDF:', error)
       alert('Erro ao gerar PDF. Tente novamente.')
     }
@@ -561,19 +585,20 @@ export function OrderDetails({
         Após 90 dias sem retirada e sem contato do proprietário, o veículo poderá ser considerado abandonado.
       </p>
 
-      {termsAccepted && (
+      {/* Nunca exigir assinatura para OS Express */}
+      {!isExpress && termsAccepted && (
         <>
           {showSignature ? (
             <SignaturePad
               onSave={handleSignatureSave}
-              initialValue={order.signature_data}
+              initialValue={signatureData}
             />
-          ) : order.signature_data ? (
+          ) : signatureData ? (
             <>
               <label className="text-sm font-medium text-foreground">Assinatura do Cliente</label>
               <div className="rounded-lg border border-border overflow-hidden bg-white">
                 <img
-                  src={order.signature_data}
+                  src={signatureData}
                   alt="Assinatura do cliente"
                   className="w-full h-32 object-contain"
                 />
@@ -598,6 +623,9 @@ export function OrderDetails({
           )}
         </>
       )}
+      {isExpress && (
+        <p className="text-sm text-muted-foreground text-center">Cadastro Express não exige assinatura do cliente.</p>
+      )}
     </div>
   );
 
@@ -618,7 +646,6 @@ export function OrderDetails({
           </label>
         </div>
       </div>
-
       <label className="text-sm font-medium text-foreground">Assinatura do Cliente (Entrega)</label>
       {showDeliverySignature ? (
         <SignaturePad
@@ -646,6 +673,7 @@ export function OrderDetails({
       ) : (
         <Button
           variant="outline"
+          size="sm"
           onClick={() => {
             if (!deliveryTermsAccepted) {
               alert('Por favor, confirme que leu e concorda com o termo de entrega do veículo antes de coletar a assinatura.');
@@ -730,10 +758,11 @@ export function OrderDetails({
             <div className="flex items-center gap-2">
               <StatusBadge status={order.status} />
               <Select 
-                value={order.status} 
+                value={order.status}
                 onValueChange={(value) => {
-                  if (value === 'concluida' && !order.signature_data) {
-                    alert('É necessário coletar a assinatura do cliente antes de concluir a ordem de serviço.');
+                  // Permite selecionar 'concluida_entregue' só após assinatura na OS normal
+                  if (value === 'concluida_entregue' && !order.signature_data && !isExpress) {
+                    alert('É necessário coletar a assinatura do cliente antes de marcar como Concluída e Entregue.');
                     return;
                   }
 
@@ -750,7 +779,7 @@ export function OrderDetails({
 
                   onStatusChange(value as OrderStatus);
                 }}
-                disabled={isUpdating || order.status === 'concluida'}
+                disabled={isUpdating}
               >
                 <SelectTrigger className="w-[140px] h-8 text-sm">
                   <SelectValue />
@@ -759,11 +788,9 @@ export function OrderDetails({
                   <SelectItem value="aberta">Aberta</SelectItem>
                   <SelectItem value="em_andamento">Em Andamento</SelectItem>
                   <SelectItem value="concluida">Concluída</SelectItem>
+                  <SelectItem value="concluida_entregue">Concluída e Entregue</SelectItem>
                 </SelectContent>
               </Select>
-              {order.status === 'concluida' && (
-                <span className="text-xs text-emerald-600 font-medium">✓ Finalizada</span>
-              )}
             </div>
           </div>
           <div className="flex items-center justify-between gap-3">
@@ -785,6 +812,19 @@ export function OrderDetails({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-medium text-foreground whitespace-nowrap">Criador O.S</span>
+            <span className="text-sm">
+              {(() => {
+                const atendente = teamMembers.find(tm => tm.id === order.atendimento_id);
+                if (!atendente) return 'Não definido';
+                if (atendente.name === 'Matheus') {
+                  return <span className="text-red-500">{atendente.name}</span>;
+                }
+                return atendente.name;
+              })()}
+            </span>
           </div>
           
           {/* Data de Saída */}
@@ -1082,10 +1122,10 @@ export function OrderDetails({
         <CardContent className="p-4 space-y-3">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-medium text-foreground">Informações do Cliente</h3>
+            {/* Botão de alternância para visualizar detalhes do cliente */}
             <Button
               type="button"
               variant="ghost"
-              size="icon"
               className="h-8 w-8"
               onClick={() => setShowFullClient(v => !v)}
             >
@@ -1281,7 +1321,7 @@ export function OrderDetails({
                       size="sm"
                       className="h-7 px-2 text-green-600 hover:text-green-700"
                       onClick={handleSaveServicesTodo}
-                      disabled={isUpdating}
+                      disabled={isUpdating || order.status === 'concluida_entregue'}
                     >
                       {isUpdating ? (
                         <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
@@ -1341,17 +1381,17 @@ export function OrderDetails({
                     onItemToggle={onChecklistItemToggle}
                     onRatingChange={onChecklistItemRating}
                     onObservationsChange={onChecklistItemObservations}
-                    disabled={order.status === 'concluida'}
+                    disabled={order.status === 'concluida_entregue'}
                     orderId={order.id}
                   />
                 )}
-                {renderSignatureSection()}
+                {!isExpress && renderSignatureSection()}
               </TabsContent>
             ) : null}
 
             <TabsContent value="materiais" className="p-4">
               <div className="text-center py-4">
-                <Button onClick={onOpenMaterials} className="w-full">
+                <Button onClick={onOpenMaterials} className="w-full" disabled={order.status === 'concluida_entregue'}>
                   Abrir Peças e Serviços
                 </Button>
               </div>
@@ -1360,13 +1400,7 @@ export function OrderDetails({
         </CardContent>
       </Card>
 
-      {isExpress && !showCompleteForm && (
-        <Card className="card-elevated">
-          <CardContent className="p-4">
-            {renderSignatureSection()}
-          </CardContent>
-        </Card>
-      )}
+      
 
       {/* Pagamentos */}
       {canAccessPayments !== false && (
@@ -1486,14 +1520,13 @@ export function OrderDetails({
       )}
 
       {/* Termo de Entrega do Veículo */}
-      {canAccessPayments && (
+      {canAccessPayments && !isExpress && (
         <Card className="card-elevated">
           <CardContent className="p-4">
             {renderDeliverySection()}
           </CardContent>
         </Card>
       )}
-
       {/* Termos incorporados à seção de assinatura */}
 
       </div>
