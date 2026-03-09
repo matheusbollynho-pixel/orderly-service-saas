@@ -893,6 +893,7 @@ export function OrderDetails({
               <span className="text-sm text-muted-foreground">
                 {exitDate ? formatDateDisplay(exitDate) : 'Não definida'}
               </span>
+              <span className="text-center text-xs text-neutral-400 tracking-wider mt-2">ID da OS: {order.id}</span>
             </div>
           )}
         </CardContent>
@@ -901,6 +902,8 @@ export function OrderDetails({
                 OS ID: {order.id}
               </div>
       </Card>
+
+      {/* ID da OS movido para dentro da caixa de datas */}
 
       {isExpress && (
         <Card className="card-elevated">
