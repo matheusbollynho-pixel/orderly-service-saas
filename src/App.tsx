@@ -16,6 +16,7 @@ import PublicStoreSatisfactionPage from "./pages/PublicStoreSatisfactionPage";
 import PublicSatisfactionFeedPage from "./pages/PublicSatisfactionFeedPage";
 import { PrintOrderPage } from "./pages/PrintOrderPage";
 import { DebugOrderPage } from "./pages/DebugOrderPage";
+import ConfigToolsPage from "./pages/ConfigToolsPage";
 import { useAuth } from "./hooks/useAuth";
 import { useEffect } from "react";
 import { cleanupOldPhotos } from "./lib/photoService";
@@ -99,6 +100,7 @@ function AuthenticatedApp() {
   return (
     <Routes>
       <Route path="/" element={<Index />} />
+      <Route path="/confg" element={<ConfigToolsPage />} />
       <Route path="/pos-venda" element={<AfterSalesPage />} />
       <Route path="/fluxo-caixa" element={<CashFlowPage />} />
       <Route path="/debug-os/:id" element={<DebugOrderPage />} />
