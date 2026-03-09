@@ -120,8 +120,9 @@ export function OrderDetails({
   const [signatureData, setSignatureData] = useState(order.signature_data ?? null);
   // Campo para persistir a primeira assinatura
   const [firstSignatureData, setFirstSignatureData] = useState(order.first_signature_data ?? order.signature_data ?? null);
+  // Aba inicial sempre 'checklist', exceto se for express
   const [activeTab, setActiveTab] = useState<'checklist' | 'materiais'>(
-    isExpress ? 'materiais' : (order.signature_data ? 'materiais' : 'checklist')
+    isExpress ? 'materiais' : 'checklist'
   );
   const [isSendingPDF, setIsSendingPDF] = useState(false);
   const [isSendingText, setIsSendingText] = useState(false);
@@ -146,9 +147,7 @@ export function OrderDetails({
     } else if (order.first_delivery_signature_data) {
       setFirstDeliverySignatureData(order.first_delivery_signature_data);
     }
-    if (order.signature_data) {
-      setActiveTab('materiais');
-    }
+    // Removido: não puxar aba 'materiais' automaticamente
   }, [order.id, order.terms_accepted, order.signature_data, order.first_signature_data, order.delivery_signature_data, order.first_delivery_signature_data, order.problem_description]);
 
   // Função para atualizar termsAccepted e salvar no Supabase
@@ -586,6 +585,7 @@ export function OrderDetails({
             checked={termsAccepted}
             onCheckedChange={handleTermsChange}
             className="mt-1"
+            disabled={order.status === 'concluida_entregue'}
           />
           <label htmlFor="terms-checkbox" className="text-sm text-foreground leading-relaxed cursor-pointer">
             <span className="font-semibold">Declaro que o checklist de inspeção do veículo foi realizado e conferido no ato do atendimento, estando ciente das condições registradas e autorizando a execução dos serviços descritos nesta Ordem de Serviço.</span> Estou ciente do prazo de até 30 dias para retirada da motocicleta após a conclusão do serviço. Após esse período, será cobrada taxa de estadia no valor de R$ 6,00 por dia. O não comparecimento para retirada poderá caracterizar abandono do veículo, nos termos da legislação vigente.
@@ -600,7 +600,7 @@ export function OrderDetails({
       {/* Nunca exigir assinatura para OS Express */}
       {!isExpress && termsAccepted && (
         <>
-          {showSignature ? (
+          {showSignature && order.status !== 'concluida_entregue' ? (
             <SignaturePad
               onSave={handleSignatureSave}
               initialValue={signatureData || firstSignatureData}
@@ -620,6 +620,7 @@ export function OrderDetails({
                 size="sm"
                 onClick={() => setShowSignature(true)}
                 className="w-full"
+                disabled={order.status === 'concluida_entregue'}
               >
                 Nova Assinatura
               </Button>
@@ -629,6 +630,7 @@ export function OrderDetails({
               variant="outline"
               onClick={() => setShowSignature(true)}
               className="w-full"
+              disabled={order.status === 'concluida_entregue'}
             >
               Coletar Assinatura
             </Button>
@@ -652,6 +654,7 @@ export function OrderDetails({
             checked={deliveryTermsAccepted}
             onCheckedChange={handleDeliveryTermsChange}
             className="mt-1"
+            disabled={order.status === 'concluida_entregue'}
           />
           <label htmlFor="delivery-terms-checkbox" className="text-sm text-foreground leading-relaxed cursor-pointer">
             <span className="font-semibold">Declaro que recebi nesta data a motocicleta referente a esta Ordem de Serviço, após a execução dos serviços descritos.</span> Confirmo que o veículo foi entregue, conferido e encontra-se em condições de uso, não constatando irregularidades aparentes no ato da entrega.
@@ -659,7 +662,7 @@ export function OrderDetails({
         </div>
       </div>
       <label className="text-sm font-medium text-foreground">Assinatura do Cliente (Entrega)</label>
-      {showDeliverySignature ? (
+      {showDeliverySignature && order.status !== 'concluida_entregue' ? (
         <SignaturePad
           onSave={handleDeliverySignatureSave}
           initialValue={deliverySignatureData || firstDeliverySignatureData}
@@ -678,6 +681,7 @@ export function OrderDetails({
             size="sm"
             onClick={() => setShowDeliverySignature(true)}
             className="w-full"
+            disabled={order.status === 'concluida_entregue'}
           >
             Nova Assinatura de Entrega
           </Button>
@@ -693,7 +697,7 @@ export function OrderDetails({
             }
             setShowDeliverySignature(true);
           }}
-          disabled={!deliveryTermsAccepted}
+          disabled={!deliveryTermsAccepted || order.status === 'concluida_entregue'}
           className="w-full"
           title={!deliveryTermsAccepted ? 'É necessário aceitar o termo de entrega antes de assinar' : ''}
         >
@@ -772,6 +776,7 @@ export function OrderDetails({
               <Select 
                 value={order.status}
                 onValueChange={(value) => {
+                  if (order.status === 'concluida_entregue') return; // Bloqueia alteração
                   // Permite selecionar 'concluida_entregue' só após assinatura na OS normal
                   if (value === 'concluida_entregue' && !order.signature_data && !isExpress) {
                     alert('É necessário coletar a assinatura do cliente antes de marcar como Concluída e Entregue.');
@@ -791,7 +796,7 @@ export function OrderDetails({
 
                   onStatusChange(value as OrderStatus);
                 }}
-                disabled={isUpdating}
+                disabled={isUpdating || order.status === 'concluida_entregue'}
               >
                 <SelectTrigger className="w-[140px] h-8 text-sm">
                   <SelectValue />
@@ -813,8 +818,9 @@ export function OrderDetails({
                 const ev = new CustomEvent('order:updateMechanic', { detail: { id: order.id, mechanic_id: value === 'none' ? null : value } });
                 window.dispatchEvent(ev);
               }}
+              disabled={order.status === 'concluida_entregue'}
             >
-              <SelectTrigger className="w-[160px] h-8 text-sm">
+              <SelectTrigger className="w-[160px] h-8 text-sm" disabled={order.status === 'concluida_entregue'}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -875,14 +881,6 @@ export function OrderDetails({
                   <span className="text-sm text-muted-foreground">
                     {exitDate ? formatDateDisplay(exitDate) : 'Não definida'}
                   </span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowExitDateEditor(true)}
-                  >
-                    Alterar data
-                  </Button>
                 </div>
               )}
             </div>
@@ -1331,6 +1329,7 @@ export function OrderDetails({
                     size="sm"
                     className="h-7 px-2"
                     onClick={() => setIsEditingServicesTodo(true)}
+                    disabled={order.status === 'concluida_entregue'}
                   >
                     <Edit2 className="h-3.5 w-3.5 mr-1" />
                     Editar
@@ -1412,10 +1411,21 @@ export function OrderDetails({
 
             <TabsContent value="materiais" className="p-4">
               <div className="text-center py-4">
-                <Button onClick={onOpenMaterials} className="w-full" disabled={order.status === 'concluida_entregue'}>
+                <Button onClick={() => setActiveTab('materiais')} className="w-full" disabled={false}>
                   Abrir Peças e Serviços
                 </Button>
               </div>
+              <MaterialsNote
+                materiais={order.materials || []}
+                mecanicos={mechanics}
+                onAddMaterial={onAddMaterial}
+                onRemoveMaterial={onRemoveMaterial}
+                onUpdateMaterial={onUpdateMaterial}
+                disabled={order.status === 'concluida_entregue'}
+                loadingAdd={isUpdating}
+                loadingUpdate={isUpdating}
+                loadingDelete={isUpdating}
+              />
             </TabsContent>
           </Tabs>
         </CardContent>
@@ -1461,7 +1471,7 @@ export function OrderDetails({
                         size="icon"
                         className="h-8 w-8 text-destructive"
                         onClick={() => onDeletePayment(p.id)}
-                        disabled={isDeletingPayment}
+                        disabled={isDeletingPayment || order.status === 'concluida_entregue'}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -1477,8 +1487,8 @@ export function OrderDetails({
               {/* Quem vai finalizar o pagamento */}
               <div className="p-3 glass-card-elevated border border-border/50 rounded-lg">
                 <Label className="text-sm font-semibold text-foreground">💰 Quem vai finalizar o pagamento?</Label>
-                <Select value={paymentForm.finalized_by_staff_id || ''} onValueChange={(v) => setPaymentForm((prev) => ({ ...prev, finalized_by_staff_id: v }))}>
-                  <SelectTrigger className="h-9 mt-2 bg-muted/50 border-border/50">
+                <Select value={paymentForm.finalized_by_staff_id || ''} onValueChange={(v) => setPaymentForm((prev) => ({ ...prev, finalized_by_staff_id: v }))} disabled={order.status === 'concluida_entregue'}>
+                  <SelectTrigger className="h-9 mt-2 bg-muted/50 border-border/50" disabled={order.status === 'concluida_entregue'}>
                     <SelectValue placeholder="Selecione o responsável" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1501,6 +1511,7 @@ export function OrderDetails({
                   type="number"
                   min="0"
                   step="0.01"
+                  disabled={order.status === 'concluida_entregue'}
                 />
                 <Input
                   placeholder="Desconto (R$)"
@@ -1510,12 +1521,14 @@ export function OrderDetails({
                   type="number"
                   min="0"
                   step="0.01"
+                  disabled={order.status === 'concluida_entregue'}
                 />
                 <Select
                   value={paymentForm.method}
                   onValueChange={(v) => setPaymentForm((prev) => ({ ...prev, method: v as PaymentMethod }))}
+                  disabled={order.status === 'concluida_entregue'}
                 >
-                  <SelectTrigger className="h-9">
+                  <SelectTrigger className="h-9" disabled={order.status === 'concluida_entregue'}>
                     <SelectValue placeholder="Forma" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1529,8 +1542,9 @@ export function OrderDetails({
                   value={paymentForm.notes}
                   onChange={(e) => setPaymentForm((prev) => ({ ...prev, notes: e.target.value }))}
                   className="h-9 sm:col-span-2"
+                  disabled={order.status === 'concluida_entregue'}
                 />
-                <Button className="h-9" onClick={handleAddPayment} disabled={isCreatingPayment || !paymentForm.amount}>
+                <Button className="h-9" onClick={handleAddPayment} disabled={isCreatingPayment || !paymentForm.amount || order.status === 'concluida_entregue'}>
                   Adicionar
                 </Button>
               </div>

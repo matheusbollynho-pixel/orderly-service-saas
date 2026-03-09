@@ -130,8 +130,8 @@ export function MaterialsNote({
                     <div className="flex gap-2 items-end">
                       <div className="w-16">
                         <label className="text-xs font-semibold text-foreground block mb-1">Quantidade</label>
-                        <Select value={material.quantidade || '01'} onValueChange={(value) => onUpdateMaterial(material.id, 'quantidade', value)}>
-                          <SelectTrigger className="h-8 text-xs text-center bg-muted/50 border-border/50">
+                        <Select value={material.quantidade || '01'} onValueChange={(value) => onUpdateMaterial(material.id, 'quantidade', value)} disabled={disabled}>
+                          <SelectTrigger className="h-8 text-xs text-center bg-muted/50 border-border/50" disabled={disabled}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
