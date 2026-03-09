@@ -5,6 +5,7 @@ import { Settings, Trash2, MessageCircle, Clock, Zap, Send, RotateCcw } from 'lu
 
 export default function ConfigToolsPage() {
   const { user, isRestrictedUser } = useAuth();
+  const [showKeywords, setShowKeywords] = useState(false);
 
   if (!user || isRestrictedUser) {
     return <div className="p-8 text-center text-red-500">Acesso restrito.</div>;
@@ -39,7 +40,18 @@ export default function ConfigToolsPage() {
         </Button>
       </div>
       <div className="mt-8">
-        <MaintenanceKeywordsManager />
+        {!showKeywords ? (
+          <Button variant="outline" className="w-full mb-2" onClick={() => setShowKeywords(true)}>
+            <Zap size={18} /> Mostrar gerenciador de keywords
+          </Button>
+        ) : (
+          <>
+            <Button variant="outline" className="w-full mb-2" onClick={() => setShowKeywords(false)}>
+              Ocultar gerenciador de keywords
+            </Button>
+            <MaintenanceKeywordsManager />
+          </>
+        )}
       </div>
     </div>
   );
