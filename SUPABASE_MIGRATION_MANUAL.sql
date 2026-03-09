@@ -11,7 +11,9 @@
 ALTER TABLE public.service_orders 
   ADD COLUMN IF NOT EXISTS client_apelido TEXT NOT NULL DEFAULT '',
   ADD COLUMN IF NOT EXISTS client_instagram TEXT NOT NULL DEFAULT '',
-  ADD COLUMN IF NOT EXISTS autoriza_instagram BOOLEAN NOT NULL DEFAULT false;
+  ADD COLUMN IF NOT EXISTS autoriza_instagram BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS first_signature_data TEXT,
+  ADD COLUMN IF NOT EXISTS first_delivery_signature_data TEXT;
 
 UPDATE public.service_orders 
 SET client_apelido = COALESCE(client_apelido, ''),
@@ -48,10 +50,10 @@ BEGIN
   END IF;
 END$$;
 
-CREATE POLICY materials_select ON public.materials FOR SELECT USING (true);
-CREATE POLICY materials_insert ON public.materials FOR INSERT WITH CHECK (true);
-CREATE POLICY materials_update ON public.materials FOR UPDATE USING (true) WITH CHECK (true);
-CREATE POLICY materials_delete ON public.materials FOR DELETE USING (true);
+-- CREATE POLICY materials_select ON public.materials FOR SELECT USING (true);
+-- CREATE POLICY materials_insert ON public.materials FOR INSERT WITH CHECK (true);
+-- CREATE POLICY materials_update ON public.materials FOR UPDATE USING (true) WITH CHECK (true);
+-- CREATE POLICY materials_delete ON public.materials FOR DELETE USING (true);
 
 -- Trigger for updated_at on materials
 DROP TRIGGER IF EXISTS update_materials_updated_at ON public.materials;

@@ -115,7 +115,11 @@ export function OrderDetails({
   const [termsAccepted, setTermsAccepted] = useState(order.terms_accepted ?? false);
   const [deliveryTermsAccepted, setDeliveryTermsAccepted] = useState(order.delivery_terms_accepted ?? false);
   const [deliverySignatureData, setDeliverySignatureData] = useState(order.delivery_signature_data ?? null);
+  // Campo para persistir a primeira assinatura de entrega
+  const [firstDeliverySignatureData, setFirstDeliverySignatureData] = useState(order.first_delivery_signature_data ?? order.delivery_signature_data ?? null);
   const [signatureData, setSignatureData] = useState(order.signature_data ?? null);
+  // Campo para persistir a primeira assinatura
+  const [firstSignatureData, setFirstSignatureData] = useState(order.first_signature_data ?? order.signature_data ?? null);
   const [activeTab, setActiveTab] = useState<'checklist' | 'materiais'>(
     isExpress ? 'materiais' : (order.signature_data ? 'materiais' : 'checklist')
   );
@@ -127,17 +131,25 @@ export function OrderDetails({
   // Sincronizar com dados da OS
   useEffect(() => {
     console.log('🔄 Sincronizando dados da OS:', order.id);
-    // Sincronizar assinatura do checklist
     setSignatureData(order.signature_data ?? null);
     setDeliverySignatureData(order.delivery_signature_data ?? null);
     setTermsAccepted(order.terms_accepted ?? false);
-    setDeliveryTermsAccepted(order.delivery_terms_accepted ?? false);
     setEditedServicesTodo(order.problem_description || '');
-    // Se tem assinatura, vai para materiais
+    // Persistir a primeira assinatura se não existir
+    if (!order.first_signature_data && order.signature_data) {
+      setFirstSignatureData(order.signature_data);
+    } else if (order.first_signature_data) {
+      setFirstSignatureData(order.first_signature_data);
+    }
+    if (!order.first_delivery_signature_data && order.delivery_signature_data) {
+      setFirstDeliverySignatureData(order.delivery_signature_data);
+    } else if (order.first_delivery_signature_data) {
+      setFirstDeliverySignatureData(order.first_delivery_signature_data);
+    }
     if (order.signature_data) {
       setActiveTab('materiais');
     }
-  }, [order.id, order.terms_accepted, order.delivery_terms_accepted, order.delivery_signature_data, order.signature_data, order.problem_description]);
+  }, [order.id, order.terms_accepted, order.signature_data, order.first_signature_data, order.delivery_signature_data, order.first_delivery_signature_data, order.problem_description]);
 
   // Função para atualizar termsAccepted e salvar no Supabase
   const handleTermsChange = (checked: boolean) => {
@@ -591,14 +603,14 @@ export function OrderDetails({
           {showSignature ? (
             <SignaturePad
               onSave={handleSignatureSave}
-              initialValue={signatureData}
+              initialValue={signatureData || firstSignatureData}
             />
           ) : signatureData ? (
             <>
               <label className="text-sm font-medium text-foreground">Assinatura do Cliente</label>
               <div className="rounded-lg border border-border overflow-hidden bg-white">
                 <img
-                  src={signatureData}
+                  src={signatureData || firstSignatureData}
                   alt="Assinatura do cliente"
                   className="w-full h-32 object-contain"
                 />
@@ -650,13 +662,13 @@ export function OrderDetails({
       {showDeliverySignature ? (
         <SignaturePad
           onSave={handleDeliverySignatureSave}
-          initialValue={deliverySignatureData}
+          initialValue={deliverySignatureData || firstDeliverySignatureData}
         />
       ) : deliverySignatureData ? (
         <>
           <div className="rounded-lg border border-border overflow-hidden bg-white">
             <img
-              src={deliverySignatureData}
+              src={deliverySignatureData || firstDeliverySignatureData}
               alt="Assinatura de entrega do cliente"
               className="w-full h-32 object-contain"
             />
@@ -819,7 +831,10 @@ export function OrderDetails({
               {(() => {
                 const atendente = teamMembers.find(tm => tm.id === order.atendimento_id);
                 if (!atendente) return 'Não definido';
-                return <span className="text-red-500">{atendente.name}</span>;
+                if (atendente.name === 'Matheus') {
+                  return <span className="text-red-500">{atendente.name}</span>;
+                }
+                return atendente.name;
               })()}
             </span>
           </div>

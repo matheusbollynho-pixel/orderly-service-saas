@@ -7,31 +7,36 @@ const QR_PLACEHOLDER_EQUIPMENT = '__QR_WALKIN_PLACEHOLDER__';
 const FULL_QUERY_LIMIT = 200;
 const FALLBACK_QUERY_LIMIT = 300;
 
-const SERVICE_ORDERS_BASE_COLUMNS = `
-  id,
-  client_id,
-  motorcycle_id,
-  atendimento_id,
-  client_name,
-  client_cpf,
-  client_apelido,
-  client_instagram,
-  autoriza_instagram,
-  client_phone,
-  client_address,
-  client_birth_date,
-  equipment,
-  problem_description,
-  status,
-  terms_accepted,
-  delivery_terms_accepted,
-  entry_date,
-  exit_date,
-  conclusion_date,
-  created_at,
-  updated_at,
-  mechanic_id
-`;
+// Colunas base para queries de OS (não incluir campos grandes desnecessários)
+// ATENÇÃO: signature_data e delivery_signature_data foram incluídos para garantir persistência das assinaturas.
+// Caso precise reverter, basta comentar as linhas abaixo novamente.
+const SERVICE_ORDERS_BASE_COLUMNS = [
+  'id',
+  'client_id',
+  'motorcycle_id',
+  'atendimento_id',
+  'client_name',
+  'client_cpf',
+  'client_apelido',
+  'client_instagram',
+  'autoriza_instagram',
+  'client_phone',
+  'client_address',
+  'client_birth_date',
+  'equipment',
+  'problem_description',
+  'status',
+  'terms_accepted',
+  'delivery_terms_accepted',
+  'entry_date',
+  'exit_date',
+  'conclusion_date',
+  'created_at',
+  'updated_at',
+  'mechanic_id',
+  'signature_data', // incluído para persistência da assinatura
+  'delivery_signature_data', // incluído para persistência da assinatura de entrega
+];
 
 
 export function useServiceOrders() {
@@ -348,37 +353,35 @@ export function useServiceOrders() {
       const orderId = variables?.order_id;
       const clientTempId = variables?.client_temp_id as string | undefined;
       if (orderId) {
-        if (previousOrders) {
-          queryClient.setQueryData(['service-orders'], (old: ServiceOrder[]) =>
-            old.map(order => {
-              if (order.id !== orderId) return order;
-              const materials = order.materials || [];
-              // 1) Preferir casar pelo client_temp_id
-              if (clientTempId) {
-                const idxByTemp = materials.findIndex(m => m.id === clientTempId);
-                if (idxByTemp >= 0) {
-                  const clone = [...materials];
-                  clone[idxByTemp] = data as unknown;
-                  return { ...order, materials: clone } as ServiceOrder;
-                }
-              }
-              // 2) Fallback: tentar casar por campos principais
-              const idxByFields = materials.findIndex(m =>
-                typeof m.id === 'string' && m.id.startsWith('temp-') &&
-                m.descricao === variables.descricao &&
-                m.quantidade === variables.quantidade &&
-                (m.valor ?? 0) === (variables.valor ?? 0)
-              );
-              if (idxByFields >= 0) {
+        queryClient.setQueryData(['service-orders'], (old: ServiceOrder[]) =>
+          old.map(order => {
+            if (order.id !== orderId) return order;
+            const materials = order.materials || [];
+            // 1) Preferir casar pelo client_temp_id
+            if (clientTempId) {
+              const idxByTemp = materials.findIndex(m => m.id === clientTempId);
+              if (idxByTemp >= 0) {
                 const clone = [...materials];
-                  clone[idxByFields] = data as unknown;
+                clone[idxByTemp] = data as unknown;
                 return { ...order, materials: clone } as ServiceOrder;
               }
-              // 3) Se não achar, adiciona o novo ao final
-              return { ...order, materials: [...materials, data as unknown] } as ServiceOrder;
-            })
-          );
-        }
+            }
+            // 2) Fallback: tentar casar por campos principais
+            const idxByFields = materials.findIndex(m =>
+              typeof m.id === 'string' && m.id.startsWith('temp-') &&
+              m.descricao === variables.descricao &&
+              m.quantidade === variables.quantidade &&
+              (m.valor ?? 0) === (variables.valor ?? 0)
+            );
+            if (idxByFields >= 0) {
+              const clone = [...materials];
+                clone[idxByFields] = data as unknown;
+              return { ...order, materials: clone } as ServiceOrder;
+            }
+            // 3) Se não achar, adiciona o novo ao final
+            return { ...order, materials: [...materials, data as unknown] } as ServiceOrder;
+          })
+        );
       }
       toast.success('Material adicionado!');
     },

@@ -9,7 +9,9 @@
 -- Adicionar colunas em service_orders
 ALTER TABLE public.service_orders
 ADD COLUMN IF NOT EXISTS created_by_staff_id UUID REFERENCES public.staff_members(id) ON DELETE SET NULL,
-ADD COLUMN IF NOT EXISTS finalized_by_staff_id UUID REFERENCES public.staff_members(id) ON DELETE SET NULL;
+ADD COLUMN IF NOT EXISTS finalized_by_staff_id UUID REFERENCES public.staff_members(id) ON DELETE SET NULL,
+ADD COLUMN IF NOT EXISTS first_signature_data TEXT,
+ADD COLUMN IF NOT EXISTS first_delivery_signature_data TEXT;
 
 -- Adicionar coluna em payments
 ALTER TABLE public.payments
