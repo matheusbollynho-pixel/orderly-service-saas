@@ -7,6 +7,12 @@ import { Settings, Trash2, MessageCircle, Clock, Zap, Send, RotateCcw } from 'lu
 export default function ConfigToolsPage() {
   const { user, isRestrictedUser } = useAuth();
   const [showKeywords, setShowKeywords] = useState(false);
+  const [removeOsId, setRemoveOsId] = useState("");
+
+  function handleRemoveConcluidaEntregue(osId: string) {
+    // TODO: implementar lógica de remoção
+    alert(`Remover status de Concluída e Entregue da OS: ${osId}`);
+  }
 
   if (!user || isRestrictedUser) {
     return <div className="p-8 text-center text-red-500">Acesso restrito.</div>;
@@ -43,13 +49,6 @@ export default function ConfigToolsPage() {
             <Settings size={18} /> Tirar OS de Concluída e Entregue
           </Button>
         </div>
-      import { useState } from 'react';
-        const [removeOsId, setRemoveOsId] = useState("");
-
-        function handleRemoveConcluidaEntregue(osId: string) {
-          // TODO: implementar lógica de remoção
-          alert(`Remover status de Concluída e Entregue da OS: ${osId}`);
-        }
       </div>
       <div className="mt-8">
         {!showKeywords ? (
