@@ -210,29 +210,7 @@ export const AdminMenu = () => {
         />
       )}
 
-      {/* Botão de Engrenagem */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        style={{
-          width: '50px',
-          height: '50px',
-          borderRadius: '50%',
-          backgroundColor: '#1a1a1a',
-          border: 'none',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-          transition: 'all 0.3s',
-          position: 'relative',
-          zIndex: 1001,
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)')}
-        onMouseLeave={(e) => (e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)')}
-      >
-        <Settings size={24} color="#C1272D" />
-      </button>
+      {/* Botão de Engrenagem removido */}
 
       {/* Menu Dropdown */}
       {isOpen && (
