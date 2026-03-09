@@ -769,6 +769,7 @@ export function OrderDetails({
       {/* Status + Mecânico */}
       <Card className="card-elevated">
         <CardContent className="p-4 space-y-3">
+          {/* ...existing code... */}
           <div className="flex items-center justify-between gap-3">
             <span className="text-sm font-medium text-foreground whitespace-nowrap">Status</span>
             <div className="flex items-center gap-2">
@@ -895,6 +896,10 @@ export function OrderDetails({
             </div>
           )}
         </CardContent>
+              {/* Rodapé com ID da OS */}
+              <div style={{textAlign: 'center', fontSize: '12px', color: '#aaa', marginTop: '-12px', marginBottom: '8px', letterSpacing: '1px'}}>
+                OS ID: {order.id}
+              </div>
       </Card>
 
       {isExpress && (
