@@ -36,9 +36,20 @@ export default function ConfigToolsPage() {
         <Button variant="default" className="w-full flex items-center gap-2">
           <RotateCcw size={18} /> Resetar satisfação
         </Button>
-        <Button variant="default" className="w-full flex items-center gap-2">
-          <Settings size={18} /> Tirar OS de Concluída e Entregue
-        </Button>
+        <div className="w-full flex flex-col gap-2">
+          <label htmlFor="removeOsId" className="text-xs text-neutral-400 mb-1 font-medium">ID da OS para tirar de Concluída e Entregue:</label>
+          <input id="removeOsId" type="text" value={removeOsId} onChange={e => setRemoveOsId(e.target.value)} placeholder="Cole o ID da OS aqui" className="w-full p-2 border border-white/20 rounded text-xs bg-black/30 text-neutral-200 mb-2" />
+          <Button variant="default" className="w-full flex items-center gap-2" disabled={!removeOsId.trim()} onClick={() => handleRemoveConcluidaEntregue(removeOsId)}>
+            <Settings size={18} /> Tirar OS de Concluída e Entregue
+          </Button>
+        </div>
+      import { useState } from 'react';
+        const [removeOsId, setRemoveOsId] = useState("");
+
+        function handleRemoveConcluidaEntregue(osId: string) {
+          // TODO: implementar lógica de remoção
+          alert(`Remover status de Concluída e Entregue da OS: ${osId}`);
+        }
       </div>
       <div className="mt-8">
         {!showKeywords ? (
