@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { MaintenanceKeywordsManager } from '@/components/MaintenanceKeywordsManager';
 import { Settings, Trash2, MessageCircle, Clock, Zap, Send, RotateCcw } from 'lucide-react';
