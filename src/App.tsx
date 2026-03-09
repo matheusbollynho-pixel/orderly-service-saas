@@ -100,7 +100,7 @@ function AuthenticatedApp() {
   return (
     <Routes>
       <Route path="/" element={<Index />} />
-      <Route path="/confg" element={<ConfigToolsPage />} />
+      <Route path="/config" element={<ConfigToolsPage />} />
       <Route path="/pos-venda" element={<AfterSalesPage />} />
       <Route path="/fluxo-caixa" element={<CashFlowPage />} />
       <Route path="/debug-os/:id" element={<DebugOrderPage />} />
