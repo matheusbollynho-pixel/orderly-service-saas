@@ -846,7 +846,7 @@ export function OrderDetails({
               <span className="text-sm text-muted-foreground">{formatDateDisplay(order.entry_date)}</span>
             </div>
           )}
-          {order.status === 'concluida' && (
+          {(order.status === 'concluida' || order.status === 'concluida_entregue') && (
             <div className="flex flex-col gap-2 pt-2">
               <Label className="text-sm font-medium">📅 Data de Conclusão</Label>
               {showExitDateEditor ? (
@@ -885,6 +885,15 @@ export function OrderDetails({
                   </Button>
                 </div>
               )}
+            </div>
+          )}
+
+          {order.status === 'concluida_entregue' && (
+            <div className="flex flex-col gap-2 pt-2">
+              <Label className="text-sm font-medium">📅 Data de Entrega</Label>
+              <span className="text-sm text-muted-foreground">
+                {exitDate ? formatDateDisplay(exitDate) : 'Não definida'}
+              </span>
             </div>
           )}
         </CardContent>
