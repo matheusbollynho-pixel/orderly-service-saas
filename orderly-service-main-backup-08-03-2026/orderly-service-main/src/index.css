@@ -1,0 +1,380 @@
+body {
+  background-color: #18181b;
+  color: #fff;
+}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 
+  Design System - OS Management App
+  Professional SaaS style with blue tones
+*/
+
+@layer base {
+  :root {
+    /* Bandara Motos - Dark Premium Industrial Theme */
+    --background: 0 0% 7%;
+    --foreground: 0 0% 91%;
+
+    --card: 0 0% 7%;
+    --card-foreground: 0 0% 91%;
+
+    --popover: 0 0% 10%;
+    --popover-foreground: 0 0% 91%;
+
+    --primary: 356 72% 45%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 0 0% 10%;
+    --secondary-foreground: 0 0% 75%;
+
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 44%;
+
+    --accent: 0 0% 13%;
+    --accent-foreground: 0 0% 91%;
+
+    --destructive: 356 72% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 15%;
+    --input: 0 0% 13%;
+    --ring: 356 72% 45%;
+
+    --radius: 0.25rem;
+
+    /* Status Colors */
+    --status-open: 45 93% 47%;
+    --status-open-foreground: 0 0% 100%;
+    --status-progress: 217 91% 60%;
+    --status-progress-foreground: 0 0% 100%;
+    --status-done: 142 76% 46%;
+    --status-done-foreground: 0 0% 100%;
+
+    /* Semantic */
+    --success: 142 76% 46%;
+    --success-foreground: 0 0% 100%;
+    --warning: 45 93% 55%;
+    --warning-foreground: 0 0% 7%;
+
+    /* Sidebar */
+    --sidebar-background: 0 0% 7%;
+    --sidebar-foreground: 0 0% 94%;
+    --sidebar-primary: 356 72% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 12%;
+    --sidebar-accent-foreground: 0 0% 94%;
+    --sidebar-border: 0 0% 15%;
+    --sidebar-ring: 356 72% 45%;
+
+    /* Custom Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(356, 72%, 45%), hsl(356, 72%, 55%));
+    --gradient-success: linear-gradient(135deg, hsl(142, 76%, 46%), hsl(142, 76%, 56%));
+    --gradient-warning: linear-gradient(135deg, hsl(45, 93%, 55%), hsl(45, 93%, 65%));
+    
+    /* Shadows */
+    --shadow-card: 0 2px 16px rgba(0, 0, 0, 0.4);
+    --shadow-elevated: 0 4px 32px rgba(0, 0, 0, 0.5);
+    --shadow-modal: 0 20px 25px -5px rgba(0, 0, 0, 0.6);
+  }
+
+  /* Light Theme */
+  :root:not(.dark) {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 7%;
+
+    --card: 0 0% 98%;
+    --card-foreground: 0 0% 7%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 7%;
+
+    --primary: 356 72% 45%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 20%;
+
+    --muted: 0 0% 93%;
+    --muted-foreground: 0 0% 45%;
+
+    --accent: 0 0% 91%;
+    --accent-foreground: 0 0% 10%;
+
+    --destructive: 356 72% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 90%;
+    --input: 0 0% 98%;
+    --ring: 356 72% 45%;
+
+    /* Sidebar Light */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 0 0% 7%;
+    --sidebar-accent: 0 0% 93%;
+    --sidebar-accent-foreground: 0 0% 10%;
+    --sidebar-border: 0 0% 90%;
+  }
+
+  /* iOS/Safari specific fixes */
+  * {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+  }
+  
+  body {
+    -webkit-text-size-adjust: 100%;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  button, a, input, select, textarea {
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+  }
+  
+  input, textarea {
+    -webkit-appearance: none;
+    border-radius: 0;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-muted rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/30 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/50;
+  }
+}
+
+@layer components {
+  /* Status badge variants */
+  .status-badge {
+    @apply inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-[0.1em] border;
+  }
+
+  .status-badge-open {
+    @apply bg-[hsl(var(--status-open)/0.18)] text-[hsl(var(--status-open))] border-[hsl(var(--status-open)/0.35)];
+  }
+
+  .status-badge-progress {
+    @apply bg-[hsl(var(--status-progress)/0.18)] text-[hsl(var(--status-progress))] border-[hsl(var(--status-progress)/0.35)];
+  }
+
+  .status-badge-done {
+    @apply bg-[hsl(var(--status-done)/0.18)] text-[hsl(var(--status-done))] border-[hsl(var(--status-done)/0.35)];
+  }
+
+  /* Card with shadow */
+  .card-elevated {
+    @apply bg-card rounded-xl border border-border;
+    box-shadow: var(--shadow-card);
+  }
+
+  .card-elevated:hover {
+    box-shadow: var(--shadow-elevated);
+  }
+
+  /* Glass effect */
+  .glass {
+    @apply bg-white/80 backdrop-blur-lg border border-white/20;
+  }
+
+  /* Bottom navigation for mobile */
+  .bottom-nav {
+    @apply fixed bottom-0 left-0 right-0 bg-card border-t border-border;
+    box-shadow: 0 -4px 6px -1px rgb(0 0 0 / 0.05);
+  }
+
+  /* Signature canvas styling */
+  .signature-canvas {
+    @apply border-2 border-dashed border-muted-foreground/30 rounded-lg bg-white touch-none;
+  }
+
+  .signature-canvas:focus {
+    @apply border-primary outline-none;
+  }
+}
+
+@layer utilities {
+  /* Animations */
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.3s ease-out;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.2s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  /* Safe area for mobile */
+  .pb-safe {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .mb-safe {
+    margin-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;  /* Chrome, Safari and Opera */
+  }
+}
+
+/* Print Styles */
+@media print {
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  .print-hide {
+    display: none !important;
+  }
+
+  .text-xs {
+    font-size: 0.65rem;
+  }
+
+  .text-sm {
+    font-size: 0.75rem;
+  }
+
+  .overflow-x-auto {
+    overflow: visible;
+  }
+
+  table {
+    font-size: 0.75rem;
+  }
+
+  th, td {
+    padding: 0.4rem;
+  }
+}
+
+/* Bandara Motos - Premium Red Glassmorphism */
+.glass-card {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.4);
+}
+
+.glass-card-elevated {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Thin icon hover to red */
+.icon-hover {
+  transition: color 0.2s ease;
+}
+.icon-hover:hover,
+.group:hover .icon-hover {
+  color: #C1272D;
+}
+
+/* Bottom nav safe area */
+.pb-safe {
+  padding-bottom: max(0.35rem, env(safe-area-inset-bottom));
+}
+
+/* Scrollbar hide */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Dark Premium Date Input Styling */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="month"],
+input[type="week"] {
+  color-scheme: dark;
+}
+
+/* Chrome/Edge Calendar Picker Styling */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.8) brightness(1.2);
+  cursor: pointer;
+}
+
+input[type="date"]::-webkit-outer-spin-button,
+input[type="date"]::-webkit-inner-spin-button {
+  display: none;
+}
+
+/* Firefox Calendar */
+input[type="date"]::placeholder {
+  color: var(--muted-foreground);
+}
