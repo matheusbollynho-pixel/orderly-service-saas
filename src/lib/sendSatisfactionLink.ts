@@ -161,6 +161,9 @@ Obrigado pela confiança! 🏍️🔧`;
     console.log('📨 Enviando via WhatsApp para:', targetOrder.client_phone);
     
     // Enviar via WhatsApp
+      if (!SATISFACTION_MESSAGE || typeof SATISFACTION_MESSAGE !== 'string') {
+        throw new Error('Mensagem de satisfação não definida!');
+      }
     await sendWhatsAppText({
       phone: targetOrder.client_phone,
       text: SATISFACTION_MESSAGE

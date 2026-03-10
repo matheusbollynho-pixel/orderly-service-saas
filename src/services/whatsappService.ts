@@ -36,12 +36,20 @@ async function callEdgeFunction(payload: Record<string, unknown>): Promise<Recor
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
-      // ...existing code...
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  // Chama a Edge Function
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/enviar-documento-whatsapp`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+  });
+
   let json: Record<string, unknown>;
   try {
-    json = text ? JSON.parse(text) : {};
+    json = await res.json();
   } catch {
-    json = { raw: text };
+    json = { raw: await res.text() };
   }
 
   if (!res.ok || json?.success === false) {
