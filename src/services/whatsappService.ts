@@ -12,7 +12,6 @@ function getSupabase() {
   }
   return supabase;
 }
-
 function formatPhone(raw: string): string | null {
   const digits = raw.replace(/\D/g, '');
   // Precisa ter código do país (55) + DDD + número
@@ -21,14 +20,12 @@ function formatPhone(raw: string): string | null {
   }
   return digits;
 }
-
 function sanitizeFileName(fileName: string): string {
   const safe = fileName
     .replace(/[\s]+/g, '_')
     .replace(/[^a-zA-Z0-9_.-]/g, '');
   return safe || 'documento.pdf';
 }
-
 async function callEdgeFunction(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
   const supabase = getSupabase();
   const {
@@ -39,17 +36,7 @@ async function callEdgeFunction(payload: Record<string, unknown>): Promise<Recor
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/enviar-documento-whatsapp`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(payload),
-  });
-
-  const text = await res.text();
+      // ...existing code...
   let json: Record<string, unknown>;
   try {
     json = text ? JSON.parse(text) : {};
@@ -58,9 +45,9 @@ async function callEdgeFunction(payload: Record<string, unknown>): Promise<Recor
   }
 
   if (!res.ok || json?.success === false) {
-    const details = json?.z_api_error ? ` | Detalhes: ${JSON.stringify(json.z_api_error)}` : '';
-    const statusInfo = json?.z_api_status ? ` | Z-API status: ${json.z_api_status}` : '';
-    const msg = (json?.error || json?.message || `Falha na função (status ${res.status})`) + statusInfo + details;
+    const details = json && json.z_api_error ? ' | Detalhes: ' + JSON.stringify(json.z_api_error) : '';
+    const statusInfo = (json && json.z_api_status) ? ' | Z-API status: ' + json.z_api_status : '';
+    const msg = (json && (json.error || json.message) ? (json.error || json.message) : 'Falha na função (status ' + res.status + ')') + statusInfo + details;
     throw new Error(msg);
   }
 
@@ -150,7 +137,7 @@ export async function uploadBase64PdfToSupabaseStorage(
 ): Promise<string> {
   // Validação: garantir que recebemos uma string
   if (typeof base64Data !== 'string') {
-    console.error('❌ base64Data não é uma string:', typeof base64Data, base64Data);
+    console.error('base64Data não é uma string:', typeof base64Data, base64Data);
     throw new Error(`Base64 inválido: esperado string, recebido ${typeof base64Data}`);
   }
 
@@ -213,24 +200,9 @@ export async function sendTestSatisfactionSurvey(): Promise<{ success: boolean; 
       .limit(1);
 
     let satisfactionToken = satisfactionData && satisfactionData.length > 0 ? satisfactionData[0].public_token : null;
-    let satisfactionLink = satisfactionToken ? `https://orderly-service.vercel.app/avaliar/${satisfactionToken}` : '';
+    let satisfactionLink = satisfactionToken ? `https://os-bandara.vercel.app/avaliar/${satisfactionToken}` : '';
 
-    const SATISFACTION_MESSAGE = `Olá! Tudo bem? 😊
-
-Aqui é da *Bandara Motos*.
-
-Queremos saber:
-👉 Como foi seu atendimento com a gente?
-👉 Ficou alguma dúvida sobre o serviço ou a peça?
-
-*De 0 a 10*, o quanto você indicaria a Bandara Motos para um amigo? ⭐
-
-Responda rapidinho aqui: ${satisfactionLink}
-
-Se precisar de algo, é só responder essa mensagem.
-Estamos à disposição! 🏍️🔧
-
-Siga-nos no Instagram: @BandaraMotos`;
+      const SATISFACTION_MESSAGE = `Olá, [Nome do Cliente]! 🏍️\n\nSua opinião vale muito para a BANDARA MOTO! ⭐\n\nConsegue nos dar uma nota rapidinho sobre o serviço de hoje?\n\nÉ só clicar aqui: ${satisfactionLink}\nValeu!`;
 
     const { data: orders, error } = await supabase
       .from('service_orders')
@@ -261,12 +233,12 @@ Siga-nos no Instagram: @BandaraMotos`;
 
     return {
       success: true,
-      message: `✅ Mensagem enviada para ${order.client_name}`,
+      message: 'Mensagem enviada para ' + order.client_name,
       orderName: order.client_name,
       phone: order.client_phone
     };
   } catch (error) {
-    return { success: false, message: `❌ Erro: ${error.message}` };
+    return { success: false, message: 'Erro: ' + error.message };
   }
 }
 
@@ -278,48 +250,33 @@ export async function testSatisfactionSurveyWith4SecondDelay(): Promise<{ succes
     const { data, error } = await supabase.rpc('test_satisfaction_survey_4seconds');
 
     if (error) {
-      return { success: false, message: `❌ Erro na RPC: ${error.message}` };
+      return { success: false, message: 'Erro na RPC: ' + error.message };
     }
 
     if (!data?.success) {
       return { success: false, message: data?.message || 'Erro desconhecido na RPC' };
     }
-
     // Now send the satisfaction message
-    const SATISFACTION_MESSAGE = `Olá! Tudo bem? 😊
-
-Aqui é da *Bandara Motos*.
-
-Queremos saber:
-👉 Como foi seu atendimento com a gente?
-👉 Ficou alguma dúvida sobre o serviço ou a peça?
-
-*De 0 a 10*, o quanto você indicaria a Bandara Motos para um amigo? ⭐
-
-Se precisar de algo, é só responder essa mensagem.
-Estamos à disposição! 🏍️🔧
-
-Siga-nos no Instagram: @BandaraMotos`;
-
+    const SATISFACTION_MESSAGE = `Olá, [Nome do Cliente]! 🏍️\n\nSua opinião vale muito para a BANDARA MOTO! ⭐\n\nConsegue nos dar uma nota rapidinho sobre o nosso serviço?\n\nÉ só clicar aqui: https://os-bandara.vercel.app/avaliar/[token]\nValeu!`;
     try {
       await sendWhatsAppText({
         phone: data.order_phone,
         text: SATISFACTION_MESSAGE
       });
     } catch (whatsappError) {
-      console.error('❌ Erro ao enviar WhatsApp:', whatsappError);
+      console.error('Erro ao enviar WhatsApp:', whatsappError);
       // Don't fail completely, RPC was successful
       return {
         success: true,
-        message: `${data.message}\n\n⚠️ Erro ao enviar mensagem: ${whatsappError.message}`
+        message: 'Erro ao enviar mensagem: ' + whatsappError.message
       };
     }
 
     return {
       success: true,
-      message: `${data.message}\n\n✅ Mensagem enviada para ${data.order_phone}`
+      message: 'Mensagem enviada.'
     };
   } catch (error) {
-    return { success: false, message: `❌ Erro: ${error.message}` };
+    return { success: false, message: 'Erro: ' + error.message };
   }
 }
