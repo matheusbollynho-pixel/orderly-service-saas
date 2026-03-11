@@ -783,7 +783,7 @@ export function OrderDetails({
                 onValueChange={(value) => {
                   if (order.status === 'concluida_entregue') return; // Bloqueia alteração
                   // Permite selecionar 'concluida_entregue' só após assinatura de entrega
-                  if (value === 'concluida_entregue' && !order.delivery_signature_data && !isExpress) {
+                  if (value === 'concluida_entregue' && !deliverySignatureData && !isExpress) {
                     alert('É necessário coletar a assinatura de entrega do veículo antes de marcar como Concluída e Pago.');
                     return;
                   }

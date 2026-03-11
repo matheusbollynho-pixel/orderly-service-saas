@@ -8,7 +8,7 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 )
 
-const APP_BASE_URL = (Deno.env.get('APP_BASE_URL') || 'https://bandara-motos.com').replace(/\/$/, '')
+const APP_BASE_URL = (Deno.env.get('APP_BASE_URL') || 'https://os-bandara.vercel.app').replace(/\/$/, '')
 
 function buildSatisfactionMessage(clientName: string, link: string) {
   return `Olá, ${clientName || 'cliente'}! 👋
