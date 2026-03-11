@@ -442,6 +442,10 @@ export function OrderDetails({
 
   const handleAddPayment = () => {
     if (!onAddPayment) return;
+    if (!order.delivery_signature_data && !isExpress) {
+      alert('É necessário coletar a assinatura do Termo de Entrega do Veículo antes de registrar o pagamento.');
+      return;
+    }
     const amount = parseFloat(paymentForm.amount || '');
     const discountAmount = parseFloat(paymentForm.discount_amount || '0') || 0;
     if (!amount || amount <= 0) return;
@@ -778,9 +782,9 @@ export function OrderDetails({
                 value={order.status}
                 onValueChange={(value) => {
                   if (order.status === 'concluida_entregue') return; // Bloqueia alteração
-                  // Permite selecionar 'concluida_entregue' só após assinatura na OS normal
-                  if (value === 'concluida_entregue' && !order.signature_data && !isExpress) {
-                    alert('É necessário coletar a assinatura do cliente antes de marcar como Concluída e Entregue.');
+                  // Permite selecionar 'concluida_entregue' só após assinatura de entrega
+                  if (value === 'concluida_entregue' && !order.delivery_signature_data && !isExpress) {
+                    alert('É necessário coletar a assinatura de entrega do veículo antes de marcar como Concluída e Pago.');
                     return;
                   }
 
@@ -1393,7 +1397,13 @@ export function OrderDetails({
                   Checklist
                 </TabsTrigger>
               ) : null}
-              <TabsTrigger value="materiais" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:bg-transparent">
+              <TabsTrigger
+                value="materiais"
+                className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:bg-transparent"
+                disabled={!signatureData}
+                style={!signatureData ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                title={!signatureData ? 'Só libera após assinatura de inspeção do veículo' : ''}
+              >
                 Peças e Serviços
               </TabsTrigger>
             </TabsList>
@@ -1415,11 +1425,13 @@ export function OrderDetails({
             ) : null}
 
             <TabsContent value="materiais" className="p-4">
-              <div className="text-center py-4">
-                <Button onClick={() => setActiveTab('materiais')} className="w-full" disabled={false}>
-                  Abrir Peças e Serviços
-                </Button>
-              </div>
+              {!signatureData && (
+                <div className="text-center py-4">
+                  <Button className="w-full" disabled>
+                    Só libera após assinatura de inspeção do veículo
+                  </Button>
+                </div>
+              )}
               <MaterialsNote
                 materiais={order.materials || []}
                 mecanicos={mechanics}
