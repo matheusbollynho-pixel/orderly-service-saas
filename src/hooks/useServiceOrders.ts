@@ -276,8 +276,8 @@ export function useServiceOrders() {
       console.error(error);
     },
     onSettled: () => {
-      // Revalidação leve em segundo plano para garantir consistência sem travar UI
-      queryClient.invalidateQueries({ queryKey: ['service-orders'], refetchType: 'inactive' });
+      // Refetch após mutation concluída para garantir dados frescos do DB (ex: status concluida_entregue)
+      queryClient.invalidateQueries({ queryKey: ['service-orders'] });
     },
   });
 
