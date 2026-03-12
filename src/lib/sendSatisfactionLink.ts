@@ -83,7 +83,7 @@ export async function sendSatisfactionLinkToClient(params: {
 
     if (!token) {
       // Criar novo registro de satisfação
-      const newToken = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
+      const newToken = crypto.randomUUID().replace(/-/g, '');
       
       console.log('🆕 Criando novo rating com token:', newToken);
       
@@ -141,7 +141,7 @@ export async function sendSatisfactionLinkToClient(params: {
     }
 
     // Montar URL de satisfação
-    const baseUrl = window.location.origin;
+    const baseUrl = "https://os-bandara.vercel.app";
     const satisfactionUrl = `${baseUrl}/avaliar/${token}`;
 
     console.log('🔗 URL gerada:', satisfactionUrl);

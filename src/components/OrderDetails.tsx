@@ -44,6 +44,7 @@ import { useClients } from '@/hooks/useClients';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
 import { generateOrderPDFBase64, generateOrderPDF } from '@/lib/pdfGenerator';
 import { sendWhatsAppDocument, sendWhatsAppText } from '@/lib/whatsappService';
+import { supabase } from '@/integrations/supabase/client';
 
 import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -564,9 +565,28 @@ export function OrderDetails({
       return;
     }
 
+    // Buscar satisfactionToken no Supabase
+    let satisfactionToken = null;
+    try {
+      const { data: satisfactionData, error } = await supabase
+        .from('satisfaction_ratings')
+        .select('public_token')
+        .eq('order_id', order.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      satisfactionToken = satisfactionData && satisfactionData.length > 0 ? satisfactionData[0].public_token : null;
+    } catch (err) {
+      console.warn('Erro ao buscar token de satisfação:', err);
+    }
+
+    const satisfactionLink = satisfactionToken
+      ? `https://os-bandara.vercel.app/avaliar/${satisfactionToken}`
+      : '';
+    console.log('link satisfação:', satisfactionLink);
+
     const customText = window.prompt(
       'Mensagem para enviar ao cliente (WhatsApp):',
-      `Olá, ${order.client_name}! Sua moto está em serviço na Bandara Motos. OS #${order.id} ✅`
+      `Olá, ${order.client_name}! Sua moto está em serviço na Bandara Motos. OS #${order.id} ✅\n\nAvalie nosso atendimento: ${satisfactionLink}`
     );
 
     if (!customText) {
@@ -579,7 +599,6 @@ export function OrderDetails({
         phone: cleanPhone,
         text: customText,
       });
-      
       alert('✅ Mensagem de teste enviada com sucesso!');
     } catch (error: unknown) {
       console.error('Erro ao enviar mensagem:', error);
