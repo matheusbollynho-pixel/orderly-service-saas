@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { createMaintenanceReminder } from '@/services/maintenanceReminderService';
+import { createMaintenanceReminder, getMaintenanceKeywords, findKeywordInText } from '@/services/maintenanceReminderService';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
 
 interface ExpressCadastroPageProps {
