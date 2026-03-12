@@ -493,8 +493,14 @@ Retirada: ${retiradaInfo}`;
           const totalSettled = totalPaid + totalDiscount;
           // Se quitado, atualizar status para concluida_entregue
           if (totalOS > 0 && totalSettled >= totalOS && prev.status !== 'concluida_entregue') {
-            updateOrder({ id: prev.id, status: 'concluida_entregue' });
-            return { ...prev, payments: updatedPayments, status: 'concluida_entregue' } as ServiceOrder;
+            const now = new Date().toISOString();
+            updateOrder({
+              id: prev.id,
+              status: 'concluida_entregue',
+              exit_date: now,
+              conclusion_date: now,
+            });
+            return { ...prev, payments: updatedPayments, status: 'concluida_entregue', exit_date: now, conclusion_date: now } as ServiceOrder;
           }
           return { ...prev, payments: updatedPayments } as ServiceOrder;
         });

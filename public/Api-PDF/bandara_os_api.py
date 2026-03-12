@@ -279,11 +279,38 @@ def create_os_pdf(output_path: str, dados: dict) -> None:
             'autoriza_lembretes': fmt_sim_nao_val(dados.get('autoriza_lembretes', False)),
         }
         _equip = sv(dados.get('equipment') or '')
-        ter = {
-            'nome':     sv(dados.get('terceiro_nome') or dados.get('authorized_name') or _ter_nome or ''),
-            'telefone': sv(dados.get('terceiro_telefone') or dados.get('authorized_phone') or _ter_tel or ''),
-            'cpf':      sv(dados.get('terceiro_cpf') or dados.get('authorized_cpf') or _ter_cpf or ''),
-        }
+        # Usa delivery_person_* se disponível, senão fallback para problem_description
+        delivery_person_type = sv(dados.get('delivery_person_type') or '')
+        delivery_person_name = sv(dados.get('delivery_person_name') or '')
+        delivery_person_phone = sv(dados.get('delivery_person_phone') or '')
+        delivery_person_cpf = sv(dados.get('delivery_person_cpf') or '')
+
+
+        if delivery_person_type == 'outro' and delivery_person_name:
+            # Outra pessoa retirou — usa dados salvos
+            ter = {
+                'nome':     delivery_person_name,
+                'telefone': delivery_person_phone,
+                'cpf':      delivery_person_cpf,
+            }
+        elif delivery_person_type == 'cliente':
+            # Dono retirou — usa dados do cliente
+            ter = {
+                'nome':     sv(dados.get('client_name') or ''),
+                'telefone': sv(dados.get('client_phone') or ''),
+                'cpf':      sv(dados.get('client_cpf') or ''),
+            }
+        else:
+            # Fallback: tenta extrair do problem_description (OS antigas)
+            ter = {
+                'nome':     sv(dados.get('terceiro_nome') or dados.get('authorized_name') or _ter_nome or ''),
+                'telefone': sv(dados.get('terceiro_telefone') or dados.get('authorized_phone') or _ter_tel or ''),
+                'cpf':      sv(dados.get('terceiro_cpf') or dados.get('authorized_cpf') or _ter_cpf or ''),
+            }
+        # Atualizar _ter_* com os valores finais do ter
+        _ter_nome = ter.get('nome', '')
+        _ter_tel  = ter.get('telefone', '')
+        _ter_cpf  = ter.get('cpf', '')
         vei = {
             'tipo':          sv(dados.get('vehicle_type') or 'MOTO'),
             'modelo':        sv(dados.get('motorcycle_model') or _equip),
@@ -379,7 +406,29 @@ def create_os_pdf(output_path: str, dados: dict) -> None:
     y = h - 25*mm
 
     # ── Funções de layout ──────────────────────────────────────────────────
+    BOTTOM_MARGIN = 20*mm  # margem inferior mínima
+
+    def nova_pagina():
+        """Inicia nova página mantendo cabeçalho simples."""
+        c.showPage()
+        # Cabeçalho simplificado na nova página
+        c.setFillColor(DARK)
+        c.rect(0, h - 12*mm, w, 12*mm, fill=1, stroke=0)
+        c.setFillColor(ACCENT)
+        c.rect(0, h - 12*mm, 2.5*mm, 12*mm, fill=1, stroke=0)
+        c.setFillColor(WHITE)
+        c.setFont('Helvetica-Bold', 8)
+        c.drawCentredString(w/2, h - 7*mm, 'ORDEM DE SERVICO (continuacao)')
+        return h - 15*mm
+
+    def check_y(ypos, needed=8*mm):
+        """Verifica se há espaço suficiente; se não, cria nova página."""
+        if ypos - needed < BOTTOM_MARGIN:
+            return nova_pagina()
+        return ypos
+
     def section_header(label, ypos):
+        ypos = check_y(ypos, SH + 4*mm)
         c.setFillColor(CHARCOAL)
         c.rect(M, ypos - SH, CW, SH, fill=1, stroke=0)
         c.setFillColor(ACCENT)
@@ -390,6 +439,7 @@ def create_os_pdf(output_path: str, dados: dict) -> None:
         return ypos - SH
 
     def field_row(label, value, ypos, lw=42*mm, alt=False):
+        ypos = check_y(ypos, RH)
         bg = ROW_ALT if alt else WHITE
         c.setFillColor(bg)
         c.rect(M, ypos - RH, CW, RH, fill=1, stroke=0)
@@ -405,6 +455,7 @@ def create_os_pdf(output_path: str, dados: dict) -> None:
         return ypos - RH
 
     def two_fields(l1, v1, l2, v2, ypos, lw1=28*mm, lw2=28*mm, alt=False):
+        ypos = check_y(ypos, RH)
         half = CW / 2
         bg = ROW_ALT if alt else WHITE
         c.setFillColor(bg)
@@ -495,7 +546,7 @@ def create_os_pdf(output_path: str, dados: dict) -> None:
     y -= 2.5*mm
 
     # ── TERCEIRO AUTORIZADO ────────────────────────────────────────────────
-    y = section_header('Terceiro Autorizado a Retirar o Veiculo', y)
+    y = section_header('Autorizado a Retirar o Veículo', y)
     y = field_row('Nome',     _ter_nome or '___________________________________', y, lw=15*mm)
     y = two_fields('Telefone', _ter_tel or '____________________', 'CPF', _ter_cpf or '____________________', y, lw1=18*mm, lw2=12*mm, alt=True)
     y -= 2.5*mm
@@ -579,6 +630,7 @@ def create_os_pdf(output_path: str, dados: dict) -> None:
 
     total_geral = fin.get('total', 'R$ 0,00')
     for i, peca in enumerate(pecas):
+        y = check_y(y, RH)
         c.setFillColor(ROW_ALT if i % 2 else WHITE)
         c.rect(M, y - RH, CW, RH, fill=1, stroke=0)
         c.setStrokeColor(SILVER)
@@ -629,6 +681,7 @@ def create_os_pdf(output_path: str, dados: dict) -> None:
 
     # detalhe de cada pagamento (sublinhas)
     for pd in fin.get('payments_detail', []):
+        y = check_y(y, SH)
         amt_s  = fmt_brl(pd['amount'])
         met_s  = pd.get('method','')
         nome_s = pd.get('name','')
@@ -776,10 +829,10 @@ def gerar_os():
     import json as _json
     chaves = list(dados.keys())
     print(f"\n[DEBUG] Chaves recebidas ({len(chaves)}): {chaves}")
-    print(f"[DEBUG] is_flat detect: client_name={'client_name' in dados}, equipment={'equipment' in dados}")
     for campo in ['client_name','client_apelido','mechanic_name','autoriza_instagram']:
-        print(f"[DEBUG]   {campo} = {repr(dados.get(campo))[:80]}")
-    print(f"[DEBUG] checklist_items COMPLETO:")
+        if campo in dados:
+            print(f"[DEBUG]   {campo} = {repr(dados[campo])}")
+    print("[DEBUG] checklist_items COMPLETO:")
     for item in (dados.get('checklist_items') or []):
         print(f"[DEBUG]   {_json.dumps(item, ensure_ascii=False)}")
 

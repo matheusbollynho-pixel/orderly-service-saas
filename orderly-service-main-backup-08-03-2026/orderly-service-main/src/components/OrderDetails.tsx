@@ -115,6 +115,12 @@ export function OrderDetails({
   const [termsAccepted, setTermsAccepted] = useState(order.terms_accepted ?? false);
   const [deliveryTermsAccepted, setDeliveryTermsAccepted] = useState(order.delivery_terms_accepted ?? false);
   const [deliverySignatureData, setDeliverySignatureData] = useState(order.delivery_signature_data ?? null);
+  const [deliveryPersonType, setDeliveryPersonType] = useState<'cliente' | 'outro'>(
+  (order as any).delivery_person_type === 'outro' ? 'outro' : 'cliente'
+);
+const [deliveryPersonName, setDeliveryPersonName] = useState((order as any).delivery_person_name || '');
+const [deliveryPersonPhone, setDeliveryPersonPhone] = useState((order as any).delivery_person_phone || '');
+const [deliveryPersonCpf, setDeliveryPersonCpf] = useState((order as any).delivery_person_cpf || '');
   const [signatureData, setSignatureData] = useState(order.signature_data ?? null);
   const [activeTab, setActiveTab] = useState<'checklist' | 'materiais'>(
     isExpress ? 'materiais' : (order.signature_data ? 'materiais' : 'checklist')
@@ -625,10 +631,124 @@ export function OrderDetails({
     </div>
   );
 
-  const renderDeliverySection = () => (
+const renderDeliverySection = () => {
+  const matchTerceiro = order.problem_description?.match(
+    /Retirada: Outra pessoa - Nome: (.+?) \| Tel: (.+?) \| CPF: (.+?)(?:\n|$)/
+  );
+  const terceiroCadastrado = matchTerceiro
+    ? { nome: matchTerceiro[1], tel: matchTerceiro[2], cpf: matchTerceiro[3] }
+    : null;
+
+  const handleSaveDeliveryPerson = () => {
+    if (deliveryPersonType === 'outro') {
+      if (!deliveryPersonName.trim()) { alert('Informe o nome de quem vai retirar.'); return; }
+      if (!deliveryPersonPhone.trim()) { alert('Informe o telefone de quem vai retirar.'); return; }
+      if (!deliveryPersonCpf.trim()) { alert('Informe o CPF de quem vai retirar.'); return; }
+    }
+    if (onUpdateOrder) {
+      onUpdateOrder({
+        id: order.id,
+        delivery_person_type: deliveryPersonType,
+        delivery_person_name: deliveryPersonType === 'outro' ? deliveryPersonName.trim() : order.client_name,
+        delivery_person_phone: deliveryPersonType === 'outro' ? deliveryPersonPhone.trim() : order.client_phone,
+        delivery_person_cpf: deliveryPersonType === 'outro' ? deliveryPersonCpf.trim() : order.client_cpf,
+      } as any);
+    }
+    alert('✅ Dados de retirada salvos!');
+  };
+
+  return (
     <div className="space-y-3 pt-4 border-t border-border/50 mt-4">
       <h3 className="font-semibold text-foreground text-base">📋 Termo de Entrega do Veículo</h3>
-      
+
+      {/* Quem vai retirar */}
+      <div className="rounded-lg border border-blue-200 p-3 bg-blue-50/50 space-y-3">
+        <p className="text-sm font-semibold text-blue-800">👤 Quem está retirando o veículo?</p>
+        <div className="flex gap-3">
+          <Button
+            size="sm"
+            variant={deliveryPersonType === 'cliente' ? 'default' : 'outline'}
+            onClick={() => setDeliveryPersonType('cliente')}
+            disabled={order.status === 'concluida_entregue'}
+          >
+            Dono
+          </Button>
+          <Button
+            size="sm"
+            variant={deliveryPersonType === 'outro' ? 'default' : 'outline'}
+            onClick={() => setDeliveryPersonType('outro')}
+            disabled={order.status === 'concluida_entregue'}
+          >
+            Outra pessoa
+          </Button>
+        </div>
+
+        {deliveryPersonType === 'outro' && (
+          <div className="space-y-2">
+            {terceiroCadastrado && (
+              <div className="text-xs text-blue-700 bg-blue-100 rounded p-2">
+                Cadastrado na OS: {terceiroCadastrado.nome} | {terceiroCadastrado.tel} | {terceiroCadastrado.cpf}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="ml-2 h-5 text-xs"
+                  onClick={() => {
+                    setDeliveryPersonName(terceiroCadastrado.nome);
+                    setDeliveryPersonPhone(terceiroCadastrado.tel);
+                    setDeliveryPersonCpf(terceiroCadastrado.cpf);
+                  }}
+                  disabled={order.status === 'concluida_entregue'}
+                >
+                  Usar estes dados
+                </Button>
+              </div>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs">Nome *</Label>
+                <Input
+                  value={deliveryPersonName}
+                  onChange={(e) => setDeliveryPersonName(e.target.value)}
+                  placeholder="Nome completo"
+                  className="h-8 text-sm"
+                  disabled={order.status === 'concluida_entregue'}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Telefone *</Label>
+                <Input
+                  value={deliveryPersonPhone}
+                  onChange={(e) => setDeliveryPersonPhone(e.target.value)}
+                  placeholder="(xx) xxxxx-xxxx"
+                  className="h-8 text-sm"
+                  disabled={order.status === 'concluida_entregue'}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">CPF *</Label>
+                <Input
+                  value={deliveryPersonCpf}
+                  onChange={(e) => setDeliveryPersonCpf(e.target.value)}
+                  placeholder="000.000.000-00"
+                  className="h-8 text-sm"
+                  disabled={order.status === 'concluida_entregue'}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        <Button
+          size="sm"
+          onClick={handleSaveDeliveryPerson}
+          disabled={order.status === 'concluida_entregue'}
+          className="w-full"
+        >
+          Salvar quem retirou
+        </Button>
+      </div>
+
+      {/* Termo */}
       <div className="rounded-lg border border-border/50 p-3 bg-muted/20">
         <div className="flex items-start gap-3">
           <Checkbox
@@ -636,23 +756,25 @@ export function OrderDetails({
             checked={deliveryTermsAccepted}
             onCheckedChange={handleDeliveryTermsChange}
             className="mt-1"
+            disabled={order.status === 'concluida_entregue'}
           />
           <label htmlFor="delivery-terms-checkbox" className="text-sm text-foreground leading-relaxed cursor-pointer">
             <span className="font-semibold">Declaro que recebi nesta data a motocicleta referente a esta Ordem de Serviço, após a execução dos serviços descritos.</span> Confirmo que o veículo foi entregue, conferido e encontra-se em condições de uso, não constatando irregularidades aparentes no ato da entrega.
           </label>
         </div>
       </div>
+
       <label className="text-sm font-medium text-foreground">Assinatura do Cliente (Entrega)</label>
-      {showDeliverySignature ? (
+      {showDeliverySignature && order.status !== 'concluida_entregue' ? (
         <SignaturePad
           onSave={handleDeliverySignatureSave}
-          initialValue={deliverySignatureData}
+          initialValue={deliverySignatureData || firstDeliverySignatureData}
         />
       ) : deliverySignatureData ? (
         <>
           <div className="rounded-lg border border-border overflow-hidden bg-white">
             <img
-              src={deliverySignatureData}
+              src={deliverySignatureData || firstDeliverySignatureData}
               alt="Assinatura de entrega do cliente"
               className="w-full h-32 object-contain"
             />
@@ -662,6 +784,7 @@ export function OrderDetails({
             size="sm"
             onClick={() => setShowDeliverySignature(true)}
             className="w-full"
+            disabled={order.status === 'concluida_entregue'}
           >
             Nova Assinatura de Entrega
           </Button>
@@ -677,7 +800,7 @@ export function OrderDetails({
             }
             setShowDeliverySignature(true);
           }}
-          disabled={!deliveryTermsAccepted}
+          disabled={!deliveryTermsAccepted || order.status === 'concluida_entregue'}
           className="w-full"
           title={!deliveryTermsAccepted ? 'É necessário aceitar o termo de entrega antes de assinar' : ''}
         >
@@ -686,6 +809,7 @@ export function OrderDetails({
       )}
     </div>
   );
+};
 
   return (
     <>

@@ -115,6 +115,12 @@ export function OrderDetails({
   const [termsAccepted, setTermsAccepted] = useState(order.terms_accepted ?? false);
   const [deliveryTermsAccepted, setDeliveryTermsAccepted] = useState(order.delivery_terms_accepted ?? false);
   const [deliverySignatureData, setDeliverySignatureData] = useState(order.delivery_signature_data ?? null);
+  const [deliveryPersonType, setDeliveryPersonType] = useState<'cliente' | 'outro'>(
+    (order as any).delivery_person_type === 'outro' ? 'outro' : 'cliente'
+  );
+  const [deliveryPersonName, setDeliveryPersonName] = useState((order as any).delivery_person_name || '');
+  const [deliveryPersonPhone, setDeliveryPersonPhone] = useState((order as any).delivery_person_phone || '');
+  const [deliveryPersonCpf, setDeliveryPersonCpf] = useState((order as any).delivery_person_cpf || '');
   // Campo para persistir a primeira assinatura de entrega
   const [firstDeliverySignatureData, setFirstDeliverySignatureData] = useState(order.first_delivery_signature_data ?? order.delivery_signature_data ?? null);
   const [signatureData, setSignatureData] = useState(order.signature_data ?? null);
@@ -128,6 +134,9 @@ export function OrderDetails({
   const [isSendingText, setIsSendingText] = useState(false);
   const [isEditingServicesTodo, setIsEditingServicesTodo] = useState(false);
   const [editedServicesTodo, setEditedServicesTodo] = useState(order.problem_description || '');
+
+  // Debug datas
+  console.log('order.exit_date:', order.exit_date, 'order.status:', order.status);
 
   // Sincronizar com dados da OS
   useEffect(() => {
@@ -485,6 +494,10 @@ export function OrderDetails({
           exit_date: order.exit_date || order.conclusion_date || order.updated_at || null,
           conclusion_date: order.conclusion_date || order.exit_date || order.updated_at || null,
           logo_path: 'bandara_logo_transparent.png',
+          delivery_person_type: deliveryPersonType,
+          delivery_person_name: deliveryPersonType === 'outro' ? deliveryPersonName : order.client_name,
+          delivery_person_phone: deliveryPersonType === 'outro' ? deliveryPersonPhone : order.client_phone,
+          delivery_person_cpf: deliveryPersonType === 'outro' ? deliveryPersonCpf : order.client_cpf,
         }),
       });
 
@@ -594,6 +607,10 @@ export function OrderDetails({
         exit_date: order.exit_date || order.conclusion_date || order.updated_at || null,
         conclusion_date: order.conclusion_date || order.exit_date || order.updated_at || null,
         logo_path: 'bandara_logo_transparent.png',
+        delivery_person_type: deliveryPersonType,
+        delivery_person_name: deliveryPersonType === 'outro' ? deliveryPersonName : order.client_name,
+        delivery_person_phone: deliveryPersonType === 'outro' ? deliveryPersonPhone : order.client_phone,
+        delivery_person_cpf: deliveryPersonType === 'outro' ? deliveryPersonCpf : order.client_cpf,
       };
       console.log('📋 Dados enviados para API:', JSON.stringify(payload, null, 2));
       const response = await fetch('http://localhost:5000/gerar-os', {
@@ -687,11 +704,130 @@ export function OrderDetails({
       )}
     </div>
   );
+  
+const renderDeliverySection = () => {
+  const matchTerceiro = order.problem_description?.match(
+    /Retirada: Outra pessoa - Nome: (.+?) \| Tel: (.+?) \| CPF: (.+?)(?:\n|$)/
+  );
+  const terceiroCadastrado = matchTerceiro
+    ? { nome: matchTerceiro[1], tel: matchTerceiro[2], cpf: matchTerceiro[3] }
+    : null;
 
-  const renderDeliverySection = () => (
+  const handleSaveDeliveryPerson = () => {
+    if (deliveryPersonType === 'outro') {
+      if (!deliveryPersonName.trim()) { alert('Informe o nome de quem vai retirar.'); return; }
+      if (!deliveryPersonPhone.trim()) { alert('Informe o telefone de quem vai retirar.'); return; }
+      if (!deliveryPersonCpf.trim()) { alert('Informe o CPF de quem vai retirar.'); return; }
+    }
+    if (onUpdateOrder) {
+      onUpdateOrder({
+        id: order.id,
+        delivery_person_type: deliveryPersonType,
+        delivery_person_name: deliveryPersonType === 'outro' ? deliveryPersonName.trim() : order.client_name,
+        delivery_person_phone: deliveryPersonType === 'outro' ? deliveryPersonPhone.trim() : order.client_phone,
+        delivery_person_cpf: deliveryPersonType === 'outro' ? deliveryPersonCpf.trim() : order.client_cpf,
+      } as any);
+    }
+    alert('✅ Dados de retirada salvos!');
+  };
+
+  return (
     <div className="space-y-3 pt-4 border-t border-border/50 mt-4">
       <h3 className="font-semibold text-foreground text-base">📋 Termo de Entrega do Veículo</h3>
-      
+
+      <div className="rounded-lg border border-border/50 p-3 bg-muted/20 space-y-3">
+        <p className="text-sm font-semibold text-foreground">👤 Quem está retirando o veículo?</p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setDeliveryPersonType('cliente')}
+            disabled={order.status === 'concluida_entregue'}
+            className={`px-4 py-1.5 rounded text-sm font-medium transition-colors ${
+              deliveryPersonType === 'cliente'
+                ? 'bg-[#C1272D] text-white'
+                : 'bg-muted text-muted-foreground border border-border/50 hover:bg-muted/80'
+            }`}
+          >
+            Dono
+          </button>
+          <button
+            type="button"
+            onClick={() => setDeliveryPersonType('outro')}
+            disabled={order.status === 'concluida_entregue'}
+            className={`px-4 py-1.5 rounded text-sm font-medium transition-colors ${
+              deliveryPersonType === 'outro'
+                ? 'bg-[#C1272D] text-white'
+                : 'bg-muted text-muted-foreground border border-border/50 hover:bg-muted/80'
+            }`}
+          >
+            Outra pessoa
+          </button>
+        </div>
+
+        {deliveryPersonType === 'outro' && (
+          <div className="space-y-2">
+            {terceiroCadastrado && (
+              <div className="text-xs text-muted-foreground bg-muted/30 border border-border/30 rounded p-2 flex items-center justify-between">
+                <span>{terceiroCadastrado.nome} | {terceiroCadastrado.tel} | {terceiroCadastrado.cpf}</span>
+                <button
+                  type="button"
+                  className="text-xs text-[#C1272D] hover:underline ml-2 whitespace-nowrap"
+                  onClick={() => {
+                    setDeliveryPersonName(terceiroCadastrado.nome);
+                    setDeliveryPersonPhone(terceiroCadastrado.tel);
+                    setDeliveryPersonCpf(terceiroCadastrado.cpf);
+                  }}
+                  disabled={order.status === 'concluida_entregue'}
+                >
+                  Usar estes dados
+                </button>
+              </div>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Nome *</Label>
+                <Input
+                  value={deliveryPersonName}
+                  onChange={(e) => setDeliveryPersonName(e.target.value)}
+                  placeholder="Nome completo"
+                  className="h-8 text-sm"
+                  disabled={order.status === 'concluida_entregue'}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Telefone *</Label>
+                <Input
+                  value={deliveryPersonPhone}
+                  onChange={(e) => setDeliveryPersonPhone(e.target.value)}
+                  placeholder="(xx) xxxxx-xxxx"
+                  className="h-8 text-sm"
+                  disabled={order.status === 'concluida_entregue'}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">CPF *</Label>
+                <Input
+                  value={deliveryPersonCpf}
+                  onChange={(e) => setDeliveryPersonCpf(e.target.value)}
+                  placeholder="000.000.000-00"
+                  className="h-8 text-sm"
+                  disabled={order.status === 'concluida_entregue'}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        <Button
+          size="sm"
+          onClick={handleSaveDeliveryPerson}
+          disabled={order.status === 'concluida_entregue'}
+          className="w-full bg-[#C1272D] hover:bg-[#a01f24] text-white"
+        >
+          Salvar quem retirou
+        </Button>
+      </div>
+
       <div className="rounded-lg border border-border/50 p-3 bg-muted/20">
         <div className="flex items-start gap-3">
           <Checkbox
@@ -706,6 +842,7 @@ export function OrderDetails({
           </label>
         </div>
       </div>
+
       <label className="text-sm font-medium text-foreground">Assinatura do Cliente (Entrega)</label>
       {showDeliverySignature && order.status !== 'concluida_entregue' ? (
         <SignaturePad
@@ -742,15 +879,15 @@ export function OrderDetails({
             }
             setShowDeliverySignature(true);
           }}
-          disabled={!deliveryTermsAccepted || order.status === 'concluida_entregue'}
+          disabled={order.status === 'concluida_entregue'}
           className="w-full"
-          title={!deliveryTermsAccepted ? 'É necessário aceitar o termo de entrega antes de assinar' : ''}
         >
           Coletar Assinatura de Entrega
         </Button>
       )}
     </div>
   );
+};
 
   return (
     <>
@@ -925,7 +1062,7 @@ export function OrderDetails({
               ) : (
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm text-muted-foreground">
-                    {exitDate ? formatDateDisplay(exitDate) : 'Não definida'}
+                    {order.exit_date ? formatDateDisplay(order.exit_date) : 'Não definida'}
                   </span>
                 </div>
               )}
@@ -936,7 +1073,7 @@ export function OrderDetails({
             <div className="flex flex-col gap-2 pt-2">
               <Label className="text-sm font-medium">📅 Data de Entrega</Label>
               <span className="text-sm text-muted-foreground">
-                {exitDate ? formatDateDisplay(exitDate) : 'Não definida'}
+                {order.exit_date ? formatDateDisplay(order.exit_date) : 'Não definida'}
               </span>
               <span className="text-center text-xs text-neutral-400 tracking-wider mt-2">ID da OS: {order.id}</span>
             </div>
