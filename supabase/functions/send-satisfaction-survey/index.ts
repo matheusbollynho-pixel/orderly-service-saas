@@ -6,7 +6,8 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 )
 
-const APP_BASE_URL = (Deno.env.get('APP_BASE_URL') || 'https://os-bandara.vercel.app').replace(/\/$/, '')
+const _rawBaseUrl = Deno.env.get('APP_BASE_URL') || 'https://os-bandara.vercel.app'
+const APP_BASE_URL = (_rawBaseUrl.startsWith('http') ? _rawBaseUrl : `https://${_rawBaseUrl}`).replace(/\/$/, '')
 
 function buildSatisfactionMessage(clientName: string, link: string) {
   return `Olá, ${clientName || 'cliente'}! 👋\n\nAqui é da *Bandara Motos*.\n\nSua opinião é muito importante para melhorarmos sempre.\nPode avaliar seu atendimento em menos de 1 minuto? ⭐\n\n${link}\n\nObrigado pela confiança! 🏍️🔧`;
