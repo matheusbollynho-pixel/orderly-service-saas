@@ -129,14 +129,22 @@ def create_os_pdf(output_path: str, dados: dict) -> None:
                 continue
             # rating = gasolina/estrelas
             if itype == 'rating':
-                chk_items[key] = {'rating': item.get('rating'), 'status': None}
+                r = item.get('rating') or item.get('completed')
+                chk_items[key] = {'rating': r, 'status': None}
                 continue
             # yesno = sim/nao baseado em completed (bool)
             completed = item.get('completed')
             status_val = item.get('status') or item.get('value')
+            # Suporte a bool True/False vindo do banco
+            if isinstance(completed, bool):
+                resolved_status = completed
+            elif isinstance(completed, str):
+                resolved_status = completed.lower() in ('true', 'sim', '1', 'yes')
+            else:
+                resolved_status = False
             chk_items[key] = {
-                'rating':    item.get('rating'),
-                'status':    completed,   # bool True/False
+                'rating':     item.get('rating'),
+                'status':     resolved_status,
                 'status_raw': status_val,
             }
 
@@ -215,7 +223,7 @@ def create_os_pdf(output_path: str, dados: dict) -> None:
 
             'data_entrada':  fmt_data(dados.get('entry_date') or dados.get('created_at')),
             'data_conclusao':fmt_data(dados.get('conclusion_date') or dados.get('concluded_at')),
-            'data_entrega':  fmt_data(dados.get('exit_date') or dados.get('delivery_date') or dados.get('delivered_at')),
+            'data_entrega':  fmt_data(dados.get('exit_date') or dados.get('conclusion_date') or dados.get('delivery_date') or dados.get('delivered_at')),
         }
         def fmt_nasc(val):
             if not val: return ''
@@ -236,22 +244,28 @@ def create_os_pdf(output_path: str, dados: dict) -> None:
             if len(v) == 10:
                 return f"({v[:2]}) {v[2:6]}-{v[6:]}"
             return v
-        # Extrai terceiro e serviço limpo do problem_description
-        import re as _re
-        _equip   = sv(dados.get('equipment', ''))
-        _problem = sv(dados.get('problem_description', ''))
-        _ter_nome = _ter_tel = _ter_cpf = ''
+        # Extrai terceiro autorizado do problem_description
+        import re
+        prob_raw = sv(dados.get('problem_description') or '')
+        terceiro_nome = ''
+        terceiro_tel = ''
+        terceiro_cpf = ''
+        match_terceiro = re.search(
+            r'Retirada: Outra pessoa - Nome: (.+?) \| Tel: (.+?) \| CPF: (.+?)(?:\n|$)',
+            prob_raw
+        )
+        if match_terceiro:
+            terceiro_nome = match_terceiro.group(1).strip()
+            terceiro_tel  = match_terceiro.group(2).strip()
+            terceiro_cpf  = match_terceiro.group(3).strip()
+        prob = re.sub(r'\s*\(cadastro express\)', '', prob_raw, flags=re.IGNORECASE)
+        prob = re.split(r'\n\nRetirada:', prob)[0].strip()
+        prob = re.sub(r'\s*\(\s*\)', '', prob).strip()
+        _problem = prob
+        _ter_nome = terceiro_nome
+        _ter_tel = terceiro_tel
+        _ter_cpf = terceiro_cpf
         _servico  = _problem
-        _ret_m = _re.search(r'Retirada:\s*Outra pessoa\s*-\s*(.+)', _problem, _re.IGNORECASE)
-        if _ret_m:
-            _info = _ret_m.group(1)
-            _nm = _re.search(r'Nome:\s*([^|]+)', _info)
-            _tm = _re.search(r'Tel:\s*([^|]+)', _info)
-            _cm = _re.search(r'CPF:\s*([^|]+)', _info)
-            if _nm: _ter_nome = _nm.group(1).strip()
-            if _tm: _ter_tel  = _tm.group(1).strip()
-            if _cm: _ter_cpf  = _cm.group(1).strip()
-            _servico = _problem[:_ret_m.start()].strip().strip('\n').strip()
 
         cli = {
             'nome':               sv(dados.get('client_name')),
@@ -264,6 +278,7 @@ def create_os_pdf(output_path: str, dados: dict) -> None:
             'autoriza_instagram': fmt_sim_nao_val(dados.get('autoriza_instagram', False)),
             'autoriza_lembretes': fmt_sim_nao_val(dados.get('autoriza_lembretes', False)),
         }
+        _equip = sv(dados.get('equipment') or '')
         ter = {
             'nome':     sv(dados.get('terceiro_nome') or dados.get('authorized_name') or _ter_nome or ''),
             'telefone': sv(dados.get('terceiro_telefone') or dados.get('authorized_phone') or _ter_tel or ''),
@@ -481,8 +496,8 @@ def create_os_pdf(output_path: str, dados: dict) -> None:
 
     # ── TERCEIRO AUTORIZADO ────────────────────────────────────────────────
     y = section_header('Terceiro Autorizado a Retirar o Veiculo', y)
-    y = field_row('Nome',     ter.get('nome', '___________________________________'), y, lw=15*mm)
-    y = two_fields('Telefone', ter.get('telefone', '____________________'), 'CPF', ter.get('cpf', '____________________'), y, lw1=18*mm, lw2=12*mm, alt=True)
+    y = field_row('Nome',     _ter_nome or '___________________________________', y, lw=15*mm)
+    y = two_fields('Telefone', _ter_tel or '____________________', 'CPF', _ter_cpf or '____________________', y, lw1=18*mm, lw2=12*mm, alt=True)
     y -= 2.5*mm
 
     # ── DETALHES DO SERVIÇO ────────────────────────────────────────────────

@@ -172,14 +172,26 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
 
     setIsSaving(true);
     try {
-      const cpfToSave = selectedClient?.cpf || buildExpressCPF(client.phone);
-      const savedClient = await upsertClient({
-        name: client.name.trim(),
-        cpf: cpfToSave,
-        phone: normalizePhone(client.phone),
-        autoriza_instagram: false,
-        autoriza_lembretes: autorizaLembretes,
-      });
+      // Evitar duplicidade: buscar cliente por telefone
+      let savedClient: Client | null = null;
+      const phoneDigits = normalizePhone(client.phone);
+      if (selectedClient) {
+        savedClient = selectedClient;
+      } else {
+        const existingClient = await searchClientByPhone(phoneDigits);
+        if (existingClient) {
+          savedClient = existingClient;
+        } else {
+          const cpfToSave = buildExpressCPF(client.phone);
+          savedClient = await upsertClient({
+            name: client.name.trim(),
+            cpf: cpfToSave,
+            phone: phoneDigits,
+            autoriza_instagram: false,
+            autoriza_lembretes: autorizaLembretes,
+          });
+        }
+      }
 
       if (!savedClient) {
         toast.error('Erro ao salvar cliente');
@@ -203,7 +215,7 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
 
       if (createQuickOrder) {
         const desc = serviceDescription.trim() || 'Serviço rápido';
-        await new Promise<void>((resolve, reject) => {
+        await new Promise<void>(async (resolve, reject) => {
           createOrder(
             {
               client_id: savedClient.id,
@@ -226,36 +238,20 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
               onSuccess: async (newOrder: any) => {
                 // Process maintenance keywords from problem description
                 if (autorizaLembretes && savedClient?.id) {
-                  const problemDesc = `${desc} (cadastro express)`;
-                  const maintenanceKeywords = [
-                    'revisao',
-                    'revisão',
-                    'revisora',
-                    'oleo',
-                    'óleo',
-                    'oléo',
-                    'corrente',
-                    'correia',
-                    'cabo',
-                    'freio',
-                    'pneu',
-                    'motor',
-                  ];
-
-                  const detectedKeyword = maintenanceKeywords.find((keyword) =>
-                    problemDesc.toLowerCase().includes(keyword)
-                  );
-
-                  if (detectedKeyword) {
-                    try {
+                  try {
+                    const keywords = await getMaintenanceKeywords();
+                    const detectedKeyword = findKeywordInText(`${desc} (cadastro express)`, keywords);
+                    if (detectedKeyword) {
                       await createMaintenanceReminder(
-                        savedMoto.id,
-                        detectedKeyword,
-                        `Lembrete: ${detectedKeyword.charAt(0).toUpperCase() + detectedKeyword.slice(1).toLowerCase()} para ${savedMoto.placa || 'sua moto'}`
+                        newOrder.id,
+                        savedClient.id,
+                        savedClient.phone || '',
+                        detectedKeyword.id,
+                        new Date()
                       );
-                    } catch (err) {
-                      console.error('Erro ao criar lembrete de manutenção:', err);
                     }
+                  } catch (err) {
+                    console.error('Erro ao criar lembrete de manutenção:', err);
                   }
                 }
                 // Redirecionar para a OS criada

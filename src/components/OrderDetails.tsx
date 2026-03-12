@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
-import { ServiceOrder, OrderStatus, STATUS_LABELS, PaymentMethod } from '@/types/service-order';
+import { ServiceOrder, OrderStatus, STATUS_LABELS, PaymentMethod, Material } from '@/types/service-order';
 import { StatusBadge } from './StatusBadge';
 import { Checklist } from './Checklist';
 import { SignaturePad } from './SignaturePad';
@@ -70,7 +70,7 @@ interface OrderDetailsProps {
   onChecklistItemObservations?: (id: string, observations: string) => void;
   onSignatureSave: (signature: string) => void;
   onDelete: () => void;
-  onAddMaterial?: (material: { id: string; name: string; quantity: number }) => void;
+  onAddMaterial?: (material: Omit<Material, 'id' | 'created_at' | 'updated_at'>) => void;
   onRemoveMaterial?: (id: string) => void;
   onUpdateMaterial?: (id: string, field: string, value: string) => void;
   onAddPayment?: (payload: { order_id: string; amount: number; discount_amount?: number | null; method: PaymentMethod; reference?: string | null; notes?: string | null; finalized_by_staff_id?: string | null }) => void;
@@ -466,40 +466,58 @@ export function OrderDetails({
   };
 
   const handleSendWhatsAppPDF = async () => {
+      console.log('📋 problem_description:', order.problem_description);
     if (!order.signature_data && !isExpress) {
       alert('É necessário coletar a assinatura do cliente antes de enviar o PDF.');
       return;
     }
     
     try {
-      setIsSendingPDF(true)
-      
-      // Usar o gerador antigo que funciona
-      const pdfData = generateOrderPDFBase64(order)
-      
-      const cleanPhone = order.client_phone?.replace(/\D/g, '') || ''
+      setIsSendingPDF(true);
+
+      const response = await fetch('http://localhost:5000/gerar-os', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...order,
+          mechanic_name: mechanics.find(m => m.id === order.mechanic_id)?.name || '',
+          created_by: teamMembers.find(m => m.id === order.atendimento_id)?.name || '',
+          exit_date: order.exit_date || order.conclusion_date || order.updated_at || null,
+          conclusion_date: order.conclusion_date || order.exit_date || order.updated_at || null,
+          logo_path: 'bandara_logo_transparent.png',
+        }),
+      });
+
+      if (!response.ok) throw new Error('Erro ao gerar PDF na API');
+
+      const blob = await response.blob();
+      const arrayBuffer = await blob.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+      let binary = '';
+      for (let i = 0; i < uint8Array.length; i++) {
+        binary += String.fromCharCode(uint8Array[i]);
+      }
+      const base64 = btoa(binary);
+
+      const cleanPhone = order.client_phone?.replace(/\D/g, '') || '';
       if (cleanPhone.length < 10 || cleanPhone.length > 11) {
-        alert('Telefone do cliente inválido para WhatsApp.')
-        return
+        alert('Telefone do cliente inválido para WhatsApp.');
+        return;
       }
 
       await sendWhatsAppDocument({
         phone: cleanPhone,
-        base64: pdfData.base64,
-        fileName: pdfData.fileName,
+        base64,
+        fileName: `ordem_servico_${order.id.slice(0, 8)}.pdf`,
         caption: `Olá, ${order.client_name}! Sua Ordem de Serviço está pronta. Segue em anexo. Obrigado pela preferência!`,
-      })
+      });
 
-      alert('✅ PDF enviado para WhatsApp com sucesso!')
+      alert('✅ PDF enviado para WhatsApp com sucesso!');
     } catch (error: unknown) {
-      console.error('Erro ao enviar WhatsApp:', error)
-      if (error instanceof Error) {
-        alert(error.message || 'Erro ao enviar PDF. Tente novamente.')
-      } else {
-        alert('Erro ao enviar PDF. Tente novamente.')
-      }
+      console.error('Erro ao enviar WhatsApp:', error);
+      alert(error instanceof Error ? error.message : 'Erro ao enviar PDF. Tente novamente.');
     } finally {
-      setIsSendingPDF(false)
+      setIsSendingPDF(false);
     }
   };
 
@@ -569,12 +587,35 @@ export function OrderDetails({
     }
     
     try {
-      // Usar o gerador antigo que funciona
-      generateOrderPDF(order)
-      alert('✅ PDF baixado com sucesso!')
+      const payload = {
+        ...order,
+        mechanic_name: mechanics.find(m => m.id === order.mechanic_id)?.name || '',
+        created_by: teamMembers.find(m => m.id === order.atendimento_id)?.name || '',
+        exit_date: order.exit_date || order.conclusion_date || order.updated_at || null,
+        conclusion_date: order.conclusion_date || order.exit_date || order.updated_at || null,
+        logo_path: 'bandara_logo_transparent.png',
+      };
+      console.log('📋 Dados enviados para API:', JSON.stringify(payload, null, 2));
+      const response = await fetch('http://localhost:5000/gerar-os', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) throw new Error('Erro ao gerar PDF na API');
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ordem_servico_${order.id.slice(0, 8)}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      alert('✅ PDF baixado com sucesso!');
     } catch (error: unknown) {
-      console.error('Erro ao baixar PDF:', error)
-      alert('Erro ao gerar PDF. Tente novamente.')
+      console.error('Erro ao baixar PDF:', error);
+      alert('Erro ao gerar PDF. Tente novamente.');
     }
   };
 
