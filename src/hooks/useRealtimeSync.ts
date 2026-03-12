@@ -9,7 +9,9 @@ export function useRealtimeSync() {
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
     let fallbackInterval: ReturnType<typeof setInterval> | null = null;
+    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
     let lastInvalidateAt = 0;
+    let currentChannel: ReturnType<typeof supabase.channel> | null = null;
 
     const isHiddenQrOrder = (row: Record<string, unknown>) => {
       return row?.equipment === '__QR_WALKIN_PLACEHOLDER__' ||
@@ -25,7 +27,7 @@ export function useRealtimeSync() {
 
     const invalidate = (scope: 'orders' | 'cash' | 'all') => {
       const now = Date.now();
-      if (now - lastInvalidateAt < 1000) return;
+      if (now - lastInvalidateAt < 200) return;
       lastInvalidateAt = now;
 
       if (timer) clearTimeout(timer);
@@ -202,29 +204,43 @@ export function useRealtimeSync() {
     // Fallback para cenários em que websocket/realtime está instável
     fallbackInterval = setInterval(() => {
       if (navigator.onLine) {
-        invalidate('orders');
+        invalidate('all');
       }
-    }, 60000);
+    }, 15000);
 
-    const channel = supabase
-      .channel('global-realtime-sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'service_orders' }, (payload) => handleServiceOrdersChange(payload))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'checklist_items' }, (payload) => handleChecklistChange(payload))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'materials' }, (payload) => handleMaterialsChange(payload))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, (payload) => handlePaymentsChange(payload))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_flow' }, () => invalidate('cash'))
-      .subscribe((status) => {
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          invalidate('orders');
-        }
-      });
+    const subscribe = () => {
+      if (currentChannel) {
+        supabase.removeChannel(currentChannel);
+      }
+
+      currentChannel = supabase
+        .channel('global-realtime-sync-' + Date.now())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'service_orders' }, (payload) => handleServiceOrdersChange(payload))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'checklist_items' }, (payload) => handleChecklistChange(payload))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'materials' }, (payload) => handleMaterialsChange(payload))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, (payload) => handlePaymentsChange(payload))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_flow' }, () => invalidate('cash'))
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            invalidate('all');
+            // Reconecta automaticamente após 3s
+            if (reconnectTimeout) clearTimeout(reconnectTimeout);
+            reconnectTimeout = setTimeout(() => {
+              if (navigator.onLine) subscribe();
+            }, 3000);
+          }
+        });
+    };
+
+    subscribe();
 
     return () => {
       if (timer) clearTimeout(timer);
       if (fallbackInterval) clearInterval(fallbackInterval);
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
       window.removeEventListener('focus', handleFocusSync);
       document.removeEventListener('visibilitychange', handleVisibilitySync);
-      supabase.removeChannel(channel);
+      if (currentChannel) supabase.removeChannel(currentChannel);
     };
   }, [queryClient]);
 }
