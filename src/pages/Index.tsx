@@ -144,7 +144,7 @@ export default function Index() {
           // Extrair marca do campo model (primeira palavra) ou usar a própria string se não tiver espaço
           const modelParts = moto.model?.trim().split(' ') || [];
           const marca = modelParts[0] || 'Não informado';
-          const modelo = moto.model || moto.moto_info || 'Não informado';
+          const modelo = modelParts.slice(1).join(' ') || moto.moto_info || 'Não informado';
           
           const motoData = {
             client_id: savedClient.id,
