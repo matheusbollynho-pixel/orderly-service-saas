@@ -250,10 +250,11 @@ export function useServiceOrders() {
       return { id, ...serviceOrderUpdates } as Partial<ServiceOrder>;
     },
     onMutate: async (variables: Partial<ServiceOrder> & { id: string }) => {
+      // Cancela queries em voo para evitar que sobrescrevam a atualização otimista
       await queryClient.cancelQueries({ queryKey: ['service-orders'] });
-
-      // Refetch imediatamente após update para garantir sincronização
-      queryClient.invalidateQueries({ queryKey: ['service-orders'] });
+      // Não invalidar aqui — o onSettled cuida disso após a mutation completar.
+      // Invalidar em onMutate dispara refetch ANTES do banco confirmar a escrita,
+      // retornando dados antigos e revertendo estados locais (checkbox, assinatura).
     },
     onSuccess: async (data: Partial<ServiceOrder> | null, variables: Partial<ServiceOrder> & { id: string }) => {
       queryClient.setQueryData(['service-orders'], (old: ServiceOrder[] | undefined) => {
