@@ -487,7 +487,7 @@ Retirada: ${retiradaInfo}`;
           const current = prev.payments || [];
           const updatedPayments = [...current, saved];
           // Calcular total pago e desconto
-          const totalOS = prev.materials?.reduce((acc, m) => acc + (m.valor || 0), 0) || 0;
+          const totalOS = prev.materials?.reduce((acc, m) => acc + ((m.valor || 0) * (parseFloat(m.quantidade) || 0)), 0) || 0;
           const totalPaid = updatedPayments.reduce((acc, p) => acc + (p.amount || 0), 0);
           const totalDiscount = updatedPayments.reduce((acc, p) => acc + (p.discount_amount || 0), 0);
           const totalSettled = totalPaid + totalDiscount;
