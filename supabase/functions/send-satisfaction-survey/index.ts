@@ -11,10 +11,9 @@ const APP_BASE_URL = (Deno.env.get('APP_BASE_URL') || 'https://os-bandara.vercel
 function buildSatisfactionMessage(clientName: string, link: string) {
   return `Olá, ${clientName || 'cliente'}! 👋\n\nAqui é da *Bandara Motos*.\n\nSua opinião é muito importante para melhorarmos sempre.\nPode avaliar seu atendimento em menos de 1 minuto? ⭐\n\n${link}\n\nObrigado pela confiança! 🏍️🔧`;
 }
-}
 
 function generatePublicToken() {
-  return crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '')
+  return crypto.randomUUID().replace(/-/g, '')
 }
 
 async function ensureSatisfactionRow(order: any) {
