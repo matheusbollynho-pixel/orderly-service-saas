@@ -902,4 +902,5 @@ if __name__ == '__main__':
     print("PDF de teste gerado: ordem_servico_bandara.pdf")
     print("\nPara iniciar a API Flask:")
     print("  python bandara_os_api.py  ->  acesse http://localhost:5000/gerar-os")
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=False, host='0.0.0.0', port=port)

@@ -1,0 +1,1 @@
+web: gunicorn bandara_os_api:app
