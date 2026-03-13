@@ -286,19 +286,19 @@ def create_os_pdf(output_path: str, dados: dict) -> None:
         delivery_person_cpf = sv(dados.get('delivery_person_cpf') or '')
 
 
-        if delivery_person_type == 'outro' and delivery_person_name:
-            # Outra pessoa retirou — usa dados salvos
+        if delivery_person_name:
+            # Frontend sempre envia delivery_person_name preenchido (dono ou terceiro)
             ter = {
                 'nome':     delivery_person_name,
-                'telefone': delivery_person_phone,
-                'cpf':      delivery_person_cpf,
+                'telefone': fmt_phone(delivery_person_phone) if delivery_person_phone else '',
+                'cpf':      fmt_cpf(delivery_person_cpf) if delivery_person_cpf else '',
             }
         elif delivery_person_type == 'cliente':
-            # Dono retirou — usa dados do cliente
+            # Fallback: usa dados do cliente diretamente
             ter = {
                 'nome':     sv(dados.get('client_name') or ''),
-                'telefone': sv(dados.get('client_phone') or ''),
-                'cpf':      sv(dados.get('client_cpf') or ''),
+                'telefone': fmt_phone(dados.get('client_phone', '')),
+                'cpf':      fmt_cpf(dados.get('client_cpf', '')),
             }
         else:
             # Fallback: tenta extrair do problem_description (OS antigas)
