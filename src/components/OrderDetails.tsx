@@ -612,43 +612,13 @@ export function OrderDetails({
     }
   };
 
-  const handleDownloadPDF = async () => {
+  const handleDownloadPDF = () => {
     if (!order.signature_data && !isExpress) {
       alert('É necessário coletar a assinatura do cliente antes de gerar o PDF.');
       return;
     }
-    
     try {
-      const payload = {
-        ...order,
-        mechanic_name: mechanics.find(m => m.id === order.mechanic_id)?.name || '',
-        created_by: teamMembers.find(m => m.id === order.atendimento_id)?.name || '',
-        exit_date: order.exit_date || order.conclusion_date || order.updated_at || null,
-        conclusion_date: order.conclusion_date || order.exit_date || order.updated_at || null,
-        logo_path: 'bandara_logo_transparent.png',
-        delivery_person_type: deliveryPersonType,
-        delivery_person_name: deliveryPersonType === 'outro' ? deliveryPersonName : order.client_name,
-        delivery_person_phone: deliveryPersonType === 'outro' ? deliveryPersonPhone : order.client_phone,
-        delivery_person_cpf: deliveryPersonType === 'outro' ? deliveryPersonCpf : order.client_cpf,
-      };
-      console.log('📋 Dados enviados para API:', JSON.stringify(payload, null, 2));
-      const response = await fetch('http://localhost:5000/gerar-os', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) throw new Error('Erro ao gerar PDF na API');
-
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `ordem_servico_${order.id.slice(0, 8)}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-
-      alert('✅ PDF baixado com sucesso!');
+      generateOrderPDF(order);
     } catch (error: unknown) {
       console.error('Erro ao baixar PDF:', error);
       alert('Erro ao gerar PDF. Tente novamente.');

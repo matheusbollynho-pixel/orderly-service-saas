@@ -16,7 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Heart, Gift, Bell, Clock, CheckCircle, Zap, Eye, EyeOff } from 'lucide-react';
+import { Heart, Gift, Bell, Clock, CheckCircle, Eye, EyeOff } from 'lucide-react';
 import { MaintenanceKeywordsManager } from '@/components/MaintenanceKeywordsManager';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -58,7 +58,7 @@ export default function AfterSalesPage() {
   const [filterClient, setFilterClient] = useState('');
   const [expandUpcoming, setExpandUpcoming] = useState(false);
   const [birthdayFilterType, setBirthdayFilterType] = useState<'all' | 'upcoming' | 'active'>('all');
-  const [showBirthdayStats, setShowBirthdayStats] = useState(true);
+  const [showBirthdayStats, setShowBirthdayStats] = useState(false);
   const [activeStatsFilter, setActiveStatsFilter] = useState<'all' | 'pending' | 'sent' | 'blocked' | 'due' | 'scheduled' | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
@@ -478,8 +478,8 @@ export default function AfterSalesPage() {
             {!isRestrictedUser && (
               <>
                 <TabsTrigger value="manutencao" className="gap-2">
-                  <Zap size={18} />
-                  Manutenção
+                  <Bell size={18} />
+                  Lembretes
                 </TabsTrigger>
               </>
             )}
@@ -487,16 +487,6 @@ export default function AfterSalesPage() {
 
           {/* ABA: ANIVERSÁRIO */}
           <TabsContent value="aniversario" className="space-y-8">
-        <div className="flex justify-end mb-2">
-          <button
-            onClick={() => setShowBirthdayStats(v => !v)}
-            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {showBirthdayStats ? <EyeOff size={16} /> : <Eye size={16} />}
-            {showBirthdayStats ? 'Ocultar resumo' : 'Mostrar resumo'}
-          </button>
-        </div>
-        {showBirthdayStats && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <Card 
             className={`cursor-pointer transition-all glass-card ${
@@ -552,9 +542,22 @@ export default function AfterSalesPage() {
             </CardContent>
           </Card>
         </div>
-        )}
 
         {/* Clients List */}
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm text-muted-foreground">
+            {getFilteredBirthdayClients().length} aniversariante(s)
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowBirthdayStats(v => !v)}
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {showBirthdayStats ? <EyeOff size={16} /> : <Eye size={16} />}
+            {showBirthdayStats ? 'Ocultar lista' : 'Mostrar lista'}
+          </button>
+        </div>
+        {showBirthdayStats && (
         <div className="space-y-4">
           {getFilteredBirthdayClients().length === 0 ? (
             <Card className="glass-card">
@@ -680,6 +683,7 @@ export default function AfterSalesPage() {
             })
           )}
         </div>
+        )}
           </TabsContent>
 
           {/* ABA: MANUTENÇÃO */}
@@ -1017,7 +1021,7 @@ export default function AfterSalesPage() {
             <div className="glass-card-elevated rounded-lg border border-border/50">
               <div className="p-6 border-b border-border/50">
                 <div className="flex items-center gap-3 mb-2">
-                  <Zap className="w-6 h-6 text-purple-600" />
+                  <Bell className="w-6 h-6 text-purple-600" />
                   <h2 className="text-2xl font-bold text-foreground">Palavras-chave de Manutenção</h2>
                 </div>
                 <p className="text-muted-foreground">Adicione, edite ou desative palavras-chave para lembretes automáticos</p>
