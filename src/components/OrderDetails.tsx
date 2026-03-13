@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ServiceOrder, OrderStatus, STATUS_LABELS, PaymentMethod, Material } from '@/types/service-order';
 import { StatusBadge } from './StatusBadge';
 import { Checklist } from './Checklist';
@@ -42,8 +43,7 @@ import {
 import { useMechanics } from '@/hooks/useMechanics';
 import { useClients } from '@/hooks/useClients';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
-import { generateOrderPDFBase64, generateOrderPDF } from '@/lib/pdfGenerator';
-import { sendWhatsAppDocument, sendWhatsAppText } from '@/lib/whatsappService';
+import { sendWhatsAppText, sendWhatsAppDocument } from '@/lib/whatsappService';
 import { supabase } from '@/integrations/supabase/client';
 
 import { formatDistanceToNow, format } from 'date-fns';
@@ -105,6 +105,7 @@ export function OrderDetails({
   isAdmin = false,
   canAccessPayments = true,
 }: OrderDetailsProps) {
+  const navigate = useNavigate();
   const { members: teamMembers } = useTeamMembers();
   const { mechanics } = useMechanics();
   const { getClientById, getMotorcycleById, updateClientById, updateMotorcycleById } = useClients();
@@ -476,34 +477,18 @@ export function OrderDetails({
   };
 
   const handleSendWhatsAppPDF = async () => {
-      console.log('📋 problem_description:', order.problem_description);
     if (!order.signature_data && !isExpress) {
       alert('É necessário coletar a assinatura do cliente antes de enviar o PDF.');
       return;
     }
-    
     try {
       setIsSendingPDF(true);
-
-      const response = await fetch('http://localhost:5000/gerar-os', {
+      const response = await fetch('https://bandara-os-api.onrender.com/gerar-os', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...order,
-          mechanic_name: mechanics.find(m => m.id === order.mechanic_id)?.name || '',
-          created_by: teamMembers.find(m => m.id === order.atendimento_id)?.name || '',
-          exit_date: order.exit_date || order.conclusion_date || order.updated_at || null,
-          conclusion_date: order.conclusion_date || order.exit_date || order.updated_at || null,
-          logo_path: 'bandara_logo_transparent.png',
-          delivery_person_type: deliveryPersonType,
-          delivery_person_name: deliveryPersonType === 'outro' ? deliveryPersonName : order.client_name,
-          delivery_person_phone: deliveryPersonType === 'outro' ? deliveryPersonPhone : order.client_phone,
-          delivery_person_cpf: deliveryPersonType === 'outro' ? deliveryPersonCpf : order.client_cpf,
-        }),
+        body: JSON.stringify(order),
       });
-
       if (!response.ok) throw new Error('Erro ao gerar PDF na API');
-
       const blob = await response.blob();
       const arrayBuffer = await blob.arrayBuffer();
       const uint8Array = new Uint8Array(arrayBuffer);
@@ -512,20 +497,17 @@ export function OrderDetails({
         binary += String.fromCharCode(uint8Array[i]);
       }
       const base64 = btoa(binary);
-
       const cleanPhone = order.client_phone?.replace(/\D/g, '') || '';
       if (cleanPhone.length < 10 || cleanPhone.length > 11) {
         alert('Telefone do cliente inválido para WhatsApp.');
         return;
       }
-
       await sendWhatsAppDocument({
         phone: cleanPhone,
         base64,
         fileName: `ordem_servico_${order.id.slice(0, 8)}.pdf`,
         caption: `Olá, ${order.client_name}! Sua Ordem de Serviço está pronta. Segue em anexo. Obrigado pela preferência!`,
       });
-
       alert('✅ PDF enviado para WhatsApp com sucesso!');
     } catch (error: unknown) {
       console.error('Erro ao enviar WhatsApp:', error);
@@ -612,13 +594,25 @@ export function OrderDetails({
     }
   };
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     if (!order.signature_data && !isExpress) {
       alert('É necessário coletar a assinatura do cliente antes de gerar o PDF.');
       return;
     }
     try {
-      generateOrderPDF(order);
+      const response = await fetch('https://bandara-os-api.onrender.com/gerar-os', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(order),
+      });
+      if (!response.ok) throw new Error('Erro ao gerar PDF na API');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ordem_servico_${order.id.slice(0, 8)}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
     } catch (error: unknown) {
       console.error('Erro ao baixar PDF:', error);
       alert('Erro ao gerar PDF. Tente novamente.');

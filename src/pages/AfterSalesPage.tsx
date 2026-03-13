@@ -470,7 +470,7 @@ export default function AfterSalesPage() {
 
         {/* Tabs */}
         <Tabs defaultValue="aniversario" className="mb-8">
-          <TabsList className={`grid w-full ${isRestrictedUser ? 'grid-cols-2' : 'grid-cols-3'} glass-card`}>
+          <TabsList className="grid w-full grid-cols-2 glass-card">
             <TabsTrigger value="aniversario" className="gap-2">
               <Gift size={18} />
               Aniversário
