@@ -16,9 +16,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Heart, Gift, Bell, Clock, CheckCircle, Zap, Eye, EyeOff, Wrench } from 'lucide-react';
+import { Heart, Gift, Bell, Clock, CheckCircle, Zap, Eye, EyeOff } from 'lucide-react';
 import { MaintenanceKeywordsManager } from '@/components/MaintenanceKeywordsManager';
-import { MaintenanceDebugPanel } from '@/components/MaintenanceDebugPanel';
 import { useAuth } from '@/hooks/useAuth';
 import {
   getPendingMaintenanceReminders,
@@ -480,10 +479,6 @@ export default function AfterSalesPage() {
                 <TabsTrigger value="manutencao" className="gap-2">
                   <Zap size={18} />
                   Manutenção
-                </TabsTrigger>
-                <TabsTrigger value="debug" className="gap-2">
-                  <Wrench size={18} />
-                  Debug
                 </TabsTrigger>
               </>
             )}
@@ -1019,23 +1014,6 @@ export default function AfterSalesPage() {
             </div>
           </TabsContent>
 
-          {/* ABA: DEBUG */}
-          {!isRestrictedUser && (
-            <TabsContent value="debug" className="space-y-6">
-              <div className="glass-card-elevated rounded-lg border border-border/50">
-                <div className="p-6 border-b border-border/50">
-                  <div className="flex items-center gap-3 mb-2">
-                    <Wrench className="w-6 h-6 text-purple-400" />
-                    <h2 className="text-2xl font-bold text-foreground">Painel de Debug</h2>
-                  </div>
-                  <p className="text-muted-foreground">Verifique se todos os componentes estão funcionando corretamente</p>
-                </div>
-                <div className="p-6">
-                  <MaintenanceDebugPanel />
-                </div>
-              </div>
-            </TabsContent>
-          )}
         </Tabs>
       </div>
 
