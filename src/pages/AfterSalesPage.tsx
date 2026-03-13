@@ -58,6 +58,7 @@ export default function AfterSalesPage() {
   const [filterClient, setFilterClient] = useState('');
   const [expandUpcoming, setExpandUpcoming] = useState(false);
   const [birthdayFilterType, setBirthdayFilterType] = useState<'all' | 'upcoming' | 'active'>('all');
+  const [showBirthdayStats, setShowBirthdayStats] = useState(true);
   const [activeStatsFilter, setActiveStatsFilter] = useState<'all' | 'pending' | 'sent' | 'blocked' | 'due' | 'scheduled' | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean;
@@ -486,6 +487,16 @@ export default function AfterSalesPage() {
 
           {/* ABA: ANIVERSÁRIO */}
           <TabsContent value="aniversario" className="space-y-8">
+        <div className="flex justify-end mb-2">
+          <button
+            onClick={() => setShowBirthdayStats(v => !v)}
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {showBirthdayStats ? <EyeOff size={16} /> : <Eye size={16} />}
+            {showBirthdayStats ? 'Ocultar resumo' : 'Mostrar resumo'}
+          </button>
+        </div>
+        {showBirthdayStats && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <Card 
             className={`cursor-pointer transition-all glass-card ${
@@ -541,6 +552,7 @@ export default function AfterSalesPage() {
             </CardContent>
           </Card>
         </div>
+        )}
 
         {/* Clients List */}
         <div className="space-y-4">
