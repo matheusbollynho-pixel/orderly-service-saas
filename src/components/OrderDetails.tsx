@@ -476,6 +476,16 @@ export function OrderDetails({
     setPaymentForm((prev) => ({ ...prev, amount: '', discount_amount: '' }));
   };
 
+  const buildPDFPayload = () => ({
+    ...order,
+    mechanic_name: mechanics.find(m => m.id === order.mechanic_id)?.name || '',
+    created_by: teamMembers.find(m => m.id === order.atendimento_id)?.name || '',
+    delivery_person_type: deliveryPersonType,
+    delivery_person_name: deliveryPersonType === 'outro' ? deliveryPersonName : order.client_name,
+    delivery_person_phone: deliveryPersonType === 'outro' ? deliveryPersonPhone : order.client_phone,
+    delivery_person_cpf: deliveryPersonType === 'outro' ? deliveryPersonCpf : order.client_cpf,
+  });
+
   const handleSendWhatsAppPDF = async () => {
     if (!order.signature_data && !isExpress) {
       alert('É necessário coletar a assinatura do cliente antes de enviar o PDF.');
@@ -486,7 +496,7 @@ export function OrderDetails({
       const response = await fetch('https://bandara-os-api.onrender.com/gerar-os', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(order),
+        body: JSON.stringify(buildPDFPayload()),
       });
       if (!response.ok) throw new Error('Erro ao gerar PDF na API');
       const blob = await response.blob();
@@ -603,7 +613,7 @@ export function OrderDetails({
       const response = await fetch('https://bandara-os-api.onrender.com/gerar-os', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(order),
+        body: JSON.stringify(buildPDFPayload()),
       });
       if (!response.ok) throw new Error('Erro ao gerar PDF na API');
       const blob = await response.blob();
