@@ -434,7 +434,7 @@ export default function PublicSatisfactionPage() {
                 >
                   {publicTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
                 </Button>
-                <img src="/bandara-logo.png" alt="Bandara Motos" className="h-32 w-auto" />
+                <img src="/client-logo.png" alt="Bandara Motos" className="h-32 w-auto" />
                 <p className="-mt-3 text-sm font-semibold uppercase tracking-[0.18em] leading-none text-[#C1272D]">AVALIAÇÃO BANDARA MOTOS</p>
               </CardHeader>
               <CardContent className="pt-2 pb-4 text-center">

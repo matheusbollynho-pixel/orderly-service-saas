@@ -1,2 +1,2 @@
 // Logo Bandara Motos em base64
-export const BANDARA_LOGO_BASE64 = '/bandara-logo.png';
+export const BANDARA_LOGO_BASE64 = '/client-logo.png';
