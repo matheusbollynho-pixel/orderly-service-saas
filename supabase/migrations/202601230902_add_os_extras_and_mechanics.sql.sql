@@ -32,7 +32,7 @@ EXECUTE FUNCTION public.update_updated_at_column();
 
 -- Service orders: add extra client fields and mechanic link
 --ALTER TABLE public.service_orders
-  ADD COLUMN IF NOT EXISTS client_cpf TEXT NOT NULL DEFAULT '';
+--  ADD COLUMN IF NOT EXISTS client_cpf TEXT NOT NULL DEFAULT '';
 
 --ALTER TABLE public.service_orders
 --  ADD COLUMN IF NOT EXISTS client_apelido TEXT NOT NULL DEFAULT '';
