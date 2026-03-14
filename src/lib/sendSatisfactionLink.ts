@@ -141,7 +141,7 @@ export async function sendSatisfactionLinkToClient(params: {
     }
 
     // Montar URL de satisfação
-    const baseUrl = "https://os-bandara.vercel.app";
+    const baseUrl = "https://bamotos.netlify.app";
     const satisfactionUrl = `${baseUrl}/avaliar/${token}`;
 
     console.log('🔗 URL gerada:', satisfactionUrl);

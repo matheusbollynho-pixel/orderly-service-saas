@@ -572,7 +572,7 @@ export function OrderDetails({
     }
 
     const satisfactionLink = satisfactionToken
-      ? `https://os-bandara.vercel.app/avaliar/${satisfactionToken}`
+      ? `https://bamotos.netlify.app/avaliar/${satisfactionToken}`
       : '';
     console.log('link satisfação:', satisfactionLink);
 
