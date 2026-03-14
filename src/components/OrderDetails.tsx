@@ -1069,6 +1069,18 @@ const renderDeliverySection = () => {
                 {order.exit_date ? formatDateDisplay(order.exit_date) : 'Não definida'}
               </span>
               <span className="text-center text-xs text-neutral-400 tracking-wider mt-2">ID da OS: {order.id}</span>
+              {isAdmin && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="mt-2 text-xs border-yellow-500/50 text-yellow-600 hover:bg-yellow-500/10"
+                  onClick={() => onStatusChange('concluida')}
+                  disabled={isUpdating}
+                >
+                  Desfazer entrega
+                </Button>
+              )}
             </div>
           )}
         </CardContent>
