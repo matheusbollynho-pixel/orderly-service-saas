@@ -230,7 +230,7 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting }: { onSubmit: (dat
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <h2 className="text-2xl font-bold bg-gradient-to-r from-[#C1272D] to-red-600 bg-clip-text text-transparent">
-          Nova OS - Bandara Motos
+          Nova OS - SpeedSeek OS
         </h2>
       </div>
 
@@ -436,7 +436,7 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting }: { onSubmit: (dat
                 )}
 
                 <Label className="flex items-center gap-2 font-semibold">
-                  Adesivo Bandara Motos?
+                  Adesivo da Oficina?
                 </Label>
                 <Select value={formData.servicos.adesivo_loja} onValueChange={(v) => updateField('servicos', 0, 'adesivo_loja', v)}>
                   <SelectTrigger>
@@ -490,7 +490,7 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting }: { onSubmit: (dat
       </Tabs>
 
       <Button type="submit" className="w-full h-14 text-xl font-bold bg-gradient-to-r from-[#C1272D] to-red-600 hover:from-red-700 hover:to-red-800 text-white shadow-lg hover:shadow-xl transition-all duration-300" disabled={!isValid || isSubmitting}>
-        {isSubmitting ? '⏳ Criando OS...' : '🚀 Finalizar OS Bandara Motos'}
+        {isSubmitting ? '⏳ Criando OS...' : '🚀 Finalizar OS'}
       </Button>
     </form>
   );

@@ -553,7 +553,7 @@ Retirada: ${retiradaInfo}`;
           <div className="flex items-center justify-between">
             <div className="flex-1"></div>
             <div className="flex items-center justify-center flex-1">
-              <img src="/bandara-logo.png" alt="Bandara Motos" className="h-32 w-auto" />
+              <img src="/bandara-logo.png" alt="SpeedSeek OS" className="h-32 w-auto" />
             </div>
             <div className="flex-1 flex justify-end">
               <ThemeToggle />

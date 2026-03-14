@@ -3,7 +3,7 @@ import { sendWhatsAppText } from './whatsappService';
 
 const BIRTHDAY_MESSAGE = `🎉 *Feliz aniversário!* 🎂🥳
 
-A equipe da *Bandara Motos* deseja muitas conquistas e bons quilômetros pela frente! 🏍️💨
+A equipe da *SpeedSeek OS* deseja muitas conquistas e bons quilômetros pela frente! 🏍️💨
 
 Pra comemorar, você ganhou:
 🎁 *15% de desconto* em serviços da oficina ou peças à vista.
@@ -11,9 +11,9 @@ Pra comemorar, você ganhou:
 ⏰ Válido por 7 dias.
 É só apresentar esta mensagem 😉
 
-Bandara Motos — cuidando da sua moto como você merece!`;
+SpeedSeek OS — cuidando da sua moto como você merece!`;
 
-const REMINDER_MESSAGE = `⏰ Seu desconto de aniversário da *Bandara Motos* vence em 2 dias!
+const REMINDER_MESSAGE = `⏰ Seu desconto de aniversário da *SpeedSeek OS* vence em 2 dias!
 Aproveite seus *15% OFF* 😉🏍️`;
 
 export interface ClientWithBirthday {
@@ -133,7 +133,7 @@ export async function sendBirthdayMessage(
   try {
     const customMessage = `🎉 *Feliz aniversário, ${clientName}!* 🎂🥳
 
-A equipe da *Bandara Motos* deseja muitas conquistas e bons quilômetros pela frente! 🏍️💨
+A equipe da *SpeedSeek OS* deseja muitas conquistas e bons quilômetros pela frente! 🏍️💨
 
 Pra comemorar, você ganhou:
 🎁 *15% de desconto* em serviços da oficina ou peças à vista.
@@ -141,7 +141,7 @@ Pra comemorar, você ganhou:
 ⏰ Válido por 7 dias.
 É só apresentar esta mensagem 😉
 
-Bandara Motos — cuidando da sua moto como você merece!`;
+SpeedSeek OS — cuidando da sua moto como você merece!`;
 
     await sendWhatsAppText({ phone, text: customMessage });
     return true;
@@ -159,7 +159,7 @@ export async function sendReminderMessage(
   clientName: string
 ): Promise<boolean> {
   try {
-    const reminderMsg = `⏰ Seu desconto de aniversário da *Bandara Motos* vence em 2 dias!
+    const reminderMsg = `⏰ Seu desconto de aniversário da *SpeedSeek OS* vence em 2 dias!
 Aproveite seus *15% OFF* 😉🏍️`;
 
     await sendWhatsAppText({ phone, text: reminderMsg });
