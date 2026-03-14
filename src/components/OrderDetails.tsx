@@ -578,7 +578,7 @@ export function OrderDetails({
 
     const customText = window.prompt(
       'Mensagem para enviar ao cliente (WhatsApp):',
-      `Olá, ${order.client_name}! Sua moto está em serviço na Bandara Motos. OS #${order.id} ✅\n\nAvalie nosso atendimento: ${satisfactionLink}`
+      `Olá, ${order.client_name.split(' ')[0]}! Sua moto está em serviço na Bandara Motos. OS #${order.id} ✅\n\nAvalie nosso atendimento: ${satisfactionLink}`
     );
 
     if (!customText) {
