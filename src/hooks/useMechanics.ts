@@ -4,6 +4,7 @@ import { Mechanic } from '@/types/service-order';
 import { toast } from 'sonner';
 
 export function useMechanics() {
+  const queryClient = useQueryClient();
   const mechanicsQuery = useQuery({
     queryKey: ['mechanics'],
     queryFn: async () => {
