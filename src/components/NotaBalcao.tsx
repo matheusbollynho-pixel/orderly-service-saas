@@ -324,7 +324,7 @@ export function NotaBalcao({
     ? LOGO_BASE64
     : `data:image/png;base64,${LOGO_BASE64}`
 
-  const logoSrc = "/Bandara Motos.jpg"
+  const logoSrc = import.meta.env.VITE_LOGO_PATH || "/client-logo.png"
 
   const dragClass = editable
     ? "cursor-move border border-dashed border-[#C1272D]/50 rounded-md"
