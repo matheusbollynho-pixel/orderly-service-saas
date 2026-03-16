@@ -18,16 +18,35 @@ export async function generateOrderPDFFromNotaBalcao(
       throw new Error(`Elemento com ID "${elementId}" não encontrado`);
     }
 
-    console.log('[pdfGenerator v2] Elemento encontrado, aguardando renderização e imagens...');
-    // Aguardar imagens carregarem
+    console.log('[pdfGenerator v2] Elemento encontrado, convertendo imagens para base64...');
+    // Converter todas as imagens para base64 para evitar problemas de CORS no html2canvas
     const images = element.querySelectorAll('img');
-    await Promise.all(Array.from(images).map(img =>
-      img.complete ? Promise.resolve() : new Promise(resolve => {
-        img.addEventListener('load', resolve, { once: true });
-        img.addEventListener('error', resolve, { once: true });
-        setTimeout(resolve, 3000);
-      })
-    ));
+    await Promise.all(Array.from(images).map(async (img) => {
+      // Aguardar carregar primeiro
+      if (!img.complete) {
+        await new Promise(resolve => {
+          img.addEventListener('load', resolve, { once: true });
+          img.addEventListener('error', resolve, { once: true });
+          setTimeout(resolve, 3000);
+        });
+      }
+      // Se já é base64, não precisa converter
+      if (img.src.startsWith('data:')) return;
+      // Converter URL para base64
+      try {
+        const response = await fetch(img.src);
+        const blob = await response.blob();
+        const base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(blob);
+        });
+        img.src = base64;
+        console.log(`[pdfGenerator v2] Imagem convertida para base64: ${img.src.substring(0, 50)}...`);
+      } catch (e) {
+        console.warn('[pdfGenerator v2] Falha ao converter imagem para base64:', e);
+      }
+    }));
     await new Promise(resolve => setTimeout(resolve, 200));
 
     console.log('[pdfGenerator v2] Iniciando html2canvas...');

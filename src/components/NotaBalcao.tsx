@@ -368,6 +368,7 @@ export function NotaBalcao({
         >
           <img
             src={logoBase64 || logoSrc}
+            crossOrigin="anonymous"
             alt="Logo"
             className="h-40 w-auto object-contain mx-auto"
             onError={(e) => {
