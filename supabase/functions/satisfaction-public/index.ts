@@ -340,6 +340,7 @@ Deno.serve(async (req) => {
 
       const atendimentoRating = Number(body?.atendimento_rating) || 0
       const servicoRating = Number(body?.servico_rating) || 0
+      const storeRating = Number(body?.store_rating) || 0
 
       // Buscar registro antes de validar (precisamos saber se é walk-in)
       const { data: existing, error: existingError } = await supabase
@@ -371,8 +372,9 @@ Deno.serve(async (req) => {
         // Walk-in: precisa ao menos uma nota válida ou um comentário
         const hasAttendantRating = atendimentoRating >= 1 && atendimentoRating <= 5
         const hasMechanicRating = servicoRating >= 1 && servicoRating <= 5
+        const hasStoreRating = storeRating >= 1 && storeRating <= 5
         const hasComment = !!(body?.comment?.trim())
-        if (!hasAttendantRating && !hasMechanicRating && !hasComment) {
+        if (!hasAttendantRating && !hasMechanicRating && !hasStoreRating && !hasComment) {
           return json({ success: false, message: 'Dê ao menos uma nota ou escreva um comentário.' }, 400)
         }
       } else {
@@ -420,8 +422,6 @@ Deno.serve(async (req) => {
       }
 
       const tags = normalizeTags(body?.tags)
-
-      const storeRating = Number(body?.store_rating) || 0
 
       const { error: updateError } = await supabase
         .from('satisfaction_ratings')
