@@ -25,3 +25,13 @@ dist-ssr
 
 .vercel
 .env*.local
+
+# Claude Code
+.claude/
+
+# Supabase binaries / ferramentas pesadas
+*.exe
+Tools_supabase/
+supabase.exe/
+supabase/Supabase-exe/
+orderly-service-main-backup-08-03-2026/
