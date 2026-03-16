@@ -368,15 +368,9 @@ export function NotaBalcao({
         >
           <img
             src={logoBase64 || logoSrc}
-            crossOrigin="anonymous"
+            data-pdf-src={logoSrc}
             alt="Logo"
             className="h-40 w-auto object-contain mx-auto"
-            onError={(e) => {
-              const target = e.currentTarget
-              if (target.src !== embeddedLogoSrc) {
-                target.src = embeddedLogoSrc
-              }
-            }}
           />
         </div>
 
