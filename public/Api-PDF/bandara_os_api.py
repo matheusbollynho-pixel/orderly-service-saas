@@ -836,7 +836,21 @@ def gerar_os():
     for item in (dados.get('checklist_items') or []):
         print(f"[DEBUG]   {_json.dumps(item, ensure_ascii=False)}")
 
-    # Define caminho da logo relativo ao script
+    # Se logo_url for fornecido, baixar a imagem e usar como logo temporário
+    _tmp_logo_path = None
+    if dados.get('logo_url'):
+        import urllib.request, tempfile
+        try:
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+            urllib.request.urlretrieve(dados['logo_url'], tmp.name)
+            tmp.close()
+            dados['logo_path'] = tmp.name
+            _tmp_logo_path = tmp.name
+            print(f"[DEBUG] Logo baixado de {dados['logo_url']} -> {tmp.name}")
+        except Exception as e:
+            print(f"[DEBUG] Falha ao baixar logo_url: {e}")
+
+    # Define caminho da logo relativo ao script (fallback para logo padrão)
     if 'logo_path' not in dados:
         base_dir = os.path.dirname(os.path.abspath(__file__))
         dados['logo_path'] = os.path.join(base_dir, 'bandara_logo_transparent.png')
@@ -849,6 +863,11 @@ def gerar_os():
         return jsonify({'erro': str(e)}), 500
 
     buffer.seek(0)
+    # Limpar logo temporário se foi baixado
+    if _tmp_logo_path:
+        try: os.unlink(_tmp_logo_path)
+        except: pass
+
     numero_os = (dados.get('id') or dados.get('os', {}).get('numero') or 'os')
     numero_os = str(numero_os)[:8]
     filename  = f'ordem_servico_{numero_os}.pdf'
