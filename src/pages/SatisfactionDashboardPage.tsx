@@ -619,15 +619,17 @@ export default function SatisfactionDashboardPage() {
                     {r.comment && <p className="text-muted-foreground">“{r.comment}”</p>}
                   </div>
                   <div className="flex gap-2">
-                    {phone ? (
-                      <Button asChild variant="destructive" size="sm" className="bg-[#C1272D] hover:bg-red-700">
-                        <a href={wa} target="_blank" rel="noreferrer">Resolver no WhatsApp</a>
-                      </Button>
-                    ) : (
-                      <Button variant="destructive" size="sm" disabled className="bg-[#C1272D]/50">
-                        Sem telefone
-                      </Button>
-                    )}
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="bg-[#C1272D] hover:bg-red-700"
+                      onClick={() => {
+                        if (!phone) { alert('Telefone do cliente não disponível.'); return; }
+                        window.open(wa, '_blank');
+                      }}
+                    >
+                      Resolver no WhatsApp
+                    </Button>
                     <Button variant="outline" size="sm" onClick={() => markResolved(r.id)} className="border-border/50 bg-muted/50 text-foreground hover:bg-muted/70">
                       Marcar resolvido
                     </Button>
