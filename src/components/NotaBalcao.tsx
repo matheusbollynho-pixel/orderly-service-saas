@@ -100,6 +100,20 @@ export function NotaBalcao({
     console.warn('⚠️ NotaBalcao: dados incompletos', { cliente: data?.cliente, veiculo: data?.veiculo });
   }
 
+  const [logoBase64, setLogoBase64] = useState<string>('')
+  useEffect(() => {
+    const path = import.meta.env.VITE_LOGO_PATH || '/client-logo.png'
+    fetch(path)
+      .then(res => res.blob())
+      .then(blob => new Promise<string>((resolve) => {
+        const reader = new FileReader()
+        reader.onloadend = () => resolve(reader.result as string)
+        reader.readAsDataURL(blob)
+      }))
+      .then(b64 => setLogoBase64(b64))
+      .catch(() => {})
+  }, [])
+
   const [positions, setPositions] = useState<LayoutPositions>({})
   const [sizes, setSizes] = useState<LayoutSizes>({})
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -352,8 +366,8 @@ export function NotaBalcao({
           onWheel={(e) => handleWheelResize("header-logo", e)}
         >
           <img
-            src={logoSrc}
-            alt="Bandara Motos"
+            src={logoBase64 || logoSrc}
+            alt="Logo"
             className="h-40 w-auto object-contain mx-auto"
             onError={(e) => {
               const target = e.currentTarget
