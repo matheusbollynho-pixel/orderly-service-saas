@@ -34,11 +34,7 @@ type OrderLite = {
   problem_description: string;
 };
 
-type ClientLite = {
-  id: string;
-  name: string;
-  phone: string;
-};
+type ClientLite = { id: string; name: string; phone: string };
 
 const QR_PLACEHOLDER_EQUIPMENT = '__QR_WALKIN_PLACEHOLDER__';
 const QR_SYSTEM_NAME = 'SISTEMA QR';
@@ -118,14 +114,17 @@ export default function SatisfactionDashboardPage() {
       comAtendimento: ratings.filter(r => r.atendimento_id).length,
     });
 
-    // Buscar OS vinculadas
     const orderIds = [...new Set(ratings.map((r) => r.order_id).filter(Boolean))];
-    const { data: ordersData } = orderIds.length
-      ? await supabase
-          .from('service_orders')
-          .select('id, client_name, client_phone, problem_description')
-          .in('id', orderIds)
-      : { data: [] };
+    if (!orderIds.length) {
+      setOrdersMap({});
+      setLoading(false);
+      return;
+    }
+
+    const { data: ordersData } = await supabase
+      .from('service_orders')
+      .select('id, client_name, client_phone, problem_description')
+      .in('id', orderIds);
 
     const nextMap: Record<string, OrderLite> = {};
     for (const o of ordersData || []) {
@@ -133,30 +132,25 @@ export default function SatisfactionDashboardPage() {
     }
     setOrdersMap(nextMap);
 
-    // Buscar clientes reais para walk-ins (order_id nulo ou OS placeholder)
-    const walkInClientIds = [
-      ...new Set(
-        ratings
-          .filter((r) => {
-            if (!r.client_id) return false;
-            if (!r.order_id) return true;
-            const order = nextMap[r.order_id];
-            return !order || order.client_name === QR_SYSTEM_NAME || order.client_phone === '00000000000';
-          })
-          .map((r) => r.client_id)
-      ),
-    ];
+    // Buscar clientes reais para walk-ins (OS placeholder ou sem OS)
+    const walkInClientIds = ratings
+      .filter((r) => {
+        if (!r.client_id) return false;
+        if (!r.order_id) return true;
+        const ord = nextMap[r.order_id];
+        return !ord || ord.client_name === QR_SYSTEM_NAME || ord.client_phone === '00000000000';
+      })
+      .map((r) => r.client_id)
+      .filter(Boolean) as string[];
 
-    if (walkInClientIds.length) {
+    if (walkInClientIds.length > 0) {
+      const uniqueIds = [...new Set(walkInClientIds)];
       const { data: clientsData } = await supabase
         .from('clients')
         .select('id, name, phone')
-        .in('id', walkInClientIds);
-
+        .in('id', uniqueIds);
       const cMap: Record<string, ClientLite> = {};
-      for (const c of clientsData || []) {
-        cMap[c.id] = c as ClientLite;
-      }
+      for (const c of clientsData || []) cMap[c.id] = c as ClientLite;
       setClientsMap(cMap);
     } else {
       setClientsMap({});
@@ -186,6 +180,15 @@ export default function SatisfactionDashboardPage() {
       supabase.removeChannel(channel);
     };
   }, []);
+
+  const getClientInfo = (r: RatingRow) => {
+    const order = ordersMap[r.order_id];
+    const isWalkIn = !order || order.client_name === QR_SYSTEM_NAME || order.client_phone === '00000000000';
+    if (isWalkIn && r.client_id && clientsMap[r.client_id]) {
+      return { name: clientsMap[r.client_id].name, phone: clientsMap[r.client_id].phone };
+    }
+    return { name: order?.client_name || 'Cliente', phone: order?.client_phone || '' };
+  };
 
   const serviceOptions = useMemo(() => {
     const set = new Set<string>();
@@ -344,16 +347,6 @@ export default function SatisfactionDashboardPage() {
       (r) => ((r.atendimento_rating || 0) < 3 || (r.servico_rating || 0) < 3) && r.status === 'pendente'
     );
   }, [scored]);
-
-  // Retorna nome e telefone reais do cliente, priorizando a tabela clients para walk-ins
-  const getClientInfo = (r: RatingRow) => {
-    const order = ordersMap[r.order_id];
-    const isWalkIn = !order || order.client_name === QR_SYSTEM_NAME || order.client_phone === '00000000000';
-    if (isWalkIn && r.client_id && clientsMap[r.client_id]) {
-      return { name: clientsMap[r.client_id].name, phone: clientsMap[r.client_id].phone };
-    }
-    return { name: order?.client_name || 'Cliente', phone: order?.client_phone || '' };
-  };
 
   if (loading) {
     return <div className="py-10 text-center text-foreground">Carregando painel de satisfação...</div>;
@@ -528,11 +521,11 @@ export default function SatisfactionDashboardPage() {
         <CardContent className="space-y-2">
           {collaboratorFilteredFeed.length === 0 && <p className="text-sm text-muted-foreground">Sem avaliações no período.</p>}
           {collaboratorFilteredFeed.map((r) => {
-            const { name: clientName, phone: clientPhone } = getClientInfo(r);
             const mechanic = mechanics.find(m => m.id === r.mechanic_id);
             const atendente = members.find(m => m.id === r.atendimento_id);
             const allRatingTags = [...(r.tags?.atendimento || []), ...(r.tags?.servico || []), ...(r.tags?.store || [])];
             const isExpanded = expandedDetail === r.id;
+            const { name: clientName, phone: clientPhone } = getClientInfo(r);
 
             return (
               <div key={r.id} className="rounded-md border border-border/50 bg-muted/30 p-3 space-y-2">
@@ -612,15 +605,15 @@ export default function SatisfactionDashboardPage() {
         <CardContent className="space-y-2">
           {crisis.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma avaliação crítica no período.</p>}
           {crisis.map((r) => {
-            const { name: clientName, phone: clientPhone } = getClientInfo(r);
-            const phone = clientPhone.replace(/\D/g, '');
+            const { name: crisisName, phone: crisisPhone } = getClientInfo(r);
+            const phone = crisisPhone.replace(/\D/g, '');
             const wa = phone ? `https://wa.me/${phone.startsWith('55') ? phone : `55${phone}`}` : '#';
 
             return (
               <div key={r.id} className="rounded-md border border-[#C1272D]/30 bg-[#C1272D]/10 p-3">
                 <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <div className="text-sm">
-                    <p className="font-semibold text-foreground">{clientName}</p>
+                    <p className="font-semibold text-foreground">{crisisName}</p>
                     <p className="text-foreground">Atendimento: {r.atendimento_rating || '-'} • Serviço: {r.servico_rating || '-'}</p>
                     <p className="text-foreground">Status: <span className="font-medium">{r.status}</span></p>
                     {r.comment && <p className="text-muted-foreground">“{r.comment}”</p>}

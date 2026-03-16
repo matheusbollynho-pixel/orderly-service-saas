@@ -527,6 +527,7 @@ CREATE TABLE IF NOT EXISTS public.satisfaction_ratings (
   mechanic_id       UUID REFERENCES public.mechanics(id) ON DELETE SET NULL,
   atendimento_rating INT CHECK (atendimento_rating BETWEEN 1 AND 5),
   servico_rating    INT CHECK (servico_rating BETWEEN 1 AND 5),
+  store_rating      INT CHECK (store_rating BETWEEN 1 AND 5),
   tags              JSONB NOT NULL DEFAULT '{"atendimento":[],"servico":[]}'::jsonb,
   comment           TEXT,
   recommends        BOOLEAN,

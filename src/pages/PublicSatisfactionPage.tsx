@@ -148,24 +148,24 @@ export default function PublicSatisfactionPage() {
       // Validar token antes de fazer a requisição
       if (!token) {
         console.error('❌ Token ausente na URL');
-        setLoadError('Link inválido. Token não encontrado.');
+        setError('Link inválido. Token não encontrado.');
         setLoading(false);
         return;
       }
 
       try {
         setLoading(true);
-        setLoadError(null);
+        setError(null);
 
         console.log('🔍 Carregando satisfação com token:', token);
         console.log('📍 Supabase URL:', supabaseUrl);
-
+        
         const url = `${supabaseUrl}/functions/v1/satisfaction-public?token=${encodeURIComponent(token)}`;
         console.log('🌐 Chamando URL:', url);
-
+        
         const res = await fetch(url);
         console.log('📡 Response status:', res.status);
-
+        
         const data = await res.json();
         console.log('📦 Response data:', data);
 
@@ -312,9 +312,9 @@ export default function PublicSatisfactionPage() {
         return;
       }
 
-      // Permitir enviar apenas comentário ou nota geral se não quis avaliar ninguém
+      // Permitir enviar apenas comentário se não quis avaliar ninguém
       if (!hasAttendantReview && !hasMechanicReview && !storeRating && !comment?.trim()) {
-        setFormError('Dê ao menos uma nota ou escreva um comentário.');
+        setFormError('Escreva um comentário ou escolha avaliar um colaborador.');
         return;
       }
 
