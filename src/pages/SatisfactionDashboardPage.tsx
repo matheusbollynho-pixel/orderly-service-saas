@@ -132,19 +132,14 @@ export default function SatisfactionDashboardPage() {
     }
     setOrdersMap(nextMap);
 
-    // Buscar clientes reais para walk-ins (OS placeholder ou sem OS)
-    const walkInClientIds = ratings
-      .filter((r) => {
-        if (!r.client_id) return false;
-        if (!r.order_id) return true;
-        const ord = nextMap[r.order_id];
-        return !ord || ord.client_name === QR_SYSTEM_NAME || ord.client_phone === '00000000000';
-      })
+    // Buscar dados reais de todos os clientes (para ter telefone atualizado)
+    const allClientIds = ratings
+      .filter((r) => r.client_id)
       .map((r) => r.client_id)
       .filter(Boolean) as string[];
 
-    if (walkInClientIds.length > 0) {
-      const uniqueIds = [...new Set(walkInClientIds)];
+    if (allClientIds.length > 0) {
+      const uniqueIds = [...new Set(allClientIds)];
       const { data: clientsData } = await supabase
         .from('clients')
         .select('id, name, phone')
@@ -183,11 +178,14 @@ export default function SatisfactionDashboardPage() {
 
   const getClientInfo = (r: RatingRow) => {
     const order = ordersMap[r.order_id];
+    const clientFromMap = r.client_id ? clientsMap[r.client_id] : undefined;
     const isWalkIn = !order || order.client_name === QR_SYSTEM_NAME || order.client_phone === '00000000000';
-    if (isWalkIn && r.client_id && clientsMap[r.client_id]) {
-      return { name: clientsMap[r.client_id].name, phone: clientsMap[r.client_id].phone };
-    }
-    return { name: order?.client_name || 'Cliente', phone: order?.client_phone || '' };
+    const name = isWalkIn
+      ? (clientFromMap?.name || order?.client_name || 'Cliente')
+      : (order?.client_name || clientFromMap?.name || 'Cliente');
+    // Para telefone, prioriza dados do cliente (mais atualizados) e usa OS como fallback
+    const phone = clientFromMap?.phone || order?.client_phone || '';
+    return { name, phone };
   };
 
   const serviceOptions = useMemo(() => {
