@@ -610,12 +610,12 @@ export default function SatisfactionDashboardPage() {
             return (
               <div key={r.id} className="rounded-md border border-[#C1272D]/30 bg-[#C1272D]/10 p-3">
                 <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                  <div className=”text-sm”>
-                    <p className=”font-semibold text-foreground”>{crisisName !== 'Cliente' ? crisisName : (crisisPhone ? crisisPhone : 'Cliente')}</p>
-                    {crisisPhone && <p className=”text-muted-foreground text-xs”>{crisisPhone}</p>}
-                    <p className=”text-foreground”>Atendimento: {r.atendimento_rating || '-'} • Serviço: {r.servico_rating || '-'}</p>
-                    <p className=”text-foreground”>Status: <span className=”font-medium”>{r.status}</span></p>
-                    {r.comment && <p className=”text-muted-foreground”>{'”'}{r.comment}{'”'}</p>}
+                  <div className="text-sm">
+                    <p className="font-semibold text-foreground">{crisisName !== 'Cliente' ? crisisName : (crisisPhone ? crisisPhone : 'Cliente')}</p>
+                    {crisisPhone && <p className="text-muted-foreground text-xs">{crisisPhone}</p>}
+                    <p className="text-foreground">Atendimento: {r.atendimento_rating || '-'} • Serviço: {r.servico_rating || '-'}</p>
+                    <p className="text-foreground">Status: <span className="font-medium">{r.status}</span></p>
+                    {r.comment && <p className="text-muted-foreground">{'"'}{r.comment}{'"'}</p>}
                   </div>
                   <div className="flex gap-2">
                     <Button
