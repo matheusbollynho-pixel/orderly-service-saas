@@ -483,6 +483,7 @@ export function OrderDetails({
     delivery_person_name: deliveryPersonType === 'outro' ? deliveryPersonName : order.client_name,
     delivery_person_phone: deliveryPersonType === 'outro' ? deliveryPersonPhone : order.client_phone,
     delivery_person_cpf: deliveryPersonType === 'outro' ? deliveryPersonCpf : order.client_cpf,
+    logo_url: `${window.location.origin}${import.meta.env.VITE_LOGO_PATH || '/client-logo.png'}`,
   });
 
   const handleSendWhatsAppPDF = async () => {
