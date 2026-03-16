@@ -108,7 +108,7 @@ export default function SatisfactionDashboardPage() {
       comAtendimento: ratings.filter(r => r.atendimento_id).length,
     });
 
-    const orderIds = [...new Set(ratings.map((r) => r.order_id))];
+    const orderIds = [...new Set(ratings.map((r) => r.order_id).filter(Boolean))];
     if (!orderIds.length) {
       setOrdersMap({});
       setLoading(false);
