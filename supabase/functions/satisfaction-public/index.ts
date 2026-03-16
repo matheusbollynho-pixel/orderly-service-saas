@@ -338,13 +338,10 @@ Deno.serve(async (req) => {
 
       if (!token) return json({ success: false, message: 'Token ausente' }, 400)
 
-      const atendimentoRating = Number(body?.atendimento_rating)
-      const servicoRating = Number(body?.servico_rating)
+      const atendimentoRating = Number(body?.atendimento_rating) || 0
+      const servicoRating = Number(body?.servico_rating) || 0
 
-      if (!(atendimentoRating >= 1 && atendimentoRating <= 5) || !(servicoRating >= 1 && servicoRating <= 5)) {
-        return json({ success: false, message: 'Notas inválidas' }, 400)
-      }
-
+      // Buscar registro antes de validar (precisamos saber se é walk-in)
       const { data: existing, error: existingError } = await supabase
         .from('satisfaction_ratings')
         .select('id, responded_at, order_id, mechanic_id, atendimento_id')
@@ -357,6 +354,32 @@ Deno.serve(async (req) => {
 
       if (existing[0].responded_at) {
         return json({ success: false, message: 'Esta avaliação já foi respondida.' }, 409)
+      }
+
+      // Detectar se é walk-in para validar notas corretamente
+      let isWalkInSubmit = !existing[0].order_id
+      if (!isWalkInSubmit && existing[0].order_id) {
+        const { data: orderCheck } = await supabase
+          .from('service_orders')
+          .select('equipment')
+          .eq('id', existing[0].order_id)
+          .single()
+        isWalkInSubmit = orderCheck?.equipment === QR_PLACEHOLDER_EQUIPMENT || orderCheck?.equipment === 'Avaliação de balcão'
+      }
+
+      if (isWalkInSubmit) {
+        // Walk-in: precisa ao menos uma nota válida ou um comentário
+        const hasAttendantRating = atendimentoRating >= 1 && atendimentoRating <= 5
+        const hasMechanicRating = servicoRating >= 1 && servicoRating <= 5
+        const hasComment = !!(body?.comment?.trim())
+        if (!hasAttendantRating && !hasMechanicRating && !hasComment) {
+          return json({ success: false, message: 'Dê ao menos uma nota ou escreva um comentário.' }, 400)
+        }
+      } else {
+        // OS normal: ambas as notas obrigatórias
+        if (!(atendimentoRating >= 1 && atendimentoRating <= 5) || !(servicoRating >= 1 && servicoRating <= 5)) {
+          return json({ success: false, message: 'Notas inválidas' }, 400)
+        }
       }
 
       // Se mechanic_id ou atendimento_id estão vazios, buscar na ordem de serviço
@@ -398,11 +421,14 @@ Deno.serve(async (req) => {
 
       const tags = normalizeTags(body?.tags)
 
+      const storeRating = Number(body?.store_rating) || 0
+
       const { error: updateError } = await supabase
         .from('satisfaction_ratings')
         .update({
-          atendimento_rating: atendimentoRating,
-          servico_rating: servicoRating,
+          atendimento_rating: atendimentoRating || null,
+          servico_rating: servicoRating || null,
+          store_rating: (storeRating >= 1 && storeRating <= 5) ? storeRating : null,
           mechanic_id: mechanicId,
           atendimento_id: atendimentoId,
           tags,

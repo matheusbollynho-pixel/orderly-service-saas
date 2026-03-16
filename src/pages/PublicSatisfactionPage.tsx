@@ -222,12 +222,14 @@ export default function PublicSatisfactionPage() {
   }, [atendimentoRating, servicoRating]);
 
   const isHighRating = useMemo(() => {
-    return atendimentoRating >= 4 && servicoRating >= 4;
-  }, [atendimentoRating, servicoRating]);
+    const given = [atendimentoRating, servicoRating, storeRating].filter(r => r > 0);
+    return given.length > 0 && given.every(r => r >= 4);
+  }, [atendimentoRating, servicoRating, storeRating]);
 
   const isLowRating = useMemo(() => {
-    return atendimentoRating <= 3 || servicoRating <= 3;
-  }, [atendimentoRating, servicoRating]);
+    const given = [atendimentoRating, servicoRating, storeRating].filter(r => r > 0);
+    return given.length > 0 && given.some(r => r <= 3);
+  }, [atendimentoRating, servicoRating, storeRating]);
 
   // Resetar tags de atendimento quando rating mudar de categoria (positivo <-> negativo)
   useEffect(() => {
@@ -309,9 +311,9 @@ export default function PublicSatisfactionPage() {
         return;
       }
 
-      // Permitir enviar apenas comentário se não quis avaliar ninguém
-      if (!hasAttendantReview && !hasMechanicReview && !comment?.trim()) {
-        setError('Escreva um comentário ou escolha avaliar um colaborador.');
+      // Permitir enviar apenas comentário ou nota geral se não quis avaliar ninguém
+      if (!hasAttendantReview && !hasMechanicReview && !storeRating && !comment?.trim()) {
+        setError('Dê ao menos uma nota ou escreva um comentário.');
         return;
       }
 
