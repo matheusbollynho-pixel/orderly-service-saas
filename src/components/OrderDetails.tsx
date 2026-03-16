@@ -43,7 +43,7 @@ import {
 import { useMechanics } from '@/hooks/useMechanics';
 import { useClients } from '@/hooks/useClients';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
-import { sendWhatsAppText, sendWhatsAppDocument } from '@/lib/whatsappService';
+import { sendWhatsAppText } from '@/lib/whatsappService';
 import { supabase } from '@/integrations/supabase/client';
 
 import { formatDistanceToNow, format } from 'date-fns';
@@ -132,7 +132,6 @@ export function OrderDetails({
   const [activeTab, setActiveTab] = useState<'checklist' | 'materiais'>(
     isExpress ? 'materiais' : 'checklist'
   );
-  const [isSendingPDF, setIsSendingPDF] = useState(false);
   const [isSendingText, setIsSendingText] = useState(false);
   const [isEditingServicesTodo, setIsEditingServicesTodo] = useState(false);
   const [editedServicesTodo, setEditedServicesTodo] = useState(order.problem_description || '');
@@ -486,45 +485,12 @@ export function OrderDetails({
     delivery_person_cpf: deliveryPersonType === 'outro' ? deliveryPersonCpf : order.client_cpf,
   });
 
-  const handleSendWhatsAppPDF = async () => {
+  const handleSendWhatsAppPDF = () => {
     if (!order.signature_data && !isExpress) {
       alert('É necessário coletar a assinatura do cliente antes de enviar o PDF.');
       return;
     }
-    try {
-      setIsSendingPDF(true);
-      const response = await fetch('https://bandara-os-api.onrender.com/gerar-os', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildPDFPayload()),
-      });
-      if (!response.ok) throw new Error('Erro ao gerar PDF na API');
-      const blob = await response.blob();
-      const arrayBuffer = await blob.arrayBuffer();
-      const uint8Array = new Uint8Array(arrayBuffer);
-      let binary = '';
-      for (let i = 0; i < uint8Array.length; i++) {
-        binary += String.fromCharCode(uint8Array[i]);
-      }
-      const base64 = btoa(binary);
-      const cleanPhone = order.client_phone?.replace(/\D/g, '') || '';
-      if (cleanPhone.length < 10 || cleanPhone.length > 11) {
-        alert('Telefone do cliente inválido para WhatsApp.');
-        return;
-      }
-      await sendWhatsAppDocument({
-        phone: cleanPhone,
-        base64,
-        fileName: `ordem_servico_${order.id.slice(0, 8)}.pdf`,
-        caption: `Olá, ${order.client_name}! Sua Ordem de Serviço está pronta. Segue em anexo. Obrigado pela preferência!`,
-      });
-      alert('✅ PDF enviado para WhatsApp com sucesso!');
-    } catch (error: unknown) {
-      console.error('Erro ao enviar WhatsApp:', error);
-      alert(error instanceof Error ? error.message : 'Erro ao enviar PDF. Tente novamente.');
-    } finally {
-      setIsSendingPDF(false);
-    }
+    navigate(`/print/${order.id}`, { state: { sendWhatsApp: true } });
   };
 
   const handleSignatureSave = (signature: string) => {
@@ -604,29 +570,12 @@ export function OrderDetails({
     }
   };
 
-  const handleDownloadPDF = async () => {
+  const handleDownloadPDF = () => {
     if (!order.signature_data && !isExpress) {
       alert('É necessário coletar a assinatura do cliente antes de gerar o PDF.');
       return;
     }
-    try {
-      const response = await fetch('https://bandara-os-api.onrender.com/gerar-os', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildPDFPayload()),
-      });
-      if (!response.ok) throw new Error('Erro ao gerar PDF na API');
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `ordem_servico_${order.id.slice(0, 8)}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (error: unknown) {
-      console.error('Erro ao baixar PDF:', error);
-      alert('Erro ao gerar PDF. Tente novamente.');
-    }
+    navigate(`/print/${order.id}`, { state: { autoDownload: true } });
   };
 
   const renderSignatureSection = () => (
@@ -1787,14 +1736,9 @@ const renderDeliverySection = () => {
 
           <Button
             onClick={handleSendWhatsAppPDF}
-            disabled={isSendingPDF}
             className="w-full h-12 bg-[#25D366] hover:bg-[#20BD5A] text-white font-medium"
           >
-            {isSendingPDF ? (
-              <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-            ) : (
-              <FileText className="h-5 w-5 mr-2" />
-            )}
+            <FileText className="h-5 w-5 mr-2" />
             Enviar PDF via WhatsApp
           </Button>
         </div>
