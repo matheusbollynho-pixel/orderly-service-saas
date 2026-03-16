@@ -572,7 +572,7 @@ export function OrderDetails({
     }
 
     const satisfactionLink = satisfactionToken
-      ? `https://bamotos1.netlify.app/avaliar/${satisfactionToken}`
+      ? `${window.location.origin}/avaliar/${satisfactionToken}`
       : '';
     console.log('link satisfação:', satisfactionLink);
 

@@ -141,7 +141,7 @@ export async function sendSatisfactionLinkToClient(params: {
     }
 
     // Montar URL de satisfação
-    const baseUrl = "https://bamotos1.netlify.app";
+    const baseUrl = window.location.origin;
     const satisfactionUrl = `${baseUrl}/avaliar/${token}`;
 
     console.log('🔗 URL gerada:', satisfactionUrl);

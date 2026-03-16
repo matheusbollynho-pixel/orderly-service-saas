@@ -208,7 +208,7 @@ export async function sendTestSatisfactionSurvey(): Promise<{ success: boolean; 
       .limit(1);
 
     let satisfactionToken = satisfactionData && satisfactionData.length > 0 ? satisfactionData[0].public_token : null;
-    let satisfactionLink = satisfactionToken ? `https://bamotos1.netlify.app/avaliar/${satisfactionToken}` : '';
+    let satisfactionLink = satisfactionToken ? `${window.location.origin}/avaliar/${satisfactionToken}` : '';
 
       const SATISFACTION_MESSAGE = `Olá, [Nome do Cliente]! 🏍️\n\nSua opinião vale muito para a BANDARA MOTO! ⭐\n\nConsegue nos dar uma nota rapidinho sobre o serviço de hoje?\n\nÉ só clicar aqui: ${satisfactionLink}\nValeu!`;
 
@@ -265,7 +265,7 @@ export async function testSatisfactionSurveyWith4SecondDelay(): Promise<{ succes
       return { success: false, message: data?.message || 'Erro desconhecido na RPC' };
     }
     // Now send the satisfaction message
-    const SATISFACTION_MESSAGE = `Olá, [Nome do Cliente]! 🏍️\n\nSua opinião vale muito para a BANDARA MOTO! ⭐\n\nConsegue nos dar uma nota rapidinho sobre o nosso serviço?\n\nÉ só clicar aqui: https://bamotos1.netlify.app/avaliar/[token]\nValeu!`;
+    const SATISFACTION_MESSAGE = `Olá, [Nome do Cliente]! 🏍️\n\nSua opinião vale muito para nós! ⭐\n\nConsegue nos dar uma nota rapidinho sobre o nosso serviço?\n\nÉ só clicar aqui: ${window.location.origin}/avaliar/[token]\nValeu!`;
     try {
       await sendWhatsAppText({
         phone: data.order_phone,

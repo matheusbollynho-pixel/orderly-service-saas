@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS public.mechanics (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name           TEXT NOT NULL,
   commission_rate NUMERIC(5,2) NOT NULL DEFAULT 0,
+  photo_url      TEXT,
   active         BOOLEAN NOT NULL DEFAULT true,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -200,8 +201,8 @@ CREATE TABLE IF NOT EXISTS public.service_orders (
   first_signature_data         TEXT NULL,
   first_delivery_signature_data TEXT NULL,
   -- client/motorcycle FK
-  client_id                    UUID,
-  motorcycle_id                UUID,
+  client_id                    UUID REFERENCES public.clients(id) ON DELETE SET NULL,
+  motorcycle_id                UUID REFERENCES public.motorcycles(id) ON DELETE SET NULL,
   conclusion_date              TIMESTAMPTZ,
   -- delivery person info
   delivery_person_type         TEXT,
@@ -307,6 +308,7 @@ CREATE TABLE IF NOT EXISTS public.materials (
   quantidade     TEXT NOT NULL,
   valor          NUMERIC(10,2) NOT NULL DEFAULT 0,
   is_service     BOOLEAN NOT NULL DEFAULT false,         -- from 202601230909
+  mechanic_id    UUID REFERENCES public.mechanics(id) ON DELETE SET NULL,
   paid_at        TIMESTAMPTZ,                            -- from 202601230903
   payment_method TEXT CHECK (payment_method IN         -- from 202601262100
     ('dinheiro', 'pix', 'credito', 'debito', 'transferencia', 'outro')),
@@ -782,10 +784,10 @@ BEGIN
       BEGIN
         v_url := current_setting('app.supabase_url', true) || '/functions/v1/send-satisfaction-survey';
         IF v_url IS NULL OR v_url = '/functions/v1/send-satisfaction-survey' THEN
-          v_url := 'https://xqndblstrblqleraepzs.supabase.co/functions/v1/send-satisfaction-survey';
+          v_url := 'https://<SUPABASE_PROJECT_ID>.supabase.co/functions/v1/send-satisfaction-survey';
         END IF;
       EXCEPTION WHEN OTHERS THEN
-        v_url := 'https://xqndblstrblqleraepzs.supabase.co/functions/v1/send-satisfaction-survey';
+        v_url := 'https://<SUPABASE_PROJECT_ID>.supabase.co/functions/v1/send-satisfaction-survey';
       END;
 
       v_http_response := net.http_post(
@@ -1013,9 +1015,9 @@ SELECT cron.schedule(
   '0 8 * * *',
   $$
   SELECT net.http_post(
-    url := 'https://xqndblstrblqleraepzs.supabase.co/functions/v1/send-satisfaction-survey',
+    url := 'https://<SUPABASE_PROJECT_ID>.supabase.co/functions/v1/send-satisfaction-survey',
     headers := jsonb_build_object(
-      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9',
+      'Authorization', 'Bearer <SERVICE_ROLE_KEY>',
       'Content-Type', 'application/json'
     ),
     body := jsonb_build_object('test', false, 'triggered_by', 'cron_job')::text,
@@ -1032,7 +1034,7 @@ SELECT cron.schedule(
   'check_maintenance_reminders_daily',
   '0 8 * * *',
   'SELECT net.http_post(
-    url := ''https://xqndblstrblqleraepzs.supabase.co/functions/v1/check-maintenance-reminders'',
+    url := ''https://<SUPABASE_PROJECT_ID>.supabase.co/functions/v1/check-maintenance-reminders'',
     headers := jsonb_build_object(
       ''Content-Type'', ''application/json'',
       ''Authorization'', ''Bearer '' || current_setting(''app.settings.supabase_key'', true)
@@ -1041,5 +1043,4 @@ SELECT cron.schedule(
   ) as request_id;'
 );
 
-GRANT EXECUTE ON FUNCTION cron.schedule TO authenticated;
-GRANT EXECUTE ON FUNCTION cron.schedule TO service_role;
+-- Note: cron.schedule grants omitted (function has multiple overloads, managed by Supabase internally)
