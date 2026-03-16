@@ -103,7 +103,8 @@ export function NotaBalcao({
   const [logoBase64, setLogoBase64] = useState<string>('')
   useEffect(() => {
     const path = import.meta.env.VITE_LOGO_PATH || '/client-logo.png'
-    fetch(path)
+    const url = path.startsWith('http') ? path : `${window.location.origin}${path}`
+    fetch(url)
       .then(res => res.blob())
       .then(blob => new Promise<string>((resolve) => {
         const reader = new FileReader()
