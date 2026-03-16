@@ -114,6 +114,25 @@ export default function SatisfactionDashboardPage() {
       comAtendimento: ratings.filter(r => r.atendimento_id).length,
     });
 
+    // Buscar dados reais de todos os clientes ANTES do early return de orders
+    const allClientIds = ratings
+      .filter((r) => r.client_id)
+      .map((r) => r.client_id)
+      .filter(Boolean) as string[];
+
+    if (allClientIds.length > 0) {
+      const uniqueIds = [...new Set(allClientIds)];
+      const { data: clientsData } = await supabase
+        .from('clients')
+        .select('id, name, phone, whatsapp')
+        .in('id', uniqueIds);
+      const cMap: Record<string, ClientLite> = {};
+      for (const c of clientsData || []) cMap[c.id] = { id: c.id, name: c.name, phone: c.phone || c.whatsapp || '' };
+      setClientsMap(cMap);
+    } else {
+      setClientsMap({});
+    }
+
     const orderIds = [...new Set(ratings.map((r) => r.order_id).filter(Boolean))];
     if (!orderIds.length) {
       setOrdersMap({});
@@ -131,25 +150,6 @@ export default function SatisfactionDashboardPage() {
       nextMap[o.id] = o as OrderLite;
     }
     setOrdersMap(nextMap);
-
-    // Buscar dados reais de todos os clientes (para ter telefone atualizado)
-    const allClientIds = ratings
-      .filter((r) => r.client_id)
-      .map((r) => r.client_id)
-      .filter(Boolean) as string[];
-
-    if (allClientIds.length > 0) {
-      const uniqueIds = [...new Set(allClientIds)];
-      const { data: clientsData } = await supabase
-        .from('clients')
-        .select('id, name, phone')
-        .in('id', uniqueIds);
-      const cMap: Record<string, ClientLite> = {};
-      for (const c of clientsData || []) cMap[c.id] = c as ClientLite;
-      setClientsMap(cMap);
-    } else {
-      setClientsMap({});
-    }
 
     setLoading(false);
   };
