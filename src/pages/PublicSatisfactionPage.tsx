@@ -90,7 +90,8 @@ export default function PublicSatisfactionPage() {
   const { token } = useParams();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [alreadyResponded, setAlreadyResponded] = useState(false);
 
   const [order, setOrder] = useState<Record<string, unknown> | null>(null);
@@ -147,31 +148,31 @@ export default function PublicSatisfactionPage() {
       // Validar token antes de fazer a requisição
       if (!token) {
         console.error('❌ Token ausente na URL');
-        setError('Link inválido. Token não encontrado.');
+        setLoadError('Link inválido. Token não encontrado.');
         setLoading(false);
         return;
       }
 
       try {
         setLoading(true);
-        setError(null);
+        setLoadError(null);
 
         console.log('🔍 Carregando satisfação com token:', token);
         console.log('📍 Supabase URL:', supabaseUrl);
-        
+
         const url = `${supabaseUrl}/functions/v1/satisfaction-public?token=${encodeURIComponent(token)}`;
         console.log('🌐 Chamando URL:', url);
-        
+
         const res = await fetch(url);
         console.log('📡 Response status:', res.status);
-        
+
         const data = await res.json();
         console.log('📦 Response data:', data);
 
         if (!res.ok || !data?.success) {
           const errorMsg = data?.message || 'Não foi possível carregar a avaliação';
           console.error('❌ Erro:', errorMsg);
-          setError(errorMsg);
+          setLoadError(errorMsg);
           return;
         }
 
@@ -207,7 +208,7 @@ export default function PublicSatisfactionPage() {
         }
       } catch (e: Error | unknown) {
         console.error('❌ Erro ao carregar:', e);
-        setError((e as Error)?.message || 'Erro ao carregar');
+        setLoadError((e as Error)?.message || 'Erro ao carregar');
       } finally {
         setLoading(false);
       }
@@ -289,49 +290,49 @@ export default function PublicSatisfactionPage() {
       
       // Se escolheu avaliar balconista mas não selecionou
       if (wantsAttendantReview === true && !selectedAttendant) {
-        setError('Selecione o balconista que te atendeu.');
+        setFormError('Selecione o balconista que te atendeu.');
         return;
       }
-      
+
       // Se escolheu avaliar mecânico mas não selecionou
       if (wantsMechanicReview === true && !selectedMechanic) {
-        setError('Selecione o mecânico que te atendeu.');
+        setFormError('Selecione o mecânico que te atendeu.');
         return;
       }
 
       // Se escolheu avaliar balconista, precisa dar nota
       if (hasAttendantReview && !atendimentoRating) {
-        setError('Preencha a avaliação do balconista em estrelas.');
+        setFormError('Preencha a avaliação do balconista em estrelas.');
         return;
       }
 
       // Se escolheu avaliar mecânico, precisa dar nota
       if (hasMechanicReview && !servicoRating) {
-        setError('Preencha a avaliação do mecânico em estrelas.');
+        setFormError('Preencha a avaliação do mecânico em estrelas.');
         return;
       }
 
       // Permitir enviar apenas comentário ou nota geral se não quis avaliar ninguém
       if (!hasAttendantReview && !hasMechanicReview && !storeRating && !comment?.trim()) {
-        setError('Dê ao menos uma nota ou escreva um comentário.');
+        setFormError('Dê ao menos uma nota ou escreva um comentário.');
         return;
       }
 
       if (!token) {
-        setError('Token inválido.');
+        setFormError('Token inválido.');
         return;
       }
     } else {
       // OS normal: ambos obrigatórios
       if (!atendimentoRating || !servicoRating || !token) {
-        setError('Preencha as duas avaliações em estrelas.');
+        setFormError('Preencha as duas avaliações em estrelas.');
         return;
       }
     }
 
     try {
       setSaving(true);
-      setError(null);
+      setFormError(null);
 
       const payload: Record<string, unknown> = {
         token,
@@ -371,14 +372,14 @@ export default function PublicSatisfactionPage() {
 
       const data = await res.json();
       if (!res.ok || !data?.success) {
-        setError(data?.message || 'Não foi possível enviar avaliação');
+        setFormError(data?.message || 'Não foi possível enviar avaliação');
         return;
       }
 
       setSubmitted(true);
       setAlreadyResponded(true);
     } catch (e: Error | unknown) {
-      setError((e as Error)?.message || 'Erro ao enviar');
+      setFormError((e as Error)?.message || 'Erro ao enviar');
     } finally {
       setSaving(false);
     }
@@ -388,8 +389,8 @@ export default function PublicSatisfactionPage() {
     return <div className="min-h-screen flex items-center justify-center">Carregando avaliação...</div>;
   }
 
-  if (error) {
-    return <div className="min-h-screen flex items-center justify-center text-center px-4 text-red-600">{error}</div>;
+  if (loadError) {
+    return <div className="min-h-screen flex items-center justify-center text-center px-4 text-red-600">{loadError}</div>;
   }
 
   if (alreadyResponded && !submitted) {
@@ -787,7 +788,7 @@ export default function PublicSatisfactionPage() {
                 />
               </div>
 
-              {error && <p className="text-sm text-red-600">{error}</p>}
+              {formError && <p className="text-sm text-red-600">{formError}</p>}
 
               <Button className="w-full" onClick={handleSubmit} disabled={saving}>
                 {saving ? 'Enviando...' : 'Enviar avaliação'}
