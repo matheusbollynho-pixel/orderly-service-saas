@@ -148,14 +148,14 @@ export default function PublicSatisfactionPage() {
       // Validar token antes de fazer a requisição
       if (!token) {
         console.error('❌ Token ausente na URL');
-        setError('Link inválido. Token não encontrado.');
+        setLoadError('Link inválido. Token não encontrado.');
         setLoading(false);
         return;
       }
 
       try {
         setLoading(true);
-        setError(null);
+        setLoadError(null);
 
         console.log('🔍 Carregando satisfação com token:', token);
         console.log('📍 Supabase URL:', supabaseUrl);
