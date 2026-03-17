@@ -6,10 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import type { InventoryProduct } from '@/hooks/useInventory';
 
 interface MaterialsPageProps {
   order: ServiceOrder;
   mecanicos?: Mechanic[];
+  inventoryProducts?: InventoryProduct[];
   onBack: () => void;
   onAddMaterial: (material: Material) => void;
   onRemoveMaterial: (id: string) => void;
@@ -24,6 +26,7 @@ interface MaterialsPageProps {
 export function MaterialsPage({
   order,
   mecanicos = [],
+  inventoryProducts = [],
   onBack,
   onAddMaterial,
   onRemoveMaterial,
@@ -85,6 +88,7 @@ export function MaterialsPage({
           <MaterialsNote
             materiais={order.materials || []}
             mecanicos={mecanicos}
+            inventoryProducts={inventoryProducts}
             onAddMaterial={onAddMaterial}
             onRemoveMaterial={onRemoveMaterial}
             onUpdateMaterial={onUpdateMaterial}

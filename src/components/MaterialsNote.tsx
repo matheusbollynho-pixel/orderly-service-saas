@@ -1,14 +1,16 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Trash2, ChevronDown, ChevronUp, Package } from 'lucide-react';
 import { Material, Mechanic, PaymentMethod } from '@/types/service-order';
+import type { InventoryProduct } from '@/hooks/useInventory';
 
 interface MaterialsNoteProps {
   materiais: Material[];
   mecanicos?: Mechanic[];
+  inventoryProducts?: InventoryProduct[];
   onAddMaterial: (material: Omit<Material, 'id' | 'created_at' | 'updated_at'>) => void;
   onRemoveMaterial: (id: string) => void;
   onUpdateMaterial: (id: string, field: string, value: string) => void;
@@ -21,6 +23,7 @@ interface MaterialsNoteProps {
 export function MaterialsNote({
   materiais,
   mecanicos = [],
+  inventoryProducts = [],
   onAddMaterial,
   onRemoveMaterial,
   onUpdateMaterial,
@@ -36,8 +39,46 @@ export function MaterialsNote({
     descricao: '',
     valor: '',
     is_service: false,
-    mechanic_id: undefined as string | undefined
+    mechanic_id: undefined as string | undefined,
+    product_id: undefined as string | undefined,
   });
+  const [suggestions, setSuggestions] = useState<InventoryProduct[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleDescricaoChange = (value: string) => {
+    setNewMaterial((prev) => ({ ...prev, descricao: value, product_id: undefined }));
+    if (value.trim().length >= 2 && inventoryProducts.length > 0) {
+      const q = value.toLowerCase();
+      const found = inventoryProducts
+        .filter((p) => p.active && (p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)))
+        .slice(0, 6);
+      setSuggestions(found);
+      setShowSuggestions(found.length > 0);
+    } else {
+      setShowSuggestions(false);
+    }
+  };
+
+  const handleSelectProduct = (product: InventoryProduct) => {
+    setNewMaterial((prev) => ({
+      ...prev,
+      descricao: product.name,
+      valor: String(product.sale_price),
+      product_id: product.id,
+    }));
+    setShowSuggestions(false);
+  };
 
   const total = materiais.reduce((sum, m) => {
     const qtd = parseFloat(m.quantidade) || 0;
@@ -57,14 +98,13 @@ export function MaterialsNote({
       is_service: newMaterial.is_service,
     };
 
-    // Só adiciona mechanic_id se foi selecionado
-    if (newMaterial.mechanic_id) {
-      payload.mechanic_id = newMaterial.mechanic_id;
-    }
+    if (newMaterial.mechanic_id) payload.mechanic_id = newMaterial.mechanic_id;
+    if (newMaterial.product_id) payload.product_id = newMaterial.product_id;
 
     onAddMaterial(payload);
 
-    setNewMaterial({ quantidade: '01', descricao: '', valor: '', is_service: false, mechanic_id: undefined });
+    setNewMaterial({ quantidade: '01', descricao: '', valor: '', is_service: false, mechanic_id: undefined, product_id: undefined });
+    setShowSuggestions(false);
   };
 
   return (
@@ -230,15 +270,38 @@ export function MaterialsNote({
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex-1">
-                  <label className="text-xs font-semibold text-foreground block mb-1">Descrição</label>
+                <div className="flex-1 relative" ref={suggestionsRef}>
+                  <label className="text-xs font-semibold text-foreground block mb-1">
+                    Descrição {newMaterial.product_id && <span className="text-green-600 ml-1">✓ estoque</span>}
+                  </label>
                   <Input
-                    placeholder="Descrição"
+                    placeholder="Descrição ou buscar no estoque..."
                     value={newMaterial.descricao}
-                    onChange={(e) => setNewMaterial({ ...newMaterial, descricao: e.target.value })}
+                    onChange={(e) => handleDescricaoChange(e.target.value)}
+                    onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
                     disabled={disabled}
                     className="h-8 bg-muted/50 border-border/50"
                   />
+                  {showSuggestions && (
+                    <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-md border border-border bg-popover shadow-lg">
+                      {suggestions.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => handleSelectProduct(p)}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs hover:bg-muted transition-colors"
+                        >
+                          <Package className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <span className="font-medium truncate block">{p.name}</span>
+                            <span className="text-muted-foreground">{p.code} · Estoque: {p.stock_current} {p.unit} · R$ {p.sale_price.toFixed(2)}</span>
+                          </div>
+                          {p.stock_current <= 0 && <span className="text-red-500 flex-shrink-0">Zerado</span>}
+                          {p.stock_current > 0 && p.stock_current <= p.stock_minimum && <span className="text-orange-500 flex-shrink-0">Baixo</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="w-24">
                   <label className="text-xs font-semibold text-foreground block mb-1">Valor (R$)</label>

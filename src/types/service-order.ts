@@ -23,6 +23,7 @@ export interface Material {
   mechanic_id?: string | null; // mecanico responsavel pelo item
   payment_method?: PaymentMethod | null; // forma de pagamento do item (pix, dinheiro, cartao)
   paid_at?: string | null; // data quando foi pago
+  product_id?: string | null; // produto do estoque vinculado (baixa automática)
   created_at: string;
   updated_at: string;
 }

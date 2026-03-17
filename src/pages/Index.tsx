@@ -18,6 +18,7 @@ import { ExpressCadastroPage } from './ExpressCadastroPage';
 import { supabase } from '@/integrations/supabase/client';
 import SatisfactionDashboardPage from './SatisfactionDashboardPage';
 import InventoryPage from './InventoryPage';
+import { useInventory } from '@/hooks/useInventory';
 import { BottomNav } from '@/components/BottomNav';
 import { EmptyState } from '@/components/EmptyState';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -76,6 +77,7 @@ export default function Index() {
   } = useServiceOrders();
 
   const { mechanics } = useMechanics();
+  const { products: inventoryProducts } = useInventory();
   const { upsertClient, upsertMotorcycle, getClientById } = useClients();
 
   // Mantém a OS selecionada sincronizada com o cache atualizado (PC/celular)
@@ -738,6 +740,7 @@ Retirada: ${retiradaInfo}`;
             onAddMaterial={handleAddMaterial}
             onRemoveMaterial={handleRemoveMaterial}
             onUpdateMaterial={handleUpdateMaterial}
+            inventoryProducts={inventoryProducts}
             onAddPayment={handleAddPayment}
             onDeletePayment={handleDeletePayment}
             isCreatingPayment={isCreatingPayment}
@@ -752,6 +755,7 @@ Retirada: ${retiradaInfo}`;
           <MaterialsPage
             order={selectedOrder}
             mecanicos={mechanics}
+            inventoryProducts={inventoryProducts}
             onBack={handleBackFromMaterials}
             onAddMaterial={handleAddMaterial}
             onRemoveMaterial={handleRemoveMaterial}

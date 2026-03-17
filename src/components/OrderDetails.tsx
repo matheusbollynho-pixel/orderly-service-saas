@@ -5,6 +5,7 @@ import { StatusBadge } from './StatusBadge';
 import { Checklist } from './Checklist';
 import { SignaturePad } from './SignaturePad';
 import { MaterialsNote } from './MaterialsNote';
+import type { InventoryProduct } from '@/hooks/useInventory';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
@@ -74,6 +75,7 @@ interface OrderDetailsProps {
   onAddMaterial?: (material: Omit<Material, 'id' | 'created_at' | 'updated_at'>) => void;
   onRemoveMaterial?: (id: string) => void;
   onUpdateMaterial?: (id: string, field: string, value: string) => void;
+  inventoryProducts?: InventoryProduct[];
   onAddPayment?: (payload: { order_id: string; amount: number; discount_amount?: number | null; method: PaymentMethod; reference?: string | null; notes?: string | null; finalized_by_staff_id?: string | null }) => void;
   onDeletePayment?: (id: string) => void;
   isCreatingPayment?: boolean;
@@ -97,6 +99,7 @@ export function OrderDetails({
   onAddMaterial,
   onRemoveMaterial,
   onUpdateMaterial,
+  inventoryProducts = [],
   onAddPayment,
   onDeletePayment,
   isCreatingPayment = false,
@@ -1618,6 +1621,7 @@ const renderDeliverySection = () => {
               <MaterialsNote
                 materiais={order.materials || []}
                 mecanicos={mechanics}
+                inventoryProducts={inventoryProducts}
                 onAddMaterial={onAddMaterial}
                 onRemoveMaterial={onRemoveMaterial}
                 onUpdateMaterial={onUpdateMaterial}
