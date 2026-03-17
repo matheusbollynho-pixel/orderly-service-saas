@@ -154,8 +154,9 @@ export function MaterialsNote({
                       <ChevronDown className="h-4 w-4 text-[#C1272D]" />
                     )}
                   </div>
-                  <div className="col-span-7 text-sm font-medium text-foreground">
+                  <div className="col-span-7 text-sm font-medium text-foreground flex items-center gap-1">
                     {material.descricao}
+                    {material.product_id && <Package className="h-3 w-3 text-green-600 flex-shrink-0" title="Vinculado ao estoque" />}
                   </div>
                   <div className="col-span-2 text-sm text-muted-foreground">
                     {material.quantidade} × R$ {parseFloat(String(material.valor)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -285,10 +286,16 @@ export function MaterialsNote({
                 </div>
                 <div className="flex-1 relative" ref={suggestionsRef}>
                   <label className="text-xs font-semibold text-foreground block mb-1">
-                    Descrição {newMaterial.product_id && <span className="text-green-600 ml-1">✓ estoque</span>}
+                    Descrição{' '}
+                    {newMaterial.product_id
+                      ? <span className="text-green-600 ml-1 font-normal">✓ vinculado ao estoque — dará baixa automática</span>
+                      : newMaterial.descricao && inventoryProducts.length > 0
+                        ? <span className="text-amber-500 ml-1 font-normal">⚠ selecione do dropdown para dar baixa no estoque</span>
+                        : null
+                    }
                   </label>
                   <Input
-                    placeholder="Descrição ou clique para buscar no estoque..."
+                    placeholder="Clique para buscar no estoque ou digite livremente..."
                     value={newMaterial.descricao}
                     onChange={(e) => handleDescricaoChange(e.target.value)}
                     onFocus={handleDescricaoFocus}
