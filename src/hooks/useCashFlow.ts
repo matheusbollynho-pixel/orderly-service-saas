@@ -176,6 +176,7 @@ export function useCashFlow(selectedDate?: string) {
       queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
       queryClient.invalidateQueries({ queryKey: ['cash-flow-summary'] });
       queryClient.invalidateQueries({ queryKey: ['cash-flow-period'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
       toast.success('Registro removido do fluxo de caixa!');
     },
     onError: (error: Error) => {

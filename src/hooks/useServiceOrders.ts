@@ -417,6 +417,7 @@ export function useServiceOrders() {
   });
 
   const deleteMaterialMutation = useMutation({
+
     mutationFn: async (id: string) => {
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!uuidRegex.test(id)) {
@@ -432,6 +433,7 @@ export function useServiceOrders() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['service-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
       toast.success('Material removido!');
     },
     onError: (error) => {
