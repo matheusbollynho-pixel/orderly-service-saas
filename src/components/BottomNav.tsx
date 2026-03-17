@@ -28,12 +28,12 @@ export function BottomNav({ activeView, onViewChange, isAdmin }: BottomNavProps)
       { id: 'reports' as const, label: 'Relatórios', icon: ChartBar }
     ] : []),
     ...(canAccessCashFlow ? [
-      { id: 'fluxo-caixa' as const, label: 'Caixa', icon: Wallet }
+      { id: 'fluxo-caixa' as const, label: 'Caixa', icon: Wallet },
+      { id: 'estoque' as const, label: 'Estoque', icon: Package },
     ] : []),
     { id: 'mechanics' as const, label: 'Equipe', icon: Users },
     { id: 'pos-venda' as const, label: 'Pós-Venda', icon: Heart },
     { id: 'satisfacao' as const, label: 'Satisfação', icon: Star },
-    { id: 'estoque' as const, label: 'Estoque', icon: Package },
   ];
 
   return (
