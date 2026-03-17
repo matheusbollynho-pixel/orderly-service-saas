@@ -733,7 +733,7 @@ export default function InventoryPage() {
 
                       <div className="flex items-center gap-3 mt-2 text-xs">
                         <span className={cn('font-bold', isLow ? 'text-[#C1272D]' : 'text-foreground')} style={isLow ? { color: '#C1272D' } : {}}>
-                          {p.stock_current} {p.unit}.
+                          {p.stock_current} {p.unit.toUpperCase()}.
                           {isLow && <span style={{ color: '#C1272D' }} className="ml-1">(mín: {p.stock_minimum})</span>}
                         </span>
                         <span className="text-muted-foreground">Venda: {fmtCurrency(p.sale_price)}</span>
