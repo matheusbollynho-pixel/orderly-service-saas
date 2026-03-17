@@ -544,6 +544,7 @@ export default function InventoryPage() {
 
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('produtos');
+  const [filterLowStock, setFilterLowStock] = useState(false);
 
   // Product form
   const [formOpen, setFormOpen] = useState(false);
@@ -559,9 +560,13 @@ export default function InventoryPage() {
 
   // Filtered products
   const filteredProducts = useMemo(() => {
-    if (!search.trim()) return products;
+    let list = products;
+    if (filterLowStock) {
+      list = list.filter((p) => p.active && p.stock_minimum > 0 && p.stock_current <= p.stock_minimum);
+    }
+    if (!search.trim()) return list;
     const q = search.toLowerCase();
-    return products.filter(
+    return list.filter(
       (p) =>
         p.name.toLowerCase().includes(q) ||
         p.code.toLowerCase().includes(q) ||
@@ -569,7 +574,7 @@ export default function InventoryPage() {
         (p.brand ?? '').toLowerCase().includes(q) ||
         (p.moto_model ?? '').toLowerCase().includes(q)
     );
-  }, [products, search]);
+  }, [products, search, filterLowStock]);
 
   const lowStock = useMemo(
     () => products.filter((p) => p.active && p.stock_minimum > 0 && p.stock_current <= p.stock_minimum),
@@ -633,12 +638,26 @@ export default function InventoryPage() {
         </Button>
       </div>
 
-      {/* Alerta estoque baixo */}
+      {/* Alerta estoque baixo – clicável para filtrar */}
       {lowStock.length > 0 && (
-        <div className="flex items-center gap-2 rounded-lg border-2 px-3 py-2 text-sm font-semibold" style={{ borderColor: '#C1272D', color: '#C1272D' }}>
-          <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-          <span>{lowStock.length} produto{lowStock.length > 1 ? 's' : ''} com estoque baixo ou zerado</span>
-        </div>
+        <button
+          type="button"
+          onClick={() => { setFilterLowStock((v) => !v); setTab('produtos'); }}
+          className="w-full flex items-center justify-between gap-2 rounded-lg border-2 px-3 py-2 text-sm font-semibold transition-colors"
+          style={{
+            borderColor: '#C1272D',
+            color: '#C1272D',
+            backgroundColor: filterLowStock ? 'rgba(193,39,45,0.12)' : 'transparent',
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+            <span>{lowStock.length} produto{lowStock.length > 1 ? 's' : ''} com estoque baixo ou zerado</span>
+          </div>
+          <span className="text-xs font-normal opacity-80">
+            {filterLowStock ? '✕ limpar filtro' : 'ver todos →'}
+          </span>
+        </button>
       )}
 
       <Tabs value={tab} onValueChange={setTab}>
