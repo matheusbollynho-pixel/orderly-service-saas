@@ -384,6 +384,8 @@ export function useServiceOrders() {
           })
         );
       }
+      // Invalida estoque para refletir a baixa feita pelo trigger
+      queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
       toast.success('Material adicionado!');
     },
     onError: (error: Error | unknown) => {
