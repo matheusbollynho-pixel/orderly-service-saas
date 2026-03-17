@@ -581,9 +581,17 @@ export default function InventoryPage() {
     [products]
   );
 
+  const nextCode = () => {
+    const nums = products
+      .map((p) => parseInt(p.code.replace(/\D/g, ''), 10))
+      .filter((n) => !isNaN(n));
+    const max = nums.length > 0 ? Math.max(...nums) : 0;
+    return String(max + 1).padStart(3, '0');
+  };
+
   const handleOpenNew = () => {
     setEditingProduct(null);
-    setFormData({ ...EMPTY_FORM });
+    setFormData({ ...EMPTY_FORM, code: nextCode() });
     setFormOpen(true);
   };
 
