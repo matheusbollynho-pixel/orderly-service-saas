@@ -635,7 +635,7 @@ export default function InventoryPage() {
 
       {/* Alerta estoque baixo */}
       {lowStock.length > 0 && (
-        <div className="flex items-center gap-2 rounded-lg border border-orange-300 bg-orange-50 dark:bg-orange-950/20 px-3 py-2 text-sm text-orange-700 dark:text-orange-400">
+        <div className="flex items-center gap-2 rounded-lg border border-[#C1272D]/40 bg-[#C1272D]/5 px-3 py-2 text-sm text-[#C1272D]">
           <AlertTriangle className="h-4 w-4 flex-shrink-0" />
           <span><strong>{lowStock.length} produto{lowStock.length > 1 ? 's' : ''}</strong> com estoque baixo ou zerado</span>
         </div>
@@ -683,13 +683,13 @@ export default function InventoryPage() {
                     key={p.id}
                     className={cn(
                       'rounded-xl border bg-card p-3 flex items-start gap-3',
-                      isLow && 'border-orange-300 bg-orange-50/40 dark:bg-orange-950/10'
+                      isLow && 'border-[#C1272D]/30 bg-[#C1272D]/5'
                     )}
                   >
                     {/* Stock indicator */}
                     <div className={cn(
                       'mt-0.5 flex-shrink-0 w-2 h-2 rounded-full',
-                      p.stock_current === 0 ? 'bg-red-500' : isLow ? 'bg-orange-400' : 'bg-green-500'
+                      isLow ? 'bg-[#C1272D]' : 'bg-green-500'
                     )} />
 
                     {/* Info */}
@@ -705,9 +705,9 @@ export default function InventoryPage() {
                       </div>
 
                       <div className="flex items-center gap-3 mt-2 text-xs">
-                        <span className={cn('font-bold', p.stock_current === 0 ? 'text-red-500' : isLow ? 'text-orange-500' : 'text-foreground')}>
+                        <span className={cn('font-bold', isLow ? 'text-[#C1272D]' : 'text-foreground')}>
                           {p.stock_current} {p.unit}
-                          {isLow && <span className="text-orange-500 ml-1">(mín: {p.stock_minimum})</span>}
+                          {isLow && <span className="text-[#C1272D] ml-1">(mín: {p.stock_minimum})</span>}
                         </span>
                         <span className="text-muted-foreground">Venda: {fmtCurrency(p.sale_price)}</span>
                         {p.location && <span className="text-muted-foreground">📦 {p.location}</span>}
