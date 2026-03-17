@@ -31,8 +31,10 @@ import {
   AlertTriangle,
   Edit2,
   Trash2,
-  ChevronRight,
+  Sparkles,
+  Loader2,
 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -124,11 +126,43 @@ interface ProductFormProps {
   isEditing: boolean;
   isSaving: boolean;
   onChange: (field: string, value: unknown) => void;
+  onBulkChange: (fields: Record<string, unknown>) => void;
   onSave: () => void;
   onClose: () => void;
 }
 
-function ProductFormDialog({ open, product, isEditing, isSaving, onChange, onSave, onClose }: ProductFormProps) {
+function ProductFormDialog({ open, product, isEditing, isSaving, onChange, onBulkChange, onSave, onClose }: ProductFormProps) {
+  const [aiDescription, setAiDescription] = useState('');
+  const [isAiLoading, setIsAiLoading] = useState(false);
+
+  const handleAiFill = async () => {
+    if (!aiDescription.trim()) {
+      toast.error('Descreva a peça antes de usar a IA');
+      return;
+    }
+    setIsAiLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('ai-fill-product', {
+        body: { description: aiDescription },
+      });
+      if (error) throw error;
+      if (data?.fields) {
+        // Remove nulls — não sobrescreve campos já preenchidos com null
+        const clean: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(data.fields)) {
+          if (v !== null && v !== undefined && v !== '') clean[k] = v;
+        }
+        onBulkChange(clean);
+        toast.success('Campos preenchidos pela IA! Revise e confirme.');
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erro ao chamar IA';
+      toast.error(msg);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -137,6 +171,36 @@ function ProductFormDialog({ open, product, isEditing, isSaving, onChange, onSav
         </DialogHeader>
 
         <div className="space-y-5 py-2">
+          {/* IA */}
+          <section className="rounded-xl border border-primary/30 bg-primary/5 p-3 space-y-2">
+            <div className="flex items-center gap-2 text-sm font-semibold text-primary">
+              <Sparkles className="h-4 w-4" />
+              Preencher com IA
+            </div>
+            <p className="text-xs text-muted-foreground">Descreva a peça e a IA preenche os campos automaticamente. Revise antes de salvar.</p>
+            <div className="flex gap-2">
+              <Input
+                placeholder='Ex: pastilha de freio dianteira Honda CG 160 2020'
+                value={aiDescription}
+                onChange={(e) => setAiDescription(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAiFill()}
+                disabled={isAiLoading}
+                className="flex-1"
+              />
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                onClick={handleAiFill}
+                disabled={isAiLoading || !aiDescription.trim()}
+                className="flex-shrink-0"
+              >
+                {isAiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                {isAiLoading ? 'Preenchendo...' : 'Preencher'}
+              </Button>
+            </div>
+          </section>
+
           {/* Identificação */}
           <section>
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Identificação</h3>
@@ -528,6 +592,10 @@ export default function InventoryPage() {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
+  const handleBulkChange = (fields: Record<string, unknown>) => {
+    setFormData((prev) => ({ ...prev, ...fields }));
+  };
+
   const handleSaveProduct = () => {
     if (!formData.code.trim()) { toast.error('Código interno obrigatório'); return; }
     if (!formData.name.trim()) { toast.error('Nome obrigatório'); return; }
@@ -730,6 +798,7 @@ export default function InventoryPage() {
         isEditing={!!editingProduct}
         isSaving={isCreatingProduct || isUpdatingProduct}
         onChange={handleFormChange}
+        onBulkChange={handleBulkChange}
         onSave={handleSaveProduct}
         onClose={() => setFormOpen(false)}
       />
