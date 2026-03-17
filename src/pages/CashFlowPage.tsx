@@ -95,15 +95,28 @@ export function CashFlowPage() {
   const handleDescriptionChange = (value: string) => {
     setFormData((prev) => ({ ...prev, description: value }));
     setSelectedProductId(undefined);
-    if (value.trim().length >= 2 && inventoryProducts.length > 0) {
-      const q = value.toLowerCase();
-      const found = inventoryProducts
-        .filter((p) => p.active && (p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)))
-        .slice(0, 6);
+    if (inventoryProducts.length > 0) {
+      const q = value.trim().toLowerCase();
+      const found = q.length === 0
+        ? inventoryProducts.filter((p) => p.active).slice(0, 8)
+        : inventoryProducts
+            .filter((p) => p.active && (p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)))
+            .slice(0, 8);
       setProductSuggestions(found);
-      setShowProductSuggestions(found.length > 0);
-    } else {
-      setShowProductSuggestions(false);
+      setShowProductSuggestions(true);
+    }
+  };
+
+  const handleDescriptionFocus = () => {
+    if (inventoryProducts.length > 0 && !selectedProductId) {
+      const q = formData.description.trim().toLowerCase();
+      const found = q.length === 0
+        ? inventoryProducts.filter((p) => p.active).slice(0, 8)
+        : inventoryProducts
+            .filter((p) => p.active && (p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)))
+            .slice(0, 8);
+      setProductSuggestions(found);
+      setShowProductSuggestions(true);
     }
   };
 
@@ -112,7 +125,7 @@ export function CashFlowPage() {
     setFormData((prev) => ({
       ...prev,
       description: product.name,
-      amount: String(product.sale_price * qty),
+      amount: product.sale_price > 0 ? String(product.sale_price * qty) : prev.amount,
     }));
     setSelectedProductId(product.id);
     setShowProductSuggestions(false);
@@ -625,30 +638,35 @@ export function CashFlowPage() {
                       </Label>
                       <Input
                         id="description"
-                        placeholder="Ex: Compra de peças ou buscar no estoque..."
+                        placeholder="Descrição ou clique para buscar no estoque..."
                         value={formData.description}
                         onChange={(e) => handleDescriptionChange(e.target.value)}
-                        onFocus={() => productSuggestions.length > 0 && setShowProductSuggestions(true)}
+                        onFocus={handleDescriptionFocus}
+                        autoComplete="off"
                         required
                       />
                       {showProductSuggestions && (
-                        <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-md border border-border bg-popover shadow-lg">
-                          {productSuggestions.map((p) => (
-                            <button
-                              key={p.id}
-                              type="button"
-                              onClick={() => handleSelectInventoryProduct(p)}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs hover:bg-muted transition-colors"
-                            >
-                              <Package className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                              <div className="flex-1 min-w-0">
-                                <span className="font-medium truncate block">{p.name}</span>
-                                <span className="text-muted-foreground">{p.code} · Estoque: {p.stock_current} {p.unit} · R$ {p.sale_price.toFixed(2)}</span>
-                              </div>
-                              {p.stock_current <= 0 && <span className="text-red-500 flex-shrink-0">Zerado</span>}
-                              {p.stock_current > 0 && p.stock_current <= p.stock_minimum && <span className="text-orange-500 flex-shrink-0">Baixo</span>}
-                            </button>
-                          ))}
+                        <div className="absolute top-full left-0 right-0 z-[100] mt-1 rounded-md border border-border bg-popover shadow-lg max-h-52 overflow-y-auto">
+                          {productSuggestions.length === 0 ? (
+                            <div className="px-3 py-2 text-xs text-muted-foreground">Nenhum produto encontrado</div>
+                          ) : (
+                            productSuggestions.map((p) => (
+                              <button
+                                key={p.id}
+                                type="button"
+                                onMouseDown={(e) => { e.preventDefault(); handleSelectInventoryProduct(p); }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs hover:bg-muted transition-colors"
+                              >
+                                <Package className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <span className="font-medium truncate block">{p.name}</span>
+                                  <span className="text-muted-foreground">{p.code} · Estoque: {p.stock_current} {p.unit} · R$ {p.sale_price.toFixed(2)}</span>
+                                </div>
+                                {p.stock_current <= 0 && <span className="text-red-500 flex-shrink-0">Zerado</span>}
+                                {p.stock_current > 0 && p.stock_current <= p.stock_minimum && <span className="text-orange-500 flex-shrink-0">Baixo</span>}
+                              </button>
+                            ))
+                          )}
                         </div>
                       )}
                     </div>

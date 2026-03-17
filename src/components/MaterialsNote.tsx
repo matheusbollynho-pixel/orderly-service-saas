@@ -58,15 +58,28 @@ export function MaterialsNote({
 
   const handleDescricaoChange = (value: string) => {
     setNewMaterial((prev) => ({ ...prev, descricao: value, product_id: undefined }));
-    if (value.trim().length >= 2 && inventoryProducts.length > 0) {
-      const q = value.toLowerCase();
-      const found = inventoryProducts
-        .filter((p) => p.active && (p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)))
-        .slice(0, 6);
+    if (inventoryProducts.length > 0) {
+      const q = value.trim().toLowerCase();
+      const found = q.length === 0
+        ? inventoryProducts.filter((p) => p.active).slice(0, 8)
+        : inventoryProducts
+            .filter((p) => p.active && (p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)))
+            .slice(0, 8);
       setSuggestions(found);
-      setShowSuggestions(found.length > 0);
-    } else {
-      setShowSuggestions(false);
+      setShowSuggestions(true);
+    }
+  };
+
+  const handleDescricaoFocus = () => {
+    if (inventoryProducts.length > 0 && !newMaterial.product_id) {
+      const q = newMaterial.descricao.trim().toLowerCase();
+      const found = q.length === 0
+        ? inventoryProducts.filter((p) => p.active).slice(0, 8)
+        : inventoryProducts
+            .filter((p) => p.active && (p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)))
+            .slice(0, 8);
+      setSuggestions(found);
+      setShowSuggestions(true);
     }
   };
 
@@ -275,31 +288,36 @@ export function MaterialsNote({
                     Descrição {newMaterial.product_id && <span className="text-green-600 ml-1">✓ estoque</span>}
                   </label>
                   <Input
-                    placeholder="Descrição ou buscar no estoque..."
+                    placeholder="Descrição ou clique para buscar no estoque..."
                     value={newMaterial.descricao}
                     onChange={(e) => handleDescricaoChange(e.target.value)}
-                    onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                    onFocus={handleDescricaoFocus}
                     disabled={disabled}
+                    autoComplete="off"
                     className="h-8 bg-muted/50 border-border/50"
                   />
                   {showSuggestions && (
-                    <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-md border border-border bg-popover shadow-lg">
-                      {suggestions.map((p) => (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => handleSelectProduct(p)}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs hover:bg-muted transition-colors"
-                        >
-                          <Package className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <span className="font-medium truncate block">{p.name}</span>
-                            <span className="text-muted-foreground">{p.code} · Estoque: {p.stock_current} {p.unit} · R$ {p.sale_price.toFixed(2)}</span>
-                          </div>
-                          {p.stock_current <= 0 && <span className="text-red-500 flex-shrink-0">Zerado</span>}
-                          {p.stock_current > 0 && p.stock_current <= p.stock_minimum && <span className="text-orange-500 flex-shrink-0">Baixo</span>}
-                        </button>
-                      ))}
+                    <div className="absolute top-full left-0 right-0 z-[100] mt-1 rounded-md border border-border bg-popover shadow-lg max-h-52 overflow-y-auto">
+                      {suggestions.length === 0 ? (
+                        <div className="px-3 py-2 text-xs text-muted-foreground">Nenhum produto encontrado</div>
+                      ) : (
+                        suggestions.map((p) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onMouseDown={(e) => { e.preventDefault(); handleSelectProduct(p); }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs hover:bg-muted transition-colors"
+                          >
+                            <Package className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <span className="font-medium truncate block">{p.name}</span>
+                              <span className="text-muted-foreground">{p.code} · Estoque: {p.stock_current} {p.unit} · R$ {p.sale_price.toFixed(2)}</span>
+                            </div>
+                            {p.stock_current <= 0 && <span className="text-red-500 flex-shrink-0">Zerado</span>}
+                            {p.stock_current > 0 && p.stock_current <= p.stock_minimum && <span className="text-orange-500 flex-shrink-0">Baixo</span>}
+                          </button>
+                        ))
+                      )}
                     </div>
                   )}
                 </div>
