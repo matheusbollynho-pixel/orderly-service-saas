@@ -32,7 +32,7 @@ Descrição: "${description}"
 Retorne APENAS um JSON válido (sem markdown, sem explicação) com os campos que conseguir inferir:
 {
   "name": "nome padronizado e completo da peça (ex: 'Pastilha de Freio Dianteira - Honda CG 160')",
-  "category": "categoria principal: freio | motor | suspensão | elétrica | transmissão | carroceria | lubrificação | filtro | arrefecimento | escapamento | outro",
+  "category": "categoria principal: freio | motor | suspensão | elétrica | transmissão | carroceria | lubrificação | filtro | arrefecimento | escapamento | pneu | outro",
   "subcategory": "subcategoria específica (ex: pastilha, disco, vela, filtro de ar, corrente, relé, etc)",
   "classification": "classificação geral (ex: peça de desgaste, peça estrutural, fluido, etc)",
   "brand": "marca da peça/fabricante se mencionado",
@@ -61,6 +61,7 @@ Regras:
 - moto_displacement: CG 125 = 125cc, CG 150/Titan 150/Factor 150 = 150cc, CG 160/Titan 160/Bros 160 = 162cc, Fazer 250/Hornet 250 = 249cc, CB 300 = 300cc, XRE 300 = 300cc, Lander 250 = 249cc
 - compatibility: use seu conhecimento técnico de intercambialidade de peças entre modelos
 - material: use terminologia técnica do setor automotivo
+- Pneus: category = "pneu"; subcategory = "pneu dianteiro" ou "pneu traseiro"; dimensions = medida do pneu no formato padrão (ex: 80/100-14, 90/90-18, 2.75-18, 3.00-18); notes deve informar se é com câmara (convencional) ou tubeless, e o perfil (rodoviário, trilha, misto); unit = "un"; material = borracha. Marcas de pneu comuns no Brasil: Pirelli, Michelin, Metzeler, Titan, Maggion, Levorin, Rinaldi, Bridgestone, Continental
 - Retorne SOMENTE o JSON, nada mais`
 
   try {
