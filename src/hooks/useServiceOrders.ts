@@ -328,6 +328,7 @@ export function useServiceOrders() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['service-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
       toast.success('Ordem de serviço excluída!');
     },
     onError: (error) => {
