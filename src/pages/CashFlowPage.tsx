@@ -121,11 +121,10 @@ export function CashFlowPage() {
   };
 
   const handleSelectInventoryProduct = (product: InventoryProduct) => {
-    const qty = parseFloat(formData.quantity) || 1;
     setFormData((prev) => ({
       ...prev,
       description: product.name,
-      amount: product.sale_price > 0 ? String(product.sale_price * qty) : prev.amount,
+      amount: product.sale_price > 0 ? String(product.sale_price) : prev.amount,
     }));
     setSelectedProductId(product.id);
     setShowProductSuggestions(false);
@@ -149,11 +148,12 @@ export function CashFlowPage() {
     // Se é venda de produto do estoque: cria movimentação → trigger auto-cria o cash_flow
     if (selectedProductId && formData.type === 'entrada') {
       const qty = parseFloat(formData.quantity) || 1;
+      const unitPrice = parseFloat(formData.amount) || 0;
       createMovement({
         product_id: selectedProductId,
         type: 'saida_venda',
         quantity: qty,
-        unit_price: parseFloat(formData.amount) / qty,
+        unit_price: unitPrice, // amount é o preço unitário
         notes: formData.notes || undefined,
       });
     } else {
@@ -741,7 +741,18 @@ export function CashFlowPage() {
 
                     {/* Valor */}
                     <div className="col-span-2">
-                      <Label htmlFor="amount">Valor</Label>
+                      <Label htmlFor="amount">
+                        {selectedProductId ? (
+                          <>
+                            Preço unit.{' '}
+                            {formData.quantity && formData.amount && (
+                              <span className="text-green-600 font-normal text-xs">
+                                = R$ {((parseFloat(formData.amount) || 0) * (parseFloat(formData.quantity) || 1)).toFixed(2)} total
+                              </span>
+                            )}
+                          </>
+                        ) : 'Valor'}
+                      </Label>
                       <input
                         id="amount"
                         type="text"
