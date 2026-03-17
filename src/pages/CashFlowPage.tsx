@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useCashFlow, useCashFlowPeriod } from '@/hooks/useCashFlow';
+import { useInventory, type InventoryProduct } from '@/hooks/useInventory';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,8 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowUpCircle, ArrowDownCircle, DollarSign, Calendar, Trash2, Plus, Eye, EyeOff } from 'lucide-react';
-import { CashFlowType } from '@/types/service-order';
+import { ArrowUpCircle, ArrowDownCircle, DollarSign, Calendar, Trash2, Plus, Eye, EyeOff, Package } from 'lucide-react';
+import { CashFlowType, PaymentMethod, CashFlow } from '@/types/service-order';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -53,7 +54,21 @@ export function CashFlowPage() {
   const [showForm, setShowForm] = useState(false);
   const [hideValues, setHideValues] = useState(false);
   const [entrySourceFilter, setEntrySourceFilter] = useState<'all' | 'without-os' | 'os-only'>('all');
-  
+  const [selectedProductId, setSelectedProductId] = useState<string | undefined>(undefined);
+  const [productSuggestions, setProductSuggestions] = useState<InventoryProduct[]>([]);
+  const [showProductSuggestions, setShowProductSuggestions] = useState(false);
+  const productSuggestionsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (productSuggestionsRef.current && !productSuggestionsRef.current.contains(e.target as Node)) {
+        setShowProductSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // Quando volta para dia, sempre volta a hoje
   useEffect(() => {
     if (activePeriod === 'day') {
@@ -61,6 +76,7 @@ export function CashFlowPage() {
     }
   }, [activePeriod]);
   const { cashFlow, summary, isLoading, createEntry, deleteEntry, isCreating } = useCashFlow(selectedDate);
+  const { products: inventoryProducts, createMovement, isCreatingMovement } = useInventory();
   const { summary: weeklySummary, isLoading: weeklyLoading } = useCashFlowPeriod('week');
   const { summary: monthlySummary, isLoading: monthlyLoading } = useCashFlowPeriod('month', selectedMonth);
 
@@ -76,9 +92,35 @@ export function CashFlowPage() {
     transactionDate: '',
   });
 
+  const handleDescriptionChange = (value: string) => {
+    setFormData((prev) => ({ ...prev, description: value }));
+    setSelectedProductId(undefined);
+    if (value.trim().length >= 2 && inventoryProducts.length > 0) {
+      const q = value.toLowerCase();
+      const found = inventoryProducts
+        .filter((p) => p.active && (p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)))
+        .slice(0, 6);
+      setProductSuggestions(found);
+      setShowProductSuggestions(found.length > 0);
+    } else {
+      setShowProductSuggestions(false);
+    }
+  };
+
+  const handleSelectInventoryProduct = (product: InventoryProduct) => {
+    const qty = parseFloat(formData.quantity) || 1;
+    setFormData((prev) => ({
+      ...prev,
+      description: product.name,
+      amount: String(product.sale_price * qty),
+    }));
+    setSelectedProductId(product.id);
+    setShowProductSuggestions(false);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.amount || !formData.description) {
       toast.error('Preencha todos os campos obrigatórios');
       return;
@@ -90,29 +132,32 @@ export function CashFlowPage() {
     }
 
     const todayDate = getLocalDate();
-    
-    // Log para debug
-    console.log('🔍 Salvando transação:', {
-      descricao: formData.description,
-      valor: formData.amount,
-      data: todayDate,
-      dataSelecionada: selectedDate,
-      dataTipada: formData.transactionDate,
-      regra: 'sempre_salvar_no_dia_atual',
-    });
 
-    createEntry({
-      type: formData.type,
-      amount: parseFloat(formData.amount),
-      description: formData.description,
-      category:
-        formData.type === 'saida'
-          ? (formData.saidaDestination === 'oficina' ? 'Saída - Oficina' : 'Saída - Balcão')
-          : formData.category,
-      payment_method: formData.payment_method,
-      date: todayDate,
-      notes: formData.notes,
-    });
+    // Se é venda de produto do estoque: cria movimentação → trigger auto-cria o cash_flow
+    if (selectedProductId && formData.type === 'entrada') {
+      const qty = parseFloat(formData.quantity) || 1;
+      createMovement({
+        product_id: selectedProductId,
+        type: 'saida_venda',
+        quantity: qty,
+        unit_price: parseFloat(formData.amount) / qty,
+        notes: formData.notes || undefined,
+      });
+    } else {
+      // Venda avulsa sem produto do estoque
+      createEntry({
+        type: formData.type,
+        amount: parseFloat(formData.amount),
+        description: formData.description,
+        category:
+          formData.type === 'saida'
+            ? (formData.saidaDestination === 'oficina' ? 'Saída - Oficina' : 'Saída - Balcão')
+            : formData.category,
+        payment_method: formData.payment_method,
+        date: todayDate,
+        notes: formData.notes,
+      });
+    }
 
     if (selectedDate !== todayDate) {
       toast.info('Por segurança, novos lançamentos são registrados apenas na data de hoje.');
@@ -130,6 +175,7 @@ export function CashFlowPage() {
       quantity: '',
       transactionDate: '',
     });
+    setSelectedProductId(undefined);
     setShowForm(false);
   };
 
@@ -573,17 +619,38 @@ export function CashFlowPage() {
                     </div>
 
                     {/* Descrição */}
-                    <div className="col-span-5">
-                      <Label htmlFor="description">Descrição</Label>
+                    <div className="col-span-5 relative" ref={productSuggestionsRef}>
+                      <Label htmlFor="description">
+                        Descrição {selectedProductId && <span className="text-green-600 ml-1 text-xs">✓ estoque</span>}
+                      </Label>
                       <Input
                         id="description"
-                        placeholder="Ex: Compra de peças"
+                        placeholder="Ex: Compra de peças ou buscar no estoque..."
                         value={formData.description}
-                        onChange={(e) =>
-                          setFormData({ ...formData, description: e.target.value })
-                        }
+                        onChange={(e) => handleDescriptionChange(e.target.value)}
+                        onFocus={() => productSuggestions.length > 0 && setShowProductSuggestions(true)}
                         required
                       />
+                      {showProductSuggestions && (
+                        <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-md border border-border bg-popover shadow-lg">
+                          {productSuggestions.map((p) => (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => handleSelectInventoryProduct(p)}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-left text-xs hover:bg-muted transition-colors"
+                            >
+                              <Package className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <span className="font-medium truncate block">{p.name}</span>
+                                <span className="text-muted-foreground">{p.code} · Estoque: {p.stock_current} {p.unit} · R$ {p.sale_price.toFixed(2)}</span>
+                              </div>
+                              {p.stock_current <= 0 && <span className="text-red-500 flex-shrink-0">Zerado</span>}
+                              {p.stock_current > 0 && p.stock_current <= p.stock_minimum && <span className="text-orange-500 flex-shrink-0">Baixo</span>}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     {/* Forma de Pagamento */}
@@ -676,8 +743,8 @@ export function CashFlowPage() {
                   </div>
 
                   <div className="flex gap-2">
-                    <Button type="submit" disabled={isCreating}>
-                      {isCreating ? 'Salvando...' : 'Salvar'}
+                    <Button type="submit" disabled={isCreating || isCreatingMovement}>
+                      {(isCreating || isCreatingMovement) ? 'Salvando...' : 'Salvar'}
                     </Button>
                     <Button
                       type="button"
