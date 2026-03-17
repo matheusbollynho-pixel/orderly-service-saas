@@ -62,6 +62,182 @@ export type Database = {
           },
         ]
       },
+      inventory_products: {
+        Row: {
+          id: string
+          code: string
+          barcode: string | null
+          sku: string | null
+          name: string
+          description: string | null
+          classification: string | null
+          category: string | null
+          subcategory: string | null
+          brand: string | null
+          supplier: string | null
+          part_type: 'original' | 'paralela' | 'usada' | 'remanufaturada' | 'outro' | null
+          moto_brand: string | null
+          moto_model: string | null
+          moto_year: string | null
+          moto_displacement: string | null
+          moto_version: string | null
+          compatibility: string | null
+          manufacturer_part_number: string | null
+          dimensions: string | null
+          color: string | null
+          material: string | null
+          side: 'direito' | 'esquerdo' | 'dianteiro' | 'traseiro' | 'ambos' | 'nao_aplicavel' | null
+          unit: string
+          stock_current: number
+          stock_minimum: number
+          stock_maximum: number | null
+          location: string | null
+          lot: string | null
+          entry_date: string | null
+          cost_price: number
+          sale_price: number
+          profit_margin: number | null
+          promotional_price: number | null
+          active: boolean
+          status: 'ativo' | 'inativo' | 'em_falta' | 'descontinuado'
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          code: string
+          barcode?: string | null
+          sku?: string | null
+          name: string
+          description?: string | null
+          classification?: string | null
+          category?: string | null
+          subcategory?: string | null
+          brand?: string | null
+          supplier?: string | null
+          part_type?: 'original' | 'paralela' | 'usada' | 'remanufaturada' | 'outro' | null
+          moto_brand?: string | null
+          moto_model?: string | null
+          moto_year?: string | null
+          moto_displacement?: string | null
+          moto_version?: string | null
+          compatibility?: string | null
+          manufacturer_part_number?: string | null
+          dimensions?: string | null
+          color?: string | null
+          material?: string | null
+          side?: 'direito' | 'esquerdo' | 'dianteiro' | 'traseiro' | 'ambos' | 'nao_aplicavel' | null
+          unit?: string
+          stock_current?: number
+          stock_minimum?: number
+          stock_maximum?: number | null
+          location?: string | null
+          lot?: string | null
+          entry_date?: string | null
+          cost_price?: number
+          sale_price?: number
+          profit_margin?: number | null
+          promotional_price?: number | null
+          active?: boolean
+          status?: 'ativo' | 'inativo' | 'em_falta' | 'descontinuado'
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          code?: string
+          barcode?: string | null
+          sku?: string | null
+          name?: string
+          description?: string | null
+          classification?: string | null
+          category?: string | null
+          subcategory?: string | null
+          brand?: string | null
+          supplier?: string | null
+          part_type?: 'original' | 'paralela' | 'usada' | 'remanufaturada' | 'outro' | null
+          moto_brand?: string | null
+          moto_model?: string | null
+          moto_year?: string | null
+          moto_displacement?: string | null
+          moto_version?: string | null
+          compatibility?: string | null
+          manufacturer_part_number?: string | null
+          dimensions?: string | null
+          color?: string | null
+          material?: string | null
+          side?: 'direito' | 'esquerdo' | 'dianteiro' | 'traseiro' | 'ambos' | 'nao_aplicavel' | null
+          unit?: string
+          stock_current?: number
+          stock_minimum?: number
+          stock_maximum?: number | null
+          location?: string | null
+          lot?: string | null
+          entry_date?: string | null
+          cost_price?: number
+          sale_price?: number
+          profit_margin?: number | null
+          promotional_price?: number | null
+          active?: boolean
+          status?: 'ativo' | 'inativo' | 'em_falta' | 'descontinuado'
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      },
+      inventory_movements: {
+        Row: {
+          id: string
+          product_id: string
+          type: 'entrada_manual' | 'saida_os' | 'saida_venda' | 'ajuste' | 'devolucao'
+          quantity: number
+          unit_cost: number | null
+          unit_price: number | null
+          order_id: string | null
+          material_id: string | null
+          notes: string | null
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          product_id: string
+          type: 'entrada_manual' | 'saida_os' | 'saida_venda' | 'ajuste' | 'devolucao'
+          quantity: number
+          unit_cost?: number | null
+          unit_price?: number | null
+          order_id?: string | null
+          material_id?: string | null
+          notes?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          product_id?: string
+          type?: 'entrada_manual' | 'saida_os' | 'saida_venda' | 'ajuste' | 'devolucao'
+          quantity?: number
+          unit_cost?: number | null
+          unit_price?: number | null
+          order_id?: string | null
+          material_id?: string | null
+          notes?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_movements_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      },
       checklist_items: {
         Row: {
           completed: boolean
