@@ -58,6 +58,7 @@ Regras:
 - NÃO invente preços
 - unit deve ser "par" para pastilhas/lonas de freio, "un" para a maioria das peças
 - side deve ser inferido quando a descrição mencionar dianteiro/traseiro/direito/esquerdo/frente/trás
+- Para part_type: marcas como NGK, Denso, Bosch, Brembo, EBC, Mahle, Mann, Fram, Motul, Castrol, Shell, Champion, Iridium são fornecedores OEM — classifique como "original". Se a descrição mencionar "paralela", "genérica", "universal" classifique como "paralela". Se mencionar "usada" classifique como "usada". Se não tiver informação suficiente, use null.
 - Retorne SOMENTE o JSON, nada mais`
 
   try {
