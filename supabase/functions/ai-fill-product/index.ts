@@ -25,40 +25,42 @@ Deno.serve(async (req) => {
     return json({ error: 'JSON inválido' }, 400)
   }
 
-  const prompt = `Você é um assistente especializado em peças de moto. Com base na descrição abaixo, preencha os campos do produto em JSON.
+  const prompt = `Você é um assistente especializado em peças de moto para oficinas brasileiras. Com base na descrição abaixo, preencha os campos do produto em JSON.
 
 Descrição: "${description}"
 
 Retorne APENAS um JSON válido (sem markdown, sem explicação) com os campos que conseguir inferir:
 {
-  "name": "nome completo da peça",
-  "category": "categoria (ex: freio, motor, suspensão, elétrica, transmissão, carroceria, lubrificação, filtro, outro)",
-  "subcategory": "subcategoria específica",
-  "classification": "classificação geral",
+  "name": "nome padronizado e completo da peça (ex: 'Pastilha de Freio Dianteira - Honda CG 160')",
+  "category": "categoria principal: freio | motor | suspensão | elétrica | transmissão | carroceria | lubrificação | filtro | arrefecimento | escapamento | outro",
+  "subcategory": "subcategoria específica (ex: pastilha, disco, vela, filtro de ar, corrente, relé, etc)",
+  "classification": "classificação geral (ex: peça de desgaste, peça estrutural, fluido, etc)",
   "brand": "marca da peça/fabricante se mencionado",
-  "supplier": null,
-  "part_type": "original | paralela | usada | remanufaturada | outro | null (se não souber)",
-  "moto_brand": "marca da moto (Honda, Yamaha, Suzuki, Kawasaki, etc)",
-  "moto_model": "modelo da moto",
-  "moto_year": "ano ou faixa de anos (ex: 2018-2024)",
-  "moto_displacement": "cilindrada (ex: 160cc)",
-  "moto_version": "versão se houver",
-  "compatibility": "outras motos compatíveis se souber",
-  "side": "direito | esquerdo | dianteiro | traseiro | ambos | nao_aplicavel | null",
-  "unit": "un | par | jogo | kit | m | l",
-  "dimensions": null,
+  "supplier": "fornecedor/distribuidor (ex: NGK do Brasil, Bosch Brasil, Brembo — se marca OEM conhecida, senão null)",
+  "part_type": "original | paralela | usada | remanufaturada | outro | null",
+  "moto_brand": "marca da moto (Honda, Yamaha, Suzuki, Kawasaki, Dafra, Shineray, etc)",
+  "moto_model": "modelo da moto (ex: CG 160, Factor 150, Fazer 250, Titan 150, Bros 160)",
+  "moto_year": "ano ou faixa de anos (ex: 2016-2024)",
+  "moto_displacement": "cilindrada em cc (ex: 160cc) — infira pelo modelo se souber",
+  "moto_version": "versão se houver (ex: ESDI, Start, Fan, Sport)",
+  "compatibility": "outras motos compativeis que você conhece (ex: compativel com CG 125, CG 150 e CG 160 de 2009 em diante)",
+  "dimensions": "dimensões se souber para o modelo informado (ex: pastilha dianteira CG = 34x43mm)",
   "color": "cor se mencionada",
-  "material": "material se souber (aço, borracha, alumínio, etc)",
-  "notes": "observação útil sobre a peça se houver"
+  "material": "material técnico: pastilha = cerâmico ou semi-metálico; vela padrão = níquel; vela iridium = iridium; filtro = papel filtrante; corrente = aço; cabo = aço revestido; pneu = borracha; etc",
+  "side": "direito | esquerdo | dianteiro | traseiro | ambos | nao_aplicavel | null",
+  "unit": "un | par | jogo | kit | m | l — par para pastilhas e lonas; l para óleos e fluidos; m para cabos por metro; jogo/kit para conjuntos",
+  "notes": "observação técnica útil: intervalo de troca recomendado, cuidados de instalação, compatibilidade especial"
 }
 
 Regras:
-- Use null para campos que não conseguir inferir com segurança
-- NÃO invente part_number ou manufacturer_part_number
-- NÃO invente preços
-- unit deve ser "par" para pastilhas/lonas de freio, "un" para a maioria das peças
-- side deve ser inferido quando a descrição mencionar dianteiro/traseiro/direito/esquerdo/frente/trás
-- Para part_type: marcas como NGK, Denso, Bosch, Brembo, EBC, Mahle, Mann, Fram, Motul, Castrol, Shell, Champion, Iridium são fornecedores OEM — classifique como "original". Se a descrição mencionar "paralela", "genérica", "universal" classifique como "paralela". Se mencionar "usada" classifique como "usada". Se não tiver informação suficiente, use null.
+- Use null apenas para campos que realmente não conseguir inferir — tente preencher o máximo possível
+- NÃO invente manufacturer_part_number nem preços
+- name: gere sempre um nome limpo e padronizado mesmo que a descrição seja informal
+- part_type: marcas NGK, Denso, Bosch, Brembo, EBC, Mahle, Mann, Fram, Motul, Castrol, Shell, Champion, Iridium, Valeo, SKF, FAG, Yamaha, Honda, Suzuki, Kawasaki (peças genuínas) são OEM → "original". Palavras "paralela", "genérica", "universal", "similar", "compatível" → "paralela". "Usada", "seminova" → "usada". Sem informação → null
+- supplier: se a marca é OEM conhecida, preencha com o nome do distribuidor oficial no Brasil
+- moto_displacement: CG 125 = 125cc, CG 150/Titan 150/Factor 150 = 150cc, CG 160/Titan 160/Bros 160 = 162cc, Fazer 250/Hornet 250 = 249cc, CB 300 = 300cc, XRE 300 = 300cc, Lander 250 = 249cc
+- compatibility: use seu conhecimento técnico de intercambialidade de peças entre modelos
+- material: use terminologia técnica do setor automotivo
 - Retorne SOMENTE o JSON, nada mais`
 
   try {
@@ -85,10 +87,8 @@ Regras:
     const result = await response.json()
     const text = result.content?.[0]?.text ?? ''
 
-    // Parse JSON da resposta
     let fields: Record<string, unknown>
     try {
-      // Remove possível markdown ```json ... ```
       const clean = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
       fields = JSON.parse(clean)
     } catch {
