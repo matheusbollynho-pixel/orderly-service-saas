@@ -18,6 +18,7 @@ import { ExpressCadastroPage } from './ExpressCadastroPage';
 import { supabase } from '@/integrations/supabase/client';
 import SatisfactionDashboardPage from './SatisfactionDashboardPage';
 import InventoryPage from './InventoryPage';
+import VendaBalcaoPage from './VendaBalcaoPage';
 import { useInventory } from '@/hooks/useInventory';
 import { BottomNav } from '@/components/BottomNav';
 import { EmptyState } from '@/components/EmptyState';
@@ -27,7 +28,7 @@ import { Wrench, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { getMaintenanceKeywords, findKeywordInText, createMaintenanceReminder, rescheduleMaintenanceReminder } from '@/services/maintenanceReminderService';
 
-type View = 'dashboard' | 'new' | 'express' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa' | 'satisfacao' | 'estoque';
+type View = 'dashboard' | 'new' | 'express' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa' | 'satisfacao' | 'estoque' | 'balcao';
 
 export default function Index() {
   const { isAdmin, canAccessCashFlow, canAccessReports } = useAuth();
@@ -626,6 +627,10 @@ Retirada: ${retiradaInfo}`;
 
         {currentView === 'satisfacao' && (
           <SatisfactionDashboardPage />
+        )}
+
+        {currentView === 'balcao' && (
+          <VendaBalcaoPage />
         )}
 
         {currentView === 'estoque' && (
