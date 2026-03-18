@@ -687,18 +687,16 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
                   <FileText className="h-4 w-4" />
                   Baixar PDF
                 </Button>
-                {(editClientPhone || order.client_phone) && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleOrcamentoWhatsApp}
-                    disabled={isSendingOrc}
-                    className="flex-1 h-9 gap-1.5 text-sm text-green-600 border-green-300 hover:bg-green-50 dark:text-green-400 dark:border-green-700 dark:hover:bg-green-950/30"
-                  >
-                    <Send className="h-4 w-4" />
-                    {isSendingOrc ? 'Enviando...' : 'WhatsApp'}
-                  </Button>
-                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleOrcamentoWhatsApp}
+                  disabled={isSendingOrc}
+                  className="flex-1 h-9 gap-1.5 text-sm text-green-600 border-green-300 hover:bg-green-50 dark:text-green-400 dark:border-green-700 dark:hover:bg-green-950/30"
+                >
+                  <Send className="h-4 w-4" />
+                  {isSendingOrc ? 'Enviando...' : 'WhatsApp'}
+                </Button>
               </div>
             </div>
           )}
