@@ -3,7 +3,11 @@
 -- 1. Tabela de notas
 CREATE TABLE IF NOT EXISTS balcao_orders (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  numero          SERIAL,
   client_name     TEXT,
+  client_cpf      TEXT,
+  client_phone    TEXT,
+  client_address  TEXT,
   status          TEXT NOT NULL DEFAULT 'aberta'
                     CHECK (status IN ('aberta', 'finalizada', 'cancelada')),
   payment_method  TEXT DEFAULT 'dinheiro',
@@ -16,6 +20,12 @@ CREATE TABLE IF NOT EXISTS balcao_orders (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Colunas extras (para bancos onde a tabela já existe sem elas)
+ALTER TABLE balcao_orders ADD COLUMN IF NOT EXISTS numero         SERIAL;
+ALTER TABLE balcao_orders ADD COLUMN IF NOT EXISTS client_cpf     TEXT;
+ALTER TABLE balcao_orders ADD COLUMN IF NOT EXISTS client_phone   TEXT;
+ALTER TABLE balcao_orders ADD COLUMN IF NOT EXISTS client_address TEXT;
 
 -- 2. Itens da nota
 CREATE TABLE IF NOT EXISTS balcao_items (
@@ -38,10 +48,12 @@ ALTER TABLE cash_flow
 ALTER TABLE balcao_orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE balcao_items  ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Auth users can manage balcao_orders" ON balcao_orders;
 CREATE POLICY "Auth users can manage balcao_orders"
   ON balcao_orders FOR ALL TO authenticated
   USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Auth users can manage balcao_items" ON balcao_items;
 CREATE POLICY "Auth users can manage balcao_items"
   ON balcao_items FOR ALL TO authenticated
   USING (true) WITH CHECK (true);
