@@ -676,7 +676,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
           {/* ── Orçamento ── */}
           {items.length > 0 && order.status !== 'cancelada' && (
             <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Orçamento</p>
+              <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Orçamento</p>
               <div className="flex gap-2">
                 <Button
                   type="button"
