@@ -242,8 +242,8 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   };
 
   // ── HTML base para PDF ────────────────────────────────────────
-  const buildPdfHtml = (titulo: string, extra: string = '') => {
-    const logoUrl = LOGO_BASE64;
+  const buildPdfHtml = (titulo: string, extra: string = '', logoSrc?: string) => {
+    const logoUrl = logoSrc ?? LOGO_BASE64;
     const numeroNota = String(order.numero ?? '').padStart(4, '0');
     const nomeCliente = editClientName || order.client_name || '';
     const dataHoje = new Date().toLocaleDateString('pt-BR');
@@ -349,6 +349,23 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     </div></body></html>`;
   };
 
+  // ── Busca logo do tenant em base64 ───────────────────────────
+  const fetchLogoBase64 = async (): Promise<string> => {
+    const path = import.meta.env.VITE_LOGO_PATH || '/bandara-logo.png';
+    try {
+      const res = await fetch(`${window.location.origin}${path}`);
+      const blob = await res.blob();
+      return await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      return LOGO_BASE64; // fallback Bandara
+    }
+  };
+
   // ── Helper: imprime via iframe com srcdoc (com CSS preservado) ─
   const printViaIframe = (html: string) => {
     const iframe = document.createElement('iframe');
@@ -363,12 +380,13 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   };
 
   // ── Imprimir (Nota de Venda) ───────────────────────────────────
-  const handlePrint = () => {
+  const handlePrint = async () => {
+    const logo = await fetchLogoBase64();
     const pagamento = PAYMENT_LABELS[order.payment_method ?? 'dinheiro'] ?? order.payment_method;
     const extra = `<div style="margin-top:16px;font-size:12px;color:#555;padding:10px 14px;border:1px solid #ddd;border-radius:4px">
       <strong>Forma de Pagamento:</strong> ${pagamento}
     </div>`;
-    printViaIframe(buildPdfHtml('NOTA DE VENDA', extra));
+    printViaIframe(buildPdfHtml('NOTA DE VENDA', extra, logo));
   };
 
   // ── Helper: gera PDF base64 a partir do HTML ─────────────────
@@ -410,11 +428,12 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     try {
       setIsSendingWpp(true);
       toast.info('Gerando PDF...');
+      const logo = await fetchLogoBase64();
       const pagamento = PAYMENT_LABELS[order.payment_method ?? 'dinheiro'] ?? order.payment_method;
       const extra = `<div style="margin-top:16px;font-size:12px;color:#555;padding:10px 14px;border:1px solid #ddd;border-radius:4px">
         <strong>Forma de Pagamento:</strong> ${pagamento}
       </div>`;
-      const base64 = await generatePdfBase64(buildPdfHtml('NOTA DE VENDA', extra));
+      const base64 = await generatePdfBase64(buildPdfHtml('NOTA DE VENDA', extra, logo));
       const numeroNota = String(order.numero ?? '').padStart(4, '0');
       const nomeCliente = editClientName || order.client_name;
       const caption = nomeCliente
@@ -430,11 +449,12 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   };
 
   // ── Orçamento PDF ─────────────────────────────────────────────
-  const handleOrcamentoPdf = () => {
+  const handleOrcamentoPdf = async () => {
+    const logo = await fetchLogoBase64();
     const extra = `<div style="margin-top:16px;padding:10px 14px;border:1px solid #ddd;border-radius:4px;font-size:11px;color:#888">
       ⏳ Este orçamento tem validade de <strong>7 dias</strong> a partir da data de emissão.
     </div>`;
-    printViaIframe(buildPdfHtml('ORÇAMENTO', extra));
+    printViaIframe(buildPdfHtml('ORÇAMENTO', extra, logo));
   };
 
   // ── Orçamento WhatsApp (PDF) ──────────────────────────────────
@@ -445,10 +465,11 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     try {
       setIsSendingOrc(true);
       toast.info('Gerando PDF do orçamento...');
+      const logo = await fetchLogoBase64();
       const extra = `<div style="margin-top:16px;padding:10px 14px;border:1px solid #ddd;border-radius:4px;font-size:11px;color:#888">
         ⏳ Este orçamento tem validade de <strong>7 dias</strong> a partir da data de emissão.
       </div>`;
-      const base64 = await generatePdfBase64(buildPdfHtml('ORÇAMENTO', extra));
+      const base64 = await generatePdfBase64(buildPdfHtml('ORÇAMENTO', extra, logo));
       const numeroNota = String(order.numero ?? '').padStart(4, '0');
       const nomeCliente = editClientName || order.client_name;
       const caption = nomeCliente

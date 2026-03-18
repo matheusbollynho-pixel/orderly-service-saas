@@ -1,6 +1,13 @@
 ﻿import "./polyfills";
 import "./index.css";
 
+// Favicon dinâmico por tenant
+const logoPath = import.meta.env.VITE_LOGO_PATH || '/bandara-logo.png';
+const faviconLink = document.querySelector("link[rel*='icon']") as HTMLLinkElement || document.createElement('link');
+faviconLink.rel = 'icon';
+faviconLink.href = logoPath;
+document.head.appendChild(faviconLink);
+
 setTimeout(async () => {
   try {
     const React = await import('react');
