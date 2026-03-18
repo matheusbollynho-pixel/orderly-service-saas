@@ -238,34 +238,118 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     onBack();
   };
 
-  // ── Imprimir ──────────────────────────────────────────────────
-  const handlePrint = () => {
-    const win = window.open('', '_blank', 'width=400,height=600');
-    if (!win) return;
-    const itemsHtml = items.map(i => `
-      <tr>
-        <td style="padding:4px 8px;border-bottom:1px solid #eee;">${i.description}${i.type === 'estoque' ? ' <small style="color:#666">(est.)</small>' : ''}</td>
-        <td style="padding:4px 8px;text-align:center;border-bottom:1px solid #eee;">${i.quantity}</td>
-        <td style="padding:4px 8px;text-align:right;border-bottom:1px solid #eee;">R$ ${i.unit_price.toFixed(2)}</td>
-        <td style="padding:4px 8px;text-align:right;border-bottom:1px solid #eee;">R$ ${(i.unit_price * i.quantity).toFixed(2)}</td>
+  // ── HTML base para PDF ────────────────────────────────────────
+  const buildPdfHtml = (titulo: string, extra: string = '') => {
+    const logoUrl = `${window.location.origin}${import.meta.env.VITE_LOGO_PATH || '/client-logo.png'}`;
+    const numeroNota = String(order.numero ?? '').padStart(4, '0');
+    const nomeCliente = editClientName || order.client_name || '';
+    const dataHoje = new Date().toLocaleDateString('pt-BR');
+
+    const itemsHtml = items.map((i, idx) => `
+      <tr style="background:${idx % 2 === 0 ? '#fff' : '#f9f9f9'}">
+        <td style="padding:7px 10px;border-bottom:1px solid #e5e5e5;">${i.description}</td>
+        <td style="padding:7px 10px;text-align:center;border-bottom:1px solid #e5e5e5;">${i.quantity}</td>
+        <td style="padding:7px 10px;text-align:right;border-bottom:1px solid #e5e5e5;">R$ ${i.unit_price.toFixed(2)}</td>
+        <td style="padding:7px 10px;text-align:right;border-bottom:1px solid #e5e5e5;font-weight:600;">R$ ${(i.unit_price * i.quantity).toFixed(2)}</td>
       </tr>`).join('');
-    win.document.write(`<!DOCTYPE html><html><head><title>Nota de Balcão</title>
-      <style>body{font-family:monospace;font-size:13px;margin:20px}h2{margin:0;font-size:16px}table{width:100%;border-collapse:collapse}th{text-align:left;padding:4px 8px;border-bottom:2px solid #000}td{vertical-align:top}.total{font-size:16px;font-weight:bold}</style>
-      </head><body>
-      <h2>NOTA DE BALCÃO #${String(order.numero ?? '').padStart(4, '0')}</h2>
-      <p style="margin:4px 0">Data: ${new Date().toLocaleDateString('pt-BR')}</p>
-      ${order.client_name ? `<p style="margin:4px 0">Cliente: ${order.client_name}</p>` : ''}
-      ${editClientCpf ? `<p style="margin:4px 0">CPF: ${editClientCpf}</p>` : ''}
-      ${editClientPhone ? `<p style="margin:4px 0">Telefone: ${editClientPhone}</p>` : ''}
-      ${editClientAddress ? `<p style="margin:4px 0">Endereço: ${editClientAddress}</p>` : ''}
-      <hr/>
-      <table><thead><tr><th>Produto</th><th>Qtd</th><th>Unit.</th><th>Total</th></tr></thead>
-      <tbody>${itemsHtml}</tbody></table>
-      <hr/>
-      ${discPct > 0 ? `<p>Subtotal: R$ ${subtotal.toFixed(2)}</p><p>Desconto (${discPct}%): - R$ ${discountAmount.toFixed(2)}</p>` : ''}
-      <p class="total">TOTAL: R$ ${total.toFixed(2)}</p>
-      <p>Pagamento: ${PAYMENT_LABELS[order.payment_method ?? 'dinheiro'] ?? order.payment_method}</p>
-      </body></html>`);
+
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${titulo} #${numeroNota}</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{font-family:Arial,sans-serif;font-size:13px;color:#222;background:#fff}
+      .page{max-width:780px;margin:0 auto;padding:32px}
+      /* Cabeçalho */
+      .header{display:flex;align-items:center;justify-content:space-between;background:#1a1a1a;color:#fff;padding:20px 24px;border-radius:4px 4px 0 0}
+      .header img{height:60px;object-fit:contain}
+      .header-title{text-align:center;flex:1}
+      .header-title h1{font-size:22px;font-weight:800;letter-spacing:2px;color:#fff}
+      .header-title p{font-size:11px;color:#aaa;margin-top:2px}
+      .header-box{text-align:right;min-width:140px}
+      .header-box .num{font-size:24px;font-weight:800;color:#C1272D}
+      .header-box .lbl{font-size:10px;color:#aaa;text-transform:uppercase}
+      .header-box .date{font-size:11px;color:#ccc;margin-top:4px}
+      /* Linha vermelha */
+      .redline{height:4px;background:#C1272D;margin-bottom:16px}
+      /* Seção */
+      .section-title{background:#1a1a1a;color:#fff;padding:6px 12px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:0}
+      .section-body{border:1px solid #ddd;border-top:none;padding:12px;margin-bottom:14px}
+      .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px}
+      .info-row{font-size:12px;padding:3px 0;border-bottom:1px solid #f0f0f0}
+      .info-row span{color:#888;margin-right:6px}
+      /* Tabela */
+      table{width:100%;border-collapse:collapse;font-size:12px}
+      thead tr{background:#1a1a1a;color:#fff}
+      thead th{padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.5px}
+      thead th:nth-child(2){text-align:center}
+      thead th:nth-child(3),thead th:nth-child(4){text-align:right}
+      /* Totais */
+      .totais{display:flex;justify-content:flex-end;margin-top:4px}
+      .totais-box{width:280px;border:1px solid #ddd;border-radius:4px;overflow:hidden}
+      .totais-row{display:flex;justify-content:space-between;padding:7px 14px;font-size:13px;border-bottom:1px solid #eee}
+      .totais-row.total{background:#C1272D;color:#fff;font-size:16px;font-weight:800;border:none}
+      .totais-row.desconto span:last-child{color:#2a9d2a;font-weight:600}
+      /* Footer */
+      .footer{margin-top:24px;border-top:2px solid #C1272D;padding-top:10px;text-align:center;font-size:11px;color:#888}
+      @media print{.page{padding:16px}}
+    </style></head><body><div class="page">
+      <div class="header">
+        <img src="${logoUrl}" alt="Logo" onerror="this.style.display='none'">
+        <div class="header-title">
+          <h1>${titulo}</h1>
+          <p>${dataHoje}</p>
+        </div>
+        <div class="header-box">
+          <div class="lbl">Nº</div>
+          <div class="num">#${numeroNota}</div>
+          <div class="date">${dataHoje}</div>
+        </div>
+      </div>
+      <div class="redline"></div>
+
+      ${nomeCliente || editClientCpf || editClientPhone || editClientAddress ? `
+      <div class="section-title">Dados do Cliente</div>
+      <div class="section-body">
+        <div class="info-grid">
+          ${nomeCliente ? `<div class="info-row"><span>Nome:</span><strong>${nomeCliente}</strong></div>` : ''}
+          ${editClientCpf ? `<div class="info-row"><span>CPF:</span>${editClientCpf}</div>` : ''}
+          ${editClientPhone ? `<div class="info-row"><span>Telefone:</span>${editClientPhone}</div>` : ''}
+          ${editClientAddress ? `<div class="info-row"><span>Endereço:</span>${editClientAddress}</div>` : ''}
+        </div>
+      </div>` : ''}
+
+      <div class="section-title">Produtos / Serviços</div>
+      <div style="border:1px solid #ddd;border-top:none;margin-bottom:14px">
+        <table>
+          <thead><tr><th>Descrição</th><th style="text-align:center">Qtd</th><th style="text-align:right">Valor Unit.</th><th style="text-align:right">Total</th></tr></thead>
+          <tbody>${itemsHtml}</tbody>
+        </table>
+      </div>
+
+      <div class="totais">
+        <div class="totais-box">
+          ${discPct > 0 ? `
+          <div class="totais-row"><span>Subtotal:</span><span>R$ ${subtotal.toFixed(2)}</span></div>
+          <div class="totais-row desconto"><span>Desconto (${discPct}%):</span><span>- R$ ${discountAmount.toFixed(2)}</span></div>
+          ` : ''}
+          <div class="totais-row total"><span>TOTAL:</span><span>R$ ${total.toFixed(2)}</span></div>
+        </div>
+      </div>
+
+      ${extra}
+
+      <div class="footer">Bandara Motos · (75) 98804-6356 · @BandaraMotos</div>
+    </div></body></html>`;
+  };
+
+  // ── Imprimir (Nota de Venda) ───────────────────────────────────
+  const handlePrint = () => {
+    const win = window.open('', '_blank', 'width=860,height=900');
+    if (!win) return;
+    const pagamento = PAYMENT_LABELS[order.payment_method ?? 'dinheiro'] ?? order.payment_method;
+    const extra = `<div style="margin-top:16px;font-size:12px;color:#555;padding:10px 14px;border:1px solid #ddd;border-radius:4px">
+      <strong>Forma de Pagamento:</strong> ${pagamento}
+    </div>`;
+    win.document.write(buildPdfHtml('NOTA DE VENDA', extra));
     win.document.close();
     win.focus();
     win.print();
@@ -309,49 +393,12 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
 
   // ── Orçamento PDF ─────────────────────────────────────────────
   const handleOrcamentoPdf = () => {
-    const win = window.open('', '_blank', 'width=500,height=700');
+    const win = window.open('', '_blank', 'width=860,height=900');
     if (!win) return;
-    const numeroNota = String(order.numero ?? '').padStart(4, '0');
-    const nomeCliente = editClientName || order.client_name;
-    const itemsHtml = items.map(i => `
-      <tr>
-        <td style="padding:5px 8px;border-bottom:1px solid #eee;">${i.description}</td>
-        <td style="padding:5px 8px;text-align:center;border-bottom:1px solid #eee;">${i.quantity}</td>
-        <td style="padding:5px 8px;text-align:right;border-bottom:1px solid #eee;">R$ ${i.unit_price.toFixed(2)}</td>
-        <td style="padding:5px 8px;text-align:right;border-bottom:1px solid #eee;">R$ ${(i.unit_price * i.quantity).toFixed(2)}</td>
-      </tr>`).join('');
-    win.document.write(`<!DOCTYPE html><html><head><title>Orçamento #${numeroNota}</title>
-      <style>
-        body{font-family:Arial,sans-serif;font-size:13px;margin:30px;color:#222}
-        h1{margin:0 0 4px;font-size:22px;letter-spacing:1px;color:#1a1a1a}
-        .sub{color:#666;font-size:12px;margin:2px 0}
-        table{width:100%;border-collapse:collapse;margin-top:12px}
-        th{text-align:left;padding:6px 8px;border-bottom:2px solid #333;font-size:11px;text-transform:uppercase}
-        td{vertical-align:top}
-        .totais{margin-top:12px;text-align:right}
-        .totais p{margin:4px 0;font-size:13px}
-        .total-final{font-size:17px;font-weight:bold;margin-top:8px}
-        .validity{margin-top:20px;font-size:11px;color:#888;border-top:1px solid #ddd;padding-top:8px}
-      </style>
-      </head><body>
-      <h1>ORÇAMENTO</h1>
-      <p class="sub">#${numeroNota} · ${new Date().toLocaleDateString('pt-BR')}</p>
-      ${nomeCliente ? `<p class="sub">Cliente: <strong>${nomeCliente}</strong></p>` : ''}
-      ${editClientCpf ? `<p class="sub">CPF: ${editClientCpf}</p>` : ''}
-      ${editClientPhone ? `<p class="sub">Telefone: ${editClientPhone}</p>` : ''}
-      ${editClientAddress ? `<p class="sub">Endereço: ${editClientAddress}</p>` : ''}
-      <table>
-        <thead><tr><th>Produto / Serviço</th><th>Qtd</th><th>Unit.</th><th>Total</th></tr></thead>
-        <tbody>${itemsHtml}</tbody>
-      </table>
-      <div class="totais">
-        ${discPct > 0
-          ? `<p>Subtotal: R$ ${subtotal.toFixed(2)}</p><p>Desconto (${discPct}%): <span style="color:green">- R$ ${discountAmount.toFixed(2)}</span></p>`
-          : ''}
-        <p class="total-final">TOTAL: R$ ${total.toFixed(2)}</p>
-      </div>
-      <p class="validity">Este orçamento tem validade de 7 dias a partir da data de emissão.</p>
-      </body></html>`);
+    const extra = `<div style="margin-top:16px;padding:10px 14px;border:1px solid #ddd;border-radius:4px;font-size:11px;color:#888">
+      ⏳ Este orçamento tem validade de <strong>7 dias</strong> a partir da data de emissão.
+    </div>`;
+    win.document.write(buildPdfHtml('ORÇAMENTO', extra));
     win.document.close();
     win.focus();
     win.print();
