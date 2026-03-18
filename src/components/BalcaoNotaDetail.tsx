@@ -263,7 +263,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
       .page{max-width:780px;margin:0 auto;padding:32px}
       /* Cabeçalho */
       .header{display:flex;align-items:center;justify-content:space-between;background:#1a1a1a;color:#fff;padding:20px 24px;border-radius:4px 4px 0 0}
-      .header img{height:60px;object-fit:contain}
+      .header img{height:90px;object-fit:contain}
       .header-title{text-align:center;flex:1}
       .header-title h1{font-size:22px;font-weight:800;letter-spacing:2px;color:#fff}
       .header-title p{font-size:11px;color:#aaa;margin-top:2px}
