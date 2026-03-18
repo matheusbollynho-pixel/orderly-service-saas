@@ -631,7 +631,7 @@ export function CashFlowPage() {
                         placeholder="1"
                         value={formData.quantity}
                         onChange={(e) => {
-                          const value = e.target.value;
+                          const value = e.target.value.replace(',', '.');
                           if (value === '' || /^\d*\.?\d*$/.test(value)) {
                             setFormData({ ...formData, quantity: value });
                           }
@@ -769,7 +769,7 @@ export function CashFlowPage() {
                         placeholder="0.00"
                         value={formData.amount}
                         onChange={(e) => {
-                          const value = e.target.value;
+                          const value = e.target.value.replace(',', '.');
                           if (value === '' || /^\d*\.?\d*$/.test(value)) {
                             setFormData({ ...formData, amount: value });
                           }
