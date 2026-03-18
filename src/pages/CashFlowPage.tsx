@@ -145,19 +145,28 @@ export function CashFlowPage() {
 
     const todayDate = getLocalDate();
 
-    // Se é venda de produto do estoque: cria movimentação → trigger auto-cria o cash_flow
     if (selectedProductId && formData.type === 'entrada') {
       const qty = parseFloat(formData.quantity) || 1;
       const unitPrice = parseFloat(formData.amount) || 0;
+      // Dá baixa no estoque
       createMovement({
         product_id: selectedProductId,
         type: 'saida_venda',
         quantity: qty,
-        unit_price: unitPrice, // amount é o preço unitário
+        unit_price: unitPrice,
         notes: formData.notes || undefined,
       });
+      // Registra no caixa com valor total
+      createEntry({
+        type: 'entrada',
+        amount: qty * unitPrice,
+        description: formData.description,
+        category: formData.category,
+        payment_method: formData.payment_method,
+        date: todayDate,
+        notes: formData.notes,
+      });
     } else {
-      // Venda avulsa sem produto do estoque
       createEntry({
         type: formData.type,
         amount: parseFloat(formData.amount),
