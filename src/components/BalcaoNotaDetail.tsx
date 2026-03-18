@@ -39,6 +39,10 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   const items: BalcaoItem[] = order.balcao_items ?? [];
   const isEditable = order.status === 'aberta';
 
+  // Remove acentos de vogais mas mantém ç
+  const stripAccents = (text: string) =>
+    text.normalize('NFD').replace(/[\u0300-\u036f]/g, c => c === '\u0327' ? c : '').normalize('NFC');
+
   // ── campos do novo item ──────────────────────────────────────
   const [newDesc, setNewDesc] = useState('');
   const [newQty, setNewQty] = useState('1');
@@ -153,7 +157,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
 
   const handleSelectProduct = (p: InventoryProduct) => {
     setSelectedProduct(p);
-    setNewDesc(p.name);
+    setNewDesc(stripAccents(p.name));
     if (p.sale_price > 0) setNewPrice(String(p.sale_price));
     setShowSuggestions(false);
   };
@@ -175,7 +179,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
         order_id: order.id,
         type: 'estoque',
         product_id: selectedProduct.id,
-        description: selectedProduct.name,
+        description: stripAccents(selectedProduct.name),
         quantity: qty,
         unit_price: price || (selectedProduct.sale_price ?? selectedProduct.cost_price ?? 0),
         total_price: (price || (selectedProduct.sale_price ?? 0)) * qty,
