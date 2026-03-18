@@ -5,8 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Plus, Trash2, CheckCircle, XCircle, Package, Printer } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, CheckCircle, XCircle, Package, Printer, Send } from 'lucide-react';
 import { toast } from 'sonner';
+import { sendWhatsAppText } from '@/lib/whatsappService';
 
 interface Props {
   order: BalcaoOrder;
@@ -50,6 +51,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   const [editClientAddress, setEditClientAddress] = useState(order.client_address ?? '');
   const [discountPct, setDiscountPct] = useState(String(order.discount_pct || ''));
   const [paymentMethod, setPaymentMethod] = useState(order.payment_method ?? 'dinheiro');
+  const [isSendingWpp, setIsSendingWpp] = useState(false);
 
   const activeProducts = products.filter(p => p.active !== false);
 
@@ -248,6 +250,42 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     win.print();
   };
 
+  // ── Enviar WhatsApp ───────────────────────────────────────────
+  const handleSendWhatsApp = async () => {
+    const phone = editClientPhone || order.client_phone;
+    if (!phone) { toast.error('Informe o telefone do cliente para enviar'); return; }
+
+    const numeroNota = String(order.numero ?? '').padStart(4, '0');
+    const linhasItens = items
+      .map(i => `  • ${i.description}: ${i.quantity} x R$ ${i.unit_price.toFixed(2)} = R$ ${(i.unit_price * i.quantity).toFixed(2)}`)
+      .join('\n');
+
+    const nomeCliente = editClientName || order.client_name;
+    const saudacao = nomeCliente ? `Olá, *${nomeCliente}*! 👋\n\n` : '';
+
+    const descontoLinha = discPct > 0
+      ? `\n💸 Desconto (${discPct}%): -R$ ${discountAmount.toFixed(2)}`
+      : '';
+
+    const text =
+      `${saudacao}Segue o resumo da sua *Nota de Balcão #${numeroNota}*:\n\n` +
+      `📋 *Itens:*\n${linhasItens}\n` +
+      `\n🧾 Subtotal: R$ ${subtotal.toFixed(2)}${descontoLinha}` +
+      `\n✅ *TOTAL: R$ ${total.toFixed(2)}*` +
+      `\n💳 Pagamento: ${PAYMENT_LABELS[paymentMethod] ?? paymentMethod}` +
+      `\n\nObrigado pela preferência! 🏍️`;
+
+    try {
+      setIsSendingWpp(true);
+      await sendWhatsAppText({ phone, text });
+      toast.success('Nota enviada no WhatsApp!');
+    } catch (e: unknown) {
+      toast.error(`Erro ao enviar: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setIsSendingWpp(false);
+    }
+  };
+
   return (
     <div className="animate-fade-in max-w-2xl mx-auto">
       {/* ── Header ── */}
@@ -266,10 +304,23 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
             {new Date(order.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
           </p>
         </div>
-        <button type="button" onClick={handlePrint} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded border">
-          <Printer className="h-4 w-4" />
-          Imprimir
-        </button>
+        <div className="flex items-center gap-2">
+          {(editClientPhone || order.client_phone) && (
+            <button
+              type="button"
+              onClick={handleSendWhatsApp}
+              disabled={isSendingWpp}
+              className="flex items-center gap-1.5 text-sm text-green-600 hover:text-green-700 dark:text-green-500 dark:hover:text-green-400 transition-colors px-2 py-1 rounded border border-green-300 dark:border-green-700 disabled:opacity-50"
+            >
+              <Send className="h-4 w-4" />
+              {isSendingWpp ? 'Enviando...' : 'WhatsApp'}
+            </button>
+          )}
+          <button type="button" onClick={handlePrint} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded border">
+            <Printer className="h-4 w-4" />
+            Imprimir
+          </button>
+        </div>
       </div>
 
       <div className="border-2 border-border rounded-xl overflow-hidden shadow-sm bg-card">
