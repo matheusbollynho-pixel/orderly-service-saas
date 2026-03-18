@@ -133,6 +133,7 @@ export function useInventory() {
     movements: movementsQuery.data ?? [],
     isLoadingMovements: movementsQuery.isLoading,
     createMovement: createMovementMutation.mutate,
+    createMovementAsync: createMovementMutation.mutateAsync,
     isCreatingMovement: createMovementMutation.isPending,
   };
 }

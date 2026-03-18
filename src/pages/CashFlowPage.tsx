@@ -76,7 +76,7 @@ export function CashFlowPage() {
     }
   }, [activePeriod]);
   const { cashFlow, summary, isLoading, createEntry, deleteEntry, isCreating } = useCashFlow(selectedDate);
-  const { products: inventoryProducts, createMovement, isCreatingMovement } = useInventory();
+  const { products: inventoryProducts, createMovementAsync, isCreatingMovement } = useInventory();
   const { summary: weeklySummary, isLoading: weeklyLoading } = useCashFlowPeriod('week');
   const { summary: monthlySummary, isLoading: monthlyLoading } = useCashFlowPeriod('month', selectedMonth);
 
@@ -130,7 +130,7 @@ export function CashFlowPage() {
     setShowProductSuggestions(false);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!formData.amount || !formData.description) {
@@ -148,15 +148,15 @@ export function CashFlowPage() {
     if (selectedProductId && formData.type === 'entrada') {
       const qty = parseFloat(formData.quantity) || 1;
       const unitPrice = parseFloat(formData.amount) || 0;
-      // Dá baixa no estoque
-      createMovement({
+      // Dá baixa no estoque e pega o ID do movimento
+      const movement = await createMovementAsync({
         product_id: selectedProductId,
         type: 'saida_venda',
         quantity: qty,
         unit_price: unitPrice,
         notes: formData.notes || undefined,
       });
-      // Registra no caixa com valor total
+      // Registra no caixa linkado ao movimento (permite restaurar estoque ao deletar)
       createEntry({
         type: 'entrada',
         amount: qty * unitPrice,
@@ -165,6 +165,7 @@ export function CashFlowPage() {
         payment_method: formData.payment_method,
         date: todayDate,
         notes: formData.notes,
+        inventory_movement_id: movement.id,
       });
     } else {
       createEntry({

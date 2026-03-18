@@ -157,6 +157,7 @@ export interface CashFlow {
   payment_method?: PaymentMethod | null;
   order_id?: string | null;
   payment_id?: string | null;
+  inventory_movement_id?: string | null;
   date: string;
   notes?: string | null;
   created_at: string;

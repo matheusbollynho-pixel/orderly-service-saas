@@ -122,6 +122,7 @@ export function useCashFlow(selectedDate?: string) {
         payment_method: entry.payment_method,
         date: dateToInsert,
         notes: entry.notes || null,
+        inventory_movement_id: entry.inventory_movement_id || null,
       };
 
       console.log('📤 Enviando para Supabase:', insertPayload);
