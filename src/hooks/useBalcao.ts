@@ -2,6 +2,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
+export interface PaymentEntry {
+  method: string;
+  amount: number;
+}
+
 export interface BalcaoOrder {
   id: string;
   numero: number;
@@ -11,6 +16,7 @@ export interface BalcaoOrder {
   client_address: string | null;
   status: 'aberta' | 'finalizada' | 'cancelada';
   payment_method: string | null;
+  payment_methods: PaymentEntry[] | null;
   discount_pct: number;
   subtotal: number;
   discount_amount: number;
@@ -191,25 +197,35 @@ export function useBalcao() {
         }
       }
 
-      // Lançar no caixa
+      // Lançar no caixa — uma entrada por forma de pagamento
       const itemsSummary = (order.balcao_items as BalcaoItem[])
         .map(i => `${i.quantity}x ${i.description}`).join(', ');
       const description = `Nota Balcão${order.client_name ? ` - ${order.client_name}` : ''}: ${itemsSummary}`;
 
-      const { error: cfErr } = await supabase.from('cash_flow').insert({
-        type: 'entrada',
-        amount: order.total,
-        description,
-        category: 'venda_balcao',
-        payment_method: order.payment_method ?? 'dinheiro',
-        date: toISODate(),
-        notes: order.discount_pct > 0
-          ? `Desconto ${order.discount_pct}% = R$ ${order.discount_amount.toFixed(2)}`
-          : null,
-        inventory_movement_id: firstMovId,
-        balcao_order_id: orderId,
-      });
-      if (cfErr) throw cfErr;
+      const payments: PaymentEntry[] =
+        Array.isArray(order.payment_methods) && order.payment_methods.length > 0
+          ? order.payment_methods
+          : [{ method: order.payment_method ?? 'dinheiro', amount: order.total }];
+
+      const discountNotes = order.discount_pct > 0
+        ? `Desconto ${order.discount_pct}% = R$ ${order.discount_amount.toFixed(2)}`
+        : null;
+
+      for (let i = 0; i < payments.length; i++) {
+        const pm = payments[i];
+        const { error: cfErr } = await supabase.from('cash_flow').insert({
+          type: 'entrada',
+          amount: pm.amount,
+          description,
+          category: 'venda_balcao',
+          payment_method: pm.method,
+          date: toISODate(),
+          notes: discountNotes,
+          inventory_movement_id: i === 0 ? firstMovId : null,
+          balcao_order_id: orderId,
+        });
+        if (cfErr) throw cfErr;
+      }
 
       // Atualizar status
       const { error: updErr } = await supabase

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useBalcao, type BalcaoOrder, type BalcaoItem } from '@/hooks/useBalcao';
+import { useBalcao, type BalcaoOrder, type BalcaoItem, type PaymentEntry } from '@/hooks/useBalcao';
 import { useInventory, type InventoryProduct } from '@/hooks/useInventory';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -62,7 +62,12 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
       ? String((order.subtotal * order.discount_pct / 100).toFixed(2))
       : ''
   );
-  const [paymentMethod, setPaymentMethod] = useState(order.payment_method ?? 'dinheiro');
+  const initPayments = (): PaymentEntry[] => {
+    if (Array.isArray(order.payment_methods) && order.payment_methods.length > 0)
+      return order.payment_methods;
+    return [{ method: order.payment_method ?? 'dinheiro', amount: 0 }];
+  };
+  const [paymentEntries, setPaymentEntries] = useState<PaymentEntry[]>(initPayments);
   const [isSendingWpp, setIsSendingWpp] = useState(false);
   const [isSendingOrc, setIsSendingOrc] = useState(false);
 
@@ -123,9 +128,31 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     });
   };
 
-  const handlePaymentChange = async (val: string) => {
-    setPaymentMethod(val);
-    await updateOrder({ id: order.id, payment_method: val });
+  const savePayments = async (entries: PaymentEntry[]) => {
+    setPaymentEntries(entries);
+    await updateOrder({
+      id: order.id,
+      payment_method: entries[0]?.method ?? 'dinheiro',
+      payment_methods: entries,
+    });
+  };
+
+  const handleAddPayment = () => savePayments([...paymentEntries, { method: 'dinheiro', amount: 0 }]);
+
+  const handleRemovePayment = (idx: number) => {
+    if (paymentEntries.length === 1) return;
+    savePayments(paymentEntries.filter((_, i) => i !== idx));
+  };
+
+  const handlePaymentMethodChange = (idx: number, method: string) => {
+    const updated = paymentEntries.map((e, i) => i === idx ? { ...e, method } : e);
+    savePayments(updated);
+  };
+
+  const handlePaymentAmountChange = (idx: number, val: string) => {
+    const amount = parseFloat(val.replace(',', '.')) || 0;
+    const updated = paymentEntries.map((e, i) => i === idx ? { ...e, amount } : e);
+    savePayments(updated);
   };
 
   // ── Autocomplete ──────────────────────────────────────────────
@@ -385,14 +412,30 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     iframe.srcdoc = html;
   };
 
+  // ── Helper: gera HTML das formas de pagamento ─────────────────
+  const buildPaymentHtml = () => {
+    const entries = Array.isArray(order.payment_methods) && order.payment_methods.length > 0
+      ? order.payment_methods
+      : [{ method: order.payment_method ?? 'dinheiro', amount: order.total }];
+    if (entries.length === 1) {
+      const label = PAYMENT_LABELS[entries[0].method] ?? entries[0].method;
+      return `<div style="margin-top:16px;font-size:12px;color:#555;padding:10px 14px;border:1px solid #ddd;border-radius:4px">
+        <strong>Forma de Pagamento:</strong> ${label}
+      </div>`;
+    }
+    const rows = entries.map(e =>
+      `<tr><td style="padding:4px 8px">${PAYMENT_LABELS[e.method] ?? e.method}</td><td style="padding:4px 8px;text-align:right">R$ ${e.amount.toFixed(2)}</td></tr>`
+    ).join('');
+    return `<div style="margin-top:16px;font-size:12px;color:#555;padding:10px 14px;border:1px solid #ddd;border-radius:4px">
+      <strong>Formas de Pagamento:</strong>
+      <table style="width:100%;margin-top:6px;border-collapse:collapse">${rows}</table>
+    </div>`;
+  };
+
   // ── Imprimir (Nota de Venda) ───────────────────────────────────
   const handlePrint = async () => {
     const logo = await fetchLogoBase64();
-    const pagamento = PAYMENT_LABELS[order.payment_method ?? 'dinheiro'] ?? order.payment_method;
-    const extra = `<div style="margin-top:16px;font-size:12px;color:#555;padding:10px 14px;border:1px solid #ddd;border-radius:4px">
-      <strong>Forma de Pagamento:</strong> ${pagamento}
-    </div>`;
-    printViaIframe(buildPdfHtml('NOTA DE VENDA', extra, logo));
+    printViaIframe(buildPdfHtml('NOTA DE VENDA', buildPaymentHtml(), logo));
   };
 
   // ── Helper: gera PDF base64 a partir do HTML ─────────────────
@@ -435,11 +478,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
       setIsSendingWpp(true);
       toast.info('Gerando PDF...');
       const logo = await fetchLogoBase64();
-      const pagamento = PAYMENT_LABELS[order.payment_method ?? 'dinheiro'] ?? order.payment_method;
-      const extra = `<div style="margin-top:16px;font-size:12px;color:#555;padding:10px 14px;border:1px solid #ddd;border-radius:4px">
-        <strong>Forma de Pagamento:</strong> ${pagamento}
-      </div>`;
-      const base64 = await generatePdfBase64(buildPdfHtml('NOTA DE VENDA', extra, logo));
+      const base64 = await generatePdfBase64(buildPdfHtml('NOTA DE VENDA', buildPaymentHtml(), logo));
       const numeroNota = String(order.numero ?? '').padStart(4, '0');
       const nomeCliente = editClientName || order.client_name;
       const caption = nomeCliente
@@ -782,21 +821,76 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
         {/* ── Pagamento e ações ── */}
         <div className="border-t-2 border-border px-5 py-4 space-y-3">
           <div>
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 block">
-              Forma de Pagamento
-            </label>
-            <Select value={paymentMethod} onValueChange={handlePaymentChange} disabled={!isEditable}>
-              <SelectTrigger className="h-10">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                <SelectItem value="pix">PIX</SelectItem>
-                <SelectItem value="cartao_credito">Cartão Crédito</SelectItem>
-                <SelectItem value="cartao_debito">Cartão Débito</SelectItem>
-                <SelectItem value="transferencia">Transferência</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Formas de Pagamento
+              </label>
+              {isEditable && (
+                <button
+                  type="button"
+                  onClick={handleAddPayment}
+                  className="text-xs text-primary hover:underline flex items-center gap-1"
+                >
+                  <Plus className="h-3 w-3" /> Adicionar
+                </button>
+              )}
+            </div>
+            <div className="space-y-2">
+              {paymentEntries.map((entry, idx) => (
+                <div key={idx} className="flex gap-2 items-center">
+                  <Select
+                    value={entry.method}
+                    onValueChange={v => handlePaymentMethodChange(idx, v)}
+                    disabled={!isEditable}
+                  >
+                    <SelectTrigger className="h-9 flex-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                      <SelectItem value="pix">PIX</SelectItem>
+                      <SelectItem value="cartao_credito">Cartão Crédito</SelectItem>
+                      <SelectItem value="cartao_debito">Cartão Débito</SelectItem>
+                      <SelectItem value="transferencia">Transferência</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {paymentEntries.length > 1 && (
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="R$ 0,00"
+                      value={entry.amount > 0 ? String(entry.amount) : ''}
+                      onChange={e => handlePaymentAmountChange(idx, e.target.value)}
+                      disabled={!isEditable}
+                      className="h-9 w-28 text-right"
+                    />
+                  )}
+                  {isEditable && paymentEntries.length > 1 && (
+                    <button
+                      type="button"
+                      title="Remover forma de pagamento"
+                      onClick={() => handleRemovePayment(idx)}
+                      className="text-destructive hover:text-destructive/80"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            {paymentEntries.length > 1 && (() => {
+              const pago = paymentEntries.reduce((s, e) => s + e.amount, 0);
+              const restante = total - pago;
+              return (
+                <p className={`text-xs mt-1 ${Math.abs(restante) < 0.01 ? 'text-green-600' : 'text-orange-500'}`}>
+                  {Math.abs(restante) < 0.01
+                    ? '✓ Valor conferido'
+                    : restante > 0
+                      ? `Faltam R$ ${restante.toFixed(2)}`
+                      : `Excede R$ ${Math.abs(restante).toFixed(2)}`}
+                </p>
+              );
+            })()}
           </div>
 
           {/* ── Orçamento ── */}
