@@ -346,18 +346,24 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     </div></body></html>`;
   };
 
-  // ── Helper: abre PDF via blob URL (sem popup bloqueado) ───────
+  // ── Helper: abre PDF via blob URL em nova aba ─────────────────
   const printViaIframe = (html: string) => {
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.target = '_blank';
-    a.rel = 'noopener';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    const win = window.open(url, '_blank');
+    if (!win) {
+      // fallback: iframe oculto
+      const iframe = document.createElement('iframe');
+      iframe.style.cssText = 'position:fixed;width:0;height:0;border:none;left:-9999px;top:-9999px';
+      iframe.src = url;
+      document.body.appendChild(iframe);
+      iframe.onload = () => {
+        iframe.contentWindow?.print();
+        setTimeout(() => { document.body.removeChild(iframe); URL.revokeObjectURL(url); }, 2000);
+      };
+    } else {
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
   };
 
   // ── Imprimir (Nota de Venda) ───────────────────────────────────
