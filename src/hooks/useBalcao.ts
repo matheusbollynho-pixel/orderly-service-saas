@@ -213,6 +213,7 @@ export function useBalcao() {
 
       for (let i = 0; i < payments.length; i++) {
         const pm = payments[i];
+        if (!pm.amount || pm.amount <= 0) continue;
         const { error: cfErr } = await supabase.from('cash_flow').insert({
           type: 'entrada',
           amount: pm.amount,
