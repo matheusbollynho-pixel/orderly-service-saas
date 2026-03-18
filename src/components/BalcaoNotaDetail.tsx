@@ -50,6 +50,11 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   const [editClientPhone, setEditClientPhone] = useState(order.client_phone ?? '');
   const [editClientAddress, setEditClientAddress] = useState(order.client_address ?? '');
   const [discountPct, setDiscountPct] = useState(String(order.discount_pct || ''));
+  const [discountVal, setDiscountVal] = useState(
+    order.discount_pct > 0
+      ? String((order.subtotal * order.discount_pct / 100).toFixed(2))
+      : ''
+  );
   const [paymentMethod, setPaymentMethod] = useState(order.payment_method ?? 'dinheiro');
   const [isSendingWpp, setIsSendingWpp] = useState(false);
   const [isSendingOrc, setIsSendingOrc] = useState(false);
@@ -85,6 +90,21 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   };
 
   const handleBlurDiscount = () => saveTotals(discPct);
+
+  const handleChangePct = (val: string) => {
+    setDiscountPct(val);
+    const pct = parseFloat(val) || 0;
+    setDiscountVal(pct > 0 && subtotal > 0 ? (subtotal * pct / 100).toFixed(2) : '');
+  };
+
+  const handleChangeVal = (val: string) => {
+    setDiscountVal(val);
+    const v = parseFloat(val) || 0;
+    const pct = subtotal > 0 ? (v / subtotal) * 100 : 0;
+    setDiscountPct(pct > 0 ? pct.toFixed(4) : '');
+  };
+
+  const handleBlurDiscountVal = () => saveTotals(discPct);
 
   const handleBlurClient = async () => {
     await updateOrder({
@@ -628,16 +648,25 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
           </div>
 
           <div className="flex items-center justify-between px-5 py-2 border-b border-border/50 gap-4">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm text-muted-foreground">Desconto</span>
               {isEditable ? (
-                <div className="relative w-20">
-                  <Input type="number" placeholder="0" value={discountPct}
-                    onChange={e => setDiscountPct(e.target.value)}
-                    onBlur={handleBlurDiscount}
-                    className="h-7 pr-5 text-sm text-right" min={0} max={100} />
-                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
-                </div>
+                <>
+                  <div className="relative w-20">
+                    <Input type="number" placeholder="0" value={discountPct}
+                      onChange={e => handleChangePct(e.target.value)}
+                      onBlur={handleBlurDiscount}
+                      className="h-7 pr-5 text-sm text-right" min={0} max={100} />
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
+                  </div>
+                  <div className="relative w-24">
+                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">R$</span>
+                    <Input type="number" placeholder="0,00" value={discountVal}
+                      onChange={e => handleChangeVal(e.target.value)}
+                      onBlur={handleBlurDiscountVal}
+                      className="h-7 pl-7 text-sm text-right" min={0} />
+                  </div>
+                </>
               ) : (
                 <span className="text-sm">{order.discount_pct}%</span>
               )}
