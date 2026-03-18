@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { sendWhatsAppText, sendWhatsAppDocument } from '@/lib/whatsappService';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import LOGO_BASE64 from '@/assets/logo';
 
 interface Props {
   order: BalcaoOrder;
@@ -242,7 +243,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
 
   // ── HTML base para PDF ────────────────────────────────────────
   const buildPdfHtml = (titulo: string, extra: string = '') => {
-    const logoUrl = `${window.location.origin}${import.meta.env.VITE_LOGO_PATH || '/client-logo.png'}`;
+    const logoUrl = LOGO_BASE64;
     const numeroNota = String(order.numero ?? '').padStart(4, '0');
     const nomeCliente = editClientName || order.client_name || '';
     const dataHoje = new Date().toLocaleDateString('pt-BR');
