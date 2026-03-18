@@ -348,39 +348,17 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     </div></body></html>`;
   };
 
-  // ── Helper: imprime injetando na própria página ────────────────
+  // ── Helper: imprime via iframe com srcdoc (com CSS preservado) ─
   const printViaIframe = (html: string) => {
-    // Extrai só o conteúdo do <body> do HTML gerado
-    const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-    const bodyContent = bodyMatch ? bodyMatch[1] : html;
-
-    // Cria div de impressão
-    const printDiv = document.createElement('div');
-    printDiv.id = '__balcao_print__';
-    printDiv.innerHTML = bodyContent;
-    document.body.appendChild(printDiv);
-
-    // Injeta estilo de impressão: esconde tudo exceto o div
-    const style = document.createElement('style');
-    style.id = '__balcao_print_style__';
-    style.innerHTML = `
-      @media print {
-        body > *:not(#__balcao_print__) { display: none !important; }
-        #__balcao_print__ { display: block !important; }
-      }
-      @media screen {
-        #__balcao_print__ { display: none !important; }
-      }
-    `;
-    document.head.appendChild(style);
-
-    window.print();
-
-    // Limpa após impressão
-    setTimeout(() => {
-      document.body.removeChild(printDiv);
-      document.head.removeChild(style);
-    }, 1000);
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;width:800px;height:0;border:none;left:-9999px;top:0;visibility:hidden';
+    document.body.appendChild(iframe);
+    iframe.onload = () => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => document.body.removeChild(iframe), 2000);
+    };
+    iframe.srcdoc = html;
   };
 
   // ── Imprimir (Nota de Venda) ───────────────────────────────────
@@ -396,9 +374,16 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   const generatePdfBase64 = async (html: string): Promise<string> => {
     const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
     const bodyContent = bodyMatch ? bodyMatch[1] : html;
+    const styleMatch = html.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+    const cssText = styleMatch ? styleMatch[1] : '';
+
+    // Injeta CSS temporariamente no documento
+    const tmpStyle = document.createElement('style');
+    tmpStyle.textContent = cssText;
+    document.head.appendChild(tmpStyle);
 
     const container = document.createElement('div');
-    container.style.cssText = 'position:fixed;left:-9999px;top:0;width:800px;background:#fff;padding:0;z-index:-1';
+    container.style.cssText = 'position:fixed;left:-9999px;top:0;width:800px;background:#fff;z-index:-1';
     container.innerHTML = bodyContent;
     document.body.appendChild(container);
 
@@ -412,6 +397,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
       return pdf.output('datauristring');
     } finally {
       document.body.removeChild(container);
+      document.head.removeChild(tmpStyle);
     }
   };
 
