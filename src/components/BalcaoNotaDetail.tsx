@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Plus, Trash2, CheckCircle, XCircle, Package, Printer, Send } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, CheckCircle, XCircle, Package, Printer, Send, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { sendWhatsAppText } from '@/lib/whatsappService';
 
@@ -52,6 +52,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   const [discountPct, setDiscountPct] = useState(String(order.discount_pct || ''));
   const [paymentMethod, setPaymentMethod] = useState(order.payment_method ?? 'dinheiro');
   const [isSendingWpp, setIsSendingWpp] = useState(false);
+  const [isSendingOrc, setIsSendingOrc] = useState(false);
 
   const activeProducts = products.filter(p => p.active !== false);
 
@@ -283,6 +284,92 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
       toast.error(`Erro ao enviar: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setIsSendingWpp(false);
+    }
+  };
+
+  // ── Orçamento PDF ─────────────────────────────────────────────
+  const handleOrcamentoPdf = () => {
+    const win = window.open('', '_blank', 'width=500,height=700');
+    if (!win) return;
+    const numeroNota = String(order.numero ?? '').padStart(4, '0');
+    const nomeCliente = editClientName || order.client_name;
+    const itemsHtml = items.map(i => `
+      <tr>
+        <td style="padding:5px 8px;border-bottom:1px solid #eee;">${i.description}</td>
+        <td style="padding:5px 8px;text-align:center;border-bottom:1px solid #eee;">${i.quantity}</td>
+        <td style="padding:5px 8px;text-align:right;border-bottom:1px solid #eee;">R$ ${i.unit_price.toFixed(2)}</td>
+        <td style="padding:5px 8px;text-align:right;border-bottom:1px solid #eee;">R$ ${(i.unit_price * i.quantity).toFixed(2)}</td>
+      </tr>`).join('');
+    win.document.write(`<!DOCTYPE html><html><head><title>Orçamento #${numeroNota}</title>
+      <style>
+        body{font-family:Arial,sans-serif;font-size:13px;margin:30px;color:#222}
+        h1{margin:0 0 4px;font-size:22px;letter-spacing:1px;color:#1a1a1a}
+        .sub{color:#666;font-size:12px;margin:2px 0}
+        table{width:100%;border-collapse:collapse;margin-top:12px}
+        th{text-align:left;padding:6px 8px;border-bottom:2px solid #333;font-size:11px;text-transform:uppercase}
+        td{vertical-align:top}
+        .totais{margin-top:12px;text-align:right}
+        .totais p{margin:4px 0;font-size:13px}
+        .total-final{font-size:17px;font-weight:bold;margin-top:8px}
+        .validity{margin-top:20px;font-size:11px;color:#888;border-top:1px solid #ddd;padding-top:8px}
+      </style>
+      </head><body>
+      <h1>ORÇAMENTO</h1>
+      <p class="sub">#${numeroNota} · ${new Date().toLocaleDateString('pt-BR')}</p>
+      ${nomeCliente ? `<p class="sub">Cliente: <strong>${nomeCliente}</strong></p>` : ''}
+      ${editClientCpf ? `<p class="sub">CPF: ${editClientCpf}</p>` : ''}
+      ${editClientPhone ? `<p class="sub">Telefone: ${editClientPhone}</p>` : ''}
+      ${editClientAddress ? `<p class="sub">Endereço: ${editClientAddress}</p>` : ''}
+      <table>
+        <thead><tr><th>Produto / Serviço</th><th>Qtd</th><th>Unit.</th><th>Total</th></tr></thead>
+        <tbody>${itemsHtml}</tbody>
+      </table>
+      <div class="totais">
+        ${discPct > 0
+          ? `<p>Subtotal: R$ ${subtotal.toFixed(2)}</p><p>Desconto (${discPct}%): <span style="color:green">- R$ ${discountAmount.toFixed(2)}</span></p>`
+          : ''}
+        <p class="total-final">TOTAL: R$ ${total.toFixed(2)}</p>
+      </div>
+      <p class="validity">Este orçamento tem validade de 7 dias a partir da data de emissão.</p>
+      </body></html>`);
+    win.document.close();
+    win.focus();
+    win.print();
+  };
+
+  // ── Orçamento WhatsApp ────────────────────────────────────────
+  const handleOrcamentoWhatsApp = async () => {
+    const phone = editClientPhone || order.client_phone;
+    if (!phone) { toast.error('Informe o telefone do cliente para enviar'); return; }
+
+    const numeroNota = String(order.numero ?? '').padStart(4, '0');
+    const nomeCliente = editClientName || order.client_name;
+    const saudacao = nomeCliente ? `Olá, *${nomeCliente}*! 👋\n\n` : '';
+
+    const linhasItens = items
+      .map(i => `  • ${i.description}: ${i.quantity} x R$ ${i.unit_price.toFixed(2)} = R$ ${(i.unit_price * i.quantity).toFixed(2)}`)
+      .join('\n');
+
+    const descontoLinha = discPct > 0
+      ? `\n💸 Desconto (${discPct}%): -R$ ${discountAmount.toFixed(2)}`
+      : '';
+
+    const text =
+      `${saudacao}Segue o seu *Orçamento #${numeroNota}*:\n\n` +
+      `📋 *Itens:*\n${linhasItens}\n` +
+      `\n🧾 Subtotal: R$ ${subtotal.toFixed(2)}${descontoLinha}` +
+      `\n✅ *TOTAL: R$ ${total.toFixed(2)}*\n` +
+      `\n⏳ Validade: 7 dias\n` +
+      `\nQualquer dúvida, estamos à disposição! 🏍️`;
+
+    try {
+      setIsSendingOrc(true);
+      await sendWhatsAppText({ phone, text });
+      toast.success('Orçamento enviado no WhatsApp!');
+    } catch (e: unknown) {
+      toast.error(`Erro ao enviar: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setIsSendingOrc(false);
     }
   };
 
@@ -585,6 +672,36 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
               </SelectContent>
             </Select>
           </div>
+
+          {/* ── Orçamento ── */}
+          {items.length > 0 && order.status !== 'cancelada' && (
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Orçamento</p>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleOrcamentoPdf}
+                  className="flex-1 h-9 gap-1.5 text-sm"
+                >
+                  <FileText className="h-4 w-4" />
+                  Baixar PDF
+                </Button>
+                {(editClientPhone || order.client_phone) && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleOrcamentoWhatsApp}
+                    disabled={isSendingOrc}
+                    className="flex-1 h-9 gap-1.5 text-sm text-green-600 border-green-300 hover:bg-green-50 dark:text-green-400 dark:border-green-700 dark:hover:bg-green-950/30"
+                  >
+                    <Send className="h-4 w-4" />
+                    {isSendingOrc ? 'Enviando...' : 'WhatsApp'}
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
 
           {isAdmin && order.status !== 'cancelada' && (
             <div className="flex gap-2">
