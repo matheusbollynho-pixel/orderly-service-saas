@@ -258,7 +258,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
 
     return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${titulo} #${numeroNota}</title>
     <style>
-      *{box-sizing:border-box;margin:0;padding:0}
+      *{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
       body{font-family:Arial,sans-serif;font-size:13px;color:#222;background:#fff}
       .page{max-width:780px;margin:0 auto;padding:32px}
       /* Cabeçalho */
