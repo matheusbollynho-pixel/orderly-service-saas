@@ -826,13 +826,15 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
                 Formas de Pagamento
               </label>
               {isEditable && (
-                <button
+                <Button
                   type="button"
+                  variant="outline"
+                  size="sm"
                   onClick={handleAddPayment}
-                  className="text-xs text-primary hover:underline flex items-center gap-1"
+                  className="h-7 px-2 text-xs gap-1"
                 >
-                  <Plus className="h-3 w-3" /> Adicionar
-                </button>
+                  <Plus className="h-3 w-3" /> Adicionar forma
+                </Button>
               )}
             </div>
             <div className="space-y-2">
