@@ -346,18 +346,28 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     </div></body></html>`;
   };
 
+  // ── Helper: imprime via iframe (sem popup) ────────────────────
+  const printViaIframe = (html: string) => {
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;width:0;height:0;border:none;left:-9999px;top:-9999px';
+    document.body.appendChild(iframe);
+    iframe.contentDocument?.open();
+    iframe.contentDocument?.write(html);
+    iframe.contentDocument?.close();
+    setTimeout(() => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => document.body.removeChild(iframe), 1500);
+    }, 500);
+  };
+
   // ── Imprimir (Nota de Venda) ───────────────────────────────────
   const handlePrint = () => {
-    const win = window.open('', '_blank', 'width=860,height=900');
-    if (!win) { toast.error('Popup bloqueado! Permita popups para este site nas configurações do navegador.'); return; }
     const pagamento = PAYMENT_LABELS[order.payment_method ?? 'dinheiro'] ?? order.payment_method;
     const extra = `<div style="margin-top:16px;font-size:12px;color:#555;padding:10px 14px;border:1px solid #ddd;border-radius:4px">
       <strong>Forma de Pagamento:</strong> ${pagamento}
     </div>`;
-    win.document.write(buildPdfHtml('NOTA DE VENDA', extra));
-    win.document.close();
-    win.focus();
-    win.print();
+    printViaIframe(buildPdfHtml('NOTA DE VENDA', extra));
   };
 
   // ── Enviar WhatsApp ───────────────────────────────────────────
@@ -398,15 +408,10 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
 
   // ── Orçamento PDF ─────────────────────────────────────────────
   const handleOrcamentoPdf = () => {
-    const win = window.open('', '_blank', 'width=860,height=900');
-    if (!win) { toast.error('Popup bloqueado! Permita popups para este site nas configurações do navegador.'); return; }
     const extra = `<div style="margin-top:16px;padding:10px 14px;border:1px solid #ddd;border-radius:4px;font-size:11px;color:#888">
       ⏳ Este orçamento tem validade de <strong>7 dias</strong> a partir da data de emissão.
     </div>`;
-    win.document.write(buildPdfHtml('ORÇAMENTO', extra));
-    win.document.close();
-    win.focus();
-    win.print();
+    printViaIframe(buildPdfHtml('ORÇAMENTO', extra));
   };
 
   // ── Orçamento WhatsApp ────────────────────────────────────────
