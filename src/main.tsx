@@ -1,8 +1,12 @@
 ﻿import "./polyfills";
 import "./index.css";
 
-// Favicon dinâmico por tenant
+// Título e favicon dinâmicos por tenant
 const logoPath = import.meta.env.VITE_LOGO_PATH || '/bandara-logo.png';
+const appTitle = import.meta.env.VITE_APP_TITLE || 'Bandara Motos';
+
+document.title = appTitle;
+
 const faviconLink = document.querySelector("link[rel*='icon']") as HTMLLinkElement || document.createElement('link');
 faviconLink.rel = 'icon';
 faviconLink.href = logoPath;
