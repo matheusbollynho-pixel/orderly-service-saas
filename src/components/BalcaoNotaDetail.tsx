@@ -7,7 +7,9 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Plus, Trash2, CheckCircle, XCircle, Package, Printer, Send, FileText } from 'lucide-react';
 import { toast } from 'sonner';
-import { sendWhatsAppText } from '@/lib/whatsappService';
+import { sendWhatsAppText, sendWhatsAppDocument } from '@/lib/whatsappService';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 interface Props {
   order: BalcaoOrder;
@@ -390,34 +392,48 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     printViaIframe(buildPdfHtml('NOTA DE VENDA', extra));
   };
 
-  // ── Enviar WhatsApp ───────────────────────────────────────────
+  // ── Helper: gera PDF base64 a partir do HTML ─────────────────
+  const generatePdfBase64 = async (html: string): Promise<string> => {
+    const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+    const bodyContent = bodyMatch ? bodyMatch[1] : html;
+
+    const container = document.createElement('div');
+    container.style.cssText = 'position:fixed;left:-9999px;top:0;width:800px;background:#fff;padding:0;z-index:-1';
+    container.innerHTML = bodyContent;
+    document.body.appendChild(container);
+
+    try {
+      const canvas = await html2canvas(container, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+      const imgData = canvas.toDataURL('image/jpeg', 0.85);
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pdfW = pdf.internal.pageSize.getWidth();
+      const pdfH = (canvas.height * pdfW) / canvas.width;
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfW, pdfH);
+      return pdf.output('datauristring');
+    } finally {
+      document.body.removeChild(container);
+    }
+  };
+
+  // ── Enviar WhatsApp (Nota de Venda como PDF) ─────────────────
   const handleSendWhatsApp = async () => {
     const phone = editClientPhone || order.client_phone;
     if (!phone) { toast.error('Informe o telefone do cliente para enviar'); return; }
 
-    const numeroNota = String(order.numero ?? '').padStart(4, '0');
-    const linhasItens = items
-      .map(i => `  • ${i.description}: ${i.quantity} x R$ ${i.unit_price.toFixed(2)} = R$ ${(i.unit_price * i.quantity).toFixed(2)}`)
-      .join('\n');
-
-    const nomeCliente = editClientName || order.client_name;
-    const saudacao = nomeCliente ? `Olá, *${nomeCliente}*! 👋\n\n` : '';
-
-    const descontoLinha = discPct > 0
-      ? `\n💸 Desconto (${discPct}%): -R$ ${discountAmount.toFixed(2)}`
-      : '';
-
-    const text =
-      `${saudacao}Segue o resumo da sua *Nota de Balcão #${numeroNota}*:\n\n` +
-      `📋 *Itens:*\n${linhasItens}\n` +
-      `\n🧾 Subtotal: R$ ${subtotal.toFixed(2)}${descontoLinha}` +
-      `\n✅ *TOTAL: R$ ${total.toFixed(2)}*` +
-      `\n💳 Pagamento: ${PAYMENT_LABELS[paymentMethod] ?? paymentMethod}` +
-      `\n\nObrigado pela preferência! 🏍️`;
-
     try {
       setIsSendingWpp(true);
-      await sendWhatsAppText({ phone, text });
+      toast.info('Gerando PDF...');
+      const pagamento = PAYMENT_LABELS[order.payment_method ?? 'dinheiro'] ?? order.payment_method;
+      const extra = `<div style="margin-top:16px;font-size:12px;color:#555;padding:10px 14px;border:1px solid #ddd;border-radius:4px">
+        <strong>Forma de Pagamento:</strong> ${pagamento}
+      </div>`;
+      const base64 = await generatePdfBase64(buildPdfHtml('NOTA DE VENDA', extra));
+      const numeroNota = String(order.numero ?? '').padStart(4, '0');
+      const nomeCliente = editClientName || order.client_name;
+      const caption = nomeCliente
+        ? `Olá, *${nomeCliente}*! Segue sua Nota de Venda #${numeroNota} 🏍️`
+        : `Nota de Venda #${numeroNota} — Bandara Motos 🏍️`;
+      await sendWhatsAppDocument({ phone, base64, fileName: `nota-balcao-${numeroNota}.pdf`, caption });
       toast.success('Nota enviada no WhatsApp!');
     } catch (e: unknown) {
       toast.error(`Erro ao enviar: ${e instanceof Error ? e.message : String(e)}`);
@@ -434,34 +450,24 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     printViaIframe(buildPdfHtml('ORÇAMENTO', extra));
   };
 
-  // ── Orçamento WhatsApp ────────────────────────────────────────
+  // ── Orçamento WhatsApp (PDF) ──────────────────────────────────
   const handleOrcamentoWhatsApp = async () => {
     const phone = editClientPhone || order.client_phone;
     if (!phone) { toast.error('Informe o telefone do cliente para enviar'); return; }
 
-    const numeroNota = String(order.numero ?? '').padStart(4, '0');
-    const nomeCliente = editClientName || order.client_name;
-    const saudacao = nomeCliente ? `Olá, *${nomeCliente}*! 👋\n\n` : '';
-
-    const linhasItens = items
-      .map(i => `  • ${i.description}: ${i.quantity} x R$ ${i.unit_price.toFixed(2)} = R$ ${(i.unit_price * i.quantity).toFixed(2)}`)
-      .join('\n');
-
-    const descontoLinha = discPct > 0
-      ? `\n💸 Desconto (${discPct}%): -R$ ${discountAmount.toFixed(2)}`
-      : '';
-
-    const text =
-      `${saudacao}Segue o seu *Orçamento #${numeroNota}*:\n\n` +
-      `📋 *Itens:*\n${linhasItens}\n` +
-      `\n🧾 Subtotal: R$ ${subtotal.toFixed(2)}${descontoLinha}` +
-      `\n✅ *TOTAL: R$ ${total.toFixed(2)}*\n` +
-      `\n⏳ Validade: 7 dias\n` +
-      `\nQualquer dúvida, estamos à disposição! 🏍️`;
-
     try {
       setIsSendingOrc(true);
-      await sendWhatsAppText({ phone, text });
+      toast.info('Gerando PDF do orçamento...');
+      const extra = `<div style="margin-top:16px;padding:10px 14px;border:1px solid #ddd;border-radius:4px;font-size:11px;color:#888">
+        ⏳ Este orçamento tem validade de <strong>7 dias</strong> a partir da data de emissão.
+      </div>`;
+      const base64 = await generatePdfBase64(buildPdfHtml('ORÇAMENTO', extra));
+      const numeroNota = String(order.numero ?? '').padStart(4, '0');
+      const nomeCliente = editClientName || order.client_name;
+      const caption = nomeCliente
+        ? `Olá, *${nomeCliente}*! Segue seu Orçamento #${numeroNota} — válido por 7 dias 🏍️`
+        : `Orçamento #${numeroNota} — Bandara Motos 🏍️`;
+      await sendWhatsAppDocument({ phone, base64, fileName: `orcamento-${numeroNota}.pdf`, caption });
       toast.success('Orçamento enviado no WhatsApp!');
     } catch (e: unknown) {
       toast.error(`Erro ao enviar: ${e instanceof Error ? e.message : String(e)}`);
