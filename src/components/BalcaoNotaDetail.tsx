@@ -296,7 +296,9 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
         <img src="${logoUrl}" alt="Logo" onerror="this.style.display='none'">
         <div class="header-title">
           <h1>${titulo}</h1>
-          <p>${dataHoje}</p>
+          <p style="font-size:13px;font-weight:700;color:#fff;margin-top:4px">Bandara Motos</p>
+          <p style="font-size:10px;color:#aaa;margin-top:2px">Matheus da Silva Alves · CNPJ: 24.890.547/0001-78</p>
+          <p style="font-size:10px;color:#aaa">Rodovia BA 210, Nº913-A, BTN 02, Paulo Afonso-BA</p>
         </div>
         <div class="header-box">
           <div class="lbl">Nº</div>
@@ -337,7 +339,10 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
 
       ${extra}
 
-      <div class="footer">Bandara Motos · (75) 98804-6356 · @BandaraMotos</div>
+      <div class="footer">
+        Bandara Motos · CNPJ: 24.890.547/0001-78 · (75) 98804-6356 · @BandaraMotos<br>
+        Rodovia BA 210, Nº913-A, BTN 02, Paulo Afonso-BA
+      </div>
     </div></body></html>`;
   };
 
