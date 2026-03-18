@@ -66,7 +66,9 @@ export function useInventory() {
 
   const deleteProductMutation = useMutation({
     mutationFn: async (id: string) => {
-      // Deleta movimentações vinculadas antes de deletar o produto (evita FK 409)
+      // Remove referência em materials (OS) sem deletar o material
+      await supabase.from('materials').update({ product_id: null }).eq('product_id', id);
+      // Deleta movimentações vinculadas
       await supabase.from('inventory_movements').delete().eq('product_id', id);
       const { error } = await supabase
         .from('inventory_products')
