@@ -178,10 +178,11 @@ export function useBalcao() {
             .from('inventory_movements')
             .insert({
               product_id: item.product_id,
-              type: 'saida_venda',
+              type: 'saida_balcao',
               quantity: item.quantity,
               unit_price: item.unit_price,
               notes: `Nota Balcão #${orderId.slice(0, 8)}${order.client_name ? ` - ${order.client_name}` : ''}`,
+              balcao_order_id: orderId,
             })
             .select()
             .single();
