@@ -346,24 +346,39 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     </div></body></html>`;
   };
 
-  // ── Helper: abre PDF via blob URL em nova aba ─────────────────
+  // ── Helper: imprime injetando na própria página ────────────────
   const printViaIframe = (html: string) => {
-    const blob = new Blob([html], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const win = window.open(url, '_blank');
-    if (!win) {
-      // fallback: iframe oculto
-      const iframe = document.createElement('iframe');
-      iframe.style.cssText = 'position:fixed;width:0;height:0;border:none;left:-9999px;top:-9999px';
-      iframe.src = url;
-      document.body.appendChild(iframe);
-      iframe.onload = () => {
-        iframe.contentWindow?.print();
-        setTimeout(() => { document.body.removeChild(iframe); URL.revokeObjectURL(url); }, 2000);
-      };
-    } else {
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-    }
+    // Extrai só o conteúdo do <body> do HTML gerado
+    const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+    const bodyContent = bodyMatch ? bodyMatch[1] : html;
+
+    // Cria div de impressão
+    const printDiv = document.createElement('div');
+    printDiv.id = '__balcao_print__';
+    printDiv.innerHTML = bodyContent;
+    document.body.appendChild(printDiv);
+
+    // Injeta estilo de impressão: esconde tudo exceto o div
+    const style = document.createElement('style');
+    style.id = '__balcao_print_style__';
+    style.innerHTML = `
+      @media print {
+        body > *:not(#__balcao_print__) { display: none !important; }
+        #__balcao_print__ { display: block !important; }
+      }
+      @media screen {
+        #__balcao_print__ { display: none !important; }
+      }
+    `;
+    document.head.appendChild(style);
+
+    window.print();
+
+    // Limpa após impressão
+    setTimeout(() => {
+      document.body.removeChild(printDiv);
+      document.head.removeChild(style);
+    }, 1000);
   };
 
   // ── Imprimir (Nota de Venda) ───────────────────────────────────
