@@ -349,7 +349,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   // ── Imprimir (Nota de Venda) ───────────────────────────────────
   const handlePrint = () => {
     const win = window.open('', '_blank', 'width=860,height=900');
-    if (!win) return;
+    if (!win) { toast.error('Popup bloqueado! Permita popups para este site nas configurações do navegador.'); return; }
     const pagamento = PAYMENT_LABELS[order.payment_method ?? 'dinheiro'] ?? order.payment_method;
     const extra = `<div style="margin-top:16px;font-size:12px;color:#555;padding:10px 14px;border:1px solid #ddd;border-radius:4px">
       <strong>Forma de Pagamento:</strong> ${pagamento}
@@ -399,7 +399,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   // ── Orçamento PDF ─────────────────────────────────────────────
   const handleOrcamentoPdf = () => {
     const win = window.open('', '_blank', 'width=860,height=900');
-    if (!win) return;
+    if (!win) { toast.error('Popup bloqueado! Permita popups para este site nas configurações do navegador.'); return; }
     const extra = `<div style="margin-top:16px;padding:10px 14px;border:1px solid #ddd;border-radius:4px;font-size:11px;color:#888">
       ⏳ Este orçamento tem validade de <strong>7 dias</strong> a partir da data de emissão.
     </div>`;
