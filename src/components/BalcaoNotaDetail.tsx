@@ -257,6 +257,16 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   // ── Finalizar ─────────────────────────────────────────────────
   const handleFinalizar = async () => {
     if (items.length === 0) { toast.error('Adicione ao menos um item'); return; }
+    if (paymentEntries.length > 1) {
+      const pago = paymentEntries.reduce((s, e) => s + e.amount, 0);
+      const restante = total - pago;
+      if (Math.abs(restante) >= 0.01) {
+        toast.error(restante > 0
+          ? `Faltam R$ ${restante.toFixed(2)} para fechar o pagamento`
+          : `Pagamento excede o total em R$ ${Math.abs(restante).toFixed(2)}`);
+        return;
+      }
+    }
     if (!window.confirm(`Finalizar nota de R$ ${total.toFixed(2)}? Esta ação lançará no caixa e dará baixa no estoque.`)) return;
     await saveTotals(discPct);
     await finalizeOrder(order.id);
