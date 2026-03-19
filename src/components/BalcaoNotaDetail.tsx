@@ -407,18 +407,33 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     </div></body></html>`;
   };
 
-  // ── Busca logo do tenant em base64 ───────────────────────────
+  // ── Busca logo do tenant em base64 redimensionada (máx 200px) ─
   const fetchLogoBase64 = async (): Promise<string> => {
     const rawUrl = storeSettings?.logo_url || `${window.location.origin}${import.meta.env.VITE_LOGO_PATH || '/bandara-logo.png'}`;
-    const url = rawUrl.split('?')[0]; // Remove cache-busting timestamp
+    const url = rawUrl.split('?')[0];
     try {
       const res = await fetch(url, { mode: 'cors', credentials: 'omit' });
       const blob = await res.blob();
-      return await new Promise<string>((resolve, reject) => {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve(reader.result as string);
         reader.onerror = reject;
         reader.readAsDataURL(blob);
+      });
+      // Redimensiona para máx 200px para evitar timeout no Render
+      return await new Promise<string>((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const MAX = 200;
+          const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = () => resolve(dataUrl);
+        img.src = dataUrl;
       });
     } catch {
       return LOGO_BASE64;
