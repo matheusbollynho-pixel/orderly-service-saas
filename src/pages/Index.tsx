@@ -45,19 +45,6 @@ export default function Index() {
   const [initialBalcaoOrderId, setInitialBalcaoOrderId] = useState<string | null>(null);
   const [orderFormInitialData, setOrderFormInitialData] = useState<{ client_name?: string; client_phone?: string; equipment?: string; service_description?: string; client_id?: string } | undefined>();
 
-  // Atualiza favicon e título dinamicamente com dados da loja
-  useEffect(() => {
-    if (storeSettings?.logo_url) {
-      const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement || document.createElement('link');
-      link.rel = 'icon';
-      link.href = storeSettings.logo_url;
-      document.head.appendChild(link);
-    }
-    if (storeSettings?.company_name) {
-      document.title = storeSettings.company_name;
-    }
-  }, [storeSettings?.logo_url, storeSettings?.company_name]);
-
   // Redirecionar se usuário restrito tentar acessar caixa ou relatórios
   useEffect(() => {
     if (!canAccessCashFlow && currentView === 'fluxo-caixa') {

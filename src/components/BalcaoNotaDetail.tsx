@@ -409,9 +409,10 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
 
   // ── Busca logo do tenant em base64 ───────────────────────────
   const fetchLogoBase64 = async (): Promise<string> => {
-    const url = storeSettings?.logo_url || `${window.location.origin}${import.meta.env.VITE_LOGO_PATH || '/bandara-logo.png'}`;
+    const rawUrl = storeSettings?.logo_url || `${window.location.origin}${import.meta.env.VITE_LOGO_PATH || '/bandara-logo.png'}`;
+    const url = rawUrl.split('?')[0]; // Remove cache-busting timestamp
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, { mode: 'cors', credentials: 'omit' });
       const blob = await res.blob();
       return await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();

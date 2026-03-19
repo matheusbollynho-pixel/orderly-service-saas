@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Moon, Star, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useStoreSettings } from '@/hooks/useStoreSettings';
 
 const BALCAO_POSITIVE_TAGS = ['Educação', 'Rapidez', 'Transparência', 'Simpatia', 'Agilidade'];
 const BALCAO_IMPROVEMENT_TAGS = ['Demora no balcão', 'Falta de Atenção', 'Falta de Informação', 'Não Entendia'];
@@ -88,6 +89,9 @@ function Stars({ value, onChange }: { value: number; onChange: (n: number) => vo
 
 export default function PublicSatisfactionPage() {
   const { token } = useParams();
+  const { settings: storeSettings } = useStoreSettings();
+  const companyName = storeSettings?.company_name || 'Bandara Motos';
+  const logoUrl = storeSettings?.logo_url || import.meta.env.VITE_LOGO_PATH || '/bandara-logo.png';
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -412,7 +416,7 @@ export default function PublicSatisfactionPage() {
               <CardTitle>Avaliação já registrada ✅</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">Obrigado pelo seu feedback. A equipe da Bandara Motos agradece!</p>
+              <p className="text-sm text-muted-foreground">Obrigado pelo seu feedback. A equipe da {companyName} agradece!</p>
             </CardContent>
           </Card>
         </div>
@@ -437,8 +441,8 @@ export default function PublicSatisfactionPage() {
                 >
                   {publicTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
                 </Button>
-                <img src={import.meta.env.VITE_LOGO_PATH || '/bandara-logo.png'} alt="Logo" className="h-32 w-auto" />
-                <p className="-mt-3 text-sm font-semibold uppercase tracking-[0.18em] leading-none text-[#C1272D]">AVALIAÇÃO BANDARA MOTOS</p>
+                <img src={logoUrl} alt="Logo" className="h-32 w-auto" />
+                <p className="-mt-3 text-sm font-semibold uppercase tracking-[0.18em] leading-none text-[#C1272D]">AVALIAÇÃO {companyName.toUpperCase()}</p>
               </CardHeader>
               <CardContent className="pt-2 pb-4 text-center">
                 <p className="inline-flex flex-wrap items-center justify-center gap-1 rounded-md border border-border/60 bg-muted/40 px-3 py-1.5 text-sm text-zinc-400">
@@ -738,7 +742,7 @@ export default function PublicSatisfactionPage() {
                 <div className="text-lg">🏪</div>
                 <div>
                   <p className="text-xs font-medium uppercase text-muted-foreground">Experiência Geral</p>
-                  <p className="font-medium">Bandara Motos</p>
+                  <p className="font-medium">{companyName}</p>
                 </div>
               </div>
               <p className="font-medium text-base">Como foi sua experiência na loja?</p>
@@ -756,7 +760,7 @@ export default function PublicSatisfactionPage() {
             {/* SEÇÃO FINAL - sempre visível */}
             <div className="space-y-4 border-t pt-6">
               <div className="space-y-2">
-                <p className="font-medium">Recomendaria a Bandara Motos?</p>
+                <p className="font-medium">Recomendaria a {companyName}?</p>
                 <div className="flex gap-2">
                   <Button
                     type="button"

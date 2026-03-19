@@ -482,7 +482,25 @@ export function OrderDetails({
     setPaymentForm((prev) => ({ ...prev, amount: '', discount_amount: '' }));
   };
 
-  const buildPDFPayload = () => ({
+  // Busca logo como base64 para enviar ao gerador de PDF
+  const fetchLogoBase64 = async (): Promise<string | null> => {
+    const rawUrl = storeSettings?.logo_url || `${window.location.origin}${import.meta.env.VITE_LOGO_PATH || '/client-logo.png'}`;
+    const url = rawUrl.split('?')[0];
+    try {
+      const res = await fetch(url, { mode: 'cors', credentials: 'omit' });
+      const blob = await res.blob();
+      return await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      return null;
+    }
+  };
+
+  const buildPDFPayload = (logoBase64?: string | null) => ({
     ...order,
     mechanic_name: mechanics.find(m => m.id === order.mechanic_id)?.name || '',
     created_by: teamMembers.find(m => m.id === order.atendimento_id)?.name || '',
@@ -490,7 +508,8 @@ export function OrderDetails({
     delivery_person_name: deliveryPersonType === 'outro' ? deliveryPersonName : order.client_name,
     delivery_person_phone: deliveryPersonType === 'outro' ? deliveryPersonPhone : order.client_phone,
     delivery_person_cpf: deliveryPersonType === 'outro' ? deliveryPersonCpf : order.client_cpf,
-    logo_url: storeSettings?.logo_url || `${window.location.origin}${import.meta.env.VITE_LOGO_PATH || '/client-logo.png'}`,
+    logo_url: (storeSettings?.logo_url || `${window.location.origin}${import.meta.env.VITE_LOGO_PATH || '/client-logo.png'}`).split('?')[0],
+    ...(logoBase64 ? { logo_base64: logoBase64 } : {}),
   });
 
   const handleSendWhatsAppPDF = async () => {
@@ -500,10 +519,11 @@ export function OrderDetails({
     }
     try {
       setIsSendingPDF(true);
+      const logoBase64 = await fetchLogoBase64();
       const response = await fetch('https://bandara-os-api.onrender.com/gerar-os', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildPDFPayload()),
+        body: JSON.stringify(buildPDFPayload(logoBase64)),
       });
       if (!response.ok) throw new Error('Erro ao gerar PDF na API');
       const blob = await response.blob();
@@ -617,10 +637,11 @@ export function OrderDetails({
       return;
     }
     try {
+      const logoBase64 = await fetchLogoBase64();
       const response = await fetch('https://bandara-os-api.onrender.com/gerar-os', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildPDFPayload()),
+        body: JSON.stringify(buildPDFPayload(logoBase64)),
       });
       if (!response.ok) throw new Error('Erro ao gerar PDF na API');
       const blob = await response.blob();

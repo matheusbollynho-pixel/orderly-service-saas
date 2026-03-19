@@ -798,9 +798,26 @@ def create_os_pdf(output_path: str, dados: dict) -> None:
 # ---------------------------------------------------------------------------
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}})
 
-@app.route('/gerar-os', methods=['POST'])
+@app.after_request
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    return response
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    from flask import jsonify
+    import traceback
+    print(f"[ERROR] Unhandled exception: {traceback.format_exc()}")
+    response = jsonify({'erro': str(e)})
+    response.status_code = 500
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    return response
+
+@app.route('/gerar-os', methods=['POST', 'OPTIONS'])
 def gerar_os():
     """
     Recebe JSON com os dados da O.S e retorna o PDF para download.
@@ -821,6 +838,10 @@ def gerar_os():
     a.download = 'ordem_servico.pdf';
     a.click();
     """
+    from flask import request as _req
+    if _req.method == 'OPTIONS':
+        return '', 204
+
     dados = request.get_json(force=True)
     if not dados:
         return jsonify({'erro': 'JSON invalido ou ausente'}), 400
@@ -836,17 +857,41 @@ def gerar_os():
     for item in (dados.get('checklist_items') or []):
         print(f"[DEBUG]   {_json.dumps(item, ensure_ascii=False)}")
 
-    # Se logo_url for fornecido, baixar a imagem e usar como logo temporário
+    # Se logo_base64 for fornecido, decodifica diretamente (mais confiável que fetch remoto)
     _tmp_logo_path = None
-    if dados.get('logo_url'):
-        import urllib.request, tempfile
+    if dados.get('logo_base64'):
+        import base64, tempfile
         try:
-            tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
-            urllib.request.urlretrieve(dados['logo_url'], tmp.name)
+            b64data = str(dados['logo_base64'])
+            if ',' in b64data:
+                _, b64data = b64data.split(',', 1)
+            img_bytes = base64.b64decode(b64data)
+            # Detecta formato pela assinatura dos bytes
+            suffix = '.jpg' if img_bytes[:2] == b'\xff\xd8' else '.png'
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+            tmp.write(img_bytes)
             tmp.close()
             dados['logo_path'] = tmp.name
             _tmp_logo_path = tmp.name
-            print(f"[DEBUG] Logo baixado de {dados['logo_url']} -> {tmp.name}")
+            print(f"[DEBUG] Logo decodificado de base64 -> {tmp.name}")
+        except Exception as e:
+            print(f"[DEBUG] Falha ao processar logo_base64: {e}")
+
+    # Fallback: Se logo_url for fornecido e logo_path ainda não foi definido
+    elif dados.get('logo_url'):
+        import urllib.request, tempfile, urllib.parse
+        try:
+            url_clean = dados['logo_url'].split('?')[0]
+            parsed_path = urllib.parse.urlparse(url_clean).path
+            ext = '.' + parsed_path.rsplit('.', 1)[-1].lower() if '.' in parsed_path else '.png'
+            if ext not in ('.png', '.jpg', '.jpeg', '.gif', '.bmp'):
+                ext = '.png'
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
+            urllib.request.urlretrieve(url_clean, tmp.name)
+            tmp.close()
+            dados['logo_path'] = tmp.name
+            _tmp_logo_path = tmp.name
+            print(f"[DEBUG] Logo baixado de {url_clean} -> {tmp.name}")
         except Exception as e:
             print(f"[DEBUG] Falha ao baixar logo_url: {e}")
 

@@ -22,6 +22,7 @@ import { useEffect } from "react";
 import { cleanupOldPhotos } from "./lib/photoService";
 import { useLocalSync } from "./hooks/useLocalSync";
 import { useRealtimeSync } from "./hooks/useRealtimeSync";
+import { useStoreSettings } from "./hooks/useStoreSettings";
 
 console.log('📦 App.tsx importado');
 
@@ -114,7 +115,24 @@ function AppContent() {
   // Inicializar sistema de sincronização local (dentro do QueryClientProvider)
   const { status: syncStatus } = useLocalSync();
   useRealtimeSync();
-  
+  const { settings: storeSettings } = useStoreSettings();
+
+  // Atualiza favicon e título globalmente (funciona em todas as rotas)
+  useEffect(() => {
+    if (storeSettings?.logo_url) {
+      let link = document.querySelector("link[rel*='icon']") as HTMLLinkElement | null;
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        document.head.appendChild(link);
+      }
+      link.href = storeSettings.logo_url;
+    }
+    if (storeSettings?.company_name) {
+      document.title = storeSettings.company_name;
+    }
+  }, [storeSettings?.logo_url, storeSettings?.company_name]);
+
   useEffect(() => {
     if (syncStatus.isReady) {
       console.log('✅ Sistema de sincronização local ativo');
