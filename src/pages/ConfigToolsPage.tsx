@@ -3,12 +3,16 @@ import { useState } from 'react';
 import { useServiceOrders } from '@/hooks/useServiceOrders';
 import { useAuth } from '@/hooks/useAuth';
 import { MaintenanceKeywordsManager } from '@/components/MaintenanceKeywordsManager';
-import { Settings, Trash2, MessageCircle, Clock, Zap, Send, RotateCcw } from 'lucide-react';
+import { useStoreSettings } from '@/hooks/useStoreSettings';
+import { Settings, Trash2, MessageCircle, Clock, Zap, Send, RotateCcw, Building2 } from 'lucide-react';
 
 export default function ConfigToolsPage() {
   const { user, isRestrictedUser } = useAuth();
   const [showKeywords, setShowKeywords] = useState(false);
   const [removeOsId, setRemoveOsId] = useState("");
+  const { settings, loading: loadingSettings, saving, saveSettings } = useStoreSettings();
+  const [companyName, setCompanyName] = useState('');
+  const [template, setTemplate] = useState('');
 
   const { updateOrder, isUpdating } = useServiceOrders();
 
@@ -16,6 +20,12 @@ export default function ConfigToolsPage() {
     const sanitizedId = osId.trim();
     if (!sanitizedId || !updateOrder || typeof updateOrder !== 'function') return;
     updateOrder({ id: sanitizedId, status: 'aberta' });
+  }
+
+  // Sync local state when settings load
+  if (settings && companyName === '' && template === '') {
+    setCompanyName(settings.company_name);
+    setTemplate(settings.whatsapp_confirmation_template);
   }
 
   if (!user || isRestrictedUser) {
@@ -54,6 +64,47 @@ export default function ConfigToolsPage() {
           </Button>
         </div>
       </div>
+      {/* Configurações da loja */}
+      <div className="mt-8 border border-white/10 rounded-lg p-4 space-y-4">
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          <Building2 size={20} /> Configurações da Loja
+        </h2>
+        {loadingSettings ? (
+          <p className="text-sm text-neutral-400">Carregando...</p>
+        ) : (
+          <>
+            <div className="space-y-1">
+              <label className="text-xs text-neutral-400 font-medium">Nome da empresa</label>
+              <input
+                type="text"
+                value={companyName}
+                onChange={e => setCompanyName(e.target.value)}
+                placeholder="Ex: Bandara Motos"
+                className="w-full p-2 border border-white/20 rounded text-sm bg-black/30 text-neutral-200"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-neutral-400 font-medium">Mensagem de confirmação de agendamento (WhatsApp)</label>
+              <p className="text-xs text-neutral-500">Variáveis disponíveis: {'{{nome}}'} {'{{empresa}}'} {'{{data}}'} {'{{turno}}'} {'{{moto}}'} {'{{servico}}'}</p>
+              <textarea
+                rows={10}
+                value={template}
+                onChange={e => setTemplate(e.target.value)}
+                placeholder="Digite a mensagem de confirmação..."
+                className="w-full p-2 border border-white/20 rounded text-sm bg-black/30 text-neutral-200 font-mono"
+              />
+            </div>
+            <Button
+              className="w-full"
+              disabled={saving}
+              onClick={() => saveSettings({ company_name: companyName, whatsapp_confirmation_template: template })}
+            >
+              {saving ? 'Salvando...' : 'Salvar configurações'}
+            </Button>
+          </>
+        )}
+      </div>
+
       <div className="mt-8">
         {!showKeywords ? (
           <Button variant="outline" className="w-full mb-2" onClick={() => setShowKeywords(true)}>
