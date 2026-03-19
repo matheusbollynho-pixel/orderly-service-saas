@@ -409,9 +409,9 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
 
   // ── Busca logo do tenant em base64 ───────────────────────────
   const fetchLogoBase64 = async (): Promise<string> => {
-    const path = import.meta.env.VITE_LOGO_PATH || '/bandara-logo.png';
+    const url = storeSettings?.logo_url || `${window.location.origin}${import.meta.env.VITE_LOGO_PATH || '/bandara-logo.png'}`;
     try {
-      const res = await fetch(`${window.location.origin}${path}`);
+      const res = await fetch(url);
       const blob = await res.blob();
       return await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -420,7 +420,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
         reader.readAsDataURL(blob);
       });
     } catch {
-      return LOGO_BASE64; // fallback Bandara
+      return LOGO_BASE64;
     }
   };
 

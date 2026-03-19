@@ -14,6 +14,7 @@ import { ReportsPage } from './ReportsPage';
 import { MechanicsPage } from './MechanicsPage';
 import AfterSalesPage from './AfterSalesPage';
 import MessagesConfigPage from './MessagesConfigPage';
+import { useStoreSettings } from '@/hooks/useStoreSettings';
 import { CashFlowPage } from './CashFlowPage';
 import { ExpressCadastroPage } from './ExpressCadastroPage';
 import { supabase } from '@/integrations/supabase/client';
@@ -36,6 +37,7 @@ type View = 'dashboard' | 'new' | 'express' | 'orders' | 'details' | 'materials'
 
 export default function Index() {
   const { isAdmin, canAccessCashFlow, canAccessReports } = useAuth();
+  const { settings: storeSettings } = useStoreSettings();
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [selectedOrder, setSelectedOrder] = useState<ServiceOrder | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -564,7 +566,7 @@ Retirada: ${retiradaInfo}`;
           <div className="flex items-center justify-between">
             <div className="flex-1"></div>
             <div className="flex items-center justify-center flex-1">
-              <img src={import.meta.env.VITE_LOGO_PATH || '/bandara-logo.png'} alt="Logo" className="h-32 w-auto" />
+              <img src={storeSettings?.logo_url || import.meta.env.VITE_LOGO_PATH || '/bandara-logo.png'} alt="Logo" className="h-32 w-auto" />
             </div>
             <div className="flex-1 flex justify-end items-center gap-2">
               {isAdmin && (

@@ -10,6 +10,7 @@ export interface StoreSettings {
   store_cnpj: string;
   store_instagram: string;
   store_owner: string;
+  logo_url: string;
   whatsapp_confirmation_template: string;
   whatsapp_satisfaction_template: string;
   whatsapp_birthday_template: string;
@@ -23,6 +24,7 @@ const DEFAULTS: Omit<StoreSettings, 'id'> = {
   store_cnpj: '',
   store_instagram: '',
   store_owner: '',
+  logo_url: '',
   whatsapp_confirmation_template: `Olá{{nome}}! 👋
 
 Seu agendamento na *{{empresa}}* foi confirmado! ✅

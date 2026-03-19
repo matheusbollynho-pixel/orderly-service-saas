@@ -1,12 +1,13 @@
 import { Button } from '@/components/ui/button';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useServiceOrders } from '@/hooks/useServiceOrders';
 import { useAuth } from '@/hooks/useAuth';
 import { MaintenanceKeywordsManager } from '@/components/MaintenanceKeywordsManager';
 import { useStoreSettings, StoreSettings } from '@/hooks/useStoreSettings';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Settings, Zap, MessageSquare, CalendarCheck, Star, Cake, ShoppingCart, Store } from 'lucide-react';
+import { Settings, Zap, MessageSquare, CalendarCheck, Star, Cake, ShoppingCart, Store, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 
 type MessageKey = 'whatsapp_confirmation_template' | 'whatsapp_satisfaction_template' | 'whatsapp_birthday_template' | 'whatsapp_balcao_followup_template';
 
@@ -76,6 +77,9 @@ export default function ConfigToolsPage() {
   const [storeCnpj, setStoreCnpj] = useState('');
   const [storeInstagram, setStoreInstagram] = useState('');
   const [storeOwner, setStoreOwner] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const [templates, setTemplates] = useState<Record<MessageKey, string>>({
     whatsapp_confirmation_template: '',
     whatsapp_satisfaction_template: '',
@@ -95,6 +99,7 @@ export default function ConfigToolsPage() {
       setStoreCnpj(settings.store_cnpj || '');
       setStoreInstagram(settings.store_instagram || '');
       setStoreOwner(settings.store_owner || '');
+      setLogoUrl(settings.logo_url || '');
       setTemplates({
         whatsapp_confirmation_template: settings.whatsapp_confirmation_template,
         whatsapp_satisfaction_template: settings.whatsapp_satisfaction_template,
@@ -104,6 +109,22 @@ export default function ConfigToolsPage() {
       setInitialized(true);
     }
   }, [settings, initialized]);
+
+  async function handleLogoUpload(file: File) {
+    setUploadingLogo(true);
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `logo/logo.${ext}`;
+      const { error } = await supabase.storage.from('public-files').upload(path, file, { upsert: true });
+      if (error) throw error;
+      const { data } = supabase.storage.from('public-files').getPublicUrl(path);
+      setLogoUrl(data.publicUrl + '?t=' + Date.now());
+    } catch (err: any) {
+      alert('Erro ao fazer upload: ' + err.message);
+    } finally {
+      setUploadingLogo(false);
+    }
+  }
 
   function handleAlterarParaAberta(osId: string) {
     const sanitizedId = osId.trim();
@@ -119,6 +140,7 @@ export default function ConfigToolsPage() {
       store_cnpj: storeCnpj,
       store_instagram: storeInstagram,
       store_owner: storeOwner,
+      logo_url: logoUrl,
       ...templates,
     } as Partial<StoreSettings>);
   }
@@ -155,6 +177,26 @@ export default function ConfigToolsPage() {
             <p className="text-sm text-neutral-400">Carregando...</p>
           ) : (
             <>
+              {/* Logo */}
+              <div className="space-y-2">
+                <label className="text-xs text-neutral-400 font-medium">Logo da empresa</label>
+                <div className="flex items-center gap-3">
+                  {logoUrl ? (
+                    <img src={logoUrl} alt="Logo" className="h-16 w-auto object-contain rounded border border-white/10 bg-black/20 p-1" />
+                  ) : (
+                    <div className="h-16 w-24 rounded border border-white/10 bg-black/20 flex items-center justify-center text-neutral-600 text-xs">Sem logo</div>
+                  )}
+                  <div className="flex flex-col gap-1">
+                    <Button type="button" variant="outline" size="sm" disabled={uploadingLogo} onClick={() => logoInputRef.current?.click()}>
+                      <Upload size={14} className="mr-1" />
+                      {uploadingLogo ? 'Enviando...' : 'Fazer upload'}
+                    </Button>
+                    <p className="text-xs text-neutral-500">PNG ou SVG recomendado</p>
+                  </div>
+                </div>
+                <input ref={logoInputRef} type="file" accept="image/*" title="Logo da empresa" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleLogoUpload(f); }} />
+              </div>
+
               {[
                 { label: 'Nome da empresa', value: companyName, set: setCompanyName, placeholder: 'Ex: Bandara Motos' },
                 { label: 'Telefone / WhatsApp', value: storePhone, set: setStorePhone, placeholder: 'Ex: (75) 98804-6356' },
