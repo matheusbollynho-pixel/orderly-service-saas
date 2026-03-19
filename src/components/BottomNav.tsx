@@ -1,9 +1,9 @@
-import { LayoutDashboard, Plus, ClipboardList, ChartBar, Users, LogOut, Heart, Wallet, Bolt, Circle, Star, Package, ShoppingCart, Gauge, CalendarDays, MessageSquare } from 'lucide-react';
+import { LayoutDashboard, Plus, ClipboardList, ChartBar, Users, LogOut, Heart, Wallet, Bolt, Circle, Star, Package, ShoppingCart, Gauge, CalendarDays } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 
-type View = 'dashboard' | 'new' | 'express' | 'orders' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa' | 'satisfacao' | 'estoque' | 'balcao' | 'quadro' | 'agenda' | 'mensagens';
+type View = 'dashboard' | 'new' | 'express' | 'orders' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa' | 'satisfacao' | 'estoque' | 'balcao' | 'quadro' | 'agenda';
 
 interface BottomNavProps {
   activeView: View;
@@ -37,9 +37,6 @@ export function BottomNav({ activeView, onViewChange, isAdmin }: BottomNavProps)
     { id: 'mechanics' as const, label: 'Equipe', icon: Users },
     { id: 'pos-venda' as const, label: 'Pós-Venda', icon: Heart },
     { id: 'satisfacao' as const, label: 'Satisfação', icon: Star },
-    ...(isAdmin ? [
-      { id: 'mensagens' as const, label: 'Mensagens', icon: MessageSquare },
-    ] : []),
   ];
 
   return (

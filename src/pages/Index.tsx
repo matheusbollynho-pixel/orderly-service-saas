@@ -28,7 +28,7 @@ import { BottomNav } from '@/components/BottomNav';
 import { EmptyState } from '@/components/EmptyState';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
-import { Wrench, Search } from 'lucide-react';
+import { Wrench, Search, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { getMaintenanceKeywords, findKeywordInText, createMaintenanceReminder, rescheduleMaintenanceReminder } from '@/services/maintenanceReminderService';
 
@@ -566,7 +566,12 @@ Retirada: ${retiradaInfo}`;
             <div className="flex items-center justify-center flex-1">
               <img src={import.meta.env.VITE_LOGO_PATH || '/bandara-logo.png'} alt="Logo" className="h-32 w-auto" />
             </div>
-            <div className="flex-1 flex justify-end">
+            <div className="flex-1 flex justify-end items-center gap-2">
+              {isAdmin && (
+                <a href="/config" title="Configurações">
+                  <Settings className="h-5 w-5 text-muted-foreground hover:text-foreground transition-colors" />
+                </a>
+              )}
               <ThemeToggle />
             </div>
           </div>
