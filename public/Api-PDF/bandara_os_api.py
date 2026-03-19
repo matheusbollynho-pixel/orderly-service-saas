@@ -860,18 +860,17 @@ def gerar_os():
     for item in (dados.get('checklist_items') or []):
         print(f"[DEBUG]   {_json.dumps(item, ensure_ascii=False)}")
 
-    # Se logo_base64 for fornecido, decodifica e converte para RGB PNG (evita crash do reportlab com RGBA)
+    # Baixa logo_url com timeout de 5s e converte RGBA->RGB com Pillow
     _tmp_logo_path = None
-    if dados.get('logo_base64'):
-        import base64, tempfile, io as _io
+    if dados.get('logo_url'):
+        import urllib.request, tempfile, io as _io
         try:
             from PIL import Image as _Image
-            b64data = str(dados['logo_base64'])
-            if ',' in b64data:
-                _, b64data = b64data.split(',', 1)
-            img_bytes = base64.b64decode(b64data)
+            url_clean = str(dados['logo_url']).split('?')[0]
+            req = urllib.request.Request(url_clean, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                img_bytes = resp.read()
             pil_img = _Image.open(_io.BytesIO(img_bytes)).convert('RGBA')
-            # Fundo branco para transparência (reportlab não suporta RGBA diretamente)
             bg = _Image.new('RGBA', pil_img.size, (255, 255, 255, 255))
             bg.paste(pil_img, mask=pil_img.split()[3])
             rgb_img = bg.convert('RGB')
@@ -880,11 +879,11 @@ def gerar_os():
             tmp.close()
             dados['logo_path'] = tmp.name
             _tmp_logo_path = tmp.name
-            print(f"[DEBUG] Logo convertido RGBA->RGB -> {tmp.name}")
+            print(f"[DEBUG] Logo baixado e convertido -> {tmp.name}")
         except Exception as e:
-            print(f"[DEBUG] Falha ao processar logo_base64: {e}")
+            print(f"[DEBUG] Falha ao baixar logo_url (usando padrão): {e}")
 
-    # Define caminho da logo relativo ao script (fallback para logo padrão)
+    # Fallback para logo padrão do servidor
     if 'logo_path' not in dados:
         base_dir = os.path.dirname(os.path.abspath(__file__))
         dados['logo_path'] = os.path.join(base_dir, 'bandara_logo_transparent.png')
