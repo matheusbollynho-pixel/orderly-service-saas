@@ -9,18 +9,23 @@ const supabase = createClient(
 const _rawBaseUrl = Deno.env.get('APP_BASE_URL') || 'https://os-bandara.vercel.app'
 const APP_BASE_URL = (_rawBaseUrl.startsWith('http') ? _rawBaseUrl : `https://${_rawBaseUrl}`).replace(/\/$/, '')
 
-function buildFollowUpMessage(clientName: string | null, numero: number, avaliacaoUrl: string, atendenteName: string | null): string {
+async function loadSettings() {
+  const { data } = await supabase.from('store_settings').select('company_name, whatsapp_balcao_followup_template').limit(1).maybeSingle()
+  return {
+    company_name: data?.company_name || 'Minha Oficina',
+    template: data?.whatsapp_balcao_followup_template || 'Olá{{nome}}! 👋\n\nAqui é da *{{empresa}}*.\n\nPassando para saber se tudo ficou certinho com seu atendimento da nota *#{{numero}}*. Ficou alguma dúvida ou podemos ajudar em algo? 😊\n\nSe quiser, deixa sua avaliação — leva menos de 1 minuto e nos ajuda muito! ⭐\n\n{{link}}\n\nAtt, {{atendente}} 🏍️🔧',
+  }
+}
+
+function buildFollowUpMessage(clientName: string | null, numero: number, avaliacaoUrl: string, atendenteName: string | null, company_name: string, template: string): string {
   const nome = clientName ? `, ${clientName.split(' ')[0]}` : ''
-  const assinatura = atendenteName ? `*${atendenteName}* - Bandara Motos` : '*Bandara Motos*'
-  return (
-    `Olá${nome}! 👋\n\n` +
-    `Aqui é da *Bandara Motos*.\n\n` +
-    `Passando para saber se tudo ficou certinho com seu atendimento da nota *#${numero}*. ` +
-    `Ficou alguma dúvida ou podemos ajudar em algo? 😊\n\n` +
-    `Se quiser, deixa sua avaliação — leva menos de 1 minuto e nos ajuda muito! ⭐\n\n` +
-    `${avaliacaoUrl}\n\n` +
-    `Att, ${assinatura} 🏍️🔧`
-  )
+  const atendente = atendenteName ? `*${atendenteName}* - ${company_name}` : `*${company_name}*`
+  return template
+    .replace(/\{\{nome\}\}/g, nome)
+    .replace(/\{\{empresa\}\}/g, company_name)
+    .replace(/\{\{numero\}\}/g, String(numero))
+    .replace(/\{\{link\}\}/g, avaliacaoUrl)
+    .replace(/\{\{atendente\}\}/g, atendente)
 }
 
 const corsHeaders = {
@@ -51,12 +56,13 @@ Deno.serve(async (req) => {
 
     const results: { id: string; numero: number; status: string }[] = []
     const avaliacaoUrl = `${APP_BASE_URL}/avaliar/loja`
+    const { company_name, template } = await loadSettings()
 
     for (const order of orders ?? []) {
       try {
         const phone = normalizeBrPhone(order.client_phone)
         const atendenteName = (order.staff_members as any)?.name ?? null
-        const message = buildFollowUpMessage(order.client_name, order.numero, avaliacaoUrl, atendenteName)
+        const message = buildFollowUpMessage(order.client_name, order.numero, avaliacaoUrl, atendenteName, company_name, template)
 
         await sendWhatsAppText(phone, message)
 

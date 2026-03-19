@@ -9,8 +9,19 @@ const supabase = createClient(
 const _rawBaseUrl = Deno.env.get('APP_BASE_URL') || 'https://os-bandara.vercel.app'
 const APP_BASE_URL = (_rawBaseUrl.startsWith('http') ? _rawBaseUrl : `https://${_rawBaseUrl}`).replace(/\/$/, '')
 
-function buildSatisfactionMessage(clientName: string, link: string) {
-  return `Olá, ${clientName || 'cliente'}! 👋\n\nAqui é da *Bandara Motos*.\n\nSua opinião é muito importante para melhorarmos sempre.\nPode avaliar seu atendimento em menos de 1 minuto? ⭐\n\n${link}\n\nObrigado pela confiança! 🏍️🔧`;
+async function loadSettings() {
+  const { data } = await supabase.from('store_settings').select('company_name, whatsapp_satisfaction_template').limit(1).maybeSingle()
+  return {
+    company_name: data?.company_name || 'Minha Oficina',
+    template: data?.whatsapp_satisfaction_template || 'Olá, {{nome}}! 👋\n\nAqui é da *{{empresa}}*.\n\nSua opinião é muito importante para melhorarmos sempre.\nPode avaliar seu atendimento em menos de 1 minuto? ⭐\n\n{{link}}\n\nObrigado pela confiança! 🏍️🔧',
+  }
+}
+
+function buildSatisfactionMessage(clientName: string, link: string, company_name: string, template: string) {
+  return template
+    .replace(/\{\{nome\}\}/g, clientName || 'cliente')
+    .replace(/\{\{empresa\}\}/g, company_name)
+    .replace(/\{\{link\}\}/g, link)
 }
 
 function generatePublicToken() {
@@ -70,7 +81,8 @@ Deno.serve(async (req) => {
       if (order) {
         const ratingRow = await ensureSatisfactionRow(order)
         const link = `${APP_BASE_URL}/avaliar/${ratingRow.public_token}`
-        const message = buildSatisfactionMessage(order.client_name, link)
+        const { company_name, template } = await loadSettings()
+        const message = buildSatisfactionMessage(order.client_name, link, company_name, template)
         await sendWhatsAppText(normalizeBrPhone(order.client_phone), message)
         await supabase.from('service_orders').update({ satisfaction_survey_sent_at: new Date().toISOString() }).eq('id', order.id)
       }

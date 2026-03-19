@@ -7,19 +7,19 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 )
 
-const BIRTHDAY_MESSAGE = `🎉 *Feliz aniversário!* 🎂🥳
+async function loadSettings() {
+  const { data } = await supabase.from('store_settings').select('company_name, whatsapp_birthday_template').limit(1).maybeSingle()
+  return {
+    company_name: data?.company_name || 'Minha Oficina',
+    template: data?.whatsapp_birthday_template || '🎉 *Feliz aniversário!* 🎂🥳\n\nA equipe da *{{empresa}}* deseja muitas conquistas e bons quilômetros pela frente! 🏍️💨\n\nPra comemorar, você ganhou:\n🎁 *15% de desconto* em serviços da oficina ou peças à vista.\n\n⏰ Válido por 7 dias.\nÉ só apresentar esta mensagem 😉\n\n*{{empresa}}* — cuidando da sua moto como você merece!',
+  }
+}
 
-A equipe da *Bandara Motos* deseja muitas conquistas e bons quilômetros pela frente! 🏍️💨
-
-Pra comemorar, você ganhou:
-🎁 *15% de desconto* em serviços da oficina ou peças à vista.
-
-⏰ Válido por 7 dias.
-É só apresentar esta mensagem 😉
-
-Siga-nos no Instagram: @BandaraMotos
-
-Bandara Motos — cuidando da sua moto como você merece!`
+function buildBirthdayMessage(clientName: string, company_name: string, template: string) {
+  return template
+    .replace(/\{\{nome\}\}/g, clientName ? `, ${clientName.split(' ')[0]}` : '')
+    .replace(/\{\{empresa\}\}/g, company_name)
+}
 
 async function sendWhatsApp(phone: string, message: string) {
   const formattedPhone = normalizeBrPhone(phone)
@@ -63,13 +63,14 @@ Deno.serve(async (req) => {
       })
     }
 
+    const { company_name, template } = await loadSettings()
     const results = []
-    
+
     for (const person of birthdays) {
       try {
         console.log(`📱 Enviando para ${person.client_name} (${person.client_phone})`)
-        
-        await sendWhatsApp(person.client_phone, BIRTHDAY_MESSAGE)
+        const message = buildBirthdayMessage(person.client_name, company_name, template)
+        await sendWhatsApp(person.client_phone, message)
         
         // Create discount record
         const now = new Date()

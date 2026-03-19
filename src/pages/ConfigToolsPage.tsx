@@ -3,19 +3,81 @@ import { useState, useEffect } from 'react';
 import { useServiceOrders } from '@/hooks/useServiceOrders';
 import { useAuth } from '@/hooks/useAuth';
 import { MaintenanceKeywordsManager } from '@/components/MaintenanceKeywordsManager';
-import { useStoreSettings } from '@/hooks/useStoreSettings';
+import { useStoreSettings, StoreSettings } from '@/hooks/useStoreSettings';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Settings, Zap, MessageSquare } from 'lucide-react';
+import { Settings, Zap, MessageSquare, CalendarCheck, Star, Cake, ShoppingCart } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
-const VARIABLES = ['{{nome}}', '{{empresa}}', '{{data}}', '{{turno}}', '{{moto}}', '{{servico}}'];
+type MessageKey = 'whatsapp_confirmation_template' | 'whatsapp_satisfaction_template' | 'whatsapp_birthday_template' | 'whatsapp_balcao_followup_template';
+
+interface MessageConfig {
+  key: MessageKey;
+  label: string;
+  icon: React.ElementType;
+  variables: string[];
+  preview: (template: string, company: string) => string;
+}
+
+const MESSAGE_CONFIGS: MessageConfig[] = [
+  {
+    key: 'whatsapp_confirmation_template',
+    label: 'Confirmação de Agendamento',
+    icon: CalendarCheck,
+    variables: ['{{nome}}', '{{empresa}}', '{{data}}', '{{turno}}', '{{moto}}', '{{servico}}'],
+    preview: (t, c) => t
+      .replace(/\{\{nome\}\}/g, ', João')
+      .replace(/\{\{empresa\}\}/g, c)
+      .replace(/\{\{data\}\}/g, 'quarta-feira, 19/03/2026')
+      .replace(/\{\{turno\}\}/g, 'Manhã')
+      .replace(/\{\{moto\}\}/g, 'CG 125 2020')
+      .replace(/\{\{servico\}\}/g, 'Troca de óleo'),
+  },
+  {
+    key: 'whatsapp_satisfaction_template',
+    label: 'Pesquisa de Satisfação',
+    icon: Star,
+    variables: ['{{nome}}', '{{empresa}}', '{{link}}'],
+    preview: (t, c) => t
+      .replace(/\{\{nome\}\}/g, 'João')
+      .replace(/\{\{empresa\}\}/g, c)
+      .replace(/\{\{link\}\}/g, 'https://seusite.com/avaliar/abc123'),
+  },
+  {
+    key: 'whatsapp_birthday_template',
+    label: 'Aniversário',
+    icon: Cake,
+    variables: ['{{nome}}', '{{empresa}}'],
+    preview: (t, c) => t
+      .replace(/\{\{nome\}\}/g, ', João')
+      .replace(/\{\{empresa\}\}/g, c),
+  },
+  {
+    key: 'whatsapp_balcao_followup_template',
+    label: 'Follow-up Balcão',
+    icon: ShoppingCart,
+    variables: ['{{nome}}', '{{empresa}}', '{{numero}}', '{{atendente}}', '{{link}}'],
+    preview: (t, c) => t
+      .replace(/\{\{nome\}\}/g, ', João')
+      .replace(/\{\{empresa\}\}/g, c)
+      .replace(/\{\{numero\}\}/g, '42')
+      .replace(/\{\{atendente\}\}/g, `*Carlos* - ${c}`)
+      .replace(/\{\{link\}\}/g, 'https://seusite.com/avaliar/loja'),
+  },
+];
 
 export default function ConfigToolsPage() {
   const { user, isRestrictedUser } = useAuth();
   const [showKeywords, setShowKeywords] = useState(false);
-  const [removeOsId, setRemoveOsId] = useState("");
+  const [removeOsId, setRemoveOsId] = useState('');
   const { settings, loading: loadingSettings, saving, saveSettings } = useStoreSettings();
   const [companyName, setCompanyName] = useState('');
-  const [template, setTemplate] = useState('');
+  const [templates, setTemplates] = useState<Record<MessageKey, string>>({
+    whatsapp_confirmation_template: '',
+    whatsapp_satisfaction_template: '',
+    whatsapp_birthday_template: '',
+    whatsapp_balcao_followup_template: '',
+  });
+  const [selectedMessage, setSelectedMessage] = useState<MessageKey>('whatsapp_confirmation_template');
   const [initialized, setInitialized] = useState(false);
 
   const { updateOrder, isUpdating } = useServiceOrders();
@@ -23,7 +85,12 @@ export default function ConfigToolsPage() {
   useEffect(() => {
     if (settings && !initialized) {
       setCompanyName(settings.company_name);
-      setTemplate(settings.whatsapp_confirmation_template);
+      setTemplates({
+        whatsapp_confirmation_template: settings.whatsapp_confirmation_template,
+        whatsapp_satisfaction_template: settings.whatsapp_satisfaction_template,
+        whatsapp_birthday_template: settings.whatsapp_birthday_template,
+        whatsapp_balcao_followup_template: settings.whatsapp_balcao_followup_template,
+      });
       setInitialized(true);
     }
   }, [settings, initialized]);
@@ -34,9 +101,19 @@ export default function ConfigToolsPage() {
     updateOrder({ id: sanitizedId, status: 'aberta' });
   }
 
+  function handleSave() {
+    saveSettings({
+      company_name: companyName,
+      ...templates,
+    } as Partial<StoreSettings>);
+  }
+
   if (!user || isRestrictedUser) {
     return <div className="p-8 text-center text-red-500">Acesso restrito.</div>;
   }
+
+  const currentConfig = MESSAGE_CONFIGS.find(m => m.key === selectedMessage)!;
+  const currentTemplate = templates[selectedMessage];
 
   return (
     <div className="max-w-2xl mx-auto p-6">
@@ -56,28 +133,26 @@ export default function ConfigToolsPage() {
 
         {/* ABA FERRAMENTAS */}
         <TabsContent value="ferramentas" className="space-y-6">
-          <div className="space-y-4">
-            <div className="w-full flex flex-col gap-2">
-              <label htmlFor="removeOsId" className="text-xs text-neutral-400 mb-1 font-medium">
-                ID da OS para tirar de Concluída e Entregue:
-              </label>
-              <input
-                id="removeOsId"
-                type="text"
-                value={removeOsId}
-                onChange={e => setRemoveOsId(e.target.value)}
-                placeholder="Cole o ID da OS aqui"
-                className="w-full p-2 border border-white/20 rounded text-xs bg-black/30 text-neutral-200 mb-2"
-              />
-              <Button
-                variant="default"
-                className="w-full flex items-center gap-2"
-                disabled={!removeOsId.trim() || isUpdating}
-                onClick={() => handleAlterarParaAberta(removeOsId)}
-              >
-                <Settings size={18} /> Alterar OS para "Aberta"
-              </Button>
-            </div>
+          <div className="w-full flex flex-col gap-2">
+            <label htmlFor="removeOsId" className="text-xs text-neutral-400 mb-1 font-medium">
+              ID da OS para tirar de Concluída e Entregue:
+            </label>
+            <input
+              id="removeOsId"
+              type="text"
+              value={removeOsId}
+              onChange={e => setRemoveOsId(e.target.value)}
+              placeholder="Cole o ID da OS aqui"
+              className="w-full p-2 border border-white/20 rounded text-xs bg-black/30 text-neutral-200 mb-2"
+            />
+            <Button
+              variant="default"
+              className="w-full flex items-center gap-2"
+              disabled={!removeOsId.trim() || isUpdating}
+              onClick={() => handleAlterarParaAberta(removeOsId)}
+            >
+              <Settings size={18} /> Alterar OS para "Aberta"
+            </Button>
           </div>
 
           <div>
@@ -97,15 +172,14 @@ export default function ConfigToolsPage() {
         </TabsContent>
 
         {/* ABA MENSAGENS */}
-        <TabsContent value="mensagens" className="space-y-6">
+        <TabsContent value="mensagens" className="space-y-4">
           {loadingSettings ? (
             <p className="text-sm text-neutral-400">Carregando...</p>
           ) : (
-            <div className="border border-white/10 rounded-lg p-4 space-y-4">
-              <h2 className="text-base font-semibold">Confirmação de Agendamento (WhatsApp)</h2>
-
+            <>
+              {/* Nome da empresa (global) */}
               <div className="space-y-1">
-                <label className="text-xs text-neutral-400 font-medium">Nome da empresa</label>
+                <label className="text-xs text-neutral-400 font-medium">Nome da empresa (usado em todas as mensagens)</label>
                 <input
                   type="text"
                   value={companyName}
@@ -115,51 +189,69 @@ export default function ConfigToolsPage() {
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs text-neutral-400 font-medium">Mensagem</label>
-                <div className="flex flex-wrap gap-1 mb-1">
-                  {VARIABLES.map(v => (
+              {/* Seletor de mensagem */}
+              <div className="grid grid-cols-2 gap-2">
+                {MESSAGE_CONFIGS.map(cfg => {
+                  const Icon = cfg.icon;
+                  return (
+                    <button
+                      key={cfg.key}
+                      type="button"
+                      onClick={() => setSelectedMessage(cfg.key)}
+                      className={cn(
+                        'flex items-center gap-2 p-3 rounded-lg border text-sm font-medium transition-colors text-left',
+                        selectedMessage === cfg.key
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-white/10 bg-black/20 text-neutral-300 hover:border-white/30'
+                      )}
+                    >
+                      <Icon size={16} className="flex-shrink-0" />
+                      {cfg.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Editor da mensagem selecionada */}
+              <div className="border border-white/10 rounded-lg p-4 space-y-3">
+                <h3 className="text-sm font-semibold text-neutral-200 flex items-center gap-2">
+                  <currentConfig.icon size={15} />
+                  {currentConfig.label}
+                </h3>
+
+                <div className="flex flex-wrap gap-1">
+                  {currentConfig.variables.map(v => (
                     <button
                       key={v}
                       type="button"
-                      onClick={() => setTemplate(t => t + v)}
+                      onClick={() => setTemplates(prev => ({ ...prev, [selectedMessage]: prev[selectedMessage] + v }))}
                       className="text-xs bg-white/10 hover:bg-white/20 text-neutral-300 px-2 py-0.5 rounded font-mono transition-colors"
                     >
                       {v}
                     </button>
                   ))}
                 </div>
+
                 <textarea
                   rows={10}
-                  value={template}
-                  onChange={e => setTemplate(e.target.value)}
-                  placeholder="Digite a mensagem de confirmação..."
+                  value={currentTemplate}
+                  onChange={e => setTemplates(prev => ({ ...prev, [selectedMessage]: e.target.value }))}
+                  placeholder="Digite a mensagem..."
                   className="w-full p-2 border border-white/20 rounded text-sm bg-black/30 text-neutral-200 font-mono"
                 />
+
+                <div className="border border-white/10 rounded p-3 bg-black/20">
+                  <p className="text-xs text-neutral-500 mb-2 font-medium">Pré-visualização</p>
+                  <pre className="text-xs text-neutral-300 whitespace-pre-wrap font-sans">
+                    {currentConfig.preview(currentTemplate, companyName || 'Minha Oficina')}
+                  </pre>
+                </div>
               </div>
 
-              <div className="border border-white/10 rounded p-3 bg-black/20">
-                <p className="text-xs text-neutral-500 mb-1 font-medium">Pré-visualização</p>
-                <pre className="text-xs text-neutral-300 whitespace-pre-wrap font-sans">
-                  {template
-                    .replace(/\{\{nome\}\}/g, ', João')
-                    .replace(/\{\{empresa\}\}/g, companyName || 'Minha Oficina')
-                    .replace(/\{\{data\}\}/g, 'quarta-feira, 19/03/2026')
-                    .replace(/\{\{turno\}\}/g, 'Manhã')
-                    .replace(/\{\{moto\}\}/g, 'CG 125 2020')
-                    .replace(/\{\{servico\}\}/g, 'Troca de óleo')
-                  }
-                </pre>
-              </div>
-
-              <Button
-                className="w-full"
-                disabled={saving}
-                onClick={() => saveSettings({ company_name: companyName, whatsapp_confirmation_template: template })}
-              >
-                {saving ? 'Salvando...' : 'Salvar'}
+              <Button className="w-full" disabled={saving} onClick={handleSave}>
+                {saving ? 'Salvando...' : 'Salvar todas as mensagens'}
               </Button>
-            </div>
+            </>
           )}
         </TabsContent>
       </Tabs>

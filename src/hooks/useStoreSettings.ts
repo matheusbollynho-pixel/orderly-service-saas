@@ -6,9 +6,14 @@ export interface StoreSettings {
   id: string;
   company_name: string;
   whatsapp_confirmation_template: string;
+  whatsapp_satisfaction_template: string;
+  whatsapp_birthday_template: string;
+  whatsapp_balcao_followup_template: string;
 }
 
-const DEFAULT_TEMPLATE = `Olá{{nome}}! 👋
+const DEFAULTS: Omit<StoreSettings, 'id'> = {
+  company_name: 'Minha Oficina',
+  whatsapp_confirmation_template: `Olá{{nome}}! 👋
 
 Seu agendamento na *{{empresa}}* foi confirmado! ✅
 
@@ -19,7 +24,40 @@ Seu agendamento na *{{empresa}}* foi confirmado! ✅
 
 Qualquer dúvida, é só chamar. Te esperamos! 😊
 
-*{{empresa}}* 🏍️🔧`;
+*{{empresa}}* 🏍️🔧`,
+  whatsapp_satisfaction_template: `Olá, {{nome}}! 👋
+
+Aqui é da *{{empresa}}*.
+
+Sua opinião é muito importante para melhorarmos sempre.
+Pode avaliar seu atendimento em menos de 1 minuto? ⭐
+
+{{link}}
+
+Obrigado pela confiança! 🏍️🔧`,
+  whatsapp_birthday_template: `🎉 *Feliz aniversário!* 🎂🥳
+
+A equipe da *{{empresa}}* deseja muitas conquistas e bons quilômetros pela frente! 🏍️💨
+
+Pra comemorar, você ganhou:
+🎁 *15% de desconto* em serviços da oficina ou peças à vista.
+
+⏰ Válido por 7 dias.
+É só apresentar esta mensagem 😉
+
+*{{empresa}}* — cuidando da sua moto como você merece!`,
+  whatsapp_balcao_followup_template: `Olá{{nome}}! 👋
+
+Aqui é da *{{empresa}}*.
+
+Passando para saber se tudo ficou certinho com seu atendimento da nota *#{{numero}}*. Ficou alguma dúvida ou podemos ajudar em algo? 😊
+
+Se quiser, deixa sua avaliação — leva menos de 1 minuto e nos ajuda muito! ⭐
+
+{{link}}
+
+Att, {{atendente}} 🏍️🔧`,
+};
 
 export function useStoreSettings() {
   const [settings, setSettings] = useState<StoreSettings | null>(null);
@@ -37,10 +75,9 @@ export function useStoreSettings() {
     if (data) {
       setSettings(data as StoreSettings);
     } else {
-      // Cria linha padrão se não existir
       const { data: created } = await supabase
         .from('store_settings')
-        .insert({ company_name: 'Minha Oficina', whatsapp_confirmation_template: DEFAULT_TEMPLATE })
+        .insert(DEFAULTS)
         .select()
         .single();
       if (created) setSettings(created as StoreSettings);
