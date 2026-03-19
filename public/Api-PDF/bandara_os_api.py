@@ -381,7 +381,10 @@ def create_os_pdf(output_path: str, dados: dict) -> None:
     c.rect(0, h - 22*mm, 2.5*mm, 22*mm, fill=1, stroke=0)
 
     if os.path.exists(logo_path):
-        c.drawImage(logo_path, M, h - 21*mm, width=21*mm, height=21*mm, mask='auto')
+        try:
+            c.drawImage(logo_path, M, h - 21*mm, width=21*mm, height=21*mm, mask='auto')
+        except Exception as _e:
+            print(f"[DEBUG] Falha ao desenhar logo: {_e}")
 
     c.setFillColor(WHITE)
     c.setFont('Helvetica-Bold', 15)
@@ -857,22 +860,27 @@ def gerar_os():
     for item in (dados.get('checklist_items') or []):
         print(f"[DEBUG]   {_json.dumps(item, ensure_ascii=False)}")
 
-    # Se logo_base64 for fornecido, decodifica diretamente
+    # Se logo_base64 for fornecido, decodifica e converte para RGB PNG (evita crash do reportlab com RGBA)
     _tmp_logo_path = None
     if dados.get('logo_base64'):
-        import base64, tempfile
+        import base64, tempfile, io as _io
         try:
+            from PIL import Image as _Image
             b64data = str(dados['logo_base64'])
             if ',' in b64data:
                 _, b64data = b64data.split(',', 1)
             img_bytes = base64.b64decode(b64data)
-            suffix = '.jpg' if img_bytes[:2] == b'\xff\xd8' else '.png'
-            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-            tmp.write(img_bytes)
+            pil_img = _Image.open(_io.BytesIO(img_bytes)).convert('RGBA')
+            # Fundo branco para transparência (reportlab não suporta RGBA diretamente)
+            bg = _Image.new('RGBA', pil_img.size, (255, 255, 255, 255))
+            bg.paste(pil_img, mask=pil_img.split()[3])
+            rgb_img = bg.convert('RGB')
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+            rgb_img.save(tmp.name, 'PNG')
             tmp.close()
             dados['logo_path'] = tmp.name
             _tmp_logo_path = tmp.name
-            print(f"[DEBUG] Logo decodificado de base64 -> {tmp.name}")
+            print(f"[DEBUG] Logo convertido RGBA->RGB -> {tmp.name}")
         except Exception as e:
             print(f"[DEBUG] Falha ao processar logo_base64: {e}")
 
