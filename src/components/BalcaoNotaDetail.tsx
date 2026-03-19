@@ -411,19 +411,11 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   const fetchLogoBase64 = async (): Promise<string> => {
     const rawUrl = storeSettings?.logo_url || `${window.location.origin}${import.meta.env.VITE_LOGO_PATH || '/bandara-logo.png'}`;
     const url = rawUrl.split('?')[0];
-    try {
-      const res = await fetch(url, { mode: 'cors', credentials: 'omit' });
-      const blob = await res.blob();
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-      // Redimensiona para máx 200px para evitar timeout no Render
-      return await new Promise<string>((resolve) => {
-        const img = new Image();
-        img.onload = () => {
+    return new Promise<string>((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
           const MAX = 200;
           const scale = Math.min(1, MAX / Math.max(img.width, img.height));
           const canvas = document.createElement('canvas');
@@ -431,13 +423,13 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
           canvas.height = Math.round(img.height * scale);
           canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
           resolve(canvas.toDataURL('image/png'));
-        };
-        img.onerror = () => resolve(dataUrl);
-        img.src = dataUrl;
-      });
-    } catch {
-      return LOGO_BASE64;
-    }
+        } catch {
+          resolve(LOGO_BASE64);
+        }
+      };
+      img.onerror = () => resolve(LOGO_BASE64);
+      img.src = url;
+    });
   };
 
   // ── Helper: imprime via iframe com srcdoc (com CSS preservado) ─

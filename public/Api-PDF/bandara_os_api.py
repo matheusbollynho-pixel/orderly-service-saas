@@ -857,7 +857,7 @@ def gerar_os():
     for item in (dados.get('checklist_items') or []):
         print(f"[DEBUG]   {_json.dumps(item, ensure_ascii=False)}")
 
-    # Se logo_base64 for fornecido, decodifica diretamente (mais confiável que fetch remoto)
+    # Se logo_base64 for fornecido, decodifica diretamente
     _tmp_logo_path = None
     if dados.get('logo_base64'):
         import base64, tempfile
@@ -866,7 +866,6 @@ def gerar_os():
             if ',' in b64data:
                 _, b64data = b64data.split(',', 1)
             img_bytes = base64.b64decode(b64data)
-            # Detecta formato pela assinatura dos bytes
             suffix = '.jpg' if img_bytes[:2] == b'\xff\xd8' else '.png'
             tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
             tmp.write(img_bytes)
@@ -876,24 +875,6 @@ def gerar_os():
             print(f"[DEBUG] Logo decodificado de base64 -> {tmp.name}")
         except Exception as e:
             print(f"[DEBUG] Falha ao processar logo_base64: {e}")
-
-    # Fallback: Se logo_url for fornecido e logo_path ainda não foi definido
-    elif dados.get('logo_url'):
-        import urllib.request, tempfile, urllib.parse
-        try:
-            url_clean = dados['logo_url'].split('?')[0]
-            parsed_path = urllib.parse.urlparse(url_clean).path
-            ext = '.' + parsed_path.rsplit('.', 1)[-1].lower() if '.' in parsed_path else '.png'
-            if ext not in ('.png', '.jpg', '.jpeg', '.gif', '.bmp'):
-                ext = '.png'
-            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
-            urllib.request.urlretrieve(url_clean, tmp.name)
-            tmp.close()
-            dados['logo_path'] = tmp.name
-            _tmp_logo_path = tmp.name
-            print(f"[DEBUG] Logo baixado de {url_clean} -> {tmp.name}")
-        except Exception as e:
-            print(f"[DEBUG] Falha ao baixar logo_url: {e}")
 
     # Define caminho da logo relativo ao script (fallback para logo padrão)
     if 'logo_path' not in dados:
