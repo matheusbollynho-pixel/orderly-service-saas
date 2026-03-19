@@ -118,7 +118,9 @@ export default function ConfigToolsPage() {
       const { error } = await supabase.storage.from('public-files').upload(path, file, { upsert: true });
       if (error) throw error;
       const { data } = supabase.storage.from('public-files').getPublicUrl(path);
-      setLogoUrl(data.publicUrl + '?t=' + Date.now());
+      const url = data.publicUrl + '?t=' + Date.now();
+      setLogoUrl(url);
+      await saveSettings({ logo_url: url });
     } catch (err: any) {
       alert('Erro ao fazer upload: ' + err.message);
     } finally {
