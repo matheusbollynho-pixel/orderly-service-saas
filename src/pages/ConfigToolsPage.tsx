@@ -161,7 +161,7 @@ export default function ConfigToolsPage() {
                 { label: 'Endereço', value: storeAddress, set: setStoreAddress, placeholder: 'Ex: Rua das Motos, 123 - Cidade-BA' },
                 { label: 'CNPJ', value: storeCnpj, set: setStoreCnpj, placeholder: 'Ex: 00.000.000/0001-00' },
                 { label: 'Instagram', value: storeInstagram, set: setStoreInstagram, placeholder: 'Ex: @BandaraMotos' },
-                { label: 'Responsável / Proprietário', value: storeOwner, set: setStoreOwner, placeholder: 'Ex: João da Silva' },
+                { label: 'Razão Social', value: storeOwner, set: setStoreOwner, placeholder: 'Ex: João da Silva ME' },
               ].map(({ label, value, set, placeholder }) => (
                 <div key={label} className="space-y-1">
                   <label className="text-xs text-neutral-400 font-medium">{label}</label>
