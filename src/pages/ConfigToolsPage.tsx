@@ -4,7 +4,7 @@ import { useServiceOrders } from '@/hooks/useServiceOrders';
 import { useAuth } from '@/hooks/useAuth';
 import { MaintenanceKeywordsManager } from '@/components/MaintenanceKeywordsManager';
 import { useStoreSettings } from '@/hooks/useStoreSettings';
-import { Settings, Trash2, MessageCircle, Clock, Zap, Send, RotateCcw, Building2 } from 'lucide-react';
+import { Settings, Zap, Building2 } from 'lucide-react';
 
 export default function ConfigToolsPage() {
   const { user, isRestrictedUser } = useAuth();
@@ -38,24 +38,6 @@ export default function ConfigToolsPage() {
         <Settings size={24} /> Ferramentas Administrativas
       </h1>
       <div className="space-y-4">
-        <Button variant="destructive" className="w-full flex items-center gap-2">
-          <Trash2 size={18} /> Limpar fotos antigas
-        </Button>
-        <Button variant="default" className="w-full flex items-center gap-2">
-          <MessageCircle size={18} /> Testar pesquisa satisfação
-        </Button>
-        <Button variant="default" className="w-full flex items-center gap-2">
-          <Clock size={18} /> Testar pesquisa (4s)
-        </Button>
-        <Button variant="default" className="w-full flex items-center gap-2">
-          <Zap size={18} /> Gerenciar keywords manutenção
-        </Button>
-        <Button variant="default" className="w-full flex items-center gap-2">
-          <Send size={18} /> Enviar link satisfação
-        </Button>
-        <Button variant="default" className="w-full flex items-center gap-2">
-          <RotateCcw size={18} /> Resetar satisfação
-        </Button>
         <div className="w-full flex flex-col gap-2">
           <label htmlFor="removeOsId" className="text-xs text-neutral-400 mb-1 font-medium">ID da OS para tirar de Concluída e Entregue:</label>
           <input id="removeOsId" type="text" value={removeOsId} onChange={e => setRemoveOsId(e.target.value)} placeholder="Cole o ID da OS aqui" className="w-full p-2 border border-white/20 rounded text-xs bg-black/30 text-neutral-200 mb-2" />
