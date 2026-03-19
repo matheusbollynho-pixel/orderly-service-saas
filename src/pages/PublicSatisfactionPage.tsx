@@ -887,8 +887,8 @@ export default function PublicSatisfactionPage() {
 
                 <div className="text-center pt-2 border-t">
                   <p className="text-xs text-muted-foreground">
-                    📱 Bandara Motos • Paulo Afonso-BA<br/>
-                    (75) 98804-6356 • @BandaraMotos
+                    📱 {companyName}{storeSettings?.store_address ? ` • ${storeSettings.store_address}` : ''}<br/>
+                    {storeSettings?.store_phone || ''}{storeSettings?.store_instagram ? ` • ${storeSettings.store_instagram}` : ''}
                   </p>
                 </div>
               </>
