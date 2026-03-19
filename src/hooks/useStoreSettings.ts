@@ -87,18 +87,25 @@ export function useStoreSettings() {
     if (data) {
       setSettings(data as StoreSettings);
     } else {
-      const { data: created } = await supabase
-        .from('store_settings')
-        .insert(DEFAULTS)
-        .select()
-        .single();
-      if (created) setSettings(created as StoreSettings);
+      // Só cria linha padrão se houver sessão autenticada
+      const { data: session } = await supabase.auth.getSession();
+      if (session?.session) {
+        const { data: created } = await supabase
+          .from('store_settings')
+          .insert(DEFAULTS)
+          .select()
+          .single();
+        if (created) setSettings(created as StoreSettings);
+      }
     }
     setLoading(false);
   }
 
   async function saveSettings(updated: Partial<StoreSettings>) {
     if (!settings) return;
+    // Só salva se houver sessão autenticada
+    const { data: session } = await supabase.auth.getSession();
+    if (!session?.session) return;
     setSaving(true);
     const { data, error } = await supabase
       .from('store_settings')
