@@ -1,4 +1,4 @@
-import { ServiceOrder } from '@/types/service-order';
+import { ServiceOrder, STATUS_OFICINA_LABELS, STATUS_OFICINA_COLORS } from '@/types/service-order';
 import { StatusBadge } from './StatusBadge';
 import { Card, CardContent } from '@/components/ui/card';
 import { MapPin, Phone, Wrench, ChevronRight, Calendar } from 'lucide-react';
@@ -34,6 +34,11 @@ export function OrderCard({ order, onClick }: OrderCardProps) {
             <div className="flex items-center gap-2 mb-2.5">
               <h3 className="font-bold text-foreground truncate text-[18px] tracking-[0.02em]">{order.client_name}</h3>
               <StatusBadge status={order.status} />
+              {order.status_oficina && (
+                <span className={`text-[9px] font-semibold uppercase tracking-[0.1em] px-2 py-0.5 rounded-full border ${STATUS_OFICINA_COLORS[order.status_oficina]}`}>
+                  {STATUS_OFICINA_LABELS[order.status_oficina]}
+                </span>
+              )}
               {isExpress && (
                 <span className="text-[9px] font-semibold uppercase tracking-[0.12em] px-2 py-0.5 rounded-full bg-[#C1272D]/20 text-[#C1272D] border border-[#C1272D]/40">
                   Express

@@ -22,6 +22,7 @@ export interface BalcaoOrder {
   discount_amount: number;
   total: number;
   notes: string | null;
+  atendente_id: string | null;
   finalized_at: string | null;
   created_at: string;
   updated_at: string;
@@ -247,7 +248,7 @@ export function useBalcao() {
 
   // ── Cancelar nota (admin) ─────────────────────────────────────
   const cancelOrderMutation = useMutation({
-    mutationFn: async (orderId: string) => {
+    mutationFn: async ({ orderId, cancelReason, cancelNotes }: { orderId: string; cancelReason: string; cancelNotes?: string }) => {
       const { data: order, error: fetchErr } = await supabase
         .from('balcao_orders')
         .select('*, balcao_items(*)')
@@ -257,30 +258,20 @@ export function useBalcao() {
       if (order.status === 'cancelada') throw new Error('Nota já cancelada');
 
       if (order.status === 'finalizada') {
-        // Reverter movimentações de estoque
-        for (const item of (order.balcao_items ?? []) as BalcaoItem[]) {
-          if (item.type === 'estoque' && item.product_id) {
-            const { error: movErr } = await supabase
-              .from('inventory_movements')
-              .insert({
-                product_id: item.product_id,
-                type: 'devolucao',
-                quantity: item.quantity,
-                unit_price: item.unit_price,
-                notes: `Cancelamento Nota Balcão #${orderId.slice(0, 8)}`,
-              });
-            if (movErr) throw movErr;
-          }
-        }
-
-        // Remover lançamento do caixa
+        // Remover lançamento do caixa — o trigger fn_restore_stock_on_cashflow_delete
+        // já cuida de restaurar o estoque automaticamente ao deletar
         await supabase.from('cash_flow').delete().eq('balcao_order_id', orderId);
       }
 
-      // Marcar como cancelada
+      // Marcar como cancelada com motivo
       const { error: updErr } = await supabase
         .from('balcao_orders')
-        .update({ status: 'cancelada', updated_at: new Date().toISOString() })
+        .update({
+          status: 'cancelada',
+          cancel_reason: cancelReason,
+          cancel_notes: cancelNotes || null,
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', orderId);
       if (updErr) throw updErr;
     },

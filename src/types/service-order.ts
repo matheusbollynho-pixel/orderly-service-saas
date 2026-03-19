@@ -1,5 +1,36 @@
 export type OrderStatus = 'aberta' | 'em_andamento' | 'concluida' | 'concluida_entregue';
 
+export type StatusOficina =
+  | 'aguardando_inspecao'
+  | 'em_servico'
+  | 'aguardando_peca'
+  | 'servico_concluido'
+  | 'pronta_para_buscar';
+
+export const STATUS_OFICINA_LABELS: Record<StatusOficina, string> = {
+  aguardando_inspecao: 'Aguardando Inspeção',
+  em_servico: 'Em Serviço',
+  aguardando_peca: 'Aguardando Peça',
+  servico_concluido: 'Serviço Concluído',
+  pronta_para_buscar: 'Pronta p/ Buscar',
+};
+
+export const STATUS_OFICINA_OPTIONS_LIST: { value: StatusOficina; label: string }[] = [
+  { value: 'aguardando_inspecao', label: '🔍 Aguardando Inspeção' },
+  { value: 'em_servico', label: '🔧 Em Serviço' },
+  { value: 'aguardando_peca', label: '📦 Aguardando Peça' },
+  { value: 'servico_concluido', label: '✅ Serviço Concluído' },
+  { value: 'pronta_para_buscar', label: '🏁 Pronta p/ Buscar' },
+];
+
+export const STATUS_OFICINA_COLORS: Record<StatusOficina, string> = {
+  aguardando_inspecao: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+  em_servico: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  aguardando_peca: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  servico_concluido: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+  pronta_para_buscar: 'bg-green-500/20 text-green-400 border-green-500/30',
+};
+
 export interface ChecklistItem {
   id: string;
   order_id: string;
@@ -68,6 +99,8 @@ export interface ServiceOrder {
   first_delivery_signature_data?: string | null;
   entry_date?: string;
   exit_date?: string | null;
+  previsao_entrega?: string | null; // DATE: 'YYYY-MM-DD'
+  status_oficina?: StatusOficina | null;
   created_at: string;
   updated_at: string;
   mechanic_id?: string | null;
@@ -157,6 +190,7 @@ export interface CashFlow {
   payment_method?: PaymentMethod | null;
   order_id?: string | null;
   payment_id?: string | null;
+  balcao_order_id?: string | null;
   inventory_movement_id?: string | null;
   date: string;
   notes?: string | null;

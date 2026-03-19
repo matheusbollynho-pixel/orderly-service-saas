@@ -85,22 +85,27 @@ export function useClients() {
     }
   };
 
-  // Buscar cliente por telefone
+  // Buscar cliente por telefone (tenta várias variações de formato)
   const searchClientByPhone = async (phone: string): Promise<Client | null> => {
     try {
-      const cleanPhone = phone.replace(/\D/g, '');
+      const clean = phone.replace(/\D/g, '');
+      // Variações: com/sem DDI 55, com/sem 9 extra
+      const variants = new Set<string>([clean]);
+      if (clean.startsWith('55')) variants.add(clean.slice(2));
+      else variants.add(`55${clean}`);
+      // adiciona/remove o 9 no início do número local (após DDD)
+      const local = clean.startsWith('55') ? clean.slice(2) : clean;
+      if (local.length === 11) variants.add(local.slice(0, 2) + local.slice(3)); // remove 9
+      if (local.length === 10) variants.add(local.slice(0, 2) + '9' + local.slice(2)); // add 9
+
       const { data, error } = await supabase
         .from('clients')
         .select('*')
-        .eq('phone', cleanPhone)
+        .in('phone', [...variants])
         .eq('active', true)
         .limit(1);
 
-      if (error || !data || data.length === 0) {
-        console.log('Cliente não encontrado:', error);
-        return null;
-      }
-
+      if (error || !data || data.length === 0) return null;
       return data[0];
     } catch (err) {
       console.error('Erro ao buscar cliente:', err);

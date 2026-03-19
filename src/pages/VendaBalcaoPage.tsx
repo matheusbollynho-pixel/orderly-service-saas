@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useBalcao, type BalcaoOrder } from '@/hooks/useBalcao';
 import { BalcaoNotaDetail } from '@/components/BalcaoNotaDetail';
 import { useAuth } from '@/hooks/useAuth';
@@ -27,13 +27,30 @@ const STATUS_ICONS = {
 
 type Filter = 'todas' | 'aberta' | 'finalizada' | 'cancelada';
 
-export default function VendaBalcaoPage() {
+interface Props {
+  initialOrderId?: string | null;
+  onInitialOrderConsumed?: () => void;
+}
+
+export default function VendaBalcaoPage({ initialOrderId, onInitialOrderConsumed }: Props = {}) {
   const { orders, isLoading, createOrder, isCreating } = useBalcao();
   const { isAdmin } = useAuth();
 
   const [selectedOrder, setSelectedOrder] = useState<BalcaoOrder | null>(null);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<Filter>('aberta');
+
+  // Abrir nota diretamente quando vindo do caixa
+  useEffect(() => {
+    if (initialOrderId && orders.length > 0) {
+      const found = orders.find(o => o.id === initialOrderId);
+      if (found) {
+        setSelectedOrder(found);
+        setFilter('todas');
+        onInitialOrderConsumed?.();
+      }
+    }
+  }, [initialOrderId, orders]);
 
   // Sincronizar selectedOrder com dados atualizados do servidor
   const currentOrder = selectedOrder

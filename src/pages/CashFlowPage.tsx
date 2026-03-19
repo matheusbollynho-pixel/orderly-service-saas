@@ -14,7 +14,12 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-export function CashFlowPage() {
+interface CashFlowPageProps {
+  onSelectOrder?: (orderId: string) => void;
+  onSelectBalcaoOrder?: (balcaoOrderId: string) => void;
+}
+
+export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder }: CashFlowPageProps = {}) {
     // Estados para os campos do cabeçalho
     const [status, setStatus] = useState('aberta');
     const [osAbertaPor, setOsAbertaPor] = useState('Matheus');
@@ -442,16 +447,23 @@ export function CashFlowPage() {
 
     return (
       <div className="space-y-2">
-        {transactions.map((entry) => (
+        {transactions.map((entry) => {
+          const isNavigable = !!(entry.order_id && onSelectOrder) || !!(entry.balcao_order_id && onSelectBalcaoOrder);
+          const handleCardClick = () => {
+            if (entry.order_id && onSelectOrder) onSelectOrder(entry.order_id);
+            else if (entry.balcao_order_id && onSelectBalcaoOrder) onSelectBalcaoOrder(entry.balcao_order_id);
+          };
+          return (
           <Card
             key={entry.id}
-            className={`border-l-4 ${
+            onClick={isNavigable ? handleCardClick : undefined}
+            className={`border-l-4 transition-colors ${
               entry.type === 'entrada'
                 ? 'border-l-green-500'
                 : entry.type === 'retirada'
                 ? 'border-l-orange-500'
                 : 'border-l-red-500'
-            }`}
+            } ${isNavigable ? 'cursor-pointer hover:bg-muted/50' : ''}`}
           >
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
@@ -501,11 +513,12 @@ export function CashFlowPage() {
                     {entry.type === 'entrada' ? '+' : '-'}
                     {formatCurrency(Math.abs(entry.amount))}
                   </span>
-                  {entry.order_id === null && (
+                  {entry.order_id === null && entry.balcao_order_id === null && (
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         if (
                           confirm(
                             'Tem certeza que deseja excluir esta transação?'
@@ -522,7 +535,8 @@ export function CashFlowPage() {
               </div>
             </CardContent>
           </Card>
-        ))}
+          );
+        })}
       </div>
     );
   };

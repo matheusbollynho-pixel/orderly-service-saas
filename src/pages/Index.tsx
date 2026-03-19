@@ -19,6 +19,9 @@ import { supabase } from '@/integrations/supabase/client';
 import SatisfactionDashboardPage from './SatisfactionDashboardPage';
 import InventoryPage from './InventoryPage';
 import VendaBalcaoPage from './VendaBalcaoPage';
+import QuadroOficinaPage from './QuadroOficinaPage';
+import AgendaPage from './AgendaPage';
+import { AgendaAlertModal } from '@/components/AgendaAlertModal';
 import { useInventory } from '@/hooks/useInventory';
 import { BottomNav } from '@/components/BottomNav';
 import { EmptyState } from '@/components/EmptyState';
@@ -28,7 +31,7 @@ import { Wrench, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { getMaintenanceKeywords, findKeywordInText, createMaintenanceReminder, rescheduleMaintenanceReminder } from '@/services/maintenanceReminderService';
 
-type View = 'dashboard' | 'new' | 'express' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa' | 'satisfacao' | 'estoque' | 'balcao';
+type View = 'dashboard' | 'new' | 'express' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa' | 'satisfacao' | 'estoque' | 'balcao' | 'quadro' | 'agenda';
 
 export default function Index() {
   const { isAdmin, canAccessCashFlow, canAccessReports } = useAuth();
@@ -36,6 +39,8 @@ export default function Index() {
   const [selectedOrder, setSelectedOrder] = useState<ServiceOrder | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<OrderStatus | null>(null);
+  const [initialBalcaoOrderId, setInitialBalcaoOrderId] = useState<string | null>(null);
+  const [orderFormInitialData, setOrderFormInitialData] = useState<{ client_name?: string; client_phone?: string; equipment?: string; service_description?: string; client_id?: string } | undefined>();
 
   // Redirecionar se usuário restrito tentar acessar caixa ou relatórios
   useEffect(() => {
@@ -256,6 +261,7 @@ Retirada: ${retiradaInfo}`;
           }
           
           toast.success('Cliente, motos e OS salvos com sucesso! 🎉');
+          setOrderFormInitialData(undefined);
           // Redirecionar para a OS criada
           setSelectedOrder(newOrder);
           setCurrentView('details');
@@ -622,7 +628,16 @@ Retirada: ${retiradaInfo}`;
         )}
 
         {currentView === 'fluxo-caixa' && (
-          <CashFlowPage />
+          <CashFlowPage
+            onSelectOrder={(orderId) => {
+              const order = orders.find(o => o.id === orderId);
+              if (order) { setSelectedOrder(order); setCurrentView('details'); }
+            }}
+            onSelectBalcaoOrder={(balcaoOrderId) => {
+              setInitialBalcaoOrderId(balcaoOrderId);
+              setCurrentView('balcao');
+            }}
+          />
         )}
 
         {currentView === 'satisfacao' && (
@@ -630,18 +645,48 @@ Retirada: ${retiradaInfo}`;
         )}
 
         {currentView === 'balcao' && (
-          <VendaBalcaoPage />
+          <VendaBalcaoPage
+            initialOrderId={initialBalcaoOrderId}
+            onInitialOrderConsumed={() => setInitialBalcaoOrderId(null)}
+          />
         )}
 
         {currentView === 'estoque' && (
           <InventoryPage />
         )}
 
+        {currentView === 'agenda' && (
+          <AgendaPage
+            onConvertToOS={(appt) => {
+              setOrderFormInitialData({
+                client_name: appt.client_name,
+                client_phone: appt.client_phone,
+                equipment: appt.equipment,
+                service_description: appt.service_description,
+                client_id: appt.client_id ?? undefined,
+              });
+              setCurrentView('new');
+            }}
+          />
+        )}
+
+        {currentView === 'quadro' && (
+          <QuadroOficinaPage
+            orders={orders}
+            onSelectOrder={(order) => {
+              setSelectedOrder(order);
+              setCurrentView('details');
+            }}
+            onUpdateOrder={updateOrder}
+          />
+        )}
+
         {currentView === 'new' && (
           <OrderForm
             onSubmit={handleCreateOrder}
-            onCancel={() => setCurrentView('dashboard')}
+            onCancel={() => { setOrderFormInitialData(undefined); setCurrentView('dashboard'); }}
             isSubmitting={isCreating}
+            initialData={orderFormInitialData}
           />
         )}
 
@@ -782,6 +827,8 @@ Retirada: ${retiradaInfo}`;
           isAdmin={isAdmin}
         />
       )}
+
+      <AgendaAlertModal onGoToAgenda={() => setCurrentView('agenda')} />
     </div>
   );
 }

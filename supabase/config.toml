@@ -11,3 +11,9 @@ verify_jwt = false
 
 [functions.satisfaction-public]
 verify_jwt = false
+
+[functions.send-balcao-followup]
+verify_jwt = false
+
+[functions.send-appointment-confirmation]
+verify_jwt = false

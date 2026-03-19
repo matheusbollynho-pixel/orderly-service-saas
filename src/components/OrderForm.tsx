@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -55,23 +56,31 @@ interface OrderFormData {
   servicos: ServicoData;
 }
 
-export function OrderForm({ onSubmit, onCancel, isSubmitting }: { onSubmit: (data: OrderFormData) => void; onCancel: () => void; isSubmitting?: boolean }) {
+interface OrderFormInitialData {
+  client_name?: string;
+  client_phone?: string;
+  equipment?: string;
+  service_description?: string;
+  client_id?: string;
+}
+
+export function OrderForm({ onSubmit, onCancel, isSubmitting, initialData }: { onSubmit: (data: OrderFormData) => void; onCancel: () => void; isSubmitting?: boolean; initialData?: OrderFormInitialData }) {
   const [activeTab, setActiveTab] = useState<'cliente' | 'motos' | 'servicos'>('cliente');
   const [maintenanceKeywords, setMaintenanceKeywords] = useState<MaintenanceKeyword[]>([]);
   const [detectedKeywords, setDetectedKeywords] = useState<MaintenanceKeyword[]>([]);
   const { members: teamMembers } = useTeamMembers();
-  
+
   const getTodayLocal = () => {
     const now = new Date();
     const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
     return local.toISOString().split('T')[0];
   };
-  
+
   const [formData, setFormData] = useState<OrderFormData>({
-    client: { name: '', cpf: '', phone: '', address: '', numero: '', apelido: '', instagram: '', autoriza_instagram: false, autoriza_lembretes: true, birth_date: '' },
-    motos: [{ placa: '', moto_info: '', equipment: '', model: '', year: '', color: '', km: '' }],
+    client: { name: initialData?.client_name ?? '', cpf: '', phone: initialData?.client_phone ?? '', address: '', numero: '', apelido: '', instagram: '', autoriza_instagram: false, autoriza_lembretes: true, birth_date: '' },
+    motos: [{ placa: '', moto_info: initialData?.equipment ?? '', equipment: initialData?.equipment ?? '', model: '', year: '', color: '', km: '' }],
     servicos: {
-      descricao_geral: '',
+      descricao_geral: initialData?.service_description ?? '',
       atendimento_id: '',
       created_by_staff_id: '',
       finalized_by_staff_id: '',
@@ -80,10 +89,59 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting }: { onSubmit: (dat
       telefone_retirada: '',
       cpf_retirada: '',
       adesivo_loja: 'sim',
-      o_que_fazer: '',
-      entry_date: getTodayLocal() // Data de hoje (local)
+      o_que_fazer: initialData?.service_description ?? '',
+      entry_date: getTodayLocal()
     }
   });
+
+  // Pré-preencher com dados do cliente do banco quando client_id for passado
+  const prefillDone = useRef(false);
+  useEffect(() => {
+    if (!initialData?.client_id || prefillDone.current) return;
+    prefillDone.current = true;
+
+    const fetchClient = async () => {
+      const [{ data: client }, { data: motos }] = await Promise.all([
+        supabase.from('clients').select('*').eq('id', initialData.client_id!).single(),
+        supabase.from('motorcycles').select('*').eq('client_id', initialData.client_id!).eq('active', true),
+      ]);
+
+      if (!client) return;
+
+      const buildMotoData = (m: typeof motos[0]) => ({
+        placa: m.placa ?? '',
+        moto_info: `${m.marca} ${m.modelo} ${m.ano ?? ''}`.trim(),
+        equipment: `${m.marca} ${m.modelo}${m.ano ? ' ' + m.ano : ''}${m.cor ? ' ' + m.cor : ''}${m.placa ? ' (' + m.placa + ')' : ''}`.trim(),
+        model: `${m.marca ?? ''} ${m.modelo ?? ''}`.trim(),
+        year: m.ano ? String(m.ano) : '',
+        color: m.cor ?? '',
+        km: '',
+      });
+
+      const motosData = motos && motos.length > 0
+        ? motos.map(buildMotoData)
+        : [{ placa: '', moto_info: initialData.equipment ?? '', equipment: initialData.equipment ?? '', model: '', year: '', color: '', km: '' }];
+
+      setFormData(prev => ({
+        ...prev,
+        client: {
+          ...prev.client,
+          name: client.name ?? prev.client.name,
+          cpf: client.cpf ?? '',
+          phone: client.phone ?? prev.client.phone,
+          address: client.endereco ?? '',
+          apelido: client.apelido ?? '',
+          instagram: client.instagram ?? '',
+          autoriza_instagram: client.autoriza_instagram ?? false,
+          autoriza_lembretes: client.autoriza_lembretes ?? true,
+          birth_date: client.birth_date ?? '',
+        },
+        motos: motosData,
+      }));
+    };
+
+    fetchClient();
+  }, [initialData?.client_id]);
 
   // Load maintenance keywords on component mount
   useEffect(() => {

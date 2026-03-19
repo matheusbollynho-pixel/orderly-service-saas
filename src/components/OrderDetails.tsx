@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ServiceOrder, OrderStatus, STATUS_LABELS, PaymentMethod, Material } from '@/types/service-order';
+import { ServiceOrder, OrderStatus, STATUS_LABELS, PaymentMethod, Material, StatusOficina, STATUS_OFICINA_OPTIONS_LIST } from '@/types/service-order';
 import { StatusBadge } from './StatusBadge';
 import { Checklist } from './Checklist';
 import { SignaturePad } from './SignaturePad';
@@ -258,6 +258,7 @@ export function OrderDetails({
   
   const [exitDate, setExitDate] = useState(formatDateToInput(order.exit_date));
   const [showExitDateEditor, setShowExitDateEditor] = useState(false);
+  const [previsaoEntrega, setPrevisaoEntrega] = useState(order.previsao_entrega ?? '');
 
   // Função para salvar a edição do campo "O que fazer"
   const handleSaveServicesTodo = () => {
@@ -343,7 +344,8 @@ export function OrderDetails({
     setShowExitDateEditor(false);
     setAutorizaInstagram(!!order.autoriza_instagram);
     setAutorizaLembretes(order.autoriza_lembretes !== false ? true : false);
-  }, [order.id, order.exit_date, order.autoriza_instagram, order.autoriza_lembretes]);
+    setPrevisaoEntrega(order.previsao_entrega ?? '');
+  }, [order.id, order.exit_date, order.autoriza_instagram, order.autoriza_lembretes, order.previsao_entrega]);
 
   useEffect(() => {
     if (isExpress && !showCompleteForm) {
@@ -962,11 +964,22 @@ const renderDeliverySection = () => {
                     return;
                   }
 
+                  if (value === 'em_andamento' && order.status !== 'em_andamento') {
+                    // Sincroniza para Em Serviço, mas só se ainda não tiver um status de oficina definido
+                    if (!order.status_oficina || order.status_oficina === 'aguardando_inspecao') {
+                      onUpdateOrder?.({ id: order.id, status_oficina: 'em_servico' });
+                    }
+                  }
+
                   if (value === 'concluida' && order.status !== 'concluida') {
                     const today = formatDateToInput(new Date().toISOString());
                     setExitDate(today);
                     dispatchExitDateUpdate(today);
                     setShowExitDateEditor(false);
+                    // Sincroniza status da oficina
+                    if (order.status_oficina !== 'servico_concluido') {
+                      onUpdateOrder?.({ id: order.id, status_oficina: 'servico_concluido' });
+                    }
                   }
 
                   if (value !== 'concluida') {
@@ -1086,9 +1099,68 @@ const renderDeliverySection = () => {
               )}
             </div>
           )}
+
         </CardContent>
               {/* Rodapé com ID da OS removido para evitar duplicidade */}
       </Card>
+
+      {/* Quadro da Oficina — Card próprio, visível logo após status */}
+      {order.status !== 'concluida_entregue' && (
+        <Card className="card-elevated border-primary/20">
+          <CardContent className="p-4 space-y-3">
+            <span className="text-sm font-semibold text-foreground flex items-center gap-2">
+              🔧 Oficina
+            </span>
+
+            {/* Previsão de Entrega */}
+            <div className="flex items-center justify-between gap-3">
+              <Label className="text-sm font-medium text-foreground whitespace-nowrap">📅 Previsão de entrega</Label>
+              <Input
+                type="date"
+                value={previsaoEntrega}
+                onChange={(e) => setPrevisaoEntrega(e.target.value)}
+                onBlur={() => {
+                  onUpdateOrder?.({
+                    id: order.id,
+                    previsao_entrega: previsaoEntrega || null,
+                  });
+                }}
+                className="h-8 text-sm w-[160px]"
+              />
+            </div>
+
+            {/* Status da Oficina */}
+            <div className="flex items-center justify-between gap-3">
+              <Label className="text-sm font-medium text-foreground whitespace-nowrap">Status</Label>
+              <Select
+                value={order.status_oficina ?? ''}
+                onValueChange={(v) => {
+                  const novoStatus = v as StatusOficina;
+                  onUpdateOrder?.({ id: order.id, status_oficina: novoStatus });
+                  // Sincroniza status da OS
+                  if (novoStatus === 'servico_concluido' && order.status !== 'concluida' && order.status !== 'concluida_entregue') {
+                    const today = formatDateToInput(new Date().toISOString());
+                    setExitDate(today);
+                    dispatchExitDateUpdate(today);
+                    onStatusChange('concluida');
+                  }
+                }}
+              >
+                <SelectTrigger className="w-[200px] h-8 text-sm">
+                  <SelectValue placeholder="Definir..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {STATUS_OFICINA_OPTIONS_LIST.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value} className="text-sm">
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ID da OS movido para dentro da caixa de datas - duplicidade removida */}
 

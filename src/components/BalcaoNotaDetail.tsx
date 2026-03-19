@@ -1,10 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
 import { useBalcao, type BalcaoOrder, type BalcaoItem, type PaymentEntry } from '@/hooks/useBalcao';
 import { useInventory, type InventoryProduct } from '@/hooks/useInventory';
+import { useTeamMembers } from '@/hooks/useTeamMembers';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeft, Plus, Trash2, CheckCircle, XCircle, Package, Printer, Send, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { sendWhatsAppText, sendWhatsAppDocument } from '@/lib/whatsappService';
@@ -35,6 +38,7 @@ const STATUS_COLORS: Record<string, string> = {
 export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   const { updateOrder, addItem, updateItem, removeItem, finalizeOrder, cancelOrder, isFinalizing, isCancelling } = useBalcao();
   const { products } = useInventory();
+  const { members: teamMembers } = useTeamMembers();
 
   const items: BalcaoItem[] = order.balcao_items ?? [];
   const isEditable = order.status === 'aberta';
@@ -51,6 +55,10 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   const [suggestions, setSuggestions] = useState<InventoryProduct[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const suggestionsRef = useRef<HTMLDivElement>(null);
+
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelNotes, setCancelNotes] = useState('');
 
   const [editClientName, setEditClientName] = useState(order.client_name ?? '');
   const [editClientCpf, setEditClientCpf] = useState(order.client_cpf ?? '');
@@ -257,6 +265,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   // ── Finalizar ─────────────────────────────────────────────────
   const handleFinalizar = async () => {
     if (items.length === 0) { toast.error('Adicione ao menos um item'); return; }
+    if (!order.atendente_id) { toast.error('Selecione o atendente antes de finalizar'); return; }
     if (paymentEntries.length > 1) {
       const pago = paymentEntries.reduce((s, e) => s + e.amount, 0);
       const restante = total - pago;
@@ -273,12 +282,16 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   };
 
   // ── Cancelar ──────────────────────────────────────────────────
-  const handleCancelar = async () => {
-    const msg = order.status === 'finalizada'
-      ? 'Cancelar nota? O estoque será revertido e o lançamento no caixa removido.'
-      : 'Cancelar nota? Esta ação não pode ser desfeita.';
-    if (!window.confirm(msg)) return;
-    await cancelOrder(order.id);
+  const handleCancelar = () => {
+    setCancelReason('');
+    setCancelNotes('');
+    setShowCancelDialog(true);
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!cancelReason) { toast.error('Selecione o motivo do cancelamento'); return; }
+    setShowCancelDialog(false);
+    await cancelOrder({ orderId: order.id, cancelReason, cancelNotes });
     onBack();
   };
 
@@ -599,6 +612,24 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Atendente</label>
+              <Select
+                value={order.atendente_id ?? 'none'}
+                onValueChange={v => updateOrder({ id: order.id, atendente_id: v === 'none' ? null : v })}
+                disabled={!isEditable}
+              >
+                <SelectTrigger className="mt-1 h-8 text-sm bg-background">
+                  <SelectValue placeholder="Quem atendeu?" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Não definido</SelectItem>
+                  {teamMembers.filter(m => m.active).map(m => (
+                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">CPF</label>
               <Input
@@ -936,7 +967,9 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
           {isAdmin && order.status !== 'cancelada' && (
             <div className="flex gap-2">
               {order.status === 'aberta' && (
-                <Button type="button" onClick={handleFinalizar} disabled={isFinalizing || items.length === 0}
+                <Button type="button" onClick={handleFinalizar}
+                  disabled={isFinalizing || items.length === 0 || !order.atendente_id}
+                  title={!order.atendente_id ? 'Selecione o atendente antes de finalizar' : undefined}
                   className="flex-1 h-10 font-semibold gap-2">
                   <CheckCircle className="h-4 w-4" />
                   {isFinalizing ? 'Finalizando...' : `Finalizar · R$ ${total.toFixed(2)}`}
@@ -952,6 +985,71 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
           )}
         </div>
       </div>
+
+      {/* Dialog de motivo de cancelamento */}
+      <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base text-destructive">
+              <XCircle className="h-5 w-5" />
+              Cancelar Nota #{order.numero}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-1">
+            <p className="text-sm text-muted-foreground">
+              {order.status === 'finalizada'
+                ? 'O estoque será revertido e o lançamento no caixa removido.'
+                : 'Esta ação não pode ser desfeita.'}
+            </p>
+
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Motivo do cancelamento *</p>
+              {[
+                { value: 'erro_lancamento', label: 'Erro de lançamento', desc: 'Nota aberta por engano' },
+                { value: 'preco',           label: 'Preço',              desc: 'Cliente não aprovou o valor' },
+                { value: 'insatisfacao',    label: 'Insatisfação',       desc: 'Cliente não ficou satisfeito' },
+                { value: 'produto_indisponivel', label: 'Produto indisponível', desc: 'Item fora de estoque' },
+                { value: 'outro',           label: 'Outro motivo',       desc: '' },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setCancelReason(opt.value)}
+                  className={`w-full text-left px-3 py-2.5 rounded-lg border text-sm transition-colors ${
+                    cancelReason === opt.value
+                      ? 'border-destructive bg-destructive/10 text-destructive'
+                      : 'border-border bg-muted/20 hover:border-destructive/50'
+                  }`}
+                >
+                  <span className="font-semibold">{opt.label}</span>
+                  {opt.desc && <span className="text-muted-foreground ml-2 text-xs">— {opt.desc}</span>}
+                </button>
+              ))}
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Observação (opcional)</p>
+              <Textarea
+                placeholder="Detalhe o motivo se necessário..."
+                value={cancelNotes}
+                onChange={e => setCancelNotes(e.target.value)}
+                rows={2}
+                className="text-sm resize-none"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowCancelDialog(false)} className="flex-1">
+              Voltar
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmCancel} disabled={!cancelReason || isCancelling} className="flex-1">
+              {isCancelling ? 'Cancelando...' : 'Confirmar Cancelamento'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

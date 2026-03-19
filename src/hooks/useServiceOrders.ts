@@ -31,6 +31,8 @@ const SERVICE_ORDERS_BASE_COLUMNS = [
   'entry_date',
   'exit_date',
   'conclusion_date',
+  'previsao_entrega',
+  'status_oficina',
   'created_at',
   'updated_at',
   'mechanic_id',
