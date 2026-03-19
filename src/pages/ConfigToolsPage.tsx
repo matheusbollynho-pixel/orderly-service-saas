@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { MaintenanceKeywordsManager } from '@/components/MaintenanceKeywordsManager';
 import { useStoreSettings, StoreSettings } from '@/hooks/useStoreSettings';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Settings, Zap, MessageSquare, CalendarCheck, Star, Cake, ShoppingCart } from 'lucide-react';
+import { Settings, Zap, MessageSquare, CalendarCheck, Star, Cake, ShoppingCart, Store } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type MessageKey = 'whatsapp_confirmation_template' | 'whatsapp_satisfaction_template' | 'whatsapp_birthday_template' | 'whatsapp_balcao_followup_template';
@@ -71,6 +71,11 @@ export default function ConfigToolsPage() {
   const [removeOsId, setRemoveOsId] = useState('');
   const { settings, loading: loadingSettings, saving, saveSettings } = useStoreSettings();
   const [companyName, setCompanyName] = useState('');
+  const [storePhone, setStorePhone] = useState('');
+  const [storeAddress, setStoreAddress] = useState('');
+  const [storeCnpj, setStoreCnpj] = useState('');
+  const [storeInstagram, setStoreInstagram] = useState('');
+  const [storeOwner, setStoreOwner] = useState('');
   const [templates, setTemplates] = useState<Record<MessageKey, string>>({
     whatsapp_confirmation_template: '',
     whatsapp_satisfaction_template: '',
@@ -85,6 +90,11 @@ export default function ConfigToolsPage() {
   useEffect(() => {
     if (settings && !initialized) {
       setCompanyName(settings.company_name);
+      setStorePhone(settings.store_phone || '');
+      setStoreAddress(settings.store_address || '');
+      setStoreCnpj(settings.store_cnpj || '');
+      setStoreInstagram(settings.store_instagram || '');
+      setStoreOwner(settings.store_owner || '');
       setTemplates({
         whatsapp_confirmation_template: settings.whatsapp_confirmation_template,
         whatsapp_satisfaction_template: settings.whatsapp_satisfaction_template,
@@ -104,6 +114,11 @@ export default function ConfigToolsPage() {
   function handleSave() {
     saveSettings({
       company_name: companyName,
+      store_phone: storePhone,
+      store_address: storeAddress,
+      store_cnpj: storeCnpj,
+      store_instagram: storeInstagram,
+      store_owner: storeOwner,
       ...templates,
     } as Partial<StoreSettings>);
   }
@@ -121,15 +136,50 @@ export default function ConfigToolsPage() {
         <Settings size={24} /> Configurações
       </h1>
 
-      <Tabs defaultValue="ferramentas">
+      <Tabs defaultValue="loja">
         <TabsList className="w-full mb-6">
-          <TabsTrigger value="ferramentas" className="flex-1 flex items-center gap-2">
-            <Settings size={15} /> Ferramentas
+          <TabsTrigger value="loja" className="flex-1 flex items-center gap-2">
+            <Store size={15} /> Loja
           </TabsTrigger>
           <TabsTrigger value="mensagens" className="flex-1 flex items-center gap-2">
             <MessageSquare size={15} /> Mensagens
           </TabsTrigger>
+          <TabsTrigger value="ferramentas" className="flex-1 flex items-center gap-2">
+            <Settings size={15} /> Ferramentas
+          </TabsTrigger>
         </TabsList>
+
+        {/* ABA LOJA */}
+        <TabsContent value="loja" className="space-y-4">
+          {loadingSettings ? (
+            <p className="text-sm text-neutral-400">Carregando...</p>
+          ) : (
+            <>
+              {[
+                { label: 'Nome da empresa', value: companyName, set: setCompanyName, placeholder: 'Ex: Bandara Motos' },
+                { label: 'Telefone / WhatsApp', value: storePhone, set: setStorePhone, placeholder: 'Ex: (75) 98804-6356' },
+                { label: 'Endereço', value: storeAddress, set: setStoreAddress, placeholder: 'Ex: Rua das Motos, 123 - Cidade-BA' },
+                { label: 'CNPJ', value: storeCnpj, set: setStoreCnpj, placeholder: 'Ex: 00.000.000/0001-00' },
+                { label: 'Instagram', value: storeInstagram, set: setStoreInstagram, placeholder: 'Ex: @BandaraMotos' },
+                { label: 'Responsável / Proprietário', value: storeOwner, set: setStoreOwner, placeholder: 'Ex: João da Silva' },
+              ].map(({ label, value, set, placeholder }) => (
+                <div key={label} className="space-y-1">
+                  <label className="text-xs text-neutral-400 font-medium">{label}</label>
+                  <input
+                    type="text"
+                    value={value}
+                    onChange={e => set(e.target.value)}
+                    placeholder={placeholder}
+                    className="w-full p-2 border border-white/20 rounded text-sm bg-black/30 text-neutral-200"
+                  />
+                </div>
+              ))}
+              <Button className="w-full" disabled={saving} onClick={handleSave}>
+                {saving ? 'Salvando...' : 'Salvar informações'}
+              </Button>
+            </>
+          )}
+        </TabsContent>
 
         {/* ABA FERRAMENTAS */}
         <TabsContent value="ferramentas" className="space-y-6">

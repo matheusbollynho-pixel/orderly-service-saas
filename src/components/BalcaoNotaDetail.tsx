@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ArrowLeft, Plus, Trash2, CheckCircle, XCircle, Package, Printer, Send, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { sendWhatsAppText, sendWhatsAppDocument } from '@/lib/whatsappService';
+import { useStoreSettings } from '@/hooks/useStoreSettings';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import LOGO_BASE64 from '@/assets/logo';
@@ -39,6 +40,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   const { updateOrder, addItem, updateItem, removeItem, finalizeOrder, cancelOrder, isFinalizing, isCancelling } = useBalcao();
   const { products } = useInventory();
   const { members: teamMembers } = useTeamMembers();
+  const { settings: storeSettings } = useStoreSettings();
 
   const items: BalcaoItem[] = order.balcao_items ?? [];
   const isEditable = order.status === 'aberta';
@@ -355,9 +357,9 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
         <img src="${logoUrl}" alt="Logo" onerror="this.style.display='none'">
         <div class="header-title">
           <h1>${titulo}</h1>
-          <p style="font-size:13px;font-weight:700;color:#fff;margin-top:4px">Bandara Motos</p>
-          <p style="font-size:10px;color:#aaa;margin-top:2px">Matheus da Silva Alves · CNPJ: 24.890.547/0001-78</p>
-          <p style="font-size:10px;color:#aaa">Rodovia BA 210, Nº913-A, BTN 02, Paulo Afonso-BA</p>
+          <p style="font-size:13px;font-weight:700;color:#fff;margin-top:4px">${storeSettings?.company_name || 'Minha Oficina'}</p>
+          ${storeSettings?.store_owner || storeSettings?.store_cnpj ? `<p style="font-size:10px;color:#aaa;margin-top:2px">${[storeSettings?.store_owner, storeSettings?.store_cnpj ? 'CNPJ: ' + storeSettings.store_cnpj : ''].filter(Boolean).join(' · ')}</p>` : ''}
+          ${storeSettings?.store_address ? `<p style="font-size:10px;color:#aaa">${storeSettings.store_address}</p>` : ''}
         </div>
         <div class="header-box">
           <div class="lbl">Nº</div>
@@ -399,8 +401,8 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
       ${extra}
 
       <div class="footer">
-        Bandara Motos · CNPJ: 24.890.547/0001-78 · (75) 98804-6356 · @BandaraMotos<br>
-        Rodovia BA 210, Nº913-A, BTN 02, Paulo Afonso-BA
+        ${[storeSettings?.company_name, storeSettings?.store_cnpj ? 'CNPJ: ' + storeSettings.store_cnpj : '', storeSettings?.store_phone, storeSettings?.store_instagram].filter(Boolean).join(' · ')}<br>
+        ${storeSettings?.store_address || ''}
       </div>
     </div></body></html>`;
   };
@@ -506,7 +508,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
       const nomeCliente = editClientName || order.client_name;
       const caption = nomeCliente
         ? `Olá, *${nomeCliente}*! Segue sua Nota de Venda #${numeroNota} 🏍️`
-        : `Nota de Venda #${numeroNota} — Bandara Motos 🏍️`;
+        : `Nota de Venda #${numeroNota} — ${storeSettings?.company_name || 'Minha Oficina'} 🏍️`;
       await sendWhatsAppDocument({ phone, base64, fileName: `nota-balcao-${numeroNota}.pdf`, caption });
       toast.success('Nota enviada no WhatsApp!');
     } catch (e: unknown) {
@@ -542,7 +544,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
       const nomeCliente = editClientName || order.client_name;
       const caption = nomeCliente
         ? `Olá, *${nomeCliente}*! Segue seu Orçamento #${numeroNota} — válido por 7 dias 🏍️`
-        : `Orçamento #${numeroNota} — Bandara Motos 🏍️`;
+        : `Orçamento #${numeroNota} — ${storeSettings?.company_name || 'Minha Oficina'} 🏍️`;
       await sendWhatsAppDocument({ phone, base64, fileName: `orcamento-${numeroNota}.pdf`, caption });
       toast.success('Orçamento enviado no WhatsApp!');
     } catch (e: unknown) {

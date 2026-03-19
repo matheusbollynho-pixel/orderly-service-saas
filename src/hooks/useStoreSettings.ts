@@ -5,6 +5,11 @@ import { useToast } from '@/hooks/use-toast';
 export interface StoreSettings {
   id: string;
   company_name: string;
+  store_phone: string;
+  store_address: string;
+  store_cnpj: string;
+  store_instagram: string;
+  store_owner: string;
   whatsapp_confirmation_template: string;
   whatsapp_satisfaction_template: string;
   whatsapp_birthday_template: string;
@@ -13,6 +18,11 @@ export interface StoreSettings {
 
 const DEFAULTS: Omit<StoreSettings, 'id'> = {
   company_name: 'Minha Oficina',
+  store_phone: '',
+  store_address: '',
+  store_cnpj: '',
+  store_instagram: '',
+  store_owner: '',
   whatsapp_confirmation_template: `Olá{{nome}}! 👋
 
 Seu agendamento na *{{empresa}}* foi confirmado! ✅
