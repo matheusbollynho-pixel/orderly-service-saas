@@ -91,7 +91,7 @@ export default function PublicSatisfactionPage() {
   const { token } = useParams();
   const { settings: storeSettings } = useStoreSettings();
   const companyName = storeSettings?.company_name || 'Bandara Motos';
-  const logoUrl = storeSettings?.logo_url || import.meta.env.VITE_LOGO_PATH || '/bandara-logo.png';
+  const logoUrl = import.meta.env.VITE_LOGO_PATH || '/bandara-logo.png';
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);

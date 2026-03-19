@@ -407,21 +407,17 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     </div></body></html>`;
   };
 
-  // ── Busca logo do tenant em base64 redimensionada (máx 200px) ─
+  // ── Busca logo em base64 (usa logo local via env var) ─────────
   const fetchLogoBase64 = async (): Promise<string> => {
-    const rawUrl = storeSettings?.logo_url || `${window.location.origin}${import.meta.env.VITE_LOGO_PATH || '/bandara-logo.png'}`;
-    const url = rawUrl.split('?')[0];
+    const url = `${window.location.origin}${import.meta.env.VITE_LOGO_PATH || '/bandara-logo.png'}`;
     return new Promise<string>((resolve) => {
       const img = new Image();
-      img.crossOrigin = 'anonymous';
       img.onload = () => {
         try {
-          const MAX = 200;
-          const scale = Math.min(1, MAX / Math.max(img.width, img.height));
           const canvas = document.createElement('canvas');
-          canvas.width = Math.round(img.width * scale);
-          canvas.height = Math.round(img.height * scale);
-          canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+          canvas.width = img.width;
+          canvas.height = img.height;
+          canvas.getContext('2d')!.drawImage(img, 0, 0);
           resolve(canvas.toDataURL('image/png'));
         } catch {
           resolve(LOGO_BASE64);

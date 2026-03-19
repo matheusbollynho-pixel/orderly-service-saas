@@ -117,21 +117,12 @@ function AppContent() {
   useRealtimeSync();
   const { settings: storeSettings } = useStoreSettings();
 
-  // Atualiza favicon e título globalmente (funciona em todas as rotas)
+  // Atualiza título globalmente pelo nome da empresa
   useEffect(() => {
-    if (storeSettings?.logo_url) {
-      let link = document.querySelector("link[rel*='icon']") as HTMLLinkElement | null;
-      if (!link) {
-        link = document.createElement('link');
-        link.rel = 'icon';
-        document.head.appendChild(link);
-      }
-      link.href = storeSettings.logo_url;
-    }
     if (storeSettings?.company_name) {
       document.title = storeSettings.company_name;
     }
-  }, [storeSettings?.logo_url, storeSettings?.company_name]);
+  }, [storeSettings?.company_name]);
 
   useEffect(() => {
     if (syncStatus.isReady) {

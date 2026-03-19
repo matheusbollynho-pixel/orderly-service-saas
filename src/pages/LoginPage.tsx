@@ -45,7 +45,7 @@ export function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-[#121212] p-4">
       <Card className="w-full max-w-md glass-card-elevated border-border/50">
         <CardHeader className="text-center items-center space-y-0 p-3 pb-0 pt-2">
-          <img src={settings?.logo_url || import.meta.env.VITE_LOGO_PATH || '/bandara-logo.png'} alt="Logo" className="h-56 w-auto mx-auto -mb-8" />
+          <img src={import.meta.env.VITE_LOGO_PATH || '/bandara-logo.png'} alt="Logo" className="h-56 w-auto mx-auto -mb-8" />
           <CardDescription className="text-muted-foreground text-sm -mt-4">Sistema de Ordem de Serviço</CardDescription>
         </CardHeader>
         <CardContent>
