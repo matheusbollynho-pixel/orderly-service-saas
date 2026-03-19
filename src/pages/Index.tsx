@@ -13,6 +13,7 @@ import { MaterialsPage } from './MaterialsPage';
 import { ReportsPage } from './ReportsPage';
 import { MechanicsPage } from './MechanicsPage';
 import AfterSalesPage from './AfterSalesPage';
+import MessagesConfigPage from './MessagesConfigPage';
 import { CashFlowPage } from './CashFlowPage';
 import { ExpressCadastroPage } from './ExpressCadastroPage';
 import { supabase } from '@/integrations/supabase/client';
@@ -31,7 +32,7 @@ import { Wrench, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { getMaintenanceKeywords, findKeywordInText, createMaintenanceReminder, rescheduleMaintenanceReminder } from '@/services/maintenanceReminderService';
 
-type View = 'dashboard' | 'new' | 'express' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa' | 'satisfacao' | 'estoque' | 'balcao' | 'quadro' | 'agenda';
+type View = 'dashboard' | 'new' | 'express' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa' | 'satisfacao' | 'estoque' | 'balcao' | 'quadro' | 'agenda' | 'mensagens';
 
 export default function Index() {
   const { isAdmin, canAccessCashFlow, canAccessReports } = useAuth();
@@ -625,6 +626,10 @@ Retirada: ${retiradaInfo}`;
 
         {currentView === 'pos-venda' && (
           <AfterSalesPage />
+        )}
+
+        {currentView === 'mensagens' && (
+          <MessagesConfigPage />
         )}
 
         {currentView === 'fluxo-caixa' && (
