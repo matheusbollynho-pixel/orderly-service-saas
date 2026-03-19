@@ -90,7 +90,7 @@ function Stars({ value, onChange }: { value: number; onChange: (n: number) => vo
 export default function PublicSatisfactionPage() {
   const { token } = useParams();
   const { settings: storeSettings } = useStoreSettings();
-  const companyName = storeSettings?.company_name || 'Bandara Motos';
+  const companyName = storeSettings?.company_name || import.meta.env.VITE_COMPANY_NAME || 'Minha Oficina';
   const logoUrl = import.meta.env.VITE_LOGO_PATH || '/bandara-logo.png';
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

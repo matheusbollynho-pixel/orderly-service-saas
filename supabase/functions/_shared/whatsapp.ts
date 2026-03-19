@@ -11,7 +11,7 @@ function buildDefaultUrl(): string {
 
   if (provider === 'uazapi') {
     // UazAPI v2 (Bandara): endpoint de texto padrão
-    const base = (Deno.env.get('UAZAPI_BASE_URL') || 'https://bandara.uazapi.com').replace(/\/$/, '');
+    const base = (Deno.env.get('UAZAPI_BASE_URL') || Deno.env.get('UAZAPI_SERVER_URL') || 'https://bandara.uazapi.com').replace(/\/$/, '');
     const path = Deno.env.get('UAZAPI_TEXT_PATH') || '/send/text';
     return `${base}${path}`;
   }

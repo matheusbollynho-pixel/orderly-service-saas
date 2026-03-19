@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Moon, Sun } from 'lucide-react';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const companyName = import.meta.env.VITE_COMPANY_NAME || 'Minha Oficina';
 
 function normalizePhone(value: string) {
   return value.replace(/\D/g, '');
@@ -135,7 +136,7 @@ export default function PublicStoreSatisfactionPage() {
             <img src={import.meta.env.VITE_LOGO_PATH || '/bandara-logo.png'} alt="Logo" className="h-48 w-auto" />
           </CardHeader>
           <CardContent className="space-y-0 text-center pt-0 px-4 pb-4">
-            <p className="text-base font-semibold text-foreground -mt-3">Avaliação Bandara Motos</p>
+            <p className="text-base font-semibold text-foreground -mt-3">Avaliação {companyName}</p>
             <p className="text-sm text-muted-foreground">Identifique-se para iniciarmos sua avaliação em poucos segundos.</p>
           </CardContent>
         </Card>

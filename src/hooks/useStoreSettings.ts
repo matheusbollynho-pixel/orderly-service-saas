@@ -17,7 +17,7 @@ export interface StoreSettings {
 }
 
 const DEFAULTS: Omit<StoreSettings, 'id'> = {
-  company_name: 'Minha Oficina',
+  company_name: import.meta.env.VITE_COMPANY_NAME || 'Minha Oficina',
   store_phone: '',
   store_address: '',
   store_cnpj: '',
