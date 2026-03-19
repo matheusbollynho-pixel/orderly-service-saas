@@ -44,6 +44,7 @@ import {
 import { useMechanics } from '@/hooks/useMechanics';
 import { useClients } from '@/hooks/useClients';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
+import { useStoreSettings } from '@/hooks/useStoreSettings';
 import { sendWhatsAppText, sendWhatsAppDocument } from '@/lib/whatsappService';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -112,6 +113,7 @@ export function OrderDetails({
   const { members: teamMembers } = useTeamMembers();
   const { mechanics } = useMechanics();
   const { getClientById, getMotorcycleById, updateClientById, updateMotorcycleById } = useClients();
+  const { settings: storeSettings } = useStoreSettings();
   const printRef = useRef<HTMLDivElement>(null);
   // Corrigido: declarar isExpress apenas uma vez, usando problem_description
   const isExpress = (order.problem_description || '').toLowerCase().includes('cadastro express');
@@ -488,7 +490,7 @@ export function OrderDetails({
     delivery_person_name: deliveryPersonType === 'outro' ? deliveryPersonName : order.client_name,
     delivery_person_phone: deliveryPersonType === 'outro' ? deliveryPersonPhone : order.client_phone,
     delivery_person_cpf: deliveryPersonType === 'outro' ? deliveryPersonCpf : order.client_cpf,
-    logo_url: `${window.location.origin}${import.meta.env.VITE_LOGO_PATH || '/client-logo.png'}`,
+    logo_url: storeSettings?.logo_url || `${window.location.origin}${import.meta.env.VITE_LOGO_PATH || '/client-logo.png'}`,
   });
 
   const handleSendWhatsAppPDF = async () => {
