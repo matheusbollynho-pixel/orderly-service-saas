@@ -78,7 +78,11 @@ export function findKeywordInText(
 
   const normalizedText = normalize(text);
 
-  for (const keyword of keywords) {
+  // Ordenar por comprimento decrescente para que keywords mais específicas batam primeiro
+  // Ex: "Oleo Express" antes de "Oleo"
+  const sorted = [...keywords].sort((a, b) => b.keyword.length - a.keyword.length);
+
+  for (const keyword of sorted) {
     if (normalizedText.includes(normalize(keyword.keyword))) {
       return keyword;
     }
@@ -122,51 +126,6 @@ export async function createMaintenanceReminder(
       .single();
 
     if (keywordError) throw keywordError;
-
-    const isRevisao = (keyword.keyword || '').toLowerCase() === 'revisao';
-
-    // Se já existe revisão no mesmo dia/cliente, não cria outros lembretes
-    if (!isRevisao) {
-      let checkQuery = sb
-        .from('maintenance_reminders')
-        .select('id, keyword:maintenance_keywords(keyword)')
-        .gte('service_date', startOfDay.toISOString())
-        .lte('service_date', endOfDay.toISOString());
-
-      if (clientId) {
-        checkQuery = checkQuery.eq('client_id', clientId);
-      } else {
-        checkQuery = checkQuery.eq('client_phone', clientPhone);
-      }
-
-      const { data: sameDay, error: sameDayError } = await checkQuery;
-      if (sameDayError) throw sameDayError;
-
-      const hasRevisao = (sameDay || []).some((r: { keyword?: { keyword?: string } }) => (r.keyword?.keyword || '').toLowerCase() === 'revisao');
-      if (hasRevisao) {
-        return null;
-      }
-    }
-
-    // Se o lembrete é revisão, remove outros lembretes do mesmo dia/cliente
-    if (isRevisao) {
-      let deleteQuery = sb
-        .from('maintenance_reminders')
-        .delete()
-        .gte('service_date', startOfDay.toISOString())
-        .lte('service_date', endOfDay.toISOString());
-
-      if (clientId) {
-        deleteQuery = deleteQuery.eq('client_id', clientId);
-      } else {
-        deleteQuery = deleteQuery.eq('client_phone', clientPhone);
-      }
-
-      const { error: deleteError } = await deleteQuery
-        .neq('keyword_id', keywordId);
-
-      if (deleteError) throw deleteError;
-    }
 
     // Calculate reminder due date
     const reminderDueDate = new Date(serviceDate);

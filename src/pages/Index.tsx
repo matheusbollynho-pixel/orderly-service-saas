@@ -31,7 +31,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Wrench, Search, Settings } from 'lucide-react';
 import { toast } from 'sonner';
-import { getMaintenanceKeywords, findKeywordInText, createMaintenanceReminder, rescheduleMaintenanceReminder } from '@/services/maintenanceReminderService';
+import { getMaintenanceKeywords, findKeywordInText, rescheduleMaintenanceReminder } from '@/services/maintenanceReminderService';
 
 type View = 'dashboard' | 'new' | 'express' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa' | 'satisfacao' | 'estoque' | 'balcao' | 'quadro' | 'agenda' | 'mensagens';
 
@@ -234,34 +234,6 @@ Retirada: ${retiradaInfo}`;
       createOrder(orderData, {
         onSuccess: async (newOrder: { id: string; entry_date?: string }) => {
           console.log('✅ OS criada com sucesso:', newOrder);
-          
-          // Check for maintenance keywords and create reminders
-          try {
-            const keywords = await getMaintenanceKeywords();
-            const detectedKeyword = findKeywordInText(
-              formData.servicos.o_que_fazer || '',
-              keywords
-            );
-            
-            if (detectedKeyword && savedClient?.id && savedClient?.autoriza_lembretes !== false) {
-              console.log('🔔 Palavra-chave detectada:', detectedKeyword.keyword);
-              const reminder = await createMaintenanceReminder(
-                newOrder.id,
-                savedClient.id,
-                formData.client.phone || '',
-                detectedKeyword.id,
-                new Date(newOrder.entry_date || new Date())
-              );
-              
-              if (reminder) {
-                console.log('✅ Lembrete criado:', reminder);
-                toast.success(`Lembrete automático criado para "${detectedKeyword.keyword}" em ${detectedKeyword.reminder_days} dias! 🔔`);
-              }
-            }
-          } catch (reminderError) {
-            console.error('⚠️ Erro ao criar lembrete:', reminderError);
-            // Don't fail the entire order creation
-          }
           
           toast.success('Cliente, motos e OS salvos com sucesso! 🎉');
           setOrderFormInitialData(undefined);
