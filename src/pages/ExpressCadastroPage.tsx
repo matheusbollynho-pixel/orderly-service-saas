@@ -230,7 +230,7 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
               client_birth_date: savedClient.birth_date ?? null,
               entry_date: toNoonISOStringFromToday(),
               exit_date: null,
-              equipment: `${savedMoto.marca} ${savedMoto.modelo}${savedMoto.placa ? ` (${savedMoto.placa})` : ''}`.trim(),
+              equipment: `${savedMoto.marca} ${savedMoto.modelo}${savedMoto.ano ? ` ${savedMoto.ano}` : ''}${savedMoto.cor ? ` ${savedMoto.cor}` : ''}${savedMoto.placa ? ` (${savedMoto.placa})` : ''}`.trim(),
               problem_description: `${desc} (cadastro express)`,
               atendimento_id: atendimentoId || null,
             },
