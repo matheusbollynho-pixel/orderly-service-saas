@@ -169,6 +169,18 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
       toast.error('Modelo da moto é obrigatório');
       return;
     }
+    if (!moto.ano.trim()) {
+      toast.error('Ano da moto é obrigatório');
+      return;
+    }
+    if (!moto.cor.trim()) {
+      toast.error('Cor da moto é obrigatória');
+      return;
+    }
+    if (!serviceDescription.trim()) {
+      toast.error('Descrição do serviço é obrigatória');
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -408,7 +420,7 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
             />
           </div>
           <div className="space-y-2">
-            <Label>Ano</Label>
+            <Label>Ano *</Label>
             <Input
               value={moto.ano}
               onChange={(e) => setMoto((prev) => ({ ...prev, ano: e.target.value }))}
@@ -417,7 +429,7 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
             />
           </div>
           <div className="space-y-2">
-            <Label>Cor</Label>
+            <Label>Cor *</Label>
             <Input
               value={moto.cor}
               onChange={(e) => setMoto((prev) => ({ ...prev, cor: e.target.value }))}
@@ -434,7 +446,7 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label>O que fazer na moto?</Label>
+            <Label>O que fazer na moto? *</Label>
             <Input
               value={serviceDescription}
               onChange={(e) => setServiceDescription(e.target.value)}
