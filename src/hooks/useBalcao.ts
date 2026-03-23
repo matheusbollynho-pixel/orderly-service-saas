@@ -203,10 +203,16 @@ export function useBalcao() {
         .map(i => `${i.quantity}x ${i.description}`).join(', ');
       const description = `Nota Balcão${order.client_name ? ` - ${order.client_name}` : ''}: ${itemsSummary}`;
 
-      const payments: PaymentEntry[] =
+      const rawPayments: PaymentEntry[] =
         Array.isArray(order.payment_methods) && order.payment_methods.length > 0
           ? order.payment_methods
           : [{ method: order.payment_method ?? 'dinheiro', amount: order.total }];
+
+      // Se todos os amounts são 0 mas o total é positivo, distribui o total pelo único método
+      const paymentsTotal = rawPayments.reduce((s, p) => s + (p.amount || 0), 0);
+      const payments: PaymentEntry[] = paymentsTotal === 0 && order.total > 0
+        ? [{ method: rawPayments[0]?.method ?? order.payment_method ?? 'dinheiro', amount: order.total }]
+        : rawPayments;
 
       const discountNotes = order.discount_pct > 0
         ? `Desconto ${order.discount_pct}% = R$ ${order.discount_amount.toFixed(2)}`
