@@ -76,6 +76,7 @@ export default function ConfigToolsPage() {
   const [storeCnpj, setStoreCnpj] = useState('');
   const [storeInstagram, setStoreInstagram] = useState('');
   const [storeOwner, setStoreOwner] = useState('');
+  const [maxAgendamentosDia, setMaxAgendamentosDia] = useState(10);
   const [templates, setTemplates] = useState<Record<MessageKey, string>>({
     whatsapp_confirmation_template: '',
     whatsapp_satisfaction_template: '',
@@ -95,6 +96,7 @@ export default function ConfigToolsPage() {
       setStoreCnpj(settings.store_cnpj || '');
       setStoreInstagram(settings.store_instagram || '');
       setStoreOwner(settings.store_owner || '');
+      setMaxAgendamentosDia(settings.max_agendamentos_dia ?? 10);
       setTemplates({
         whatsapp_confirmation_template: settings.whatsapp_confirmation_template,
         whatsapp_satisfaction_template: settings.whatsapp_satisfaction_template,
@@ -119,6 +121,7 @@ export default function ConfigToolsPage() {
       store_cnpj: storeCnpj,
       store_instagram: storeInstagram,
       store_owner: storeOwner,
+      max_agendamentos_dia: maxAgendamentosDia,
       ...templates,
     } as Partial<StoreSettings>);
   }
@@ -174,6 +177,20 @@ export default function ConfigToolsPage() {
                   />
                 </div>
               ))}
+              <div className="space-y-1">
+                <label className="text-xs text-neutral-400 font-medium">Capacidade máxima de motos por dia</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={maxAgendamentosDia}
+                  onChange={e => setMaxAgendamentosDia(Number(e.target.value) || 1)}
+                  placeholder="Ex: 10"
+                  title="Capacidade máxima de motos por dia"
+                  className="w-full p-2 border border-white/20 rounded text-sm bg-black/30 text-neutral-200"
+                />
+                <p className="text-xs text-neutral-500">Máximo de agendamentos aceitos por dia (distribuídos entre manhã e tarde)</p>
+              </div>
               <Button className="w-full" disabled={saving} onClick={handleSave}>
                 {saving ? 'Salvando...' : 'Salvar informações'}
               </Button>

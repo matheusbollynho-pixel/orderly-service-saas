@@ -14,6 +14,7 @@ export interface StoreSettings {
   whatsapp_satisfaction_template: string;
   whatsapp_birthday_template: string;
   whatsapp_balcao_followup_template: string;
+  max_agendamentos_dia: number;
 }
 
 const DEFAULTS: Omit<StoreSettings, 'id'> = {
@@ -56,6 +57,7 @@ Pra comemorar, você ganhou:
 É só apresentar esta mensagem 😉
 
 *{{empresa}}* — cuidando da sua moto como você merece!`,
+  max_agendamentos_dia: 10,
   whatsapp_balcao_followup_template: `Olá{{nome}}! 👋
 
 Aqui é da *{{empresa}}*.

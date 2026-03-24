@@ -62,19 +62,30 @@ function buildBody(phone: string, message: string): Record<string, unknown> {
   const formattedPhone = normalizeBrPhone(phone);
 
   if (provider === 'uazapi') {
-    const phoneField = Deno.env.get('UAZAPI_PHONE_FIELD') || 'number';
     const messageField = Deno.env.get('UAZAPI_MESSAGE_FIELD') || 'text';
-
-    return {
-      [phoneField]: formattedPhone,
-      [messageField]: message,
-    };
+    return { number: formattedPhone, [messageField]: message };
   }
 
   return {
     phone: formattedPhone,
     message,
   };
+}
+
+export async function sendWhatsAppLocation(phone: string, lat: number, lng: number, name: string, address: string) {
+  const provider = (Deno.env.get('WHATSAPP_PROVIDER') || 'zapi').toLowerCase();
+  const formattedPhone = normalizeBrPhone(phone);
+  const headers = buildHeaders();
+
+  if (provider === 'uazapi') {
+    const base = (Deno.env.get('UAZAPI_BASE_URL') || Deno.env.get('UAZAPI_SERVER_URL') || 'https://bandara.uazapi.com').replace(/\/$/, '');
+    const url = `${base}/send/location`;
+    const body = { number: formattedPhone, latitude: lat, longitude: lng, name, address };
+    const response = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+    const raw = await response.text().catch(() => '');
+    console.log(`📍 WhatsApp location → ${url} | status: ${response.status} | body: ${raw.slice(0, 200)}`);
+    return;
+  }
 }
 
 export async function sendWhatsAppText(phone: string, message: string) {
@@ -96,6 +107,8 @@ export async function sendWhatsAppText(phone: string, message: string) {
   } catch {
     parsed = raw;
   }
+
+  console.log(`📡 WhatsApp send → ${url} | phone: ${body[Object.keys(body)[0]]} | status: ${response.status} | body: ${raw.slice(0, 300)}`);
 
   if (!response.ok) {
     throw new Error(`WhatsApp API error (${response.status}): ${typeof parsed === 'string' ? parsed : JSON.stringify(parsed)}`);

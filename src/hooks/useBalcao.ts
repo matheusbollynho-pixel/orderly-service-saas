@@ -203,15 +203,23 @@ export function useBalcao() {
         .map(i => `${i.quantity}x ${i.description}`).join(', ');
       const description = `Nota Balcão${order.client_name ? ` - ${order.client_name}` : ''}: ${itemsSummary}`;
 
+      // Calcular total real a partir dos itens (fonte da verdade, evita depender de order.total stale)
+      const itemsSubtotal = (order.balcao_items as BalcaoItem[]).reduce(
+        (s, i) => s + i.unit_price * i.quantity, 0
+      );
+      const effectiveTotal = order.discount_pct > 0
+        ? itemsSubtotal * (1 - order.discount_pct / 100)
+        : itemsSubtotal;
+
       const rawPayments: PaymentEntry[] =
         Array.isArray(order.payment_methods) && order.payment_methods.length > 0
           ? order.payment_methods
-          : [{ method: order.payment_method ?? 'dinheiro', amount: order.total }];
+          : [{ method: order.payment_method ?? 'dinheiro', amount: effectiveTotal }];
 
       // Se todos os amounts são 0 mas o total é positivo, distribui o total pelo único método
       const paymentsTotal = rawPayments.reduce((s, p) => s + (p.amount || 0), 0);
-      const payments: PaymentEntry[] = paymentsTotal === 0 && order.total > 0
-        ? [{ method: rawPayments[0]?.method ?? order.payment_method ?? 'dinheiro', amount: order.total }]
+      const payments: PaymentEntry[] = paymentsTotal === 0 && effectiveTotal > 0
+        ? [{ method: rawPayments[0]?.method ?? order.payment_method ?? 'dinheiro', amount: effectiveTotal }]
         : rawPayments;
 
       const discountNotes = order.discount_pct > 0
