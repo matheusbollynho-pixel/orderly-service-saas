@@ -84,8 +84,12 @@ export function BoletosPage() {
   const barcodeInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const readerRef = useRef<BrowserMultiFormatReader | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const rafRef = useRef<number | null>(null);
 
   const stopScanner = () => {
+    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+    if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
     BrowserMultiFormatReader.releaseAllStreams();
     readerRef.current = null;
     setScanning(false);
@@ -97,37 +101,54 @@ export function BoletosPage() {
     await new Promise(r => setTimeout(r, 200));
     if (!videoRef.current) { setScanning(false); return; }
 
-    const hints = new Map();
-    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-      BarcodeFormat.ITF,
-      BarcodeFormat.CODE_128,
-      BarcodeFormat.CODE_39,
-      BarcodeFormat.QR_CODE,
-      BarcodeFormat.DATA_MATRIX,
-      BarcodeFormat.PDF_417,
-    ]);
-    hints.set(DecodeHintType.TRY_HARDER, true);
-
-    const reader = new BrowserMultiFormatReader(hints);
-    readerRef.current = reader;
-
-    const constraints: MediaStreamConstraints = {
-      video: {
-        facingMode: 'environment',
-        width: { ideal: 1920 },
-        height: { ideal: 1080 },
-      },
-    };
-
     try {
-      await reader.decodeFromConstraints(constraints, videoRef.current, (result) => {
-        if (result) {
-          const raw = result.getText();
-          stopScanner();
-          setForm(prev => ({ ...prev, codigo_barras: raw }));
-          fetchBarcodeData(raw);
-        }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
       });
+      streamRef.current = stream;
+      videoRef.current.srcObject = stream;
+      await videoRef.current.play();
+
+      // Usa BarcodeDetector nativo do Chrome Android (mesmo motor que app de banco)
+      if ('BarcodeDetector' in window) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const detector = new (window as any).BarcodeDetector({
+          formats: ['itf', 'itf_14', 'code_128', 'code_39', 'qr_code', 'pdf417', 'data_matrix'],
+        });
+        const scan = async () => {
+          if (!videoRef.current || !streamRef.current) return;
+          try {
+            const codes = await detector.detect(videoRef.current);
+            if (codes.length > 0) {
+              const raw: string = codes[0].rawValue;
+              stopScanner();
+              setForm(prev => ({ ...prev, codigo_barras: raw }));
+              fetchBarcodeData(raw);
+              return;
+            }
+          } catch { /* frame sem código — normal */ }
+          rafRef.current = requestAnimationFrame(scan);
+        };
+        rafRef.current = requestAnimationFrame(scan);
+      } else {
+        // Fallback: ZXing para navegadores sem BarcodeDetector (iOS Safari)
+        const hints = new Map();
+        hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+          BarcodeFormat.ITF, BarcodeFormat.CODE_128, BarcodeFormat.CODE_39,
+          BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX, BarcodeFormat.PDF_417,
+        ]);
+        hints.set(DecodeHintType.TRY_HARDER, true);
+        const reader = new BrowserMultiFormatReader(hints);
+        readerRef.current = reader;
+        await reader.decodeFromStream(stream, videoRef.current, (result) => {
+          if (result) {
+            const raw = result.getText();
+            stopScanner();
+            setForm(prev => ({ ...prev, codigo_barras: raw }));
+            fetchBarcodeData(raw);
+          }
+        });
+      }
     } catch {
       setScanError('Não foi possível acessar a câmera.');
       setScanning(false);
