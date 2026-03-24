@@ -96,8 +96,6 @@ export function BoletosPage() {
     const clean = text.replace(/\D/g, '');
     if (clean.length < 44) return;
     setLoadingBarcode(true);
-    setScanError(null);
-
     // Extrai valor e vencimento direto do código (padrão FEBRABAN — funciona para qualquer banco)
     const parseBoletoLocal = () => {
       let fator: string;
