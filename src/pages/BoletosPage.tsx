@@ -1,6 +1,5 @@
 import { useState, useRef } from 'react';
-import { BrowserMultiFormatReader } from '@zxing/browser';
-import { DecodeHintType, BarcodeFormat } from '@zxing/library';
+import Quagga from '@ericblade/quagga2';
 import { useBoletos, Boleto, BoletoCategoria, BoletoRecorrencia, BoletoPaidMethod, getBoletoStatus } from '@/hooks/useBoletos';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -82,12 +81,11 @@ export function BoletosPage() {
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const readerRef = useRef<BrowserMultiFormatReader | null>(null);
+  const scannerDivRef = useRef<HTMLDivElement>(null);
 
   const stopScanner = () => {
-    BrowserMultiFormatReader.releaseAllStreams();
-    readerRef.current = null;
+    Quagga.offDetected();
+    Quagga.stop();
     setScanning(false);
   };
 
@@ -95,35 +93,37 @@ export function BoletosPage() {
     setScanError(null);
     setScanning(true);
     await new Promise(r => setTimeout(r, 300));
-    if (!videoRef.current) { setScanning(false); return; }
+    if (!scannerDivRef.current) { setScanning(false); return; }
 
-    const hints = new Map();
-    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-      BarcodeFormat.ITF, BarcodeFormat.CODE_128, BarcodeFormat.CODE_39,
-      BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX, BarcodeFormat.PDF_417,
-    ]);
-    hints.set(DecodeHintType.TRY_HARDER, true);
-
-    try {
-      const reader = new BrowserMultiFormatReader(hints);
-      readerRef.current = reader;
-      // decodeFromConstraints: ZXing gerencia stream + video internamente
-      await reader.decodeFromConstraints(
-        { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
-        videoRef.current,
-        (result) => {
-          if (result) {
-            const raw = result.getText();
-            stopScanner();
-            setForm(prev => ({ ...prev, codigo_barras: raw }));
-            fetchBarcodeData(raw);
-          }
+    Quagga.init(
+      {
+        inputStream: {
+          type: 'LiveStream',
+          target: scannerDivRef.current,
+          constraints: { facingMode: 'environment', width: 1280, height: 720 },
+        },
+        decoder: {
+          readers: ['i2of5_reader', 'code_128_reader', 'code_39_reader', 'qr_code_reader'],
+          multiple: false,
+        },
+        locate: true,
+      },
+      (err) => {
+        if (err) {
+          setScanError('Não foi possível acessar a câmera.');
+          setScanning(false);
+          return;
         }
-      );
-    } catch {
-      setScanError('Não foi possível acessar a câmera.');
-      setScanning(false);
-    }
+        Quagga.start();
+        Quagga.onDetected((data) => {
+          const raw = data.codeResult.code;
+          if (!raw) return;
+          stopScanner();
+          setForm(prev => ({ ...prev, codigo_barras: raw }));
+          fetchBarcodeData(raw);
+        });
+      }
+    );
   };
 
   // Detecta se é código Pix EMV (começa com "00020126" ou similar)
@@ -355,12 +355,7 @@ export function BoletosPage() {
               {/* Scanner ao vivo */}
               {scanning && (
                 <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center">
-                  <div className="relative w-full max-w-sm">
-                    <video ref={videoRef} className="w-full rounded-lg" autoPlay playsInline muted />
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="w-64 h-20 border-2 border-yellow-400 rounded opacity-80" />
-                    </div>
-                  </div>
+                  <div ref={scannerDivRef} className="relative w-full max-w-sm overflow-hidden rounded-lg h-72" />
                   <p className="text-white text-sm mt-4">Aponte para o código de barras</p>
                   <Button variant="outline" className="mt-4" onClick={stopScanner}>
                     <X className="h-4 w-4 mr-1" /> Cancelar
