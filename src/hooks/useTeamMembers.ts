@@ -21,13 +21,15 @@ export function useTeamMembers() {
   });
 
   const createMember = useMutation({
-    mutationFn: async (payload: { name: string; role: StaffMember['role']; photo_url?: string | null }) => {
+    mutationFn: async (payload: { name: string; role: StaffMember['role']; photo_url?: string | null; commission_rate?: number; commission_on_parts?: boolean }) => {
       const { data, error } = await supabase
         .from('staff_members')
         .insert({
           name: payload.name,
           role: payload.role,
           photo_url: payload.photo_url ?? null,
+          commission_rate: payload.commission_rate ?? 0,
+          commission_on_parts: payload.commission_on_parts ?? false,
         })
         .select()
         .single();

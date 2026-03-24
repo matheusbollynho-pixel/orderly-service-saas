@@ -115,6 +115,8 @@ export interface StaffMember {
   role: 'balconista' | 'dono' | 'outro';
   photo_url?: string | null;
   active: boolean;
+  commission_rate: number;
+  commission_on_parts: boolean;
   created_at: string;
   updated_at: string;
 }

@@ -6,17 +6,23 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MechanicDetailReport } from './MechanicDetailReport';
+import { BalcaoCommissionReport } from './BalcaoCommissionReport';
 import { PaymentsTab } from '@/components/PaymentsTab';
 
 type Period = 'week' | 'month' | 'all';
 
-export function ReportsPage() {
+interface ReportsPageProps {
+  onOpenOrder?: (id: string) => void;
+  onOpenBalcaoOrder?: (id: string) => void;
+}
+
+export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder }: ReportsPageProps = {}) {
   const { orders, isLoading, createPayment, deletePayment, updatePayment } = useServiceOrders();
   const { mechanics } = useMechanics();
   console.log('Mecânicos carregados:', mechanics);
   console.log('Ordens carregadas:', orders);
   const [period, setPeriod] = useState<Period>('month');
-  const [activeTab, setActiveTab] = useState<'resumo' | 'detalhado' | 'itens' | 'pagamentos'>('resumo');
+  const [activeTab, setActiveTab] = useState<'resumo' | 'detalhado' | 'itens' | 'pagamentos' | 'balcao'>('resumo');
   const [itemsQuery, setItemsQuery] = useState('');
   const [selectedMechanicFilter, setSelectedMechanicFilter] = useState<string>('todos');
 
@@ -66,7 +72,7 @@ export function ReportsPage() {
 
             if (!porMec[mecId]) porMec[mecId] = { name: nome, receita: 0, comissao: 0, rate };
             porMec[mecId].receita += valor;
-            porMec[mecId].comissao += comissao;
+            if (!material.paid_at) porMec[mecId].comissao += comissao;
           });
       });
 
@@ -165,11 +171,12 @@ export function ReportsPage() {
         <h2 className="text-lg font-semibold">Relatórios</h2>
       </div>
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'resumo' | 'detalhado' | 'itens' | 'pagamentos')} className="w-full">
-        <TabsList className="grid grid-cols-4 w-full">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'resumo' | 'detalhado' | 'itens' | 'pagamentos' | 'balcao')} className="w-full">
+        <TabsList className="grid grid-cols-5 w-full">
           <TabsTrigger value="resumo">Resumo</TabsTrigger>
           <TabsTrigger value="detalhado">Mecânicos</TabsTrigger>
           <TabsTrigger value="itens">Peças</TabsTrigger>
+          <TabsTrigger value="balcao">Balcão</TabsTrigger>
           <TabsTrigger value="pagamentos">Pagtos</TabsTrigger>
         </TabsList>
 
@@ -195,21 +202,29 @@ export function ReportsPage() {
           </Card>
 
           <div className="space-y-3">
-            <h3 className="text-sm font-medium text-muted-foreground">Por mecânico</h3>
+            <h3 className="text-sm font-medium text-muted-foreground">Comissão por mecânico</h3>
             {isLoading ? (
               <p>Carregando...</p>
+            ) : Object.keys(porMecanico).length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhum serviço concluído no período.</p>
             ) : (
-              <div className="space-y-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {Object.entries(porMecanico).map(([id, data]) => (
-                  <Card key={id}>
-                    <CardContent className="p-4 flex items-center justify-between">
-                      <div>
+                  <Card key={id} className="cursor-pointer hover:bg-accent" onClick={() => setActiveTab('detalhado')}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between mb-3">
                         <p className="font-medium">{data.name}</p>
-                        <p className="text-xs text-muted-foreground">Comissão: {data.rate}%</p>
+                        <span className="text-xs text-muted-foreground">{data.rate}% comissão</span>
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm">Receita: <span className="font-semibold">R$ {data.receita.toFixed(2)}</span></p>
-                        <p className="text-sm">A pagar: <span className="font-semibold">R$ {data.comissao.toFixed(2)}</span></p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-green-500/10 dark:bg-green-500/20 p-2 rounded border border-green-500/20">
+                          <p className="text-xs text-green-600 dark:text-green-400">Serviços</p>
+                          <p className="font-bold text-green-900 dark:text-green-100">R$ {data.receita.toFixed(2)}</p>
+                        </div>
+                        <div className="bg-orange-500/10 dark:bg-orange-500/20 p-2 rounded border border-orange-500/20">
+                          <p className="text-xs text-orange-600 dark:text-orange-400">A pagar</p>
+                          <p className="font-bold text-orange-900 dark:text-orange-100">R$ {data.comissao.toFixed(2)}</p>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -220,7 +235,7 @@ export function ReportsPage() {
         </TabsContent>
 
         <TabsContent value="detalhado">
-          <MechanicDetailReport onBack={() => setActiveTab('resumo')} />
+          <MechanicDetailReport onBack={() => setActiveTab('resumo')} onOpenOrder={onOpenOrder} />
         </TabsContent>
 
         <TabsContent value="itens" className="space-y-5">
@@ -293,7 +308,7 @@ export function ReportsPage() {
           ) : (
             <div className="space-y-2">
               {filteredPecas.map(item => (
-                <Card key={item.id}>
+                <Card key={item.id} className={onOpenOrder ? 'cursor-pointer hover:bg-accent transition-colors' : ''} onClick={() => onOpenOrder?.(item.id)}>
                   <CardContent className="p-4 flex items-center justify-between">
                     <div className="flex-1">
                       <p className="text-xs text-muted-foreground">{new Date(item.created_at).toLocaleDateString('pt-BR')}</p>
@@ -312,10 +327,15 @@ export function ReportsPage() {
           )}
         </TabsContent>
 
+        <TabsContent value="balcao">
+          <BalcaoCommissionReport onOpenOrder={onOpenOrder} onOpenBalcaoOrder={onOpenBalcaoOrder} />
+        </TabsContent>
+
         <TabsContent value="pagamentos" className="space-y-5">
             <PaymentsTab
               orders={orders}
               isLoading={isLoading}
+              onOpenOrder={onOpenOrder}
               period={period}
               onPeriodChange={(v) => setPeriod(v as Period)}
               onAddPayment={({ order_id, amount, discount_amount, method, reference, notes }) => {

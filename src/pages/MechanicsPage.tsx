@@ -19,6 +19,8 @@ export function MechanicsPage() {
   const [staffName, setStaffName] = useState('');
   const [staffRole, setStaffRole] = useState<'balconista' | 'dono' | 'outro'>('balconista');
   const [staffPhoto, setStaffPhoto] = useState<string | null>(null);
+  const [staffCommission, setStaffCommission] = useState<number>(0);
+  const [staffCommissionOnParts, setStaffCommissionOnParts] = useState(false);
 
   const handleMechanicPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -180,15 +182,27 @@ export function MechanicsPage() {
             </SelectContent>
           </Select>
         </div>
-        <div className="flex items-end">
+        <div className="space-y-2">
+          <Label>Comissão (%)</Label>
+          <Input type="number" step="0.01" min="0" max="100" value={staffCommission} onChange={(e) => setStaffCommission(parseFloat(e.target.value || '0'))} />
+        </div>
+        <div className="flex items-center gap-3 pt-1">
+          <Switch checked={staffCommissionOnParts} onCheckedChange={setStaffCommissionOnParts} />
+          <Label className="text-sm leading-tight cursor-pointer" onClick={() => setStaffCommissionOnParts(v => !v)}>
+            Comissão se estende às peças da oficina (OS)
+          </Label>
+        </div>
+        <div className="flex items-end md:col-span-2">
           <Button
             className="w-full"
             onClick={() => {
               if (!staffName.trim()) return;
-              createMember({ name: staffName.trim(), role: staffRole, photo_url: staffPhoto });
+              createMember({ name: staffName.trim(), role: staffRole, photo_url: staffPhoto, commission_rate: staffCommission, commission_on_parts: staffCommissionOnParts });
               setStaffName('');
               setStaffRole('balconista');
               setStaffPhoto(null);
+              setStaffCommission(0);
+              setStaffCommissionOnParts(false);
             }}
           >
             Cadastrar
@@ -217,15 +231,31 @@ export function MechanicsPage() {
                   <div>
                     <p className="font-medium">{m.name} {!m.active && <span className="text-xs text-muted-foreground">(Inativo)</span>}</p>
                     <p className="text-sm text-muted-foreground">
-                      Função: {m.role === 'balconista' ? 'Balconista' : m.role === 'dono' ? 'Dono' : 'Outro'}
+                      {m.role === 'balconista' ? 'Balconista' : m.role === 'dono' ? 'Dono' : 'Outro'} · Comissão: {m.commission_rate ?? 0}%
+                      {m.commission_on_parts && <span className="ml-1 text-xs text-blue-500">+ peças OS</span>}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap justify-end">
                   <div className="flex items-center gap-2">
                     <span className="text-sm">Ativo</span>
                     <Switch checked={m.active} onCheckedChange={(v) => updateMember({ id: m.id, active: Boolean(v) })} />
                   </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Peças OS</span>
+                    <Switch checked={m.commission_on_parts ?? false} onCheckedChange={(v) => updateMember({ id: m.id, commission_on_parts: Boolean(v) })} />
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const novo = prompt('Nova comissão (%)', String(m.commission_rate ?? 0));
+                      const val = novo ? parseFloat(novo) : NaN;
+                      if (!isNaN(val)) updateMember({ id: m.id, commission_rate: val });
+                    }}
+                  >
+                    Editar Comissão
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"

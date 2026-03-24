@@ -17,6 +17,8 @@ export interface StoreSettings {
   max_agendamentos_dia: number;
   ai_enabled: boolean;
   ai_notes: string;
+  boleto_notify_phone_1?: string | null;
+  boleto_notify_phone_2?: string | null;
 }
 
 const DEFAULTS: Omit<StoreSettings, 'id'> = {

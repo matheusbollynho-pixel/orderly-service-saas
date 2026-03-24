@@ -79,6 +79,8 @@ export default function ConfigToolsPage() {
   const [maxAgendamentosDia, setMaxAgendamentosDia] = useState(10);
   const [aiEnabled, setAiEnabled] = useState(true);
   const [aiNotes, setAiNotes] = useState('');
+  const [boletoNotifyPhone1, setBoletoNotifyPhone1] = useState('');
+  const [boletoNotifyPhone2, setBoletoNotifyPhone2] = useState('');
   const [templates, setTemplates] = useState<Record<MessageKey, string>>({
     whatsapp_confirmation_template: '',
     whatsapp_satisfaction_template: '',
@@ -101,6 +103,8 @@ export default function ConfigToolsPage() {
       setMaxAgendamentosDia(settings.max_agendamentos_dia ?? 10);
       setAiEnabled(settings.ai_enabled ?? true);
       setAiNotes(settings.ai_notes || '');
+      setBoletoNotifyPhone1((settings as any).boleto_notify_phone_1 || '');
+      setBoletoNotifyPhone2((settings as any).boleto_notify_phone_2 || '');
       setTemplates({
         whatsapp_confirmation_template: settings.whatsapp_confirmation_template,
         whatsapp_satisfaction_template: settings.whatsapp_satisfaction_template,
@@ -128,6 +132,8 @@ export default function ConfigToolsPage() {
       max_agendamentos_dia: maxAgendamentosDia,
       ai_enabled: aiEnabled,
       ai_notes: aiNotes,
+      boleto_notify_phone_1: boletoNotifyPhone1 || null,
+      boleto_notify_phone_2: boletoNotifyPhone2 || null,
       ...templates,
     } as Partial<StoreSettings>);
   }
@@ -186,6 +192,32 @@ export default function ConfigToolsPage() {
                   />
                 </div>
               ))}
+              {/* WhatsApp alertas internos */}
+              <div className="border border-white/10 rounded-lg p-3 space-y-3 bg-black/20">
+                <p className="text-xs text-neutral-400 font-semibold uppercase tracking-wide">WhatsApp — Alertas Internos (Boletos)</p>
+                <div className="space-y-1">
+                  <label className="text-xs text-neutral-400 font-medium">Dono / Responsável</label>
+                  <input
+                    type="text"
+                    value={boletoNotifyPhone1}
+                    onChange={e => setBoletoNotifyPhone1(e.target.value)}
+                    placeholder="Ex: 75988388629"
+                    className="w-full p-2 border border-white/20 rounded text-sm bg-black/30 text-neutral-200"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-neutral-400 font-medium">Financeiro</label>
+                  <input
+                    type="text"
+                    value={boletoNotifyPhone2}
+                    onChange={e => setBoletoNotifyPhone2(e.target.value)}
+                    placeholder="Ex: 75988243412"
+                    className="w-full p-2 border border-white/20 rounded text-sm bg-black/30 text-neutral-200"
+                  />
+                </div>
+                <p className="text-xs text-neutral-500">Números que recebem alertas de boletos via WhatsApp. Apenas dígitos, com DDD.</p>
+              </div>
+
               <div className="space-y-1">
                 <label className="text-xs text-neutral-400 font-medium">Capacidade máxima de motos por dia</label>
                 <input

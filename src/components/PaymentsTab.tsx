@@ -15,9 +15,10 @@ interface PaymentsTabProps {
   onAddPayment: (payload: { order_id: string; amount: number; discount_amount?: number | null; method: PaymentMethod; reference?: string | null; notes?: string | null; finalized_by_staff_id?: string | null }) => void;
   onDeletePayment: (id: string) => void;
   onUpdatePayment: (payload: { id: string; created_at?: string; amount?: number; discount_amount?: number | null; method?: PaymentMethod; notes?: string | null }) => void;
+  onOpenOrder?: (id: string) => void;
 }
 
-export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPayment, onDeletePayment, onUpdatePayment }: PaymentsTabProps) {
+export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPayment, onDeletePayment, onUpdatePayment, onOpenOrder }: PaymentsTabProps) {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed_unpaid'>('all');
   const [adding, setAdding] = useState<Record<string, { amount: string; discount_amount: string; method: PaymentMethod; notes?: string }>>({});
@@ -229,7 +230,7 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
             _totalDiscount?: number;
             _pending?: number;
           }) => (
-            <Card key={o.id}>
+            <Card key={o.id} className={onOpenOrder ? 'cursor-pointer hover:bg-accent transition-colors' : ''} onClick={() => onOpenOrder?.(o.id)}>
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>

@@ -16,6 +16,7 @@ import AfterSalesPage from './AfterSalesPage';
 import MessagesConfigPage from './MessagesConfigPage';
 import { useStoreSettings } from '@/hooks/useStoreSettings';
 import { CashFlowPage } from './CashFlowPage';
+import { BoletosPage } from './BoletosPage';
 import { ExpressCadastroPage } from './ExpressCadastroPage';
 import { supabase } from '@/integrations/supabase/client';
 import SatisfactionDashboardPage from './SatisfactionDashboardPage';
@@ -33,7 +34,7 @@ import { Wrench, Search, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { getMaintenanceKeywords, findKeywordInText, rescheduleMaintenanceReminder } from '@/services/maintenanceReminderService';
 
-type View = 'dashboard' | 'new' | 'express' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa' | 'satisfacao' | 'estoque' | 'balcao' | 'quadro' | 'agenda' | 'mensagens';
+type View = 'dashboard' | 'new' | 'express' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa' | 'satisfacao' | 'estoque' | 'balcao' | 'quadro' | 'agenda' | 'mensagens' | 'boletos';
 
 export default function Index() {
   const { isAdmin, canAccessCashFlow, canAccessReports } = useAuth();
@@ -596,7 +597,16 @@ Retirada: ${retiradaInfo}`;
         )}
 
         {currentView === 'reports' && (
-          <ReportsPage />
+          <ReportsPage
+            onOpenOrder={(id) => {
+              const order = orders.find(o => o.id === id);
+              if (order) { setSelectedOrder(order); setCurrentView('details'); }
+            }}
+            onOpenBalcaoOrder={(id) => {
+              setInitialBalcaoOrderId(id);
+              setCurrentView('balcao');
+            }}
+          />
         )}
 
         {currentView === 'mechanics' && (
@@ -610,6 +620,8 @@ Retirada: ${retiradaInfo}`;
         {currentView === 'mensagens' && (
           <MessagesConfigPage />
         )}
+
+        {currentView === 'boletos' && <BoletosPage />}
 
         {currentView === 'fluxo-caixa' && (
           <CashFlowPage

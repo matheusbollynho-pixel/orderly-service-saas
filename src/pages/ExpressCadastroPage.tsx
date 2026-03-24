@@ -3,6 +3,7 @@ import { useClients, Client, Motorcycle } from '@/hooks/useClients';
 import { useServiceOrders } from '@/hooks/useServiceOrders';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -407,6 +408,8 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
               value={moto.marca}
               onChange={(e) => setMoto((prev) => ({ ...prev, marca: e.target.value }))}
               placeholder="Honda"
+              spellCheck
+              lang="pt-BR"
               className="h-11"
             />
           </div>
@@ -416,6 +419,8 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
               value={moto.modelo}
               onChange={(e) => setMoto((prev) => ({ ...prev, modelo: e.target.value }))}
               placeholder="CG 160"
+              spellCheck
+              lang="pt-BR"
               className="h-11"
             />
           </div>
@@ -434,6 +439,8 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
               value={moto.cor}
               onChange={(e) => setMoto((prev) => ({ ...prev, cor: e.target.value }))}
               placeholder="Preta"
+              spellCheck
+              lang="pt-BR"
               className="h-11"
             />
           </div>
@@ -447,11 +454,14 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label>O que fazer na moto? *</Label>
-            <Input
+            <Textarea
               value={serviceDescription}
               onChange={(e) => setServiceDescription(e.target.value)}
               placeholder="Trocar óleo, cabo, revisão..."
-              className="h-11"
+              spellCheck
+              lang="pt-BR"
+              rows={2}
+              className="resize-none"
             />
           </div>
           <div className="space-y-2">

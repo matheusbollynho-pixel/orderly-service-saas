@@ -218,7 +218,12 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder }: CashFlowPag
     if (!dateString) return '';
     const date = new Date(dateString);
     if (Number.isNaN(date.getTime())) return '';
-    return format(date, 'HH:mm', { locale: ptBR });
+    return new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Fortaleza',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(date);
   };
 
   const formatDisplayDate = (dateString: string) => {
@@ -660,14 +665,18 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder }: CashFlowPag
                       <Label htmlFor="description">
                         Descrição {selectedProductId && <span className="text-green-600 ml-1 text-xs">✓ estoque</span>}
                       </Label>
-                      <Input
+                      <Textarea
                         id="description"
                         placeholder="Descrição ou clique para buscar no estoque..."
                         value={formData.description}
                         onChange={(e) => handleDescriptionChange(e.target.value)}
                         onFocus={handleDescriptionFocus}
                         autoComplete="off"
+                        spellCheck
+                        lang="pt-BR"
+                        rows={1}
                         required
+                        className="min-h-0 py-1.5 resize-none"
                       />
                       {showProductSuggestions && (
                         <div className="absolute top-full left-0 right-0 z-[100] mt-1 rounded-md border border-border bg-popover shadow-lg max-h-52 overflow-y-auto">

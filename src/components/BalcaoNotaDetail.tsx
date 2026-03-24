@@ -693,10 +693,13 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
             <div key={item.id} className="grid grid-cols-[1fr_72px_108px_96px_32px] items-center hover:bg-muted/20">
               <div className="px-4 py-2">
                 {item.type === 'avulso' && isEditable ? (
-                  <Input
+                  <Textarea
                     value={item.description}
                     onChange={e => handleUpdateItem(item.id, 'description', e.target.value)}
-                    className="h-7 text-sm border-dashed"
+                    spellCheck
+                    lang="pt-BR"
+                    rows={1}
+                    className="h-7 min-h-0 py-1 text-sm border-dashed resize-none"
                   />
                 ) : (
                   <div>
@@ -764,14 +767,17 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
               <div className="grid grid-cols-[1fr_72px_108px_auto] gap-2 items-end" ref={suggestionsRef}>
                 <div className="relative">
                   <label className="text-xs text-muted-foreground mb-1 block">Produto ou descrição</label>
-                  <Input
+                  <Textarea
                     placeholder="Buscar no estoque ou texto livre..."
                     value={newDesc}
                     onChange={e => handleDescChange(e.target.value)}
                     onFocus={handleDescFocus}
-                    onKeyDown={e => e.key === 'Enter' && handleAddItem()}
+                    onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleAddItem()}
                     autoComplete="off"
-                    className={selectedProduct ? 'border-blue-400 bg-blue-50/30 dark:bg-blue-950/20' : ''}
+                    spellCheck
+                    lang="pt-BR"
+                    rows={1}
+                    className={`min-h-0 py-1.5 resize-none ${selectedProduct ? 'border-blue-400 bg-blue-50/30 dark:bg-blue-950/20' : ''}`}
                   />
                   {selectedProduct && (
                     <span className="absolute right-2 top-8 text-[10px] text-blue-500 font-medium">✓ estoque</span>

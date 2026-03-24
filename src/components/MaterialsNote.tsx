@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Trash2, ChevronDown, ChevronUp, Package } from 'lucide-react';
@@ -56,8 +57,19 @@ export function MaterialsNote({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const looksLikeService = (text: string) => {
+    const normalized = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return /servi[cs]/.test(normalized); // serviço, servico, serviso, serviços...
+  };
+
   const handleDescricaoChange = (value: string) => {
-    setNewMaterial((prev) => ({ ...prev, descricao: value, product_id: undefined }));
+    const autoService = looksLikeService(value);
+    setNewMaterial((prev) => ({
+      ...prev,
+      descricao: value,
+      product_id: undefined,
+      is_service: autoService ? true : prev.is_service,
+    }));
     if (inventoryProducts.length > 0) {
       const q = value.trim().toLowerCase();
       const found = q.length === 0
@@ -100,7 +112,11 @@ export function MaterialsNote({
 
   const handleAddMaterial = () => {
     if (!newMaterial.descricao || !newMaterial.quantidade || !newMaterial.valor) {
-      alert('Preenchas todos os campos para adicionar material');
+      alert('Preencha todos os campos para adicionar material');
+      return;
+    }
+    if (newMaterial.is_service && !newMaterial.mechanic_id) {
+      alert('Selecione o mecânico responsável pelo serviço antes de adicionar.');
       return;
     }
 
@@ -294,14 +310,17 @@ export function MaterialsNote({
                         : null
                     }
                   </label>
-                  <Input
+                  <Textarea
                     placeholder="Clique para buscar no estoque ou digite livremente..."
                     value={newMaterial.descricao}
                     onChange={(e) => handleDescricaoChange(e.target.value)}
                     onFocus={handleDescricaoFocus}
                     disabled={disabled}
                     autoComplete="off"
-                    className="h-8 bg-muted/50 border-border/50"
+                    spellCheck
+                    lang="pt-BR"
+                    rows={1}
+                    className="h-8 min-h-0 py-1 resize-none bg-muted/50 border-border/50"
                   />
                   {showSuggestions && (
                     <div className="absolute top-full left-0 right-0 z-[100] mt-1 rounded-md border border-border bg-popover shadow-lg max-h-52 overflow-y-auto">
@@ -353,9 +372,12 @@ export function MaterialsNote({
               </div>
               {newMaterial.is_service && (
                 <div>
-                  <label className="text-xs font-semibold text-foreground block mb-1">Mecânico</label>
+                  <label className="text-xs font-semibold text-foreground block mb-1">
+                    Mecânico <span className="text-destructive">*</span>
+                    {!newMaterial.mechanic_id && <span className="text-destructive ml-1 font-normal">— obrigatório para serviços</span>}
+                  </label>
                   <Select value={newMaterial.mechanic_id || 'none'} onValueChange={(value) => setNewMaterial({ ...newMaterial, mechanic_id: value === 'none' ? undefined : value })} disabled={disabled}>
-                    <SelectTrigger className="h-8 bg-muted/50 border-border/50" disabled={disabled}>
+                    <SelectTrigger className={`h-8 bg-muted/50 ${!newMaterial.mechanic_id ? 'border-destructive' : 'border-border/50'}`} disabled={disabled}>
                       <SelectValue placeholder="Nenhum" />
                     </SelectTrigger>
                     <SelectContent>

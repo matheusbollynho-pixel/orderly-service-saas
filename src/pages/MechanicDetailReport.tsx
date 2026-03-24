@@ -15,9 +15,10 @@ import type { DateRange } from 'react-day-picker';
 
 interface MechanicDetailReportProps {
   onBack: () => void;
+  onOpenOrder?: (id: string) => void;
 }
 
-export function MechanicDetailReport({ onBack }: MechanicDetailReportProps) {
+export function MechanicDetailReport({ onBack, onOpenOrder }: MechanicDetailReportProps) {
   const { orders, isLoading, markMaterialAsPaid, markMaterialAsUnpaid } = useServiceOrders();
   const { mechanics } = useMechanics();
   const [selectedMechanicId, setSelectedMechanicId] = useState<string>('');
@@ -74,12 +75,7 @@ export function MechanicDetailReport({ onBack }: MechanicDetailReportProps) {
         console.log(`🔍 Verificando status de ${o.id}: "${o.status}" === "concluida" ou "concluida_entregue"?`, isConcluida);
         return isConcluida;
       })
-      .filter(o => {
-        const hasMechanicInOS = o.mechanic_id === selectedMechanicId;
-        const hasMechanicInMaterials = (o.materials || []).some(m => m.mechanic_id === selectedMechanicId);
-        console.log(`👤 OS ${o.id} tem mecânico? OS: ${hasMechanicInOS}, Materials: ${hasMechanicInMaterials}`);
-        return hasMechanicInOS || hasMechanicInMaterials;
-      })
+      .filter(o => o.mechanic_id === selectedMechanicId)
       .filter(o => {
         const osDate = new Date(o.created_at);
         const isInRange = osDate >= start && osDate <= end;
@@ -283,7 +279,7 @@ export function MechanicDetailReport({ onBack }: MechanicDetailReportProps) {
               const comissao = totalServicos * (selectedMechanic.commission_rate / 100);
 
               return (
-                <Card key={order.id}>
+                <Card key={order.id} className={onOpenOrder ? 'cursor-pointer hover:bg-accent transition-colors' : ''} onClick={() => onOpenOrder?.(order.id)}>
                   <CardContent className="p-4 space-y-3">
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
                       <div>

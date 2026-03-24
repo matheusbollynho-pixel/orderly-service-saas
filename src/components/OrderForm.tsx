@@ -372,7 +372,7 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting, initialData }: { o
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="font-semibold">Modelo</Label>
-                  <Input placeholder="Honda CG 160" value={moto.model || ''} onChange={(e) => updateField('motos', index, 'model', e.target.value)} className="h-12" />
+                  <Input placeholder="Honda CG 160" value={moto.model || ''} onChange={(e) => updateField('motos', index, 'model', e.target.value)} spellCheck lang="pt-BR" className="h-12" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
@@ -381,7 +381,7 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting, initialData }: { o
                   </div>
                   <div className="space-y-2">
                     <Label className="font-semibold">Cor</Label>
-                    <Input placeholder="Preta" value={moto.color || ''} onChange={(e) => updateField('motos', index, 'color', e.target.value)} className="h-12" />
+                    <Input placeholder="Preta" value={moto.color || ''} onChange={(e) => updateField('motos', index, 'color', e.target.value)} spellCheck lang="pt-BR" className="h-12" />
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -517,6 +517,8 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting, initialData }: { o
                 value={formData.servicos.o_que_fazer}
                 onChange={(e) => updateField('servicos', 0, 'o_que_fazer', e.target.value)}
                 rows={4}
+                spellCheck
+                lang="pt-BR"
                 className="resize-vertical min-h-[120px]"
               />
               

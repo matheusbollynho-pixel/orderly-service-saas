@@ -999,6 +999,16 @@ const renderDeliverySection = () => {
                   }
 
                   if (value === 'concluida' && order.status !== 'concluida') {
+                    const servicosSemMecanico = (order.materials || []).filter(m => m.is_service === true && !m.mechanic_id);
+                    if (servicosSemMecanico.length > 0) {
+                      if (order.mechanic_id) {
+                        // Auto-atribui o mecânico da OS aos serviços sem mecânico
+                        servicosSemMecanico.forEach(m => onUpdateMaterial?.(m.id, 'mechanic_id', order.mechanic_id!));
+                      } else {
+                        alert(`Existem ${servicosSemMecanico.length} serviço(s) sem mecânico atribuído:\n${servicosSemMecanico.map(m => `• ${m.descricao}`).join('\n')}\n\nAtribua um mecânico à OS ou a cada serviço antes de concluir.`);
+                        return;
+                      }
+                    }
                     const today = formatDateToInput(new Date().toISOString());
                     setExitDate(today);
                     dispatchExitDateUpdate(today);
@@ -1166,6 +1176,15 @@ const renderDeliverySection = () => {
                   onUpdateOrder?.({ id: order.id, status_oficina: novoStatus });
                   // Sincroniza status da OS
                   if (novoStatus === 'servico_concluido' && order.status !== 'concluida' && order.status !== 'concluida_entregue') {
+                    const servicosSemMecanico = (order.materials || []).filter(m => m.is_service === true && !m.mechanic_id);
+                    if (servicosSemMecanico.length > 0) {
+                      if (order.mechanic_id) {
+                        servicosSemMecanico.forEach(m => onUpdateMaterial?.(m.id, 'mechanic_id', order.mechanic_id!));
+                      } else {
+                        alert(`Existem ${servicosSemMecanico.length} serviço(s) sem mecânico atribuído:\n${servicosSemMecanico.map(m => `• ${m.descricao}`).join('\n')}\n\nAtribua um mecânico à OS ou a cada serviço antes de concluir.`);
+                        return;
+                      }
+                    }
                     const today = formatDateToInput(new Date().toISOString());
                     setExitDate(today);
                     dispatchExitDateUpdate(today);
