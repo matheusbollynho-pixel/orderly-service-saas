@@ -169,28 +169,59 @@ export function BoletosPage() {
     }
 
     const clean = text.replace(/\D/g, '');
-    // Aceita linha digitável (47 dígitos) ou código de barras (44 dígitos)
     if (clean.length !== 44 && clean.length !== 47) return;
     setLoadingBarcode(true);
     setScanError(null);
+
+    // Extrai valor e vencimento direto do código (padrão FEBRABAN — funciona para qualquer banco)
+    const parseBoletoLocal = () => {
+      let fator: string;
+      let valorStr: string;
+      if (clean.length === 47) {
+        // Linha digitável: campo 5 começa na posição 33
+        fator = clean.substring(33, 37);
+        valorStr = clean.substring(37, 47);
+      } else {
+        // Código de barras: posições 5-8 = fator, 9-18 = valor
+        fator = clean.substring(5, 9);
+        valorStr = clean.substring(9, 19);
+      }
+      const valor = parseInt(valorStr, 10) / 100;
+      let vencimento: string | undefined;
+      const fatorNum = parseInt(fator, 10);
+      if (fatorNum > 0) {
+        const base = new Date(1997, 9, 7); // 07/10/1997 = base FEBRABAN
+        base.setDate(base.getDate() + fatorNum);
+        vencimento = base.toISOString().split('T')[0];
+      }
+      return { valor: valor > 0 ? valor : undefined, vencimento };
+    };
+
+    const local = parseBoletoLocal();
+    if (local.valor || local.vencimento) {
+      setForm(prev => ({
+        ...prev,
+        ...(local.valor ? { valor: String(local.valor) } : {}),
+        ...(local.vencimento ? { vencimento: local.vencimento } : {}),
+      }));
+      setLoadingBarcode(false);
+      return;
+    }
+
+    // Fallback: tenta BrasilAPI para casos especiais (convênios, concessionárias)
     try {
       const res = await fetch(`https://brasilapi.com.br/api/boleto/v1/${clean}`);
       if (res.ok) {
         const data = await res.json();
-        const filled: Partial<typeof form> = {};
-        if (data.amount) filled.valor = String(data.amount);
-        if (data.expiration_date) filled.vencimento = data.expiration_date.split('T')[0];
-        if (Object.keys(filled).length > 0) {
-          setForm(prev => ({ ...prev, ...filled }));
-        } else {
-          setScanError('Código reconhecido, mas banco não retornou valor/vencimento. Preencha manualmente.');
+        if (data.amount || data.expiration_date) {
+          setForm(prev => ({
+            ...prev,
+            ...(data.amount ? { valor: String(data.amount) } : {}),
+            ...(data.expiration_date ? { vencimento: data.expiration_date.split('T')[0] } : {}),
+          }));
         }
-      } else {
-        setScanError('Banco não encontrado na BrasilAPI. Preencha valor e vencimento manualmente.');
       }
-    } catch {
-      setScanError('Erro ao consultar BrasilAPI. Verifique sua conexão.');
-    } finally {
+    } catch { /* silencioso */ } finally {
       setLoadingBarcode(false);
     }
   };
