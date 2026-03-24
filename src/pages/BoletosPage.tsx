@@ -1,4 +1,6 @@
 import { useState, useRef } from 'react';
+import { BrowserMultiFormatReader } from '@zxing/browser';
+import { DecodeHintType, BarcodeFormat } from '@zxing/library';
 import { useBoletos, Boleto, BoletoCategoria, BoletoRecorrencia, BoletoPaidMethod, getBoletoStatus } from '@/hooks/useBoletos';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -83,11 +85,14 @@ export function BoletosPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scanTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const zxingReaderRef = useRef<BrowserMultiFormatReader | null>(null);
 
   const stopScanner = () => {
     if (scanTimerRef.current) { clearInterval(scanTimerRef.current); scanTimerRef.current = null; }
     if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
     if (videoRef.current) { videoRef.current.srcObject = null; }
+    BrowserMultiFormatReader.releaseAllStreams();
+    zxingReaderRef.current = null;
     setScanning(false);
   };
 
@@ -105,44 +110,50 @@ export function BoletosPage() {
       videoRef.current.srcObject = stream;
       await videoRef.current.play();
 
-      if (!('BarcodeDetector' in window)) {
-        setScanError('Leitor não suportado neste navegador. Cole o código manualmente.');
-        stopScanner();
-        return;
-      }
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const BD = (window as any).BarcodeDetector;
-      const supported: string[] = await BD.getSupportedFormats();
-      const want = ['itf', 'itf_14', 'code_128', 'qr_code', 'pdf417'];
-      const formats = want.filter(f => supported.includes(f));
-      const detector = new BD({ formats: formats.length ? formats : supported });
-
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d')!;
-      let lastCode = '';
-      let streak = 0;
-
-      scanTimerRef.current = setInterval(async () => {
-        const video = videoRef.current;
-        if (!video || video.videoWidth === 0 || video.paused) return;
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0);
-        try {
-          const codes = await detector.detect(canvas);
-          if (!codes.length) return;
-          const raw: string = codes[0].rawValue;
+      if ('BarcodeDetector' in window) {
+        // Chrome Android — detector nativo (mais rápido)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const BD = (window as any).BarcodeDetector;
+        const supported: string[] = await BD.getSupportedFormats();
+        const want = ['itf', 'itf_14', 'code_128', 'qr_code', 'pdf417'];
+        const formats = want.filter(f => supported.includes(f));
+        const detector = new BD({ formats: formats.length ? formats : supported });
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d')!;
+        let lastCode = ''; let streak = 0;
+        scanTimerRef.current = setInterval(async () => {
+          const video = videoRef.current;
+          if (!video || video.videoWidth === 0 || video.paused) return;
+          canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+          ctx.drawImage(video, 0, 0);
+          try {
+            const codes = await detector.detect(canvas);
+            if (!codes.length) return;
+            const raw: string = codes[0].rawValue;
+            if (!raw || raw.length < 10) return;
+            if (raw === lastCode) streak++; else { lastCode = raw; streak = 1; }
+            if (streak >= 2) { stopScanner(); setForm(prev => ({ ...prev, codigo_barras: raw })); fetchBarcodeData(raw); }
+          } catch { /* frame sem código */ }
+        }, 300);
+      } else {
+        // Fallback: ZXing (Firefox, Safari, browsers sem BarcodeDetector)
+        const hints = new Map();
+        hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+          BarcodeFormat.ITF, BarcodeFormat.CODE_128, BarcodeFormat.CODE_39,
+          BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX, BarcodeFormat.PDF_417,
+        ]);
+        hints.set(DecodeHintType.TRY_HARDER, true);
+        const reader = new BrowserMultiFormatReader(hints);
+        zxingReaderRef.current = reader;
+        reader.decodeFromStream(stream, videoRef.current, (result) => {
+          if (!result) return;
+          const raw = result.getText();
           if (!raw || raw.length < 10) return;
-          if (raw === lastCode) streak++; else { lastCode = raw; streak = 1; }
-          if (streak >= 2) {
-            stopScanner();
-            setForm(prev => ({ ...prev, codigo_barras: raw }));
-            fetchBarcodeData(raw);
-          }
-        } catch { /* frame sem código */ }
-      }, 300);
-
+          stopScanner();
+          setForm(prev => ({ ...prev, codigo_barras: raw }));
+          fetchBarcodeData(raw);
+        });
+      }
     } catch {
       setScanError('Não foi possível acessar a câmera.');
       setScanning(false);
