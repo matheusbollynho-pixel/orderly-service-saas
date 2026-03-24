@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { MaintenanceKeywordsManager } from '@/components/MaintenanceKeywordsManager';
 import { useStoreSettings, StoreSettings } from '@/hooks/useStoreSettings';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Settings, Zap, MessageSquare, CalendarCheck, Star, Cake, ShoppingCart, Store } from 'lucide-react';
+import { Settings, Zap, MessageSquare, CalendarCheck, Star, Cake, ShoppingCart, Store, Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type MessageKey = 'whatsapp_confirmation_template' | 'whatsapp_satisfaction_template' | 'whatsapp_birthday_template' | 'whatsapp_balcao_followup_template';
@@ -77,6 +77,8 @@ export default function ConfigToolsPage() {
   const [storeInstagram, setStoreInstagram] = useState('');
   const [storeOwner, setStoreOwner] = useState('');
   const [maxAgendamentosDia, setMaxAgendamentosDia] = useState(10);
+  const [aiEnabled, setAiEnabled] = useState(true);
+  const [aiNotes, setAiNotes] = useState('');
   const [templates, setTemplates] = useState<Record<MessageKey, string>>({
     whatsapp_confirmation_template: '',
     whatsapp_satisfaction_template: '',
@@ -97,6 +99,8 @@ export default function ConfigToolsPage() {
       setStoreInstagram(settings.store_instagram || '');
       setStoreOwner(settings.store_owner || '');
       setMaxAgendamentosDia(settings.max_agendamentos_dia ?? 10);
+      setAiEnabled(settings.ai_enabled ?? true);
+      setAiNotes(settings.ai_notes || '');
       setTemplates({
         whatsapp_confirmation_template: settings.whatsapp_confirmation_template,
         whatsapp_satisfaction_template: settings.whatsapp_satisfaction_template,
@@ -122,6 +126,8 @@ export default function ConfigToolsPage() {
       store_instagram: storeInstagram,
       store_owner: storeOwner,
       max_agendamentos_dia: maxAgendamentosDia,
+      ai_enabled: aiEnabled,
+      ai_notes: aiNotes,
       ...templates,
     } as Partial<StoreSettings>);
   }
@@ -146,6 +152,9 @@ export default function ConfigToolsPage() {
           </TabsTrigger>
           <TabsTrigger value="mensagens" className="flex-1 flex items-center gap-2">
             <MessageSquare size={15} /> Mensagens
+          </TabsTrigger>
+          <TabsTrigger value="ia" className="flex-1 flex items-center gap-2">
+            <Bot size={15} /> IA
           </TabsTrigger>
           <TabsTrigger value="ferramentas" className="flex-1 flex items-center gap-2">
             <Settings size={15} /> Ferramentas
@@ -193,6 +202,52 @@ export default function ConfigToolsPage() {
               </div>
               <Button className="w-full" disabled={saving} onClick={handleSave}>
                 {saving ? 'Salvando...' : 'Salvar informações'}
+              </Button>
+            </>
+          )}
+        </TabsContent>
+
+        {/* ABA IA */}
+        <TabsContent value="ia" className="space-y-4">
+          {loadingSettings ? (
+            <p className="text-sm text-neutral-400">Carregando...</p>
+          ) : (
+            <>
+              <div className="flex items-center justify-between p-3 border border-white/10 rounded-lg bg-black/20">
+                <div>
+                  <p className="text-sm font-medium text-neutral-200">Assistente Virtual (WhatsApp)</p>
+                  <p className="text-xs text-neutral-500">Ativa ou desativa o atendimento automático por IA</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAiEnabled(v => !v)}
+                  title={aiEnabled ? 'Desativar IA' : 'Ativar IA'}
+                  className={cn(
+                    'relative w-11 h-6 rounded-full transition-colors',
+                    aiEnabled ? 'bg-primary' : 'bg-white/20'
+                  )}
+                >
+                  <span className={cn(
+                    'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform',
+                    aiEnabled ? 'translate-x-5' : 'translate-x-0'
+                  )} />
+                </button>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs text-neutral-400 font-medium">Instruções personalizadas para a IA</label>
+                <textarea
+                  rows={8}
+                  value={aiNotes}
+                  onChange={e => setAiNotes(e.target.value)}
+                  placeholder={`Descreva aqui informações específicas da sua oficina que a IA deve saber:\n\n- Serviços especiais que você oferece\n- Preços fixos (ex: troca de óleo R$ 50)\n- Regras de atendimento\n- Tom de comunicação preferido\n- Promoções ativas`}
+                  className="w-full p-2 border border-white/20 rounded text-sm bg-black/30 text-neutral-200"
+                />
+                <p className="text-xs text-neutral-500">Essas instruções são adicionadas ao conhecimento da IA sobre sua oficina</p>
+              </div>
+
+              <Button className="w-full" disabled={saving} onClick={handleSave}>
+                {saving ? 'Salvando...' : 'Salvar configurações da IA'}
               </Button>
             </>
           )}
