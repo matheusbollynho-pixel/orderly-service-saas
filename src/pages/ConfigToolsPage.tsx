@@ -234,16 +234,30 @@ export default function ConfigToolsPage() {
                 </button>
               </div>
 
-              <div className="space-y-1">
+              <div className="space-y-2">
                 <label className="text-xs text-neutral-400 font-medium">Instruções personalizadas para a IA</label>
+
+                <div className="border border-white/10 rounded-lg p-3 bg-black/20 space-y-2">
+                  <p className="text-xs font-medium text-neutral-300">💡 O que escrever aqui?</p>
+                  <p className="text-xs text-neutral-500">Tudo que é único da sua oficina e a IA precisa saber para atender bem seus clientes:</p>
+                  <ul className="text-xs text-neutral-400 space-y-1">
+                    <li>🔧 <span className="text-neutral-300">Serviços especiais:</span> "Fazemos funilaria, pintura e customização"</li>
+                    <li>💰 <span className="text-neutral-300">Preços fixos:</span> "Troca de óleo a partir de R$ 45, revisão completa R$ 120"</li>
+                    <li>🚫 <span className="text-neutral-300">Restrições:</span> "Não atendemos motos acima de 600cc" ou "Só trabalhamos com Honda e Yamaha"</li>
+                    <li>⏰ <span className="text-neutral-300">Regras de agendamento:</span> "Cliente deve chegar 10 min antes" ou "Deixar a moto o dia todo"</li>
+                    <li>🎯 <span className="text-neutral-300">Promoções ativas:</span> "Todo mês de abril, troca de óleo com 20% de desconto"</li>
+                    <li>💬 <span className="text-neutral-300">Tom de atendimento:</span> "Seja mais formal" ou "Use linguagem bem descontraída"</li>
+                  </ul>
+                </div>
+
                 <textarea
-                  rows={8}
+                  rows={7}
                   value={aiNotes}
                   onChange={e => setAiNotes(e.target.value)}
-                  placeholder={`Descreva aqui informações específicas da sua oficina que a IA deve saber:\n\n- Serviços especiais que você oferece\n- Preços fixos (ex: troca de óleo R$ 50)\n- Regras de atendimento\n- Tom de comunicação preferido\n- Promoções ativas`}
+                  placeholder="Ex: Fazemos revisão completa por R$ 150. Não atendemos motos acima de 300cc. Cliente deve deixar a moto o dia todo para serviços grandes..."
                   className="w-full p-2 border border-white/20 rounded text-sm bg-black/30 text-neutral-200"
                 />
-                <p className="text-xs text-neutral-500">Essas instruções são adicionadas ao conhecimento da IA sobre sua oficina</p>
+                <p className="text-xs text-neutral-500">Essas instruções são adicionadas ao conhecimento da IA sobre sua oficina. Quanto mais detalhado, melhor o atendimento.</p>
               </div>
 
               <Button className="w-full" disabled={saving} onClick={handleSave}>
