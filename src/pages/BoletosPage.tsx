@@ -115,15 +115,18 @@ export function BoletosPage() {
           return;
         }
         Quagga.start();
+        let lastCode = '';
+        let streak = 0;
         Quagga.onDetected((data) => {
           const raw = data.codeResult.code;
           if (!raw || raw.length < 10) return;
-          // exige pelo menos 2 detecções consecutivas para evitar falsos positivos
-          const errors = data.codeResult.decodedCodes
-            ?.filter((x: { error?: number }) => x.error !== undefined)
-            .map((x: { error?: number }) => x.error as number) ?? [];
-          const avgError = errors.length > 0 ? errors.reduce((a: number, b: number) => a + b, 0) / errors.length : 1;
-          if (avgError > 0.25) return; // confiança baixa, ignora
+          if (raw === lastCode) {
+            streak++;
+          } else {
+            lastCode = raw;
+            streak = 1;
+          }
+          if (streak < 3) return; // exige 3 leituras seguidas do mesmo código
           stopScanner();
           setForm(prev => ({ ...prev, codigo_barras: raw }));
           fetchBarcodeData(raw);
