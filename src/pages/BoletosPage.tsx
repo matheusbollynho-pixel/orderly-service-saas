@@ -1,6 +1,5 @@
 import { useState, useRef } from 'react';
-import { BrowserMultiFormatReader } from '@zxing/browser';
-import { DecodeHintType, BarcodeFormat } from '@zxing/library';
+
 import { useBoletos, Boleto, BoletoCategoria, BoletoRecorrencia, BoletoPaidMethod, getBoletoStatus } from '@/hooks/useBoletos';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Plus, Trash2, CheckCircle2, RotateCcw, Camera, X, AlertTriangle, Clock, Calendar } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, RotateCcw, X, AlertTriangle, Clock, Calendar } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -79,91 +78,7 @@ export function BoletosPage() {
   const [payingId, setPayingId] = useState<string | null>(null);
   const [payForm, setPayForm] = useState({ paid_at: '', paid_method: 'pix' as BoletoPaidMethod });
   const [loadingBarcode, setLoadingBarcode] = useState(false);
-  const [scanError, setScanError] = useState<string | null>(null);
-  const [scanning, setScanning] = useState(false);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const scanTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const zxingReaderRef = useRef<BrowserMultiFormatReader | null>(null);
-
-  const stopScanner = () => {
-    if (scanTimerRef.current) { clearInterval(scanTimerRef.current); scanTimerRef.current = null; }
-    if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
-    if (videoRef.current) { videoRef.current.srcObject = null; }
-    BrowserMultiFormatReader.releaseAllStreams();
-    zxingReaderRef.current = null;
-    setScanning(false);
-  };
-
-  const startScanner = async () => {
-    setScanError(null);
-    setScanning(true);
-    await new Promise(r => setTimeout(r, 400));
-    if (!videoRef.current) { setScanning(false); return; }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-      });
-      streamRef.current = stream;
-      videoRef.current.srcObject = stream;
-      await videoRef.current.play();
-
-      // Verifica se BarcodeDetector suporta ITF
-      let useNative = false;
-      if ('BarcodeDetector' in window) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const supported: string[] = await (window as any).BarcodeDetector.getSupportedFormats();
-        useNative = supported.includes('itf') || supported.includes('itf_14');
-      }
-
-      if (useNative) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const BD = (window as any).BarcodeDetector;
-        const supported: string[] = await BD.getSupportedFormats();
-        const want = ['itf', 'itf_14', 'code_128', 'qr_code', 'pdf417'];
-        const formats = want.filter(f => supported.includes(f));
-        const detector = new BD({ formats });
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d')!;
-        let lastCode = ''; let streak = 0;
-        scanTimerRef.current = setInterval(async () => {
-          const video = videoRef.current;
-          if (!video || video.videoWidth === 0 || video.paused) return;
-          canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-          ctx.drawImage(video, 0, 0);
-          try {
-            const codes = await detector.detect(canvas);
-            if (!codes.length) return;
-            const raw: string = codes[0].rawValue;
-            if (!raw || raw.length < 10) return;
-            if (raw === lastCode) streak++; else { lastCode = raw; streak = 1; }
-            if (streak >= 2) { stopScanner(); setForm(prev => ({ ...prev, codigo_barras: raw })); fetchBarcodeData(raw); }
-          } catch { /* frame sem código */ }
-        }, 300);
-      } else {
-        // ZXing — ITF específico para boleto (ALLOWED_LENGTHS=44 ajuda a detectar)
-        const hints = new Map();
-        hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.ITF]);
-        hints.set(DecodeHintType.TRY_HARDER, true);
-        hints.set(DecodeHintType.ALLOWED_LENGTHS, [44]);
-        const reader = new BrowserMultiFormatReader(hints);
-        zxingReaderRef.current = reader;
-        reader.decodeFromStream(stream, videoRef.current, (result) => {
-          if (!result) return;
-          const raw = result.getText();
-          if (!raw || raw.length < 10) return;
-          stopScanner();
-          setForm(prev => ({ ...prev, codigo_barras: raw }));
-          fetchBarcodeData(raw);
-        });
-      }
-    } catch {
-      setScanError('Não foi possível acessar a câmera.');
-      setScanning(false);
-    }
-  };
 
   // Detecta se é código Pix EMV (começa com "00020126" ou similar)
   const isPixEMV = (text: string) => text.trim().startsWith('000201');
@@ -379,28 +294,8 @@ export function BoletosPage() {
                   }}
                   className="font-mono text-sm"
                 />
-                <Button
-                  variant="outline"
-                  size="icon"
-                  title="Escanear com câmera"
-                  onClick={startScanner}
-                >
-                  <Camera className="h-4 w-4" />
-                </Button>
               </div>
               {loadingBarcode && <p className="text-xs text-muted-foreground">Buscando dados do boleto...</p>}
-              {scanError && <p className="text-xs text-red-500">{scanError}</p>}
-
-              {/* Scanner ao vivo */}
-              {scanning && (
-                <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center">
-                  <video ref={videoRef} className="w-full max-w-sm rounded-lg" autoPlay playsInline muted />
-                  <p className="text-white text-sm mt-4">Aponte para o código de barras</p>
-                  <Button variant="outline" className="mt-4" onClick={stopScanner}>
-                    <X className="h-4 w-4 mr-1" /> Cancelar
-                  </Button>
-                </div>
-              )}
               {form.pix_copia_cola && !form.codigo_barras && (
                 <p className="text-xs text-blue-500">QR Code Pix detectado — salvo no campo Pix copia e cola</p>
               )}
