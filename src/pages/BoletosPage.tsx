@@ -1,5 +1,4 @@
 import { useState, useRef } from 'react';
-import Quagga from '@ericblade/quagga2';
 import { useBoletos, Boleto, BoletoCategoria, BoletoRecorrencia, BoletoPaidMethod, getBoletoStatus } from '@/hooks/useBoletos';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -81,58 +80,73 @@ export function BoletosPage() {
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
-  const scannerDivRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopScanner = () => {
-    Quagga.offDetected();
-    Quagga.stop();
+    if (scanTimerRef.current) { clearInterval(scanTimerRef.current); scanTimerRef.current = null; }
+    if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
+    if (videoRef.current) { videoRef.current.srcObject = null; }
     setScanning(false);
   };
 
   const startScanner = async () => {
     setScanError(null);
     setScanning(true);
-    await new Promise(r => setTimeout(r, 500));
-    if (!scannerDivRef.current) { setScanning(false); return; }
+    await new Promise(r => setTimeout(r, 400));
+    if (!videoRef.current) { setScanning(false); return; }
 
-    Quagga.init(
-      {
-        inputStream: {
-          type: 'LiveStream',
-          target: scannerDivRef.current,
-          constraints: { facingMode: 'environment', width: 1280, height: 720 },
-        },
-        decoder: {
-          readers: ['i2of5_reader', 'code_128_reader', 'code_39_reader', 'qr_code_reader'],
-          multiple: false,
-        },
-        locate: true,
-      },
-      (err) => {
-        if (err) {
-          setScanError('Não foi possível acessar a câmera.');
-          setScanning(false);
-          return;
-        }
-        Quagga.start();
-        let lastCode = '';
-        let streak = 0;
-        Quagga.onDetected((data) => {
-          const raw = data.codeResult.code;
-          if (!raw || raw.length < 10) return;
-          if (raw === lastCode) {
-            streak++;
-          } else {
-            lastCode = raw;
-            streak = 1;
-          }
-          if (streak < 3) return; // exige 3 leituras seguidas do mesmo código
-          stopScanner();
-          setForm(prev => ({ ...prev, codigo_barras: raw }));
-          fetchBarcodeData(raw);
-        });
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      });
+      streamRef.current = stream;
+      videoRef.current.srcObject = stream;
+      await videoRef.current.play();
+
+      if (!('BarcodeDetector' in window)) {
+        setScanError('Leitor não suportado neste navegador. Cole o código manualmente.');
+        stopScanner();
+        return;
       }
-    );
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const BD = (window as any).BarcodeDetector;
+      const supported: string[] = await BD.getSupportedFormats();
+      const want = ['itf', 'itf_14', 'code_128', 'qr_code', 'pdf417'];
+      const formats = want.filter(f => supported.includes(f));
+      const detector = new BD({ formats: formats.length ? formats : supported });
+
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d')!;
+      let lastCode = '';
+      let streak = 0;
+
+      scanTimerRef.current = setInterval(async () => {
+        const video = videoRef.current;
+        if (!video || video.videoWidth === 0 || video.paused) return;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0);
+        try {
+          const codes = await detector.detect(canvas);
+          if (!codes.length) return;
+          const raw: string = codes[0].rawValue;
+          if (!raw || raw.length < 10) return;
+          if (raw === lastCode) streak++; else { lastCode = raw; streak = 1; }
+          if (streak >= 2) {
+            stopScanner();
+            setForm(prev => ({ ...prev, codigo_barras: raw }));
+            fetchBarcodeData(raw);
+          }
+        } catch { /* frame sem código */ }
+      }, 300);
+
+    } catch {
+      setScanError('Não foi possível acessar a câmera.');
+      setScanning(false);
+    }
   };
 
   // Detecta se é código Pix EMV (começa com "00020126" ou similar)
@@ -364,7 +378,7 @@ export function BoletosPage() {
               {/* Scanner ao vivo */}
               {scanning && (
                 <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center">
-                  <div ref={scannerDivRef} className="relative w-full max-w-sm overflow-hidden rounded-lg h-72" />
+                  <video ref={videoRef} className="w-full max-w-sm rounded-lg" autoPlay playsInline muted />
                   <p className="text-white text-sm mt-4">Aponte para o código de barras</p>
                   <Button variant="outline" className="mt-4" onClick={stopScanner}>
                     <X className="h-4 w-4 mr-1" /> Cancelar
