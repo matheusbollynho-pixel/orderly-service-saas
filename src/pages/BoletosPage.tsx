@@ -169,7 +169,7 @@ export function BoletosPage() {
     }
 
     const clean = text.replace(/\D/g, '');
-    if (clean.length !== 44 && clean.length !== 47) return;
+    if (clean.length < 44) return;
     setLoadingBarcode(true);
     setScanError(null);
 
