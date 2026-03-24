@@ -169,20 +169,27 @@ export function BoletosPage() {
     }
 
     const clean = text.replace(/\D/g, '');
-    if (clean.length < 44) return;
+    // Aceita linha digitável (47 dígitos) ou código de barras (44 dígitos)
+    if (clean.length !== 44 && clean.length !== 47) return;
     setLoadingBarcode(true);
+    setScanError(null);
     try {
       const res = await fetch(`https://brasilapi.com.br/api/boleto/v1/${clean}`);
       if (res.ok) {
         const data = await res.json();
-        setForm(prev => ({
-          ...prev,
-          valor: data.amount ? String(data.amount) : prev.valor,
-          vencimento: data.expiration_date ? data.expiration_date.split('T')[0] : prev.vencimento,
-        }));
+        const filled: Partial<typeof form> = {};
+        if (data.amount) filled.valor = String(data.amount);
+        if (data.expiration_date) filled.vencimento = data.expiration_date.split('T')[0];
+        if (Object.keys(filled).length > 0) {
+          setForm(prev => ({ ...prev, ...filled }));
+        } else {
+          setScanError('Código reconhecido, mas banco não retornou valor/vencimento. Preencha manualmente.');
+        }
+      } else {
+        setScanError('Banco não encontrado na BrasilAPI. Preencha valor e vencimento manualmente.');
       }
     } catch {
-      // silencioso — usuário preenche manualmente
+      setScanError('Erro ao consultar BrasilAPI. Verifique sua conexão.');
     } finally {
       setLoadingBarcode(false);
     }
