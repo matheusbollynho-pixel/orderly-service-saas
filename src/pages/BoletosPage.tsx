@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { BrowserMultiFormatReader } from '@zxing/browser';
 import { useBoletos, Boleto, BoletoCategoria, BoletoRecorrencia, BoletoPaidMethod, getBoletoStatus } from '@/hooks/useBoletos';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -86,28 +87,26 @@ export function BoletosPage() {
     if (!file) return;
     e.target.value = '';
     setScanError(null);
-
-    if (!('BarcodeDetector' in window)) {
-      setScanError('Seu navegador não suporta leitura automática. Cole o código manualmente.');
-      return;
-    }
+    setLoadingBarcode(true);
 
     try {
+      const url = URL.createObjectURL(file);
+      const img = document.createElement('img');
+      img.src = url;
+      await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = rej; });
+
+      const reader = new BrowserMultiFormatReader();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const detector = new (window as any).BarcodeDetector({
-        formats: ['itf', 'code_128', 'code_39', 'qr_code', 'data_matrix', 'pdf417'],
-      });
-      const img = await createImageBitmap(file);
-      const codes = await detector.detect(img);
-      if (codes.length === 0) {
-        setScanError('Nenhum código encontrado na imagem. Tente novamente ou cole manualmente.');
-        return;
-      }
-      const raw: string = codes[0].rawValue;
+      const result = await (reader as any).decodeFromImageElement(img);
+      URL.revokeObjectURL(url);
+
+      const raw: string = result.getText();
       setForm(prev => ({ ...prev, codigo_barras: raw }));
       fetchBarcodeData(raw);
     } catch {
-      setScanError('Erro ao ler a imagem. Tente novamente.');
+      setScanError('Nenhum código encontrado. Tente foto mais próxima ou cole manualmente.');
+    } finally {
+      setLoadingBarcode(false);
     }
   };
 
