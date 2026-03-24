@@ -45,7 +45,6 @@ import { sendWhatsAppText, sendWhatsAppLocation, normalizeBrPhone } from '../_sh
 // ============================================================
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
-const DONO_PHONE = Deno.env.get('DONO_PHONE') || '';
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
 
 // ============================================================
@@ -75,13 +74,18 @@ async function enviarMensagem(phone: string, texto: string): Promise<void> {
 }
 
 async function enviarAlertaDono(resumo: string): Promise<void> {
-  if (!DONO_PHONE) return;
+  const supabase = getSupabaseClient();
+  const { data: settings } = await supabase
+    .from('store_settings')
+    .select('boleto_notify_phone_1, boleto_notify_phone_2')
+    .limit(1)
+    .maybeSingle();
+  const phones = [settings?.boleto_notify_phone_1, settings?.boleto_notify_phone_2].filter(Boolean) as string[];
+  if (phones.length === 0) return;
   const msg = `🔔 *Alerta IA Atendimento*\n\n${resumo}`;
-  try {
-    await sendWhatsAppText(normalizeBrPhone(DONO_PHONE), msg);
-  } catch (e) {
-    console.error('Erro ao enviar alerta para dono:', e);
-  }
+  await Promise.allSettled(
+    phones.map(p => sendWhatsAppText(normalizeBrPhone(p), msg).catch(e => console.error('Erro alerta dono:', e)))
+  );
 }
 
 // ============================================================
