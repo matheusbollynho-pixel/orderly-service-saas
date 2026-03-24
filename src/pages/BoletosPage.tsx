@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Plus, Trash2, CheckCircle2, RotateCcw, X, AlertTriangle, Clock, Calendar } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, RotateCcw, X, AlertTriangle, Clock, Calendar, Pencil } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -74,6 +74,7 @@ const EMPTY_FORM = {
 export function BoletosPage() {
   const { boletos, isLoading, createBoleto, updateBoleto, deleteBoleto, marcarPago, marcarAberto, isCreating } = useBoletos();
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [filterStatus, setFilterStatus] = useState<string>('pendentes');
   const [payingId, setPayingId] = useState<string | null>(null);
@@ -171,9 +172,29 @@ export function BoletosPage() {
     }));
   };
 
+  const openEdit = (boleto: Boleto) => {
+    setEditingId(boleto.id);
+    setForm({
+      credor: boleto.credor,
+      valor: String(boleto.valor),
+      vencimento: boleto.vencimento,
+      codigo_barras: boleto.codigo_barras || '',
+      pix_copia_cola: boleto.pix_copia_cola || '',
+      multa: boleto.multa != null ? String(boleto.multa) : '',
+      juros: boleto.juros != null ? String(boleto.juros) : '',
+      categoria: boleto.categoria,
+      recorrencia: boleto.recorrencia,
+      alert_days: boleto.alert_days,
+      notify_sistema: boleto.notify_sistema,
+      notify_whatsapp: boleto.notify_whatsapp,
+      observacoes: boleto.observacoes || '',
+    });
+    setShowForm(true);
+  };
+
   const handleSubmit = () => {
     if (!form.credor || !form.valor || !form.vencimento) return;
-    createBoleto({
+    const payload = {
       credor: form.credor,
       valor: parseFloat(form.valor),
       vencimento: form.vencimento,
@@ -187,10 +208,14 @@ export function BoletosPage() {
       notify_sistema: form.notify_sistema,
       notify_whatsapp: form.notify_whatsapp,
       observacoes: form.observacoes || null,
-      paid_at: null,
-      paid_method: null,
-    });
+    };
+    if (editingId) {
+      updateBoleto({ id: editingId, ...payload });
+    } else {
+      createBoleto({ ...payload, paid_at: null, paid_method: null });
+    }
     setForm(EMPTY_FORM);
+    setEditingId(null);
     setShowForm(false);
   };
 
@@ -223,7 +248,7 @@ export function BoletosPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Controle de Boletos</h2>
-        <Button onClick={() => setShowForm(v => !v)} size="sm">
+        <Button onClick={() => { setShowForm(v => !v); setEditingId(null); setForm(EMPTY_FORM); }} size="sm">
           {showForm ? <><X className="h-4 w-4 mr-1" /> Cancelar</> : <><Plus className="h-4 w-4 mr-1" /> Novo Boleto</>}
         </Button>
       </div>
@@ -278,7 +303,7 @@ export function BoletosPage() {
       {showForm && (
         <Card>
           <CardContent className="p-4 space-y-4">
-            <h3 className="font-semibold">Novo Boleto</h3>
+            <h3 className="font-semibold">{editingId ? 'Editar Boleto' : 'Novo Boleto'}</h3>
 
             {/* Código de barras */}
             <div className="space-y-1">
@@ -539,6 +564,9 @@ export function BoletosPage() {
                       )}
                     </div>
                     <div className="flex gap-1 flex-shrink-0">
+                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(boleto)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
                       {!boleto.paid_at ? (
                         <Button size="sm" variant="outline" className="text-green-600 border-green-500/30 hover:bg-green-500/10"
                           onClick={() => { setPayingId(boleto.id); setPayForm({ paid_at: new Date().toISOString().split('T')[0], paid_method: 'pix' }); }}>
