@@ -79,34 +79,40 @@ export function BoletosPage() {
   const [payForm, setPayForm] = useState({ paid_at: '', paid_method: 'pix' as BoletoPaidMethod });
   const [loadingBarcode, setLoadingBarcode] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const readerRef = useRef<BrowserMultiFormatReader | null>(null);
 
-  const handleCameraCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = '';
+  const stopScanner = () => {
+    BrowserMultiFormatReader.releaseAllStreams();
+    readerRef.current = null;
+    setScanning(false);
+  };
+
+  const startScanner = async () => {
     setScanError(null);
-    setLoadingBarcode(true);
-
+    setScanning(true);
+    // aguarda o video montar no DOM
+    await new Promise(r => setTimeout(r, 150));
+    if (!videoRef.current) { setScanning(false); return; }
+    const reader = new BrowserMultiFormatReader();
+    readerRef.current = reader;
     try {
-      const url = URL.createObjectURL(file);
-      const img = document.createElement('img');
-      img.src = url;
-      await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = rej; });
-
-      const reader = new BrowserMultiFormatReader();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (reader as any).decodeFromImageElement(img);
-      URL.revokeObjectURL(url);
-
-      const raw: string = result.getText();
-      setForm(prev => ({ ...prev, codigo_barras: raw }));
-      fetchBarcodeData(raw);
+      await reader.decodeFromVideoDevice(undefined, videoRef.current, (result, err) => {
+        if (result) {
+          const raw = result.getText();
+          stopScanner();
+          setForm(prev => ({ ...prev, codigo_barras: raw }));
+          fetchBarcodeData(raw);
+        }
+        if (err && !(err.message?.includes('No MultiFormat Readers'))) {
+          // erros normais de frame sem código — ignorar
+        }
+      });
     } catch {
-      setScanError('Nenhum código encontrado. Tente foto mais próxima ou cole manualmente.');
-    } finally {
-      setLoadingBarcode(false);
+      setScanError('Não foi possível acessar a câmera.');
+      setScanning(false);
     }
   };
 
@@ -277,23 +283,30 @@ export function BoletosPage() {
                 <Button
                   variant="outline"
                   size="icon"
-                  title="Usar câmera"
-                  onClick={() => cameraInputRef.current?.click()}
+                  title="Escanear com câmera"
+                  onClick={startScanner}
                 >
                   <Camera className="h-4 w-4" />
                 </Button>
-                <input
-                  ref={cameraInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  aria-label="Capturar código de barras pela câmera"
-                  className="hidden"
-                  onChange={handleCameraCapture}
-                />
               </div>
               {loadingBarcode && <p className="text-xs text-muted-foreground">Buscando dados do boleto...</p>}
               {scanError && <p className="text-xs text-red-500">{scanError}</p>}
+
+              {/* Scanner ao vivo */}
+              {scanning && (
+                <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center">
+                  <div className="relative w-full max-w-sm">
+                    <video ref={videoRef} className="w-full rounded-lg" autoPlay playsInline muted />
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="w-64 h-20 border-2 border-yellow-400 rounded opacity-80" />
+                    </div>
+                  </div>
+                  <p className="text-white text-sm mt-4">Aponte para o código de barras</p>
+                  <Button variant="outline" className="mt-4" onClick={stopScanner}>
+                    <X className="h-4 w-4 mr-1" /> Cancelar
+                  </Button>
+                </div>
+              )}
               {form.pix_copia_cola && !form.codigo_barras && (
                 <p className="text-xs text-blue-500">QR Code Pix detectado — salvo no campo Pix copia e cola</p>
               )}
