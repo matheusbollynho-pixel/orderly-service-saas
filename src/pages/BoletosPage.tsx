@@ -190,9 +190,21 @@ export function BoletosPage() {
       let vencimento: string | undefined;
       const fatorNum = parseInt(fator, 10);
       if (fatorNum > 0) {
-        const base = new Date(1997, 9, 7); // 07/10/1997 = base FEBRABAN
-        base.setDate(base.getDate() + fatorNum);
-        vencimento = base.toISOString().split('T')[0];
+        // Primeiro ciclo: base 07/10/1997, fator até 9999 (atingido em 21/02/2025)
+        const base1 = new Date(1997, 9, 7);
+        base1.setDate(base1.getDate() + fatorNum);
+
+        const umAnoAtras = new Date();
+        umAnoAtras.setFullYear(umAnoAtras.getFullYear() - 1);
+
+        if (base1 < umAnoAtras) {
+          // Segundo ciclo (FEBRABAN 2025): fator 1000 = 22/02/2025
+          const base2 = new Date(2025, 1, 22);
+          base2.setDate(base2.getDate() + (fatorNum - 1000));
+          vencimento = base2.toISOString().split('T')[0];
+        } else {
+          vencimento = base1.toISOString().split('T')[0];
+        }
       }
       return { valor: valor > 0 ? valor : undefined, vencimento };
     };
