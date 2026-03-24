@@ -92,7 +92,7 @@ export function BoletosPage() {
   const startScanner = async () => {
     setScanError(null);
     setScanning(true);
-    await new Promise(r => setTimeout(r, 300));
+    await new Promise(r => setTimeout(r, 500));
     if (!scannerDivRef.current) { setScanning(false); return; }
 
     Quagga.init(
@@ -117,7 +117,13 @@ export function BoletosPage() {
         Quagga.start();
         Quagga.onDetected((data) => {
           const raw = data.codeResult.code;
-          if (!raw) return;
+          if (!raw || raw.length < 10) return;
+          // exige pelo menos 2 detecções consecutivas para evitar falsos positivos
+          const errors = data.codeResult.decodedCodes
+            ?.filter((x: { error?: number }) => x.error !== undefined)
+            .map((x: { error?: number }) => x.error as number) ?? [];
+          const avgError = errors.length > 0 ? errors.reduce((a: number, b: number) => a + b, 0) / errors.length : 1;
+          if (avgError > 0.25) return; // confiança baixa, ignora
           stopScanner();
           setForm(prev => ({ ...prev, codigo_barras: raw }));
           fetchBarcodeData(raw);
