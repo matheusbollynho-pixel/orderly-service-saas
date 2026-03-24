@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { BrowserMultiFormatReader } from '@zxing/browser';
+import { DecodeHintType, BarcodeFormat } from '@zxing/library';
 import { useBoletos, Boleto, BoletoCategoria, BoletoRecorrencia, BoletoPaidMethod, getBoletoStatus } from '@/hooks/useBoletos';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -93,21 +94,38 @@ export function BoletosPage() {
   const startScanner = async () => {
     setScanError(null);
     setScanning(true);
-    // aguarda o video montar no DOM
-    await new Promise(r => setTimeout(r, 150));
+    await new Promise(r => setTimeout(r, 200));
     if (!videoRef.current) { setScanning(false); return; }
-    const reader = new BrowserMultiFormatReader();
+
+    const hints = new Map();
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+      BarcodeFormat.ITF,
+      BarcodeFormat.CODE_128,
+      BarcodeFormat.CODE_39,
+      BarcodeFormat.QR_CODE,
+      BarcodeFormat.DATA_MATRIX,
+      BarcodeFormat.PDF_417,
+    ]);
+    hints.set(DecodeHintType.TRY_HARDER, true);
+
+    const reader = new BrowserMultiFormatReader(hints);
     readerRef.current = reader;
+
+    const constraints: MediaStreamConstraints = {
+      video: {
+        facingMode: 'environment',
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+      },
+    };
+
     try {
-      await reader.decodeFromVideoDevice(undefined, videoRef.current, (result, err) => {
+      await reader.decodeFromConstraints(constraints, videoRef.current, (result) => {
         if (result) {
           const raw = result.getText();
           stopScanner();
           setForm(prev => ({ ...prev, codigo_barras: raw }));
           fetchBarcodeData(raw);
-        }
-        if (err && !(err.message?.includes('No MultiFormat Readers'))) {
-          // erros normais de frame sem código — ignorar
         }
       });
     } catch {
