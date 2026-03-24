@@ -18,7 +18,8 @@ export interface Boleto {
   alert_days: number[]; // 0=no dia, 1=1 dia antes, etc.
   notify_sistema: boolean;
   notify_whatsapp: boolean;
-  juros?: number | null;
+  multa?: number | null;   // % aplicada uma vez no atraso (ex: 2)
+  juros?: number | null;   // % ao mês enquanto em atraso (ex: 1)
   pix_copia_cola?: string | null;
   observacoes?: string | null;
   paid_at?: string | null;

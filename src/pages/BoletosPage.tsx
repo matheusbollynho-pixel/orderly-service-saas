@@ -61,6 +61,7 @@ const EMPTY_FORM = {
   vencimento: '',
   codigo_barras: '',
   pix_copia_cola: '',
+  multa: '',
   juros: '',
   categoria: 'outro' as BoletoCategoria,
   recorrencia: 'nenhuma' as BoletoRecorrencia,
@@ -178,6 +179,7 @@ export function BoletosPage() {
       vencimento: form.vencimento,
       codigo_barras: form.codigo_barras || null,
       pix_copia_cola: form.pix_copia_cola || null,
+      multa: form.multa ? parseFloat(form.multa) : null,
       juros: form.juros ? parseFloat(form.juros) : null,
       categoria: form.categoria,
       recorrencia: form.recorrencia,
@@ -333,18 +335,26 @@ export function BoletosPage() {
                 />
               </div>
               <div className="space-y-1">
-                <Label>Juros / Multa <span className="text-xs text-muted-foreground">(se vencido)</span></Label>
+                <Label>Multa por atraso <span className="text-xs text-muted-foreground">(%)</span></Label>
                 <Input
                   type="number"
-                  placeholder="0,00"
+                  placeholder="ex: 2"
+                  value={form.multa}
+                  onChange={e => setForm(prev => ({ ...prev, multa: e.target.value }))}
+                  min={0}
+                  step={0.01}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label>Juros ao mês <span className="text-xs text-muted-foreground">(%)</span></Label>
+                <Input
+                  type="number"
+                  placeholder="ex: 1"
                   value={form.juros}
                   onChange={e => setForm(prev => ({ ...prev, juros: e.target.value }))}
                   min={0}
                   step={0.01}
                 />
-                {form.valor && form.juros && (
-                  <p className="text-xs text-orange-500">Total a pagar: R$ {(parseFloat(form.valor || '0') + parseFloat(form.juros || '0')).toFixed(2)}</p>
-                )}
               </div>
               <div className="space-y-1">
                 <Label>Vencimento *</Label>
@@ -487,11 +497,23 @@ export function BoletosPage() {
                           Recorrência: {RECORRENCIAS.find(r => r.value === boleto.recorrencia)?.label}
                         </p>
                       )}
-                      {(boleto.juros ?? 0) > 0 && (
-                        <p className="text-xs text-orange-500 mt-0.5">
-                          + R$ {(boleto.juros!).toFixed(2)} juros/multa → Total: R$ {(boleto.valor + boleto.juros!).toFixed(2)}
-                        </p>
-                      )}
+                      {((boleto.multa ?? 0) > 0 || (boleto.juros ?? 0) > 0) && getBoletoStatus(boleto) === 'vencido' && (() => {
+                        const hoje = new Date(); hoje.setHours(0,0,0,0);
+                        const [y,m,d] = boleto.vencimento.split('-').map(Number);
+                        const venc = new Date(y, m-1, d);
+                        const mesesAtraso = Math.max(1, Math.ceil((hoje.getTime() - venc.getTime()) / (1000*60*60*24*30)));
+                        const multa = boleto.valor * ((boleto.multa ?? 0) / 100);
+                        const juros = boleto.valor * ((boleto.juros ?? 0) / 100) * mesesAtraso;
+                        const total = boleto.valor + multa + juros;
+                        return (
+                          <p className="text-xs text-orange-500 mt-0.5">
+                            {(boleto.multa ?? 0) > 0 && `Multa ${boleto.multa}%`}
+                            {(boleto.multa ?? 0) > 0 && (boleto.juros ?? 0) > 0 && ' + '}
+                            {(boleto.juros ?? 0) > 0 && `Juros ${boleto.juros}%/mês × ${mesesAtraso}mês`}
+                            {' → Total: R$ '}{total.toFixed(2)}
+                          </p>
+                        );
+                      })()}
                       {boleto.codigo_barras && (
                         <p className="text-xs font-mono text-muted-foreground mt-1 break-all">{boleto.codigo_barras}</p>
                       )}
