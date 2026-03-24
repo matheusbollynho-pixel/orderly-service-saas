@@ -77,7 +77,39 @@ export function BoletosPage() {
   const [payingId, setPayingId] = useState<string | null>(null);
   const [payForm, setPayForm] = useState({ paid_at: '', paid_method: 'pix' as BoletoPaidMethod });
   const [loadingBarcode, setLoadingBarcode] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  const handleCameraCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setScanError(null);
+
+    if (!('BarcodeDetector' in window)) {
+      setScanError('Seu navegador não suporta leitura automática. Cole o código manualmente.');
+      return;
+    }
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const detector = new (window as any).BarcodeDetector({
+        formats: ['itf', 'code_128', 'code_39', 'qr_code', 'data_matrix', 'pdf417'],
+      });
+      const img = await createImageBitmap(file);
+      const codes = await detector.detect(img);
+      if (codes.length === 0) {
+        setScanError('Nenhum código encontrado na imagem. Tente novamente ou cole manualmente.');
+        return;
+      }
+      const raw: string = codes[0].rawValue;
+      setForm(prev => ({ ...prev, codigo_barras: raw }));
+      fetchBarcodeData(raw);
+    } catch {
+      setScanError('Erro ao ler a imagem. Tente novamente.');
+    }
+  };
 
   // Detecta se é código Pix EMV (começa com "00020126" ou similar)
   const isPixEMV = (text: string) => text.trim().startsWith('000201');
@@ -247,12 +279,22 @@ export function BoletosPage() {
                   variant="outline"
                   size="icon"
                   title="Usar câmera"
-                  onClick={() => barcodeInputRef.current?.focus()}
+                  onClick={() => cameraInputRef.current?.click()}
                 >
                   <Camera className="h-4 w-4" />
                 </Button>
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  aria-label="Capturar código de barras pela câmera"
+                  className="hidden"
+                  onChange={handleCameraCapture}
+                />
               </div>
               {loadingBarcode && <p className="text-xs text-muted-foreground">Buscando dados do boleto...</p>}
+              {scanError && <p className="text-xs text-red-500">{scanError}</p>}
               {form.pix_copia_cola && !form.codigo_barras && (
                 <p className="text-xs text-blue-500">QR Code Pix detectado — salvo no campo Pix copia e cola</p>
               )}
