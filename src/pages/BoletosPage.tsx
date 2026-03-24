@@ -114,54 +114,22 @@ export function BoletosPage() {
         check();
       });
 
-      if ('BarcodeDetector' in window) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const BD = (window as any).BarcodeDetector;
-        const supported: string[] = await BD.getSupportedFormats();
-        const want = ['itf', 'itf_14', 'code_128', 'code_39', 'qr_code', 'pdf417', 'data_matrix'];
-        const formats = want.filter(f => supported.includes(f));
-        const detector = new BD({ formats: formats.length > 0 ? formats : supported });
-
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d')!;
-
-        const scan = async () => {
-          if (!videoRef.current || !streamRef.current) return;
-          canvas.width = videoRef.current.videoWidth;
-          canvas.height = videoRef.current.videoHeight;
-          ctx.drawImage(videoRef.current, 0, 0);
-          try {
-            const codes = await detector.detect(canvas);
-            if (codes.length > 0) {
-              const raw: string = codes[0].rawValue;
-              stopScanner();
-              setForm(prev => ({ ...prev, codigo_barras: raw }));
-              fetchBarcodeData(raw);
-              return;
-            }
-          } catch { /* frame sem código */ }
-          rafRef.current = requestAnimationFrame(scan);
-        };
-        rafRef.current = requestAnimationFrame(scan);
-      } else {
-        // Fallback ZXing (iOS Safari)
-        const hints = new Map();
-        hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-          BarcodeFormat.ITF, BarcodeFormat.CODE_128, BarcodeFormat.CODE_39,
-          BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX, BarcodeFormat.PDF_417,
-        ]);
-        hints.set(DecodeHintType.TRY_HARDER, true);
-        const reader = new BrowserMultiFormatReader(hints);
-        readerRef.current = reader;
-        await reader.decodeFromStream(stream, videoRef.current, (result) => {
-          if (result) {
-            stopScanner();
-            const raw = result.getText();
-            setForm(prev => ({ ...prev, codigo_barras: raw }));
-            fetchBarcodeData(raw);
-          }
-        });
-      }
+      const hints = new Map();
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+        BarcodeFormat.ITF, BarcodeFormat.CODE_128, BarcodeFormat.CODE_39,
+        BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX, BarcodeFormat.PDF_417,
+      ]);
+      hints.set(DecodeHintType.TRY_HARDER, true);
+      const reader = new BrowserMultiFormatReader(hints);
+      readerRef.current = reader;
+      await reader.decodeFromStream(stream, videoRef.current, (result) => {
+        if (result) {
+          stopScanner();
+          const raw = result.getText();
+          setForm(prev => ({ ...prev, codigo_barras: raw }));
+          fetchBarcodeData(raw);
+        }
+      });
     } catch {
       setScanError('Não foi possível acessar a câmera.');
       setScanning(false);
