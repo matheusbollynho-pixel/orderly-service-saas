@@ -84,12 +84,8 @@ export function BoletosPage() {
   const barcodeInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const readerRef = useRef<BrowserMultiFormatReader | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const rafRef = useRef<number | null>(null);
 
   const stopScanner = () => {
-    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
-    if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
     BrowserMultiFormatReader.releaseAllStreams();
     readerRef.current = null;
     setScanning(false);
@@ -98,38 +94,32 @@ export function BoletosPage() {
   const startScanner = async () => {
     setScanError(null);
     setScanning(true);
-    await new Promise(r => setTimeout(r, 250));
+    await new Promise(r => setTimeout(r, 300));
     if (!videoRef.current) { setScanning(false); return; }
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-      });
-      streamRef.current = stream;
-      videoRef.current.srcObject = stream;
-      await videoRef.current.play();
-      // aguarda video ter dimensões reais
-      await new Promise<void>(res => {
-        const check = () => videoRef.current && videoRef.current.videoWidth > 0 ? res() : requestAnimationFrame(check);
-        check();
-      });
+    const hints = new Map();
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+      BarcodeFormat.ITF, BarcodeFormat.CODE_128, BarcodeFormat.CODE_39,
+      BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX, BarcodeFormat.PDF_417,
+    ]);
+    hints.set(DecodeHintType.TRY_HARDER, true);
 
-      const hints = new Map();
-      hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-        BarcodeFormat.ITF, BarcodeFormat.CODE_128, BarcodeFormat.CODE_39,
-        BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX, BarcodeFormat.PDF_417,
-      ]);
-      hints.set(DecodeHintType.TRY_HARDER, true);
+    try {
       const reader = new BrowserMultiFormatReader(hints);
       readerRef.current = reader;
-      await reader.decodeFromStream(stream, videoRef.current, (result) => {
-        if (result) {
-          stopScanner();
-          const raw = result.getText();
-          setForm(prev => ({ ...prev, codigo_barras: raw }));
-          fetchBarcodeData(raw);
+      // decodeFromConstraints: ZXing gerencia stream + video internamente
+      await reader.decodeFromConstraints(
+        { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
+        videoRef.current,
+        (result) => {
+          if (result) {
+            const raw = result.getText();
+            stopScanner();
+            setForm(prev => ({ ...prev, codigo_barras: raw }));
+            fetchBarcodeData(raw);
+          }
         }
-      });
+      );
     } catch {
       setScanError('Não foi possível acessar a câmera.');
       setScanning(false);
