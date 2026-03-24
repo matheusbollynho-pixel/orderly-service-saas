@@ -110,14 +110,21 @@ export function BoletosPage() {
       videoRef.current.srcObject = stream;
       await videoRef.current.play();
 
+      // Verifica se BarcodeDetector suporta ITF
+      let useNative = false;
       if ('BarcodeDetector' in window) {
-        // Chrome Android — detector nativo (mais rápido)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const supported: string[] = await (window as any).BarcodeDetector.getSupportedFormats();
+        useNative = supported.includes('itf') || supported.includes('itf_14');
+      }
+
+      if (useNative) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const BD = (window as any).BarcodeDetector;
         const supported: string[] = await BD.getSupportedFormats();
         const want = ['itf', 'itf_14', 'code_128', 'qr_code', 'pdf417'];
         const formats = want.filter(f => supported.includes(f));
-        const detector = new BD({ formats: formats.length ? formats : supported });
+        const detector = new BD({ formats });
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d')!;
         let lastCode = ''; let streak = 0;
@@ -136,13 +143,11 @@ export function BoletosPage() {
           } catch { /* frame sem código */ }
         }, 300);
       } else {
-        // Fallback: ZXing (Firefox, Safari, browsers sem BarcodeDetector)
+        // ZXing — ITF específico para boleto (ALLOWED_LENGTHS=44 ajuda a detectar)
         const hints = new Map();
-        hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-          BarcodeFormat.ITF, BarcodeFormat.CODE_128, BarcodeFormat.CODE_39,
-          BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX, BarcodeFormat.PDF_417,
-        ]);
+        hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.ITF]);
         hints.set(DecodeHintType.TRY_HARDER, true);
+        hints.set(DecodeHintType.ALLOWED_LENGTHS, [44]);
         const reader = new BrowserMultiFormatReader(hints);
         zxingReaderRef.current = reader;
         reader.decodeFromStream(stream, videoRef.current, (result) => {
