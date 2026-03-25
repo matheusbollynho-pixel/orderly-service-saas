@@ -8,9 +8,10 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, Plus, Trash2, CheckCircle, XCircle, Package, Printer, Send, FileText } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, CheckCircle, XCircle, Package, Printer, Send, FileText, Link, Copy, CheckCheck, Loader2, HandCoins } from 'lucide-react';
 import { toast } from 'sonner';
 import { sendWhatsAppText, sendWhatsAppDocument } from '@/lib/whatsappService';
+import { supabase } from '@/integrations/supabase/client';
 import { useStoreSettings } from '@/hooks/useStoreSettings';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -34,6 +35,14 @@ const STATUS_COLORS: Record<string, string> = {
   aberta: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
   finalizada: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
   cancelada: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+  fiado: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  aberta: 'Aberta',
+  finalizada: 'Finalizada',
+  cancelada: 'Cancelada',
+  fiado: 'Fiado',
 };
 
 export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
@@ -44,6 +53,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
 
   const items: BalcaoItem[] = order.balcao_items ?? [];
   const isEditable = order.status === 'aberta';
+  const canAct = isEditable && !!order.atendente_id;
 
   // Remove acentos de vogais mas mantém ç
   const stripAccents = (text: string) =>
@@ -80,6 +90,19 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   const [paymentEntries, setPaymentEntries] = useState<PaymentEntry[]>(initPayments);
   const [isSendingWpp, setIsSendingWpp] = useState(false);
   const [isSendingOrc, setIsSendingOrc] = useState(false);
+
+  // ── Asaas ──────────────────────────────────────────────────────
+  const [asaasLoading, setAsaasLoading] = useState(false);
+  const [asaasResult, setAsaasResult] = useState<null | { invoice_url?: string; bank_slip_url?: string; value?: number }>(null);
+  const [asaasCopied, setAsaasCopied] = useState(false);
+  const [asaasInstallments, setAsaasInstallments] = useState(1);
+
+  // ── Fiado ──────────────────────────────────────────────────────
+  const [showFiadoDialog, setShowFiadoDialog] = useState(false);
+  const [fiadoDueDate, setFiadoDueDate] = useState('');
+  const [fiadoNotes, setFiadoNotes] = useState('');
+  const [fiadoInterestRate, setFiadoInterestRate] = useState('2');
+  const [fiadoLoading, setFiadoLoading] = useState(false);
 
   const activeProducts = products.filter(p => p.active !== false);
 
@@ -163,6 +186,99 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     const amount = parseFloat(val.replace(',', '.')) || 0;
     const updated = paymentEntries.map((e, i) => i === idx ? { ...e, amount } : e);
     savePayments(updated);
+  };
+
+  // ── Asaas ──────────────────────────────────────────────────────
+  const handleCobrarAsaas = async (billingType: string) => {
+    if (total <= 0) return;
+    setAsaasLoading(true);
+    setAsaasResult(null);
+    const { data, error } = await supabase.functions.invoke('asaas-cobranca', {
+      body: {
+        order_id: order.id,
+        billing_type: billingType,
+        installment_count: asaasInstallments,
+        amount: total,
+        client_name: editClientName || undefined,
+        client_phone: editClientPhone || undefined,
+        client_cpf: editClientCpf || undefined,
+      },
+    });
+    setAsaasLoading(false);
+    if (data?.error || error) {
+      const body = await (error as any)?.context?.json?.().catch(() => null);
+      const errMsg = data?.error || body?.error || error?.message || 'Erro ao gerar cobrança';
+      toast.error(errMsg);
+      return;
+    }
+    setAsaasResult(data);
+  };
+
+  const handleCobrarAsaasCopy = () => {
+    const url = asaasResult?.invoice_url || asaasResult?.bank_slip_url || '';
+    if (!url) return;
+    navigator.clipboard.writeText(url);
+    setAsaasCopied(true);
+    setTimeout(() => setAsaasCopied(false), 2000);
+  };
+
+  const handleCobrarAsaasWhatsApp = () => {
+    const url = asaasResult?.invoice_url || asaasResult?.bank_slip_url || '';
+    if (!url || !editClientPhone) return;
+    const msg = `Olá${editClientName ? ' ' + editClientName.split(' ')[0] : ''}! 👋\n\nSegue o link para pagamento da nota *#${order.id.slice(0, 8)}* — *${storeSettings?.company_name || 'Loja'}*:\n\n${url}\n\nQualquer dúvida é só chamar. 😊`;
+    sendWhatsAppText({ phone: editClientPhone, text: msg });
+  };
+
+  // ── Fiado ──────────────────────────────────────────────────────
+  const handleRegistrarFiado = async () => {
+    if (!fiadoDueDate) { toast.error('Informe a data de vencimento'); return; }
+    setFiadoLoading(true);
+    // Check for duplicate
+    const { data: existing } = await supabase
+      .from('fiados')
+      .select('id')
+      .eq('origin_type', 'balcao')
+      .eq('origin_id', order.id)
+      .limit(1);
+    if (existing && existing.length > 0) {
+      toast.error('Esta nota já foi registrada como fiado');
+      setFiadoLoading(false);
+      setShowFiadoDialog(false);
+      return;
+    }
+    const fiadoItems = items.map(i => ({
+      desc: i.description || '',
+      qty: i.quantity || 1,
+      value: i.unit_price || 0,
+    })).filter(i => i.desc);
+    const amountAlreadyPaid = paymentEntries.reduce((s, e) => s + e.amount, 0);
+    const pending = Math.max(total - amountAlreadyPaid, 0);
+    const { error } = await supabase.from('fiados').insert([{
+      origin_type: 'balcao',
+      origin_id: order.id,
+      client_name: editClientName || order.client_name || 'Cliente',
+      client_phone: editClientPhone || null,
+      client_cpf: editClientCpf || null,
+      items: fiadoItems,
+      original_amount: pending > 0 ? pending : total,
+      amount_paid: 0,
+      interest_accrued: 0,
+      due_date: fiadoDueDate,
+      interest_rate_monthly: parseFloat(fiadoInterestRate) || 2,
+      notes: fiadoNotes || null,
+      status: 'pendente',
+    }]);
+    setFiadoLoading(false);
+    if (error) { toast.error('Erro ao registrar fiado'); return; }
+
+    // Marca a nota de balcão como 'fiado'
+    await supabase.from('balcao_orders').update({ status: 'fiado' }).eq('id', order.id);
+
+    setShowFiadoDialog(false);
+    setFiadoDueDate('');
+    setFiadoNotes('');
+    setFiadoInterestRate('2');
+    toast.success('Fiado registrado! Nota marcada como Fiado.');
   };
 
   // ── Autocomplete ──────────────────────────────────────────────
@@ -569,7 +685,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
           <div className="flex items-center gap-2">
             <h2 className="text-base font-bold">Nota #{String(order.numero ?? '').padStart(4, '0')}</h2>
             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_COLORS[order.status]}`}>
-              {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+              {STATUS_LABELS[order.status] ?? order.status}
             </span>
           </div>
           <p className="text-xs text-muted-foreground">
@@ -751,7 +867,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
               </div>
 
               <div className="flex items-center justify-center py-2">
-                {isEditable && (
+                {canAct && (
                   <button type="button" title="Remover" onClick={() => handleRemoveItem(item.id)}
                     className="text-muted-foreground hover:text-destructive transition-colors">
                     <Trash2 className="h-4 w-4" />
@@ -820,7 +936,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
                   </div>
                 </div>
                 <div className="pt-5">
-                  <Button type="button" variant="outline" onClick={handleAddItem} className="h-9 px-4 gap-1.5">
+                  <Button type="button" variant="outline" onClick={handleAddItem} disabled={!canAct} className="h-9 px-4 gap-1.5">
                     <Plus className="h-4 w-4" /> Add
                   </Button>
                 </div>
@@ -878,7 +994,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                 Formas de Pagamento
               </label>
-              {isEditable && (
+              {canAct && (
                 <Button
                   type="button"
                   variant="outline"
@@ -896,7 +1012,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
                   <Select
                     value={entry.method}
                     onValueChange={v => handlePaymentMethodChange(idx, v)}
-                    disabled={!isEditable}
+                    disabled={!canAct}
                   >
                     <SelectTrigger className="h-9 flex-1">
                       <SelectValue />
@@ -916,11 +1032,11 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
                       placeholder="R$ 0,00"
                       value={entry.amount > 0 ? String(entry.amount) : ''}
                       onChange={e => handlePaymentAmountChange(idx, e.target.value)}
-                      disabled={!isEditable}
+                      disabled={!canAct}
                       className="h-9 w-28 text-right"
                     />
                   )}
-                  {isEditable && paymentEntries.length > 1 && (
+                  {canAct && paymentEntries.length > 1 && (
                     <button
                       type="button"
                       title="Remover forma de pagamento"
@@ -947,6 +1063,132 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
               );
             })()}
           </div>
+
+          {/* ── Asaas ── */}
+          {order.status !== 'cancelada' && total > 0 && (
+            <div>
+              <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Cobrar via Asaas</p>
+              {!editClientCpf && (
+                <p className="text-xs text-amber-600 mb-2">⚠ CPF do cliente necessário para PIX/Boleto. Preencha o campo CPF acima.</p>
+              )}
+              {!asaasResult ? (
+                <div className="space-y-2">
+                  <div className="flex gap-2 flex-wrap">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={asaasLoading || !canAct}
+                      onClick={() => handleCobrarAsaas('PIX')}
+                      className="flex-1 h-9 text-sm gap-1.5"
+                    >
+                      {asaasLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link className="h-4 w-4" />}
+                      PIX
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={asaasLoading || !canAct}
+                      onClick={() => handleCobrarAsaas('BOLETO')}
+                      className="flex-1 h-9 text-sm gap-1.5"
+                    >
+                      {asaasLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link className="h-4 w-4" />}
+                      Boleto
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={asaasLoading || !canAct}
+                      onClick={() => handleCobrarAsaas('UNDEFINED')}
+                      className="flex-1 h-9 text-sm gap-1.5"
+                    >
+                      {asaasLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link className="h-4 w-4" />}
+                      PIX+Boleto
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <select
+                      title="Parcelas do cartão de crédito"
+                      value={asaasInstallments}
+                      onChange={e => setAsaasInstallments(Number(e.target.value))}
+                      className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      <option value={1}>Crédito à vista</option>
+                      {[2,3,4,5,6,7,8,9,10,11,12].filter(n => (total / n) >= 5).map(n => (
+                        <option key={n} value={n}>{n}x de R$ {(total / n).toFixed(2)}</option>
+                      ))}
+                    </select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={asaasLoading || !canAct}
+                      onClick={() => handleCobrarAsaas('CREDIT_CARD')}
+                      className="h-9 text-sm gap-1.5"
+                    >
+                      {asaasLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link className="h-4 w-4" />}
+                      Cartão
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-sm text-green-600 font-medium">
+                    ✓ Cobrança gerada — R$ {asaasResult.value?.toFixed(2)}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCobrarAsaasCopy}
+                      className="flex-1 h-9 text-sm gap-1.5"
+                    >
+                      {asaasCopied ? <CheckCheck className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                      {asaasCopied ? 'Copiado!' : 'Copiar link'}
+                    </Button>
+                    {editClientPhone && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleCobrarAsaasWhatsApp}
+                        className="flex-1 h-9 text-sm gap-1.5 bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        <Send className="h-4 w-4" />
+                        WhatsApp
+                      </Button>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAsaasResult(null)}
+                    className="text-xs text-muted-foreground hover:underline"
+                  >
+                    Nova cobrança
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Registrar como Fiado ── */}
+          {order.status !== 'cancelada' && total > 0 && (
+            <div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full h-9 gap-1.5 text-sm border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/30"
+                disabled={!canAct}
+                onClick={() => setShowFiadoDialog(true)}
+              >
+                <HandCoins className="h-4 w-4" />
+                Registrar como Fiado
+              </Button>
+            </div>
+          )}
 
           {/* ── Orçamento ── */}
           {items.length > 0 && order.status !== 'cancelada' && (
@@ -980,7 +1222,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
             <div className="flex gap-2">
               {order.status === 'aberta' && (
                 <Button type="button" onClick={handleFinalizar}
-                  disabled={isFinalizing || items.length === 0 || !order.atendente_id}
+                  disabled={isFinalizing || items.length === 0 || !canAct}
                   title={!order.atendente_id ? 'Selecione o atendente antes de finalizar' : undefined}
                   className="flex-1 h-10 font-semibold gap-2">
                   <CheckCircle className="h-4 w-4" />
@@ -1058,6 +1300,61 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
             </Button>
             <Button variant="destructive" onClick={handleConfirmCancel} disabled={!cancelReason || isCancelling} className="flex-1">
               {isCancelling ? 'Cancelando...' : 'Confirmar Cancelamento'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Fiado Dialog ── */}
+      <Dialog open={showFiadoDialog} onOpenChange={open => !open && setShowFiadoDialog(false)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Registrar como Fiado</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Cliente: <strong>{editClientName || order.client_name || 'Cliente'}</strong>
+              {' · '}Total: <strong>R$ {total.toFixed(2)}</strong>
+            </p>
+            <div>
+              <label className="text-sm font-medium">Data de Vencimento *</label>
+              <input
+                type="date"
+                title="Data de vencimento do fiado"
+                placeholder="dd/mm/aaaa"
+                value={fiadoDueDate}
+                onChange={e => setFiadoDueDate(e.target.value)}
+                className="mt-1 w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Juros/mês (%)</label>
+              <input
+                type="number"
+                title="Taxa de juros mensal"
+                placeholder="2"
+                step="0.1"
+                min="0"
+                value={fiadoInterestRate}
+                onChange={e => setFiadoInterestRate(e.target.value)}
+                className="mt-1 w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Observações</label>
+              <Textarea
+                placeholder="Opcional"
+                value={fiadoNotes}
+                onChange={e => setFiadoNotes(e.target.value)}
+                className="mt-1 resize-none"
+                rows={2}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowFiadoDialog(false)}>Cancelar</Button>
+            <Button onClick={handleRegistrarFiado} disabled={fiadoLoading}>
+              {fiadoLoading ? 'Salvando...' : 'Registrar Fiado'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -42,6 +42,17 @@ Deno.serve(async (req) => {
     if (rating.client_id) {
       const { data: client } = await supabase.from('clients').select('name, phone').eq('id', rating.client_id).maybeSingle()
       if (client) { clientName = client.name || 'Cliente'; clientPhone = client.phone || '' }
+    } else if (rating.order_id) {
+      const { data: order } = await supabase.from('service_orders').select('client_name, client_phone, client_id').eq('id', rating.order_id).maybeSingle()
+      if (order) {
+        clientName = order.client_name || 'Cliente'
+        clientPhone = order.client_phone || ''
+        // Se a OS tem client_id, busca telefone do cadastro (mais atualizado)
+        if (order.client_id) {
+          const { data: client } = await supabase.from('clients').select('name, phone').eq('id', order.client_id).maybeSingle()
+          if (client) { clientName = client.name || clientName; clientPhone = client.phone || clientPhone }
+        }
+      }
     }
 
     // Monta mensagem

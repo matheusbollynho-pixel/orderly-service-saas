@@ -14,7 +14,7 @@ export interface BalcaoOrder {
   client_cpf: string | null;
   client_phone: string | null;
   client_address: string | null;
-  status: 'aberta' | 'finalizada' | 'cancelada';
+  status: 'aberta' | 'finalizada' | 'cancelada' | 'fiado';
   payment_method: string | null;
   payment_methods: PaymentEntry[] | null;
   discount_pct: number;

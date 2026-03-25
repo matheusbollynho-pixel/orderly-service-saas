@@ -545,3 +545,33 @@ export async function buscarLinkSatisfacao(
   const row = data as { public_token: string };
   return `https://${projectRef}.vercel.app/avaliar/${orderId}`;
 }
+
+// ============================================================
+// FIADOS
+// ============================================================
+
+export async function buscarFiadoPorTelefone(
+  sb: SupabaseClient,
+  phone: string
+): Promise<{ id: string; client_name: string; original_amount: number; amount_paid: number; interest_accrued: number; due_date: string; status: string; asaas_payment_url: string | null } | null> {
+  const clean = (phone || '').replace(/\D/g, '')
+  if (!clean) return null
+
+  // Tenta com e sem o código do país
+  const variants = [clean, clean.startsWith('55') ? clean.slice(2) : `55${clean}`]
+
+  for (const v of variants) {
+    const { data } = await sb
+      .from('fiados')
+      .select('id, client_name, original_amount, amount_paid, interest_accrued, due_date, status, asaas_payment_url')
+      .neq('status', 'pago')
+      .or(`client_phone.eq.${v},client_phone.eq.+${v}`)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (data) return data as { id: string; client_name: string; original_amount: number; amount_paid: number; interest_accrued: number; due_date: string; status: string; asaas_payment_url: string | null }
+  }
+
+  return null
+}

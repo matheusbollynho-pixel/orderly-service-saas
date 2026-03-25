@@ -21,12 +21,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { 
-  ArrowLeft, 
-  User, 
-  MapPin, 
-  Phone, 
-  Wrench, 
+import {
+  ArrowLeft,
+  User,
+  MapPin,
+  Phone,
+  Wrench,
   FileText,
   MessageCircle,
   Trash2,
@@ -39,7 +39,11 @@ import {
   EyeOff,
   Edit2,
   Save,
-  X
+  X,
+  Link,
+  Copy,
+  CheckCheck,
+  HandCoins,
 } from 'lucide-react';
 import { useMechanics } from '@/hooks/useMechanics';
 import { useClients } from '@/hooks/useClients';
@@ -61,6 +65,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 
 interface OrderDetailsProps {
   order: ServiceOrder;
@@ -286,6 +291,19 @@ export function OrderDetails({
     notes: '',
     finalized_by_staff_id: '',
   }));
+  const [asaasLoading, setAsaasLoading] = useState(false);
+  const [asaasResult, setAsaasResult] = useState<{ invoice_url?: string; error?: string } | null>(null);
+  const [asaasCopied, setAsaasCopied] = useState(false);
+  const [asaasInstallments, setAsaasInstallments] = useState(1);
+  const [asaasCpf, setAsaasCpf] = useState(() => {
+    const c = (order.client_cpf || '').replace(/\D/g, '');
+    return c.length === 11 ? order.client_cpf! : '';
+  });
+  const [showFiadoDialog, setShowFiadoDialog] = useState(false);
+  const [fiadoDueDate, setFiadoDueDate] = useState('');
+  const [fiadoNotes, setFiadoNotes] = useState('');
+  const [fiadoInterestRate, setFiadoInterestRate] = useState('2');
+  const [fiadoLoading, setFiadoLoading] = useState(false);
   const [showFullClient, setShowFullClient] = useState(false);
   const [autorizaInstagram, setAutorizaInstagram] = useState(!!order.autoriza_instagram);
   const [autorizaLembretes, setAutorizaLembretes] = useState(order.autoriza_lembretes !== false ? true : false);
@@ -456,6 +474,98 @@ export function OrderDetails({
     { value: 'pix', label: 'PIX' },
     { value: 'cartao', label: 'CAR' },
   ];
+
+  const handleCobrarAsaas = async (billingType: 'PIX' | 'BOLETO' | 'UNDEFINED' | 'CREDIT_CARD', installments = 1) => {
+    setAsaasLoading(true);
+    setAsaasResult(null);
+    try {
+      // Se Express sem CPF salvo mas o usuário digitou no campo, persiste antes de cobrar
+      const cpfToUse = asaasCpf.replace(/\D/g, '');
+      if (isExpress && !order.client_cpf && cpfToUse.length === 11) {
+        await supabase.from('service_orders').update({ client_cpf: cpfToUse }).eq('id', order.id);
+        if (order.client_id) {
+          await supabase.from('clients').update({ cpf: cpfToUse }).eq('id', order.client_id);
+        }
+      }
+      const { data, error } = await supabase.functions.invoke('asaas-cobranca', {
+        body: {
+          order_id: order.id,
+          billing_type: billingType,
+          due_days: 3,
+          installment_count: installments,
+          ...(cpfToUse.length === 11 ? { client_cpf: cpfToUse } : {}),
+        },
+      });
+      if (data?.error) throw new Error(data.error);
+      if (error) {
+        const body = await (error as any)?.context?.json?.().catch(() => null);
+        throw new Error(body?.error || error.message || 'Erro desconhecido');
+      }
+      setAsaasResult({ invoice_url: data.invoice_url });
+    } catch (e: Error | unknown) {
+      setAsaasResult({ error: (e as Error)?.message || 'Erro ao gerar cobrança' });
+    } finally {
+      setAsaasLoading(false);
+    }
+  };
+
+  const handleCobrarAsaasCopy = () => {
+    if (!asaasResult?.invoice_url) return;
+    navigator.clipboard.writeText(asaasResult.invoice_url);
+    setAsaasCopied(true);
+    setTimeout(() => setAsaasCopied(false), 2000);
+  };
+
+  const handleRegistrarFiado = async () => {
+    if (!fiadoDueDate) { alert('Informe a data de vencimento'); return; }
+    setFiadoLoading(true);
+    // Check for duplicate
+    const { data: existing } = await supabase
+      .from('fiados')
+      .select('id')
+      .eq('origin_type', 'os')
+      .eq('origin_id', order.id)
+      .limit(1);
+    if (existing && existing.length > 0) {
+      alert('Esta OS já foi registrada como fiado');
+      setFiadoLoading(false);
+      setShowFiadoDialog(false);
+      return;
+    }
+    const items = (order.materials || []).map(m => ({
+      desc: m.descricao || m.description || '',
+      qty: parseFloat(String(m.quantidade)) || 1,
+      value: parseFloat(String(m.valor)) || 0,
+    })).filter(i => i.desc);
+    await supabase.from('fiados').insert([{
+      origin_type: 'os',
+      origin_id: order.id,
+      client_name: order.client_name,
+      client_phone: order.client_phone || null,
+      client_cpf: order.client_cpf || null,
+      items,
+      original_amount: pending,
+      amount_paid: 0,
+      interest_accrued: 0,
+      due_date: fiadoDueDate,
+      interest_rate_monthly: parseFloat(fiadoInterestRate) || 2,
+      notes: fiadoNotes || null,
+      status: 'pendente',
+    }]);
+    setFiadoLoading(false);
+    setShowFiadoDialog(false);
+    setFiadoDueDate('');
+    setFiadoNotes('');
+    setFiadoInterestRate('2');
+    alert('Fiado registrado com sucesso!');
+  };
+
+  const handleCobrarAsaasWhatsApp = async () => {
+    if (!asaasResult?.invoice_url || !order.client_phone) return;
+    const phone = order.client_phone.replace(/\D/g, '');
+    const msg = `Olá${order.client_name ? ', ' + order.client_name.split(' ')[0] : ''}! 👋\n\nSegue o link para pagamento da sua OS:\n\n${asaasResult.invoice_url}\n\n_${storeSettings?.company_name || 'Oficina'}_`;
+    await sendWhatsAppText({ phone, text: msg });
+  };
 
   const handleAddPayment = () => {
     if (!onAddPayment) return;
@@ -1479,10 +1589,34 @@ const renderDeliverySection = () => {
             </div>
           )}
 
-          {showFullClient && order.client_cpf && (
+          {showFullClient && order.client_cpf && (order.client_cpf.replace(/\D/g, '').length === 11) && (
             <div className="flex items-start gap-3">
               <FileText className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
               <p className="text-sm text-foreground">CPF: {order.client_cpf}</p>
+            </div>
+          )}
+
+          {/* Campo CPF para Express — visível independente de valor pendente */}
+          {isExpress && !showCompleteForm && (
+            <div className="flex items-start gap-3">
+              <FileText className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                {asaasCpf && asaasCpf.replace(/\D/g, '').length === 11 ? (
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm text-foreground">CPF: {asaasCpf}</p>
+                    <button type="button" onClick={() => setAsaasCpf('')} className="text-xs text-muted-foreground underline">editar</button>
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    placeholder="CPF do cliente (necessário para PIX/Boleto)"
+                    value={asaasCpf}
+                    onChange={e => setAsaasCpf(e.target.value)}
+                    className="w-full h-8 text-xs rounded border border-amber-500/50 bg-background px-2 placeholder:text-muted-foreground/60"
+                    maxLength={14}
+                  />
+                )}
+              </div>
             </div>
           )}
           
@@ -1804,6 +1938,92 @@ const renderDeliverySection = () => {
             )}
           </div>
 
+          {/* Cobrar via Asaas */}
+          {pending > 0 && (
+            <div className="pt-2 border-t border-border/30 space-y-2">
+              <p className="text-xs text-muted-foreground font-medium">Cobrar cliente via link</p>
+              {isExpress && !showCompleteForm && asaasCpf.replace(/\D/g, '').length !== 11 && (
+                <input
+                  type="text"
+                  placeholder="CPF do cliente (obrigatório para PIX/Boleto)"
+                  value={asaasCpf}
+                  onChange={e => setAsaasCpf(e.target.value)}
+                  className="w-full h-8 text-xs rounded border border-amber-500/50 bg-background px-2 placeholder:text-muted-foreground/60"
+                  maxLength={14}
+                />
+              )}
+              {!isExpress && !order.client_cpf && (
+                <p className="text-xs text-amber-600">⚠ CPF do cliente necessário para PIX/Boleto. Cadastre o CPF no Express.</p>
+              )}
+              <div className="flex gap-2 flex-wrap">
+                <Button size="sm" variant="outline" className="gap-1" disabled={asaasLoading || !paymentForm.finalized_by_staff_id} onClick={() => handleCobrarAsaas('PIX')}>
+                  <Link className="h-3.5 w-3.5" /> PIX
+                </Button>
+                <Button size="sm" variant="outline" className="gap-1" disabled={asaasLoading || !paymentForm.finalized_by_staff_id} onClick={() => handleCobrarAsaas('BOLETO')}>
+                  <Link className="h-3.5 w-3.5" /> Boleto
+                </Button>
+                <Button size="sm" variant="outline" className="gap-1" disabled={asaasLoading || !paymentForm.finalized_by_staff_id} onClick={() => handleCobrarAsaas('UNDEFINED')}>
+                  <Link className="h-3.5 w-3.5" /> PIX + Boleto
+                </Button>
+                {asaasLoading && <Loader2 className="h-4 w-4 animate-spin self-center" />}
+              </div>
+              {/* Crédito parcelado */}
+              <div className="flex gap-2 items-center flex-wrap">
+                <select
+                  title="Parcelas do cartão de crédito"
+                  value={asaasInstallments}
+                  onChange={e => setAsaasInstallments(Number(e.target.value))}
+                  className="h-8 text-xs rounded border border-border/50 bg-background px-2"
+                  disabled={asaasLoading}
+                >
+                  <option value={1}>Crédito à vista</option>
+                  {[2,3,4,5,6,7,8,9,10,11,12].filter(n => (pending / n) >= 5).map(n => (
+                    <option key={n} value={n}>{n}x de R$ {(pending / n).toFixed(2)}</option>
+                  ))}
+                </select>
+                <Button size="sm" variant="outline" className="gap-1" disabled={asaasLoading || !paymentForm.finalized_by_staff_id} onClick={() => handleCobrarAsaas('CREDIT_CARD', asaasInstallments)}>
+                  <Link className="h-3.5 w-3.5" /> Gerar link crédito
+                </Button>
+              </div>
+              {asaasResult?.error && (
+                <p className="text-xs text-destructive">{asaasResult.error}</p>
+              )}
+              {asaasResult?.invoice_url && (
+                <div className="p-2 bg-muted/30 rounded-lg space-y-2">
+                  <p className="text-xs text-muted-foreground break-all">{asaasResult.invoice_url}</p>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={handleCobrarAsaasCopy}>
+                      {asaasCopied ? <CheckCheck className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                      {asaasCopied ? 'Copiado!' : 'Copiar'}
+                    </Button>
+                    {order.client_phone && (
+                      <Button size="sm" variant="outline" className="gap-1 text-xs h-7 text-emerald-500 border-emerald-500/30" onClick={handleCobrarAsaasWhatsApp}>
+                        <MessageCircle className="h-3 w-3" /> WhatsApp
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Registrar como Fiado */}
+          {pending > 0 && (
+            <div className="pt-2 border-t border-border/30">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5 w-full h-9 text-sm border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/30"
+                disabled={!paymentForm.finalized_by_staff_id}
+                onClick={() => setShowFiadoDialog(true)}
+              >
+                <HandCoins className="h-4 w-4" />
+                Registrar como Fiado (R$ {pending.toFixed(2)})
+              </Button>
+            </div>
+          )}
+
           {onAddPayment && (
             <div className="space-y-3 pt-2 border-t border-border/30">
               {/* Quem vai finalizar o pagamento */}
@@ -1889,6 +2109,57 @@ const renderDeliverySection = () => {
       </div>
 
       </div>
+
+      {/* Fiado Dialog */}
+      <Dialog open={showFiadoDialog} onOpenChange={open => !open && setShowFiadoDialog(false)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Registrar como Fiado</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Cliente: <strong>{order.client_name}</strong>
+              {' · '}Valor pendente: <strong className="text-red-600">R$ {pending.toFixed(2)}</strong>
+            </p>
+            <div>
+              <Label>Data de Vencimento *</Label>
+              <Input
+                type="date"
+                value={fiadoDueDate}
+                onChange={e => setFiadoDueDate(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label>Juros/mês (%)</Label>
+              <Input
+                type="number"
+                step="0.1"
+                min="0"
+                value={fiadoInterestRate}
+                onChange={e => setFiadoInterestRate(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label>Observações</Label>
+              <Textarea
+                placeholder="Opcional"
+                value={fiadoNotes}
+                onChange={e => setFiadoNotes(e.target.value)}
+                className="mt-1 resize-none"
+                rows={2}
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={() => setShowFiadoDialog(false)}>Cancelar</Button>
+            <Button type="button" onClick={handleRegistrarFiado} disabled={fiadoLoading}>
+              {fiadoLoading ? 'Salvando...' : 'Registrar Fiado'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Botão fixo para envio via WhatsApp */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t border-border">

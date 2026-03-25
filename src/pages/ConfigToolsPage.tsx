@@ -81,6 +81,7 @@ export default function ConfigToolsPage() {
   const [aiNotes, setAiNotes] = useState('');
   const [boletoNotifyPhone1, setBoletoNotifyPhone1] = useState('');
   const [boletoNotifyPhone2, setBoletoNotifyPhone2] = useState('');
+  const [asaasApiKey, setAsaasApiKey] = useState('');
   const [templates, setTemplates] = useState<Record<MessageKey, string>>({
     whatsapp_confirmation_template: '',
     whatsapp_satisfaction_template: '',
@@ -105,6 +106,7 @@ export default function ConfigToolsPage() {
       setAiNotes(settings.ai_notes || '');
       setBoletoNotifyPhone1((settings as any).boleto_notify_phone_1 || '');
       setBoletoNotifyPhone2((settings as any).boleto_notify_phone_2 || '');
+      setAsaasApiKey((settings as any).asaas_api_key || '');
       setTemplates({
         whatsapp_confirmation_template: settings.whatsapp_confirmation_template,
         whatsapp_satisfaction_template: settings.whatsapp_satisfaction_template,
@@ -134,6 +136,7 @@ export default function ConfigToolsPage() {
       ai_notes: aiNotes,
       boleto_notify_phone_1: boletoNotifyPhone1 || null,
       boleto_notify_phone_2: boletoNotifyPhone2 || null,
+      asaas_api_key: asaasApiKey || null,
       ...templates,
     } as Partial<StoreSettings>);
   }
@@ -216,6 +219,22 @@ export default function ConfigToolsPage() {
                   />
                 </div>
                 <p className="text-xs text-neutral-500">Números que recebem alertas de boletos via WhatsApp. Apenas dígitos, com DDD.</p>
+              </div>
+
+              {/* Asaas - Integração de Pagamentos */}
+              <div className="border border-white/10 rounded-lg p-3 space-y-3 bg-black/20">
+                <p className="text-xs text-neutral-400 font-semibold uppercase tracking-wide">Asaas — Cobranças (PIX / Boleto)</p>
+                <div className="space-y-1">
+                  <label className="text-xs text-neutral-400 font-medium">API Key</label>
+                  <input
+                    type="password"
+                    value={asaasApiKey}
+                    onChange={e => setAsaasApiKey(e.target.value)}
+                    placeholder="$aact_..."
+                    className="w-full p-2 border border-white/20 rounded text-sm bg-black/30 text-neutral-200"
+                  />
+                </div>
+                <p className="text-xs text-neutral-500">Chave de API do Asaas para gerar links de cobrança via PIX e boleto. Encontre em Minha Conta → Integrações no painel Asaas.</p>
               </div>
 
               <div className="space-y-1">

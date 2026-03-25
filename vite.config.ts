@@ -5,6 +5,9 @@ import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  define: {
+    __BUILD_TIME__: JSON.stringify(Date.now()),
+  },
   server: {
     host: "0.0.0.0",
     port: 8080,
@@ -36,6 +39,9 @@ export default defineConfig(({ mode }) => ({
       output: {
         // Evitar template literals problemáticos no Safari antigo
         format: 'es',
+        entryFileNames: `assets/[name]-[hash:9].js`,
+        chunkFileNames: `assets/[name]-[hash:9].js`,
+        assetFileNames: `assets/[name]-[hash:9].[ext]`,
       },
     },
   },

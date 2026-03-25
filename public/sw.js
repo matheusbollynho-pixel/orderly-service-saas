@@ -1,5 +1,5 @@
 // Service Worker para PWA e Sync Local
-const CACHE_NAME = 'bandara-motos-v1';
+const CACHE_NAME = 'bandara-motos-v20260324';
 const OFFLINE_URL = '/offline.html';
 
 // Recursos essenciais para funcionar offline

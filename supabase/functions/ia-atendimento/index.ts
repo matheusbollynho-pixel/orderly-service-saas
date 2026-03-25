@@ -35,6 +35,7 @@ import {
   buscarStoreSettings,
   buscarUltimoServicoKeyword,
   buscarLinkSatisfacao,
+  buscarFiadoPorTelefone,
   type ConversationContext,
   type StoreInfo,
 } from '../_shared/database.ts';
@@ -238,6 +239,28 @@ const TOOLS = [
     },
   },
   {
+    name: 'consultar_fiado',
+    description: 'Verifica se o cliente tem um débito/fiado em aberto na loja. Usar quando o cliente mencionar que quer pagar um débito, "meu fiado", "quanto devo", "minha dívida" ou similar.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        phone: { type: 'string', description: 'Número de telefone do cliente' },
+      },
+      required: ['phone'],
+    },
+  },
+  {
+    name: 'gerar_link_pagamento_fiado',
+    description: 'Gera um link PIX via Asaas para o cliente pagar o débito/fiado. Chamar SOMENTE após consultar_fiado confirmar que há débito em aberto e o cliente confirmar que quer pagar.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        fiado_id: { type: 'string', description: 'ID do fiado retornado por consultar_fiado' },
+      },
+      required: ['fiado_id'],
+    },
+  },
+  {
     name: 'escalar_humano',
     description: 'Escala o atendimento para um humano quando necessário. Notifica o dono e muda o estado da conversa.',
     input_schema: {
@@ -402,6 +425,33 @@ async function executarFerramenta(
       return { escalado: true };
     }
 
+    case 'consultar_fiado': {
+      const fiado = await buscarFiadoPorTelefone(sb, input.phone as string);
+      if (!fiado) return { encontrado: false };
+      const saldo = Math.max(
+        (fiado.original_amount || 0) + (fiado.interest_accrued || 0) - (fiado.amount_paid || 0),
+        0
+      );
+      return { encontrado: true, fiado_id: fiado.id, client_name: fiado.client_name, saldo, vencimento: fiado.due_date, status: fiado.status, link_existente: fiado.asaas_payment_url || null };
+    }
+
+    case 'gerar_link_pagamento_fiado': {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+      try {
+        const res = await fetch(`${supabaseUrl}/functions/v1/fiado-asaas-cobranca`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceKey}` },
+          body: JSON.stringify({ fiado_id: input.fiado_id, billing_type: 'PIX' }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) return { sucesso: false, erro: data.error || 'Erro ao gerar link' };
+        return { sucesso: true, link: data.invoice_url, valor: data.value, vencimento: data.due_date };
+      } catch (e) {
+        return { sucesso: false, erro: String(e) };
+      }
+    }
+
     default:
       return { erro: `Ferramenta desconhecida: ${tool}` };
   }
@@ -484,6 +534,7 @@ ${obs ? `- *Observações:* ${obs}` : ''}
 6. Aprovação de orçamento (materiais de OS aguardando)
 7. Reenvio de link de avaliação
 8. Prazo de manutenção (se está na hora de trocar óleo, etc.) — ao responder, use o campo reminder_message do resultado como base para explicar o serviço ao cliente, adaptando para o contexto atual (data do último serviço, dias restantes). Não use mensagens genéricas.
+9. *Pagamento de débito/fiado*: Se o cliente mencionar "meu débito", "meu fiado", "quanto devo", "quero pagar", "minha dívida" ou similar — use consultar_fiado para verificar se há saldo em aberto, informe o valor e pergunte se deseja o link PIX para pagar. Se confirmar, use gerar_link_pagamento_fiado e envie o link. Não peça confirmação duas vezes.
 
 ## FLUXO DE AGENDAMENTO
 - Se o cliente quer agendar, siga este fluxo independente de estar cadastrado ou não:

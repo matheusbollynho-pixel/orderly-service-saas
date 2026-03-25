@@ -1,31 +1,34 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useBalcao, type BalcaoOrder } from '@/hooks/useBalcao';
 import { BalcaoNotaDetail } from '@/components/BalcaoNotaDetail';
 import { useAuth } from '@/hooks/useAuth';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Search, ShoppingCart, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Search, ShoppingCart, Clock, CheckCircle, XCircle, HandCoins } from 'lucide-react';
 
 const STATUS_LABELS: Record<string, string> = {
   aberta: 'Aberta',
   finalizada: 'Finalizada',
   cancelada: 'Cancelada',
+  fiado: 'Fiado',
 };
 
 const STATUS_COLORS: Record<string, string> = {
   aberta: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
   finalizada: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
   cancelada: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+  fiado: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
 };
 
-const STATUS_ICONS = {
+const STATUS_ICONS: Record<string, React.ElementType> = {
   aberta: Clock,
   finalizada: CheckCircle,
   cancelada: XCircle,
+  fiado: HandCoins,
 };
 
-type Filter = 'todas' | 'aberta' | 'finalizada' | 'cancelada';
+type Filter = 'todas' | 'aberta' | 'finalizada' | 'cancelada' | 'fiado';
 
 interface Props {
   initialOrderId?: string | null;
@@ -101,7 +104,7 @@ export default function VendaBalcaoPage({ initialOrderId, onInitialOrderConsumed
 
       {/* ── Filtros ── */}
       <div className="flex gap-2 flex-wrap">
-        {(['aberta', 'finalizada', 'cancelada', 'todas'] as Filter[]).map(f => (
+        {(['aberta', 'fiado', 'finalizada', 'cancelada', 'todas'] as Filter[]).map(f => (
           <button
             key={f}
             type="button"

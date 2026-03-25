@@ -19,6 +19,7 @@ export interface StoreSettings {
   ai_notes: string;
   boleto_notify_phone_1?: string | null;
   boleto_notify_phone_2?: string | null;
+  asaas_api_key?: string | null;
 }
 
 const DEFAULTS: Omit<StoreSettings, 'id'> = {

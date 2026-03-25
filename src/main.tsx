@@ -29,4 +29,4 @@ setTimeout(async () => {
     console.error('❌ ERRO ao carregar app:', error);
   }
 }, 100);
-// force rebuild
+// build: 2026-03-24

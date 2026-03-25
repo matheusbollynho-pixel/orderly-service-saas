@@ -24,6 +24,7 @@ import InventoryPage from './InventoryPage';
 import VendaBalcaoPage from './VendaBalcaoPage';
 import QuadroOficinaPage from './QuadroOficinaPage';
 import AgendaPage from './AgendaPage';
+import FiadosPage from './FiadosPage';
 import { AgendaAlertModal } from '@/components/AgendaAlertModal';
 import { useInventory } from '@/hooks/useInventory';
 import { BottomNav } from '@/components/BottomNav';
@@ -34,7 +35,7 @@ import { Wrench, Search, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { getMaintenanceKeywords, findKeywordInText, rescheduleMaintenanceReminder } from '@/services/maintenanceReminderService';
 
-type View = 'dashboard' | 'new' | 'express' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa' | 'satisfacao' | 'estoque' | 'balcao' | 'quadro' | 'agenda' | 'mensagens' | 'boletos';
+type View = 'dashboard' | 'new' | 'express' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa' | 'satisfacao' | 'estoque' | 'balcao' | 'quadro' | 'agenda' | 'mensagens' | 'boletos' | 'fiados';
 
 export default function Index() {
   const { isAdmin, canAccessCashFlow, canAccessReports } = useAuth();
@@ -622,6 +623,8 @@ Retirada: ${retiradaInfo}`;
         )}
 
         {currentView === 'boletos' && <BoletosPage />}
+
+        {currentView === 'fiados' && <FiadosPage />}
 
         {currentView === 'fluxo-caixa' && (
           <CashFlowPage
