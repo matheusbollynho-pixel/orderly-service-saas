@@ -26,14 +26,16 @@ export function BottomNav({ activeView, onViewChange, isAdmin }: BottomNavProps)
     { id: 'orders' as const, label: 'Ordens', icon: ClipboardList },
     { id: 'agenda' as const, label: 'Agenda', icon: CalendarDays },
     { id: 'quadro' as const, label: 'Oficina', icon: Gauge },
+    ...(canAccessCashFlow ? [
+      { id: 'fluxo-caixa' as const, label: 'Caixa', icon: Wallet },
+      { id: 'balcao' as const, label: 'Balcão', icon: ShoppingCart },
+    ] : []),
     ...(canAccessReports ? [
       { id: 'reports' as const, label: 'Relatórios', icon: ChartBar }
     ] : []),
     ...(canAccessCashFlow ? [
-      { id: 'fluxo-caixa' as const, label: 'Caixa', icon: Wallet },
       { id: 'boletos' as const, label: 'Boletos', icon: FileText },
       { id: 'fiados' as const, label: 'Fiados', icon: HandCoins },
-      { id: 'balcao' as const, label: 'Balcão', icon: ShoppingCart },
       { id: 'estoque' as const, label: 'Estoque', icon: Package },
     ] : []),
     { id: 'mechanics' as const, label: 'Equipe', icon: Users },

@@ -43,7 +43,7 @@ import {
   Link,
   Copy,
   CheckCheck,
-  HandCoins,
+  ChevronDown,
 } from 'lucide-react';
 import { useMechanics } from '@/hooks/useMechanics';
 import { useClients } from '@/hooks/useClients';
@@ -51,6 +51,7 @@ import { useTeamMembers } from '@/hooks/useTeamMembers';
 import { useStoreSettings } from '@/hooks/useStoreSettings';
 import { sendWhatsAppText, sendWhatsAppDocument } from '@/lib/whatsappService';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -292,6 +293,7 @@ export function OrderDetails({
     finalized_by_staff_id: '',
   }));
   const [asaasLoading, setAsaasLoading] = useState(false);
+  const [asaasAmount, setAsaasAmount] = useState<string>('');
   const [asaasResult, setAsaasResult] = useState<{ invoice_url?: string; error?: string } | null>(null);
   const [asaasCopied, setAsaasCopied] = useState(false);
   const [asaasInstallments, setAsaasInstallments] = useState(1);
@@ -300,10 +302,13 @@ export function OrderDetails({
     return c.length === 11 ? order.client_cpf! : '';
   });
   const [showFiadoDialog, setShowFiadoDialog] = useState(false);
+  const [showAsaasSection, setShowAsaasSection] = useState(false);
   const [fiadoDueDate, setFiadoDueDate] = useState('');
   const [fiadoNotes, setFiadoNotes] = useState('');
   const [fiadoInterestRate, setFiadoInterestRate] = useState('2');
   const [fiadoLoading, setFiadoLoading] = useState(false);
+  const [fiadoAlertLines, setFiadoAlertLines] = useState<string[]>([]);
+  const [showFiadoAlert, setShowFiadoAlert] = useState(false);
   const [showFullClient, setShowFullClient] = useState(false);
   const [autorizaInstagram, setAutorizaInstagram] = useState(!!order.autoriza_instagram);
   const [autorizaLembretes, setAutorizaLembretes] = useState(order.autoriza_lembretes !== false ? true : false);
@@ -470,12 +475,15 @@ export function OrderDetails({
   const totalSettled = totalPaid + totalDiscount;
   const pending = Math.max(totalOS - totalSettled, 0);
   const methodOptions: Array<{ value: PaymentMethod; label: string }> = [
-    { value: 'dinheiro', label: 'DIN' },
-    { value: 'pix', label: 'PIX' },
-    { value: 'cartao', label: 'CAR' },
+    { value: 'dinheiro', label: 'Dinheiro' },
+    { value: 'pix', label: 'Pix' },
+    { value: 'cartao', label: 'Cartão' },
+    { value: 'fiado', label: 'Fiado' },
   ];
 
   const handleCobrarAsaas = async (billingType: 'PIX' | 'BOLETO' | 'UNDEFINED' | 'CREDIT_CARD', installments = 1) => {
+    const chargeAmount = asaasAmount !== '' ? parseFloat(asaasAmount.replace(',', '.')) : pending;
+    if (!chargeAmount || chargeAmount <= 0) { toast.error('Informe um valor válido'); return; }
     setAsaasLoading(true);
     setAsaasResult(null);
     try {
@@ -493,6 +501,7 @@ export function OrderDetails({
           billing_type: billingType,
           due_days: 3,
           installment_count: installments,
+          amount: chargeAmount,
           ...(cpfToUse.length === 11 ? { client_cpf: cpfToUse } : {}),
         },
       });
@@ -517,32 +526,57 @@ export function OrderDetails({
   };
 
   const handleRegistrarFiado = async () => {
-    if (!fiadoDueDate) { alert('Informe a data de vencimento'); return; }
+    if (!order.mechanic_id) { toast.error('Atribua um mecânico à OS antes de registrar como fiado.'); return; }
+    if (!fiadoDueDate) { toast.error('Informe a data de vencimento'); return; }
     setFiadoLoading(true);
-    // Check for duplicate
+
+    const alertas: string[] = [];
+
     const { data: existing } = await supabase
-      .from('fiados')
-      .select('id')
-      .eq('origin_type', 'os')
-      .eq('origin_id', order.id)
-      .limit(1);
-    if (existing && existing.length > 0) {
-      alert('Esta OS já foi registrada como fiado');
+      .from('fiados').select('id, status').eq('origin_type', 'os').eq('origin_id', order.id);
+    const abertosOS = (existing || []).filter(f => ['pendente', 'parcial', 'juridico'].includes(f.status));
+    if (abertosOS.length > 0) {
+      alertas.push(`Esta OS já possui ${abertosOS.length > 1 ? abertosOS.length + ' fiados' : '1 fiado'} em aberto.`);
+    }
+
+    const cpf = (order.client_cpf || '').replace(/\D/g, '');
+    if (cpf.length >= 11) {
+      const { data: fiadosCpf } = await supabase
+        .from('fiados').select('id, status, origin_id').eq('client_cpf', cpf)
+        .in('status', ['pendente', 'parcial', 'juridico']);
+      const outros = (fiadosCpf || []).filter(f => f.origin_id !== order.id);
+      if (outros.length > 0) {
+        alertas.push(`Este cliente já tem ${outros.length > 1 ? outros.length + ' fiados' : '1 fiado'} em aberto em outras notas!`);
+      }
+    }
+
+    if (alertas.length > 0) {
+      setFiadoAlertLines(alertas);
       setFiadoLoading(false);
-      setShowFiadoDialog(false);
+      setShowFiadoAlert(true);
       return;
     }
+
+    await _confirmarFiado();
+  };
+
+  const _confirmarFiado = async () => {
+    setFiadoLoading(true);
+    setShowFiadoAlert(false);
+
     const items = (order.materials || []).map(m => ({
-      desc: m.descricao || m.description || '',
+      desc: m.descricao || '',
       qty: parseFloat(String(m.quantidade)) || 1,
       value: parseFloat(String(m.valor)) || 0,
     })).filter(i => i.desc);
-    await supabase.from('fiados').insert([{
+
+    const { error: fiadoErr } = await supabase.from('fiados').insert([{
       origin_type: 'os',
       origin_id: order.id,
       client_name: order.client_name,
       client_phone: order.client_phone || null,
       client_cpf: order.client_cpf || null,
+      client_id: order.client_id || null,
       items,
       original_amount: pending,
       amount_paid: 0,
@@ -552,12 +586,29 @@ export function OrderDetails({
       notes: fiadoNotes || null,
       status: 'pendente',
     }]);
+
+    if (fiadoErr) {
+      toast.error('Erro ao registrar fiado: ' + fiadoErr.message);
+      setFiadoLoading(false);
+      return;
+    }
+
+    const { error: osErr } = await supabase.from('service_orders').update({
+      status: 'concluida_entregue',
+      exit_date: new Date().toISOString(),
+    }).eq('id', order.id);
+
+    if (osErr) {
+      toast.error('Fiado criado, mas erro ao atualizar OS: ' + osErr.message);
+    }
+
     setFiadoLoading(false);
     setShowFiadoDialog(false);
     setFiadoDueDate('');
     setFiadoNotes('');
     setFiadoInterestRate('2');
-    alert('Fiado registrado com sucesso!');
+    onStatusChange('concluida_entregue');
+    toast.success('Fiado registrado! OS marcada como concluída e entregue.');
   };
 
   const handleCobrarAsaasWhatsApp = async () => {
@@ -1941,7 +1992,15 @@ const renderDeliverySection = () => {
           {/* Cobrar via Asaas */}
           {pending > 0 && (
             <div className="pt-2 border-t border-border/30 space-y-2">
-              <p className="text-xs text-muted-foreground font-medium">Cobrar cliente via link</p>
+              <button
+                type="button"
+                className="flex items-center gap-1 text-xs text-muted-foreground font-medium w-full text-left"
+                onClick={() => setShowAsaasSection(v => !v)}
+              >
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showAsaasSection ? 'rotate-180' : ''}`} />
+                Cobrar cliente via link
+              </button>
+          {showAsaasSection && (<>
               {isExpress && !showCompleteForm && asaasCpf.replace(/\D/g, '').length !== 11 && (
                 <input
                   type="text"
@@ -1955,6 +2014,18 @@ const renderDeliverySection = () => {
               {!isExpress && !order.client_cpf && (
                 <p className="text-xs text-amber-600">⚠ CPF do cliente necessário para PIX/Boleto. Cadastre o CPF no Express.</p>
               )}
+              <div className="flex items-center gap-2 mb-1">
+                <label className="text-xs text-muted-foreground whitespace-nowrap">Valor (R$)</label>
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  placeholder={pending.toFixed(2)}
+                  value={asaasAmount}
+                  onChange={e => setAsaasAmount(e.target.value)}
+                  className="flex-1 h-8 text-xs rounded border border-border/50 bg-background px-2"
+                />
+              </div>
               <div className="flex gap-2 flex-wrap">
                 <Button size="sm" variant="outline" className="gap-1" disabled={asaasLoading || !paymentForm.finalized_by_staff_id} onClick={() => handleCobrarAsaas('PIX')}>
                   <Link className="h-3.5 w-3.5" /> PIX
@@ -2004,25 +2075,10 @@ const renderDeliverySection = () => {
                   </div>
                 </div>
               )}
+            </>)}
             </div>
           )}
 
-          {/* Registrar como Fiado */}
-          {pending > 0 && (
-            <div className="pt-2 border-t border-border/30">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-1.5 w-full h-9 text-sm border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/30"
-                disabled={!paymentForm.finalized_by_staff_id}
-                onClick={() => setShowFiadoDialog(true)}
-              >
-                <HandCoins className="h-4 w-4" />
-                Registrar como Fiado (R$ {pending.toFixed(2)})
-              </Button>
-            </div>
-          )}
 
           {onAddPayment && (
             <div className="space-y-3 pt-2 border-t border-border/30">
@@ -2045,50 +2101,21 @@ const renderDeliverySection = () => {
 
               {/* Formulário de pagamento */}
               <div className="grid grid-cols-1 sm:grid-cols-7 gap-2">
-                <Input
-                  placeholder="Valor"
-                  value={paymentForm.amount}
-                  onChange={(e) => setPaymentForm((prev) => ({ ...prev, amount: e.target.value }))}
-                  className="h-9 sm:col-span-2"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  disabled={order.status === 'concluida_entregue'}
-                />
-                <Input
-                  placeholder="Desconto (R$)"
-                  value={paymentForm.discount_amount}
-                  onChange={(e) => setPaymentForm((prev) => ({ ...prev, discount_amount: e.target.value }))}
-                  className="h-9"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  disabled={order.status === 'concluida_entregue'}
-                />
-                <Select
-                  value={paymentForm.method}
-                  onValueChange={(v) => setPaymentForm((prev) => ({ ...prev, method: v as PaymentMethod }))}
-                  disabled={order.status === 'concluida_entregue'}
-                >
-                  <SelectTrigger className="h-9" disabled={order.status === 'concluida_entregue'}>
-                    <SelectValue placeholder="Forma" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {methodOptions.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Input
-                  placeholder="Obs. (opcional)"
-                  value={paymentForm.notes}
-                  onChange={(e) => setPaymentForm((prev) => ({ ...prev, notes: e.target.value }))}
-                  className="h-9 sm:col-span-2"
-                  disabled={order.status === 'concluida_entregue'}
-                />
-                <Button className="h-9" onClick={handleAddPayment} disabled={isCreatingPayment || !paymentForm.amount || order.status === 'concluida_entregue'}>
-                  Adicionar
-                </Button>
+                {(() => {
+                  const pb = order.status === 'concluida_entregue' || !paymentForm.finalized_by_staff_id || !order.mechanic_id;
+                  return (<>
+                  <Input placeholder="Valor" value={paymentForm.amount} onChange={(e) => setPaymentForm((prev) => ({ ...prev, amount: e.target.value }))} className="h-9 sm:col-span-2" type="number" min="0" step="0.01" disabled={pb} />
+                  <Input placeholder="Desconto (R$)" value={paymentForm.discount_amount} onChange={(e) => setPaymentForm((prev) => ({ ...prev, discount_amount: e.target.value }))} className="h-9" type="number" min="0" step="0.01" disabled={pb} />
+                  <Select value={paymentForm.method} onValueChange={(v) => setPaymentForm((prev) => ({ ...prev, method: v as PaymentMethod }))} disabled={pb}>
+                    <SelectTrigger className="h-9 sm:col-span-2" disabled={pb}><SelectValue placeholder="Forma" /></SelectTrigger>
+                    <SelectContent>{methodOptions.map((opt) => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}</SelectContent>
+                  </Select>
+                  <Input placeholder="Obs." value={paymentForm.notes} onChange={(e) => setPaymentForm((prev) => ({ ...prev, notes: e.target.value }))} className="h-9" disabled={pb} />
+                  <Button className="h-9" onClick={paymentForm.method === 'fiado' ? () => setShowFiadoDialog(true) : handleAddPayment} disabled={pb || (paymentForm.method !== 'fiado' && (isCreatingPayment || !paymentForm.amount))}>
+                    {paymentForm.method === 'fiado' ? 'Registrar' : 'Adicionar'}
+                  </Button>
+                  </>);
+                })()}
               </div>
             </div>
           )}
@@ -2110,6 +2137,27 @@ const renderDeliverySection = () => {
 
       </div>
 
+      {/* Alerta de débitos existentes */}
+      <AlertDialog open={showFiadoAlert} onOpenChange={setShowFiadoAlert}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>⚠️ Cliente com débito em aberto</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                {fiadoAlertLines.map((line, i) => (
+                  <p key={i} className="text-orange-600 font-medium">{line}</p>
+                ))}
+                <p className="text-muted-foreground pt-1">Deseja registrar mesmo assim?</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowFiadoAlert(false)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => _confirmarFiado()}>Registrar mesmo assim</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Fiado Dialog */}
       <Dialog open={showFiadoDialog} onOpenChange={open => !open && setShowFiadoDialog(false)}>
         <DialogContent className="max-w-sm">
@@ -2121,6 +2169,11 @@ const renderDeliverySection = () => {
               Cliente: <strong>{order.client_name}</strong>
               {' · '}Valor pendente: <strong className="text-red-600">R$ {pending.toFixed(2)}</strong>
             </p>
+            {!order.mechanic_id && (
+              <p className="text-sm text-red-600 font-medium">
+                ⚠️ Nenhum mecânico atribuído à OS. Volte e selecione o mecânico antes de registrar o fiado.
+              </p>
+            )}
             <div>
               <Label>Data de Vencimento *</Label>
               <Input

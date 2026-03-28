@@ -93,6 +93,15 @@ export function useFiados() {
       interest_rate_monthly: input.interest_rate_monthly ?? 2.0,
     }]).select('*, fiado_payments(*), fiado_messages(*)').single();
     if (error) { toast.error('Erro ao criar fiado'); return null; }
+
+    // OS vai para concluída e entregue imediatamente — moto já foi entregue ao cliente
+    if (input.origin_type === 'os' && input.origin_id) {
+      await supabase.from('service_orders').update({
+        status: 'concluida_entregue',
+        exit_date: new Date().toISOString(),
+      }).eq('id', input.origin_id);
+    }
+
     setFiados(prev => [data as Fiado, ...prev]);
     toast.success('Fiado registrado!');
     return data as Fiado;
@@ -113,27 +122,38 @@ export function useFiados() {
 
     await supabase.from('fiados').update({ amount_paid: newAmountPaid, status: newStatus, updated_at: new Date().toISOString() }).eq('id', fiado_id);
 
-    // Quando quitado, finaliza a origem automaticamente
-    if (newStatus === 'pago' && fiado.origin_id) {
-      if (fiado.origin_type === 'balcao') {
-        await supabase.from('balcao_orders').update({ status: 'finalizada' }).eq('id', fiado.origin_id);
-      } else if (fiado.origin_type === 'os') {
-        // Só avança para concluida_entregue se já estiver concluida
-        const { data: os } = await supabase.from('service_orders').select('status').eq('id', fiado.origin_id).single();
-        if (os?.status === 'concluida') {
-          await supabase.from('service_orders').update({ status: 'concluida_entregue' }).eq('id', fiado.origin_id);
-        }
+    // Quando origem é OS: registra em payments (trigger cria cash_flow automaticamente)
+    // Quando origem é balcão/manual: insere no cash_flow direto
+    if (fiado.origin_type === 'os' && fiado.origin_id) {
+      // Registra o valor parcial ou total pago na OS (trigger cria cash_flow)
+      await supabase.from('payments').insert({
+        order_id: fiado.origin_id,
+        amount,
+        discount_amount: 0,
+        method,
+        notes: notes || `Fiado recebido - ${fiado.client_name || 'Cliente'}`,
+      });
+      // Só marca como concluída e entregue quando o fiado estiver totalmente quitado
+      if (newStatus === 'pago') {
+        await supabase.from('service_orders')
+          .update({ status: 'concluida_entregue', exit_date: new Date().toISOString() })
+          .eq('id', fiado.origin_id)
+          .neq('status', 'concluida_entregue');
       }
+    } else {
+      // Balcão ou manual: finaliza balcão se quitado e lança no caixa
+      if (newStatus === 'pago' && fiado.origin_type === 'balcao' && fiado.origin_id) {
+        await supabase.from('balcao_orders').update({ status: 'finalizada' }).eq('id', fiado.origin_id);
+      }
+      await supabase.from('cash_flow').insert([{
+        type: 'entrada',
+        description: `Fiado recebido - ${fiado.client_name || 'Cliente'}`,
+        amount,
+        payment_method: method,
+        date: new Date().toISOString().split('T')[0],
+        notes: notes || null,
+      }]);
     }
-
-    await supabase.from('cash_flow').insert([{
-      type: 'entrada',
-      description: `Fiado recebido - ${fiado.client_name || 'Cliente'}`,
-      amount,
-      payment_method: method,
-      date: new Date().toISOString().split('T')[0],
-      notes: notes || null,
-    }]);
 
     toast.success('Pagamento registrado!');
     await load();
@@ -162,8 +182,7 @@ export function useFiados() {
             product_id: item.inventory_product_id!,
             type: 'entrada',
             quantity: item.qty,
-            reason: `Devolução - fiado excluído (${fiado.client_name})`,
-            created_at: new Date().toISOString(),
+            notes: `Devolução - fiado excluído (${fiado.client_name})`,
           }]);
         }
       }
