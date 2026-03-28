@@ -1152,6 +1152,12 @@ const renderDeliverySection = () => {
                     return;
                   }
 
+                  // Mecânico obrigatório para qualquer status além de "aberta"
+                  if (value !== 'aberta' && !order.mechanic_id) {
+                    toast.error('Selecione o mecânico responsável antes de avançar o status da OS.');
+                    return;
+                  }
+
                   if (value === 'em_andamento' && order.status !== 'em_andamento') {
                     // Sincroniza para Em Serviço, mas só se ainda não tiver um status de oficina definido
                     if (!order.status_oficina || order.status_oficina === 'aguardando_inspecao') {
@@ -2098,6 +2104,19 @@ const renderDeliverySection = () => {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Aviso quando pagamento bloqueado */}
+              {order.status !== 'concluida_entregue' && (!order.mechanic_id || !paymentForm.finalized_by_staff_id) && (
+                <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs">
+                  <span className="mt-0.5">⚠️</span>
+                  <span>
+                    Para registrar o pagamento, selecione:
+                    {!order.mechanic_id && <strong> o Mecânico</strong>}
+                    {!order.mechanic_id && !paymentForm.finalized_by_staff_id && ' e'}
+                    {!paymentForm.finalized_by_staff_id && <strong> quem está recebendo</strong>}
+                  </span>
+                </div>
+              )}
 
               {/* Formulário de pagamento */}
               <div className="grid grid-cols-1 sm:grid-cols-7 gap-2">
