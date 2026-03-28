@@ -54,7 +54,7 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder }: ReportsPageProps
 
     orders
       .filter(o => o.status === 'concluida' || o.status === 'concluida_entregue')
-      .filter(o => new Date(o.created_at) >= rangeStart)
+      .filter(o => new Date(o.exit_date || o.updated_at || o.created_at) >= rangeStart)
       .forEach(o => {
         // Processa apenas serviços para o total geral e por mecânico
         (o.materials || [])
@@ -98,7 +98,7 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder }: ReportsPageProps
 
     orders
       .filter(o => o.status === 'concluida' || o.status === 'concluida_entregue')
-      .filter(o => new Date(o.created_at) >= rangeStart)
+      .filter(o => new Date(o.exit_date || o.updated_at || o.created_at) >= rangeStart)
       .forEach(o => {
         let somaOS = 0;
         // Mecânico é o da OS, não do material individual

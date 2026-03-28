@@ -323,7 +323,31 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting, initialData }: { o
             </div>
             <div className="space-y-2">
               <Label className="font-semibold">Data de Nascimento (opcional)</Label>
-              <Input type="date" value={formData.client.birth_date || ''} onChange={(e) => updateField('client', 0, 'birth_date', e.target.value)} className="h-12 bg-muted/50 border-border/50 text-foreground" />
+              <Input
+                type="text"
+                inputMode="numeric"
+                placeholder="DD/MM/AAAA"
+                value={formData.client.birth_date
+                  ? (() => {
+                      const [y, m, d] = (formData.client.birth_date || '').split('-');
+                      return y && m && d ? `${d}/${m}/${y}` : formData.client.birth_date;
+                    })()
+                  : ''}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D/g, '').slice(0, 8);
+                  let masked = digits;
+                  if (digits.length > 4) masked = `${digits.slice(0,2)}/${digits.slice(2,4)}/${digits.slice(4)}`;
+                  else if (digits.length > 2) masked = `${digits.slice(0,2)}/${digits.slice(2)}`;
+                  // Atualiza display e converte para YYYY-MM-DD quando completo
+                  if (digits.length === 8) {
+                    const iso = `${digits.slice(4)}-${digits.slice(2,4)}-${digits.slice(0,2)}`;
+                    updateField('client', 0, 'birth_date', iso);
+                  } else {
+                    updateField('client', 0, 'birth_date', masked);
+                  }
+                }}
+                className="h-12 bg-muted/50 border-border/50 text-foreground"
+              />
             </div>
             <div className="space-y-2">
               <Label className="font-semibold">Instagram (opcional)</Label>

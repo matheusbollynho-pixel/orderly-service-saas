@@ -77,12 +77,12 @@ export function MechanicDetailReport({ onBack, onOpenOrder }: MechanicDetailRepo
       })
       .filter(o => o.mechanic_id === selectedMechanicId)
       .filter(o => {
-        const osDate = new Date(o.created_at);
+        const osDate = new Date(o.exit_date || o.updated_at || o.created_at);
         const isInRange = osDate >= start && osDate <= end;
         console.log(`⏰ OS ${o.id} (${osDate.toLocaleDateString('pt-BR')}) está entre ${start.toLocaleDateString('pt-BR')} e ${end.toLocaleDateString('pt-BR')}?`, isInRange);
         return isInRange;
       })
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      .sort((a, b) => new Date(b.exit_date || b.updated_at || b.created_at).getTime() - new Date(a.exit_date || a.updated_at || a.created_at).getTime());
 
     console.log(`✅ Resultado da filtragem: ${filtered.length} ordens encontradas`);
     return filtered;
