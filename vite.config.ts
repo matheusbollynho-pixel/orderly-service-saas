@@ -38,7 +38,7 @@ export default defineConfig(({ mode }) => {
     }
   };
 
-return ({
+return {
   define: {
     __BUILD_TIME__: JSON.stringify(Date.now()),
   },
@@ -92,5 +92,5 @@ return ({
     // Garantir compatibilidade com Safari
     logLevel: 'silent',
   },
-});
-}
+};
+})
