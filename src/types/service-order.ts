@@ -59,7 +59,7 @@ export interface Material {
   updated_at: string;
 }
 
-export type PaymentMethod = 'dinheiro' | 'pix' | 'cartao';
+export type PaymentMethod = 'dinheiro' | 'pix' | 'cartao' | 'fiado';
 
 export interface Payment {
   id: string;

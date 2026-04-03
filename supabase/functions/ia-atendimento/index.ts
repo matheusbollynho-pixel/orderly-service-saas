@@ -46,7 +46,7 @@ import { sendWhatsAppText, sendWhatsAppLocation, normalizeBrPhone } from '../_sh
 // ============================================================
 
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
-const CLAUDE_MODEL = 'claude-sonnet-4-6';
+const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
 
 // ============================================================
 // TRADUÇÕES
@@ -240,11 +240,12 @@ const TOOLS = [
   },
   {
     name: 'consultar_fiado',
-    description: 'Verifica se o cliente tem um débito/fiado em aberto na loja. Usar quando o cliente mencionar que quer pagar um débito, "meu fiado", "quanto devo", "minha dívida" ou similar.',
+    description: 'Verifica se o cliente tem um débito/fiado em aberto na loja. Usar quando o cliente mencionar que quer pagar um débito, "meu fiado", "quanto devo", "minha dívida" ou similar. Busca primeiro por telefone; se não encontrar, pede o CPF e tenta novamente.',
     input_schema: {
       type: 'object',
       properties: {
-        phone: { type: 'string', description: 'Número de telefone do cliente' },
+        phone: { type: 'string', description: 'Número de telefone do cliente (do contexto)' },
+        cpf: { type: 'string', description: 'CPF do cliente — usar somente se não encontrou por telefone e o cliente informou o CPF' },
       },
       required: ['phone'],
     },
@@ -426,13 +427,26 @@ async function executarFerramenta(
     }
 
     case 'consultar_fiado': {
-      const fiado = await buscarFiadoPorTelefone(sb, input.phone as string);
-      if (!fiado) return { encontrado: false };
-      const saldo = Math.max(
-        (fiado.original_amount || 0) + (fiado.interest_accrued || 0) - (fiado.amount_paid || 0),
-        0
-      );
-      return { encontrado: true, fiado_id: fiado.id, client_name: fiado.client_name, saldo, vencimento: fiado.due_date, status: fiado.status, link_existente: fiado.asaas_payment_url || null };
+      const resultado = await buscarFiadoPorTelefone(sb, input.phone as string, input.cpf as string | undefined);
+      if (!resultado) return { encontrado: false, sugestao: 'Não encontrei débito pelo telefone. Peça o CPF do cliente e tente novamente passando o campo cpf.' };
+      const { fiados, total_aberto } = resultado;
+      // Fiado principal: o de menor vencimento com saldo > 0
+      const principal = fiados.find(f => ((f.original_amount || 0) + (f.interest_accrued || 0) - (f.amount_paid || 0)) > 0) || fiados[0];
+      const debitos = fiados.map(f => ({
+        fiado_id: f.id,
+        saldo: Math.max((f.original_amount || 0) + (f.interest_accrued || 0) - (f.amount_paid || 0), 0),
+        vencimento: f.due_date,
+        status: f.status,
+        link_existente: f.asaas_payment_url || null,
+      }));
+      return {
+        encontrado: true,
+        client_name: principal.client_name,
+        total_debitos: fiados.length,
+        total_aberto,
+        fiado_id: principal.id,
+        debitos,
+      };
     }
 
     case 'gerar_link_pagamento_fiado': {
@@ -534,7 +548,15 @@ ${obs ? `- *Observações:* ${obs}` : ''}
 6. Aprovação de orçamento (materiais de OS aguardando)
 7. Reenvio de link de avaliação
 8. Prazo de manutenção (se está na hora de trocar óleo, etc.) — ao responder, use o campo reminder_message do resultado como base para explicar o serviço ao cliente, adaptando para o contexto atual (data do último serviço, dias restantes). Não use mensagens genéricas.
-9. *Pagamento de débito/fiado*: Se o cliente mencionar "meu débito", "meu fiado", "quanto devo", "quero pagar", "minha dívida" ou similar — use consultar_fiado para verificar se há saldo em aberto, informe o valor e pergunte se deseja o link PIX para pagar. Se confirmar, use gerar_link_pagamento_fiado e envie o link. Não peça confirmação duas vezes.
+9. *Pagamento de débito/fiado*: Se o cliente mencionar "meu débito", "meu fiado", "quanto devo", "quero pagar", "minha dívida" ou similar:
+   - Chame consultar_fiado com o telefone do contexto
+   - Se retornar encontrado=false, pergunte o CPF do cliente e chame consultar_fiado novamente passando o CPF no campo "cpf"
+   - Se encontrar, o resultado traz: total_debitos (quantos fiados), total_aberto (soma total em R$) e debitos[] (lista com saldo e vencimento de cada um)
+   - Se total_debitos = 1: informe o saldo e pergunte se quer o link PIX para pagar
+   - Se total_debitos > 1: informe o total geral e liste cada débito com vencimento e saldo. Pergunte qual deseja pagar primeiro (use o fiado_id do item selecionado em gerar_link_pagamento_fiado) ou se quer pagar o mais antigo
+   - Nunca mostre saldo R$ 0,00 como débito — ignore fiados com saldo zerado
+   - Se confirmar, use gerar_link_pagamento_fiado com o fiado_id escolhido e envie o link
+   - Não peça confirmação duas vezes
 
 ## FLUXO DE AGENDAMENTO
 - Se o cliente quer agendar, siga este fluxo independente de estar cadastrado ou não:
@@ -717,7 +739,9 @@ Deno.serve(async (req) => {
         `_Status de OS, orçamento, aprovação_\n\n` +
         `📅 *3 - Agendamento*\n` +
         `_Marcar ou consultar serviço_\n\n` +
-        `📍 *4 - Localização e horários*\n\n` +
+        `💰 *4 - Financeiro*\n` +
+        `_Ver débitos, pagar fiado, link de pagamento_\n\n` +
+        `📍 *5 - Localização e horários*\n\n` +
         `É só responder com o número ou me contar o que precisa! 🏍️`;
 
       await enviarMensagem(normalizeBrPhone(phone), menuBoasVindas);
@@ -732,7 +756,7 @@ Deno.serve(async (req) => {
 
     // Contexto resumido da conversa para o Claude
     const contextSummary = ctx.client_name
-      ? `[Contexto: cliente identificado como "${ctx.client_name}" (${ctx.apelido || ''}), id=${ctx.client_id || 'desconhecido'}, estado=${state}]`
+      ? `[Contexto: cliente identificado como "${ctx.client_name}" (${ctx.apelido || ''}), id=${ctx.client_id || 'desconhecido'}, telefone=${phone}, estado=${state}]`
       : `[Contexto: cliente ainda não identificado, telefone=${phone}, estado=${state}]`;
 
     // Histórico das últimas mensagens (máx 8 turnos = 16 mensagens)

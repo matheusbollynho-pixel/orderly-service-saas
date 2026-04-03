@@ -6,7 +6,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar as DateCalendar } from '@/components/ui/calendar';
 import { useMechanics } from '@/hooks/useMechanics';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
-import { AlertTriangle, ChevronDown, Calendar as CalendarIcon } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Calendar as CalendarIcon, Send, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { DateRange } from 'react-day-picker';
@@ -62,6 +63,8 @@ export default function SatisfactionDashboardPage() {
   const [expandedDetail, setExpandedDetail] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [bulkSending, setBulkSending] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{ enviados: number; erros: number; pendentes: number } | null>(null);
 
   useEffect(() => {
     setStartDate(dateRange?.from ? format(dateRange.from, 'yyyy-MM-dd') : '');
@@ -77,6 +80,27 @@ export default function SatisfactionDashboardPage() {
     setAtendimentoFilter('all');
     setServiceFilter('all');
     setTagFilter('all');
+  };
+
+  const handleBulkSend = async (force = false) => {
+    const msg = force
+      ? 'REENVIAR para todos os clientes que ainda não avaliaram (incluindo quem já recebeu o link antes)?'
+      : 'Enviar pesquisa para todos os clientes que ainda não receberam o link?';
+    if (!confirm(msg)) return;
+    setBulkSending(true);
+    setBulkResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('send-satisfaction-bulk', {
+        body: { force },
+      });
+      if (error) throw error;
+      setBulkResult(data);
+      toast.success(`Disparo concluído! ${data.enviados} enviados, ${data.erros} erros.`);
+    } catch (e: unknown) {
+      toast.error('Erro no disparo: ' + (e as Error)?.message);
+    } finally {
+      setBulkSending(false);
+    }
   };
 
   const markResolved = async (id: string) => {
@@ -510,11 +534,30 @@ export default function SatisfactionDashboardPage() {
 
       <Card className="glass-card border-border/50">
         <CardHeader>
-          <CardTitle className="text-foreground">
-            📋 Feed de Avaliações Detalhadas
-            {mechanicFilter !== 'all' && ` • 🔧 ${mechanics.find(m => m.id === mechanicFilter)?.name || 'Mecânico'}`}
-            {atendimentoFilter !== 'all' && ` • 🎤 ${members.find(m => m.id === atendimentoFilter)?.name || 'Atendente'}`}
-          </CardTitle>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <CardTitle className="text-foreground">
+              📋 Feed de Avaliações Detalhadas
+              {mechanicFilter !== 'all' && ` • 🔧 ${mechanics.find(m => m.id === mechanicFilter)?.name || 'Mecânico'}`}
+              {atendimentoFilter !== 'all' && ` • 🎤 ${members.find(m => m.id === atendimentoFilter)?.name || 'Atendente'}`}
+            </CardTitle>
+            <div className="flex flex-col items-end gap-1">
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => handleBulkSend(true)} disabled={bulkSending} className="gap-2 text-amber-600 border-amber-500/50">
+                  {bulkSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  Reenviar para todos
+                </Button>
+                <Button size="sm" onClick={() => handleBulkSend(false)} disabled={bulkSending} className="gap-2">
+                  {bulkSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  Disparar novos
+                </Button>
+              </div>
+              {bulkResult && (
+                <p className="text-xs text-muted-foreground">
+                  ✅ {bulkResult.enviados} enviados · ❌ {bulkResult.erros} erros · total {bulkResult.pendentes}
+                </p>
+              )}
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-2">
           {collaboratorFilteredFeed.length === 0 && <p className="text-sm text-muted-foreground">Sem avaliações no período.</p>}

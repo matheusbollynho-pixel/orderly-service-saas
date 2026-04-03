@@ -247,7 +247,6 @@ export async function buscarHistoricoOS(
     .from('service_orders')
     .select('id, equipment, status, entry_date')
     .eq('client_id', clientId)
-    .eq('status', 'concluido_e_entregue')
     .order('entry_date', { ascending: false })
     .limit(limite);
 
@@ -258,7 +257,7 @@ export async function buscarHistoricoOS(
     const { data: mats } = await sb
       .from('materials')
       .select('descricao')
-      .eq('service_order_id', os.id)
+      .eq('order_id', os.id)
       .limit(5);
 
     const summary = (mats as { descricao: string }[] | null)
@@ -279,7 +278,7 @@ export async function buscarMateriaisOS(
   const { data } = await sb
     .from('materials')
     .select('descricao, quantidade, valor, is_service')
-    .eq('service_order_id', orderId);
+    .eq('order_id', orderId);
 
   return (data as { descricao: string; quantidade: number; valor: number | null; is_service: boolean }[]) || [];
 }
@@ -552,26 +551,64 @@ export async function buscarLinkSatisfacao(
 
 export async function buscarFiadoPorTelefone(
   sb: SupabaseClient,
-  phone: string
-): Promise<{ id: string; client_name: string; original_amount: number; amount_paid: number; interest_accrued: number; due_date: string; status: string; asaas_payment_url: string | null } | null> {
+  phone: string,
+  cpf?: string
+): Promise<{ fiados: { id: string; client_name: string; original_amount: number; amount_paid: number; interest_accrued: number; due_date: string; status: string; asaas_payment_url: string | null }[]; total_aberto: number } | null> {
+  type FiadoRow = { id: string; client_name: string; original_amount: number; amount_paid: number; interest_accrued: number; due_date: string; status: string; asaas_payment_url: string | null }
+
+  let rows: FiadoRow[] = []
+
   const clean = (phone || '').replace(/\D/g, '')
-  if (!clean) return null
 
-  // Tenta com e sem o código do país
-  const variants = [clean, clean.startsWith('55') ? clean.slice(2) : `55${clean}`]
+  if (clean) {
+    const sem55 = clean.startsWith('55') ? clean.slice(2) : clean
+    const sem9 = (sem55.length === 11 && sem55[2] === '9')
+      ? sem55.slice(0, 2) + sem55.slice(3)
+      : sem55
+    const ultimos8 = sem55.slice(-8)
 
-  for (const v of variants) {
+    const filtros = [
+      `client_phone.ilike.%${sem55}%`,
+      ...(sem9 !== sem55 ? [`client_phone.ilike.%${sem9}%`] : []),
+      `client_phone.ilike.%${ultimos8}%`,
+    ]
+
     const { data } = await sb
       .from('fiados')
       .select('id, client_name, original_amount, amount_paid, interest_accrued, due_date, status, asaas_payment_url')
       .neq('status', 'pago')
-      .or(`client_phone.eq.${v},client_phone.eq.+${v}`)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+      .or(filtros.join(','))
+      .order('due_date', { ascending: true })
 
-    if (data) return data as { id: string; client_name: string; original_amount: number; amount_paid: number; interest_accrued: number; due_date: string; status: string; asaas_payment_url: string | null }
+    if (data && data.length > 0) rows = data as FiadoRow[]
   }
 
-  return null
+  // Fallback: busca por CPF se não encontrou por telefone
+  if (rows.length === 0 && cpf) {
+    const cpfClean = cpf.replace(/\D/g, '')
+    if (cpfClean.length >= 11) {
+      const { data } = await sb
+        .from('fiados')
+        .select('id, client_name, original_amount, amount_paid, interest_accrued, due_date, status, asaas_payment_url')
+        .neq('status', 'pago')
+        .eq('client_cpf', cpfClean)
+        .order('due_date', { ascending: true })
+
+      if (data && data.length > 0) rows = data as FiadoRow[]
+    }
+  }
+
+  if (rows.length === 0) return null
+
+  // Remove fiados com saldo zerado (criados incorretamente com original_amount = 0)
+  const comSaldo = rows.filter(f =>
+    ((f.original_amount || 0) + (f.interest_accrued || 0) - (f.amount_paid || 0)) > 0
+  )
+
+  if (comSaldo.length === 0) return null
+
+  const total_aberto = comSaldo.reduce((sum, f) =>
+    sum + Math.max((f.original_amount || 0) + (f.interest_accrued || 0) - (f.amount_paid || 0), 0), 0)
+
+  return { fiados: comSaldo, total_aberto }
 }

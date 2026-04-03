@@ -96,6 +96,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   const [asaasResult, setAsaasResult] = useState<null | { invoice_url?: string; bank_slip_url?: string; value?: number }>(null);
   const [asaasCopied, setAsaasCopied] = useState(false);
   const [asaasInstallments, setAsaasInstallments] = useState(1);
+  const [asaasAmount, setAsaasAmount] = useState<string>('');
 
   // ── Fiado ──────────────────────────────────────────────────────
   const [showFiadoDialog, setShowFiadoDialog] = useState(false);
@@ -191,6 +192,8 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   // ── Asaas ──────────────────────────────────────────────────────
   const handleCobrarAsaas = async (billingType: string) => {
     if (total <= 0) return;
+    const chargeAmount = asaasAmount !== '' ? parseFloat(asaasAmount.replace(',', '.')) : total;
+    if (!chargeAmount || chargeAmount <= 0) { toast.error('Informe um valor válido'); return; }
     setAsaasLoading(true);
     setAsaasResult(null);
     const { data, error } = await supabase.functions.invoke('asaas-cobranca', {
@@ -198,7 +201,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
         order_id: order.id,
         billing_type: billingType,
         installment_count: asaasInstallments,
-        amount: total,
+        amount: chargeAmount,
         client_name: editClientName || undefined,
         client_phone: editClientPhone || undefined,
         client_cpf: editClientCpf || undefined,
@@ -1073,6 +1076,18 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
               )}
               {!asaasResult ? (
                 <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-muted-foreground whitespace-nowrap">Valor (R$)</label>
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      placeholder={total.toFixed(2)}
+                      value={asaasAmount}
+                      onChange={e => setAsaasAmount(e.target.value)}
+                      className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
+                    />
+                  </div>
                   <div className="flex gap-2 flex-wrap">
                     <Button
                       type="button"
