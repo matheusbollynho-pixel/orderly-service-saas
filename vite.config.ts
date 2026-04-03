@@ -8,6 +8,7 @@ import fs from "fs";
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const companyName = env.VITE_COMPANY_NAME || 'SpeedSeek OS';
+  const iconPath = env.VITE_ICON_PATH || '/icon-192.png';
 
   // Gera manifest.json dinâmico com o nome da empresa
   const manifestPlugin = {
@@ -23,8 +24,8 @@ export default defineConfig(({ mode }) => {
         theme_color: '#C1272D',
         orientation: 'portrait-primary',
         icons: [
-          { src: '/favicon.ico', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
-          { src: '/favicon.ico', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+          { src: iconPath, sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+          { src: iconPath, sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
         ],
         categories: ['business', 'productivity'],
         shortcuts: [
