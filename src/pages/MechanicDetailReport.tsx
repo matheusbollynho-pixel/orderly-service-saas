@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { useServiceOrders } from '@/hooks/useServiceOrders';
 import { useMechanics } from '@/hooks/useMechanics';
-import { Mechanic } from '@/types/service-order';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -9,7 +10,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as DateCalendar } from '@/components/ui/calendar';
 import { ArrowLeft, Calendar as CalendarIcon, ChevronDown, Check, X } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { DateRange } from 'react-day-picker';
 
@@ -19,7 +20,8 @@ interface MechanicDetailReportProps {
 }
 
 export function MechanicDetailReport({ onBack, onOpenOrder }: MechanicDetailReportProps) {
-  const { orders, isLoading, markMaterialAsPaid, markMaterialAsUnpaid } = useServiceOrders();
+  const { markMaterialAsPaid, markMaterialAsUnpaid } = useServiceOrders();
+  const queryClient = useQueryClient();
   const { mechanics } = useMechanics();
   const [selectedMechanicId, setSelectedMechanicId] = useState<string>('');
   const [startDate, setStartDate] = useState<string>('');
@@ -37,56 +39,40 @@ export function MechanicDetailReport({ onBack, onOpenOrder }: MechanicDetailRepo
     return mechanics.find(m => m.id === selectedMechanicId);
   }, [selectedMechanicId, mechanics]);
 
-  const filteredOrders = useMemo(() => {
-    console.log('🔄 useMemo executado com:', { selectedMechanicId, startDate, endDate, ordersCount: orders.length });
-    
-    if (!selectedMechanicId) {
-      console.log('❌ Sem mecânico selecionado');
-      return [];
-    }
-    if (!startDate) {
-      console.log('❌ Sem data inicial');
-      return [];
-    }
-    if (!endDate) {
-      console.log('❌ Sem data final');
-      return [];
-    }
+  // Query dedicada sem limite: busca direto do Supabase filtrando por mecânico e período
+  const { data: filteredOrders = [], isLoading } = useQuery({
+    queryKey: ['mechanic-report', selectedMechanicId, startDate, endDate],
+    queryFn: async () => {
+      if (!selectedMechanicId || !startDate || !endDate) return [];
 
-    // Corrigir a data para timezone local (input date vem no formato YYYY-MM-DD)
-    const [startYear, startMonth, startDay] = startDate.split('-').map(Number);
-    const start = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
-    
-    const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
-    const end = new Date(endYear, endMonth - 1, endDay, 23, 59, 59, 999);
+      const [sy, sm, sd] = startDate.split('-').map(Number);
+      const [ey, em, ed] = endDate.split('-').map(Number);
 
-    console.log('📅 Datas de filtro:', {
-      startDateInput: startDate,
-      endDateInput: endDate,
-      startCompare: start.toISOString(),
-      endCompare: end.toISOString()
-    });
+      const { data, error } = await supabase
+        .from('service_orders')
+        .select(`
+          id, client_name, equipment, status, mechanic_id,
+          entry_date, exit_date, conclusion_date, created_at, updated_at,
+          materials (*),
+          payments (*)
+        `)
+        .eq('mechanic_id', selectedMechanicId)
+        .in('status', ['concluida', 'concluida_entregue'])
+        .order('created_at', { ascending: false });
 
-    console.log('📋 Todos os status das ordens:', orders.map(o => ({ id: o.id, status: o.status, date: o.created_at })));
+      if (error) throw error;
 
-    const filtered = orders
-      .filter(o => {
-        const isConcluida = o.status === 'concluida' || o.status === 'concluida_entregue';
-        console.log(`🔍 Verificando status de ${o.id}: "${o.status}" === "concluida" ou "concluida_entregue"?`, isConcluida);
-        return isConcluida;
-      })
-      .filter(o => o.mechanic_id === selectedMechanicId)
-      .filter(o => {
+      // Filtro client-side preciso para a janela de datas
+      const start = new Date(sy, sm - 1, sd, 0, 0, 0, 0);
+      const end = new Date(ey, em - 1, ed, 23, 59, 59, 999);
+      return (data || []).filter(o => {
         const osDate = new Date(o.exit_date || o.updated_at || o.created_at);
-        const isInRange = osDate >= start && osDate <= end;
-        console.log(`⏰ OS ${o.id} (${osDate.toLocaleDateString('pt-BR')}) está entre ${start.toLocaleDateString('pt-BR')} e ${end.toLocaleDateString('pt-BR')}?`, isInRange);
-        return isInRange;
-      })
-      .sort((a, b) => new Date(b.exit_date || b.updated_at || b.created_at).getTime() - new Date(a.exit_date || a.updated_at || a.created_at).getTime());
-
-    console.log(`✅ Resultado da filtragem: ${filtered.length} ordens encontradas`);
-    return filtered;
-  }, [orders, selectedMechanicId, startDate, endDate]);
+        return osDate >= start && osDate <= end;
+      });
+    },
+    enabled: !!(selectedMechanicId && startDate && endDate),
+    staleTime: 30 * 1000,
+  });
 
   const { totalServicos, totalComissao, totalPecas } = useMemo(() => {
     let totalServicos = 0;
@@ -264,13 +250,11 @@ export function MechanicDetailReport({ onBack, onOpenOrder }: MechanicDetailRepo
               const servicosDomec = (order.materials || [])
                 .filter(m => m.is_service === true)
                 .filter(m => !m.mechanic_id || m.mechanic_id === selectedMechanicId);
-              
+
               // Filtrar por status de pagamento
-              const servicosFiltrados = servicosDomec.filter(m => 
+              const servicosFiltrados = servicosDomec.filter(m =>
                 showPaid ? m.paid_at !== null && m.paid_at !== undefined : !m.paid_at
               );
-
-              if (servicosFiltrados.length === 0) return null;
 
               const totalServicos = servicosFiltrados.reduce((acc, m) => {
                 const qtd = parseFloat(m.quantidade) || 0;
@@ -319,9 +303,13 @@ export function MechanicDetailReport({ onBack, onOpenOrder }: MechanicDetailRepo
                                 variant={m.paid_at ? 'default' : 'outline'}
                                 onClick={() => {
                                   if (m.paid_at) {
-                                    markMaterialAsUnpaid(m.id);
+                                    markMaterialAsUnpaid(m.id, {
+                                      onSuccess: () => queryClient.invalidateQueries({ queryKey: ['mechanic-report'] }),
+                                    });
                                   } else {
-                                    markMaterialAsPaid(m.id);
+                                    markMaterialAsPaid(m.id, {
+                                      onSuccess: () => queryClient.invalidateQueries({ queryKey: ['mechanic-report'] }),
+                                    });
                                   }
                                 }}
                                 className={`ml-2 h-7 ${m.paid_at ? 'bg-green-600 hover:bg-green-700 text-white' : ''}`}
