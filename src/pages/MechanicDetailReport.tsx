@@ -327,7 +327,8 @@ export function MechanicDetailReport({ onBack, onOpenOrder }: MechanicDetailRepo
                               <Button
                                 size="sm"
                                 variant={m.paid_at ? 'default' : 'outline'}
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   if (m.paid_at) {
                                     markMaterialAsUnpaid(m.id, {
                                       onSuccess: () => queryClient.invalidateQueries({ queryKey: ['mechanic-report'] }),
