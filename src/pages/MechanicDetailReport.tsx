@@ -39,7 +39,7 @@ export function MechanicDetailReport({ onBack, onOpenOrder }: MechanicDetailRepo
     return mechanics.find(m => m.id === selectedMechanicId);
   }, [selectedMechanicId, mechanics]);
 
-  // Query dedicada sem limite: busca direto do Supabase filtrando por mecânico e período
+  // Query dedicada: busca OS onde o mecânico é responsável pela OS OU tem serviços atribuídos a ele
   const { data: filteredOrders = [], isLoading } = useQuery({
     queryKey: ['mechanic-report', selectedMechanicId, startDate, endDate],
     queryFn: async () => {
@@ -47,25 +47,51 @@ export function MechanicDetailReport({ onBack, onOpenOrder }: MechanicDetailRepo
 
       const [sy, sm, sd] = startDate.split('-').map(Number);
       const [ey, em, ed] = endDate.split('-').map(Number);
-
-      const { data, error } = await supabase
-        .from('service_orders')
-        .select(`
-          id, client_name, equipment, status, mechanic_id,
-          entry_date, exit_date, conclusion_date, created_at, updated_at,
-          materials (*),
-          payments (*)
-        `)
-        .eq('mechanic_id', selectedMechanicId)
-        .in('status', ['concluida', 'concluida_entregue'])
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      // Filtro client-side preciso para a janela de datas
       const start = new Date(sy, sm - 1, sd, 0, 0, 0, 0);
       const end = new Date(ey, em - 1, ed, 23, 59, 59, 999);
-      return (data || []).filter(o => {
+
+      // 1) OS onde o mecânico é o responsável principal
+      const q1 = supabase
+        .from('service_orders')
+        .select(`id, client_name, equipment, status, mechanic_id,
+          entry_date, exit_date, conclusion_date, created_at, updated_at,
+          materials (*), payments (*)`)
+        .eq('mechanic_id', selectedMechanicId)
+        .in('status', ['concluida', 'concluida_entregue']);
+
+      // 2) OS onde o mecânico tem materiais de serviço atribuídos a ele
+      const q2 = supabase
+        .from('materials')
+        .select('order_id')
+        .eq('mechanic_id', selectedMechanicId)
+        .eq('is_service', true);
+
+      const [r1, r2] = await Promise.all([q1, q2]);
+      if (r1.error) throw r1.error;
+      if (r2.error) throw r2.error;
+
+      // Buscar OS das OS referenciadas nos materiais (que não são do mecânico principal)
+      const extraOrderIds = [...new Set((r2.data || []).map(m => m.order_id))];
+      const existingIds = new Set((r1.data || []).map(o => o.id));
+      const missingIds = extraOrderIds.filter(id => !existingIds.has(id));
+
+      let extraOrders: typeof r1.data = [];
+      if (missingIds.length > 0) {
+        const r3 = await supabase
+          .from('service_orders')
+          .select(`id, client_name, equipment, status, mechanic_id,
+            entry_date, exit_date, conclusion_date, created_at, updated_at,
+            materials (*), payments (*)`)
+          .in('id', missingIds)
+          .in('status', ['concluida', 'concluida_entregue']);
+        if (r3.error) throw r3.error;
+        extraOrders = r3.data || [];
+      }
+
+      const allOrders = [...(r1.data || []), ...extraOrders];
+
+      // Filtrar por data de conclusão/saída no intervalo selecionado
+      return allOrders.filter(o => {
         const osDate = new Date(o.exit_date || o.updated_at || o.created_at);
         return osDate >= start && osDate <= end;
       });
