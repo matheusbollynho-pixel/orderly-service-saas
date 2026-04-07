@@ -74,9 +74,13 @@ export function Checklist({ items, onItemToggle, onRatingChange, onObservationsC
     'FUNCIONAMENTO': 2,
     'Elétrica': 3,
     'ELETRICA': 3,
-    'NIVEL DE GASOLINA': 4,
-    'NÍVEL DE GASOLINA': 4,
-    'Observações': 5,
+    'Freios': 4,
+    'Suspensão': 5,
+    'Ar Condicionado': 6,
+    'NIVEL DE GASOLINA': 7,
+    'NÍVEL DE GASOLINA': 7,
+    'NÍVEL DE COMBUSTÍVEL': 7,
+    'Observações': 99,
   };
 
   const normalizeLabel = (label: string) => {

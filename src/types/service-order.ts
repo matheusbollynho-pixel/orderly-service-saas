@@ -166,13 +166,26 @@ export interface Mechanic {
   updated_at: string;
 }
 
-export const DEFAULT_CHECKLIST_ITEMS = [
-  { label: 'Chave da MOTO', type: 'yesno' as const },
-  { label: 'Funcionamento do Motor', type: 'yesno' as const },
-  { label: 'Elétrica', type: 'yesno' as const },
-  { label: 'NÍVEL DE GASOLINA', type: 'rating' as const },
-  { label: 'Observações', type: 'textarea' as const },
-];
+const _vehicleLabel = (import.meta.env.VITE_VEHICLE_LABEL || 'moto').toLowerCase().trim();
+
+export const DEFAULT_CHECKLIST_ITEMS = _vehicleLabel === 'carro'
+  ? [
+      { label: 'Chave do CARRO', type: 'yesno' as const },
+      { label: 'Funcionamento do Motor', type: 'yesno' as const },
+      { label: 'Elétrica', type: 'yesno' as const },
+      { label: 'Freios', type: 'yesno' as const },
+      { label: 'Suspensão', type: 'yesno' as const },
+      { label: 'Ar Condicionado', type: 'yesno' as const },
+      { label: 'NÍVEL DE COMBUSTÍVEL', type: 'rating' as const },
+      { label: 'Observações', type: 'textarea' as const },
+    ]
+  : [
+      { label: 'Chave da MOTO', type: 'yesno' as const },
+      { label: 'Funcionamento do Motor', type: 'yesno' as const },
+      { label: 'Elétrica', type: 'yesno' as const },
+      { label: 'NÍVEL DE GASOLINA', type: 'rating' as const },
+      { label: 'Observações', type: 'textarea' as const },
+    ];
 
 export const STATUS_LABELS: Record<OrderStatus, string> = {
   aberta: 'Aberta',
