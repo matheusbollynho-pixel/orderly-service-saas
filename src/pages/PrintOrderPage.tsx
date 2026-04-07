@@ -133,7 +133,7 @@ export function PrintOrderPage() {
           .map((item: Record<string, unknown>) => {
             const label = item?.label as string || "Item"
             const rating = Number(item?.rating || 0) || 0
-            const isFuelLevel = normalizeLabel(label).includes("NIVEL DE GASOLINA")
+            const isFuelLevel = normalizeLabel(label).includes("NIVEL DE")
 
             return {
               name: label,

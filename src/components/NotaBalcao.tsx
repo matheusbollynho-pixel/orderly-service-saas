@@ -532,7 +532,7 @@ export function NotaBalcao({
             </h2>
             {/* Itens de rating (combustível) aparecem primeiro, em linha inteira */}
             <div className="grid grid-cols-1 gap-1.5 mb-2">
-              {data.checklist.filter(item => (item.rating !== undefined && item.rating !== null) || normalizeLabel(item.name).includes("NIVEL DE")).map((item, index) => (
+              {data.checklist.filter(item => normalizeLabel(item.name).includes("NIVEL DE")).map((item, index) => (
                 <div key={`rating-${index}`} className="flex items-start justify-between gap-2 text-xs leading-tight min-h-5">
                   {true ? (
                     <>
@@ -553,7 +553,7 @@ export function NotaBalcao({
             </div>
             {/* Itens yesno em 2 colunas */}
             <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-              {data.checklist.filter(item => (item.rating === undefined || item.rating === null) && !normalizeLabel(item.name).includes("NIVEL DE")).map((item, index) => (
+              {data.checklist.filter(item => !normalizeLabel(item.name).includes("NIVEL DE")).map((item, index) => (
                 <div key={index} className="flex items-center gap-1.5 text-xs leading-tight min-h-5">
                   <>
                       <div
