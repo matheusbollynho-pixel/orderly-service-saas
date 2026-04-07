@@ -833,7 +833,7 @@ export default function PublicSatisfactionPage() {
                     className="w-full bg-yellow-500 hover:bg-yellow-600"
                     onClick={() => {
                       // Link direto para adicionar review no Google Maps da Bandara Motos
-                      window.open('https://www.google.com/maps/place/BANDARA+MOTOS/@-9.4442483,-38.2225858,20.58z/data=!4m8!3m7!1s0x70931f554af5bb9:0x5e55e62aa8ccbf9b!8m2!3d-9.4442315!4d-38.2223837!9m1!1b1!16s%2Fg%2F11j1fh_bdh?entry=ttu&g_ep=EgoyMDI2MDMwMS4xIKXMDSoASAFQAw%3D%3D', '_blank');
+                      if (storeSettings?.google_maps_url) window.open(storeSettings.google_maps_url, '_blank');
                     }}
                   >
                     ⭐ Avaliar no Google Maps
@@ -872,7 +872,7 @@ export default function PublicSatisfactionPage() {
                     type="button"
                     variant="default"
                     className="w-full bg-pink-600 hover:bg-pink-700"
-                    onClick={() => window.open('https://www.instagram.com/bandaramotos/', '_blank')}
+                    onClick={() => { if (storeSettings?.instagram_url) window.open(storeSettings.instagram_url, '_blank'); }}
                   >
                     📸 Siga-nos no Instagram
                   </Button>

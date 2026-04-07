@@ -20,6 +20,8 @@ export interface StoreSettings {
   boleto_notify_phone_1?: string | null;
   boleto_notify_phone_2?: string | null;
   asaas_api_key?: string | null;
+  instagram_url?: string | null;
+  google_maps_url?: string | null;
 }
 
 const DEFAULTS: Omit<StoreSettings, 'id'> = {

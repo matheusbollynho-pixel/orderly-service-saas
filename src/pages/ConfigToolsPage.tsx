@@ -83,6 +83,8 @@ export default function ConfigToolsPage() {
   const [boletoNotifyPhone1, setBoletoNotifyPhone1] = useState('');
   const [boletoNotifyPhone2, setBoletoNotifyPhone2] = useState('');
   const [asaasApiKey, setAsaasApiKey] = useState('');
+  const [instagramUrl, setInstagramUrl] = useState('');
+  const [googleMapsUrl, setGoogleMapsUrl] = useState('');
   const [templates, setTemplates] = useState<Record<MessageKey, string>>({
     whatsapp_confirmation_template: '',
     whatsapp_satisfaction_template: '',
@@ -108,6 +110,8 @@ export default function ConfigToolsPage() {
       setBoletoNotifyPhone1((settings as any).boleto_notify_phone_1 || '');
       setBoletoNotifyPhone2((settings as any).boleto_notify_phone_2 || '');
       setAsaasApiKey((settings as any).asaas_api_key || '');
+      setInstagramUrl(settings.instagram_url || '');
+      setGoogleMapsUrl(settings.google_maps_url || '');
       setTemplates({
         whatsapp_confirmation_template: settings.whatsapp_confirmation_template,
         whatsapp_satisfaction_template: settings.whatsapp_satisfaction_template,
@@ -138,6 +142,8 @@ export default function ConfigToolsPage() {
       boleto_notify_phone_1: boletoNotifyPhone1 || null,
       boleto_notify_phone_2: boletoNotifyPhone2 || null,
       asaas_api_key: asaasApiKey || null,
+      instagram_url: instagramUrl || null,
+      google_maps_url: googleMapsUrl || null,
       ...templates,
     } as Partial<StoreSettings>);
   }
@@ -182,7 +188,9 @@ export default function ConfigToolsPage() {
                 { label: 'Telefone / WhatsApp', value: storePhone, set: setStorePhone, placeholder: 'Ex: (75) 98804-6356' },
                 { label: 'Endereço', value: storeAddress, set: setStoreAddress, placeholder: 'Ex: Rua das Oficinas, 123 - Cidade-BA' },
                 { label: 'CNPJ', value: storeCnpj, set: setStoreCnpj, placeholder: 'Ex: 00.000.000/0001-00' },
-                { label: 'Instagram', value: storeInstagram, set: setStoreInstagram, placeholder: 'Ex: @speedseekos' },
+                { label: 'Instagram (@handle)', value: storeInstagram, set: setStoreInstagram, placeholder: 'Ex: @speedseekos' },
+                { label: 'Link Instagram (URL completa)', value: instagramUrl, set: setInstagramUrl, placeholder: 'Ex: https://www.instagram.com/speedseekos/' },
+                { label: 'Link Google Maps (URL completa)', value: googleMapsUrl, set: setGoogleMapsUrl, placeholder: 'Ex: https://maps.app.goo.gl/...' },
                 { label: 'Razão Social', value: storeOwner, set: setStoreOwner, placeholder: 'Ex: João da Silva ME' },
               ].map(({ label, value, set, placeholder }) => (
                 <div key={label} className="space-y-1">
