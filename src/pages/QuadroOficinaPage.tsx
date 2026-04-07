@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { VEHICLE_CAP, VEHICLES_CAP } from '@/lib/vehicleLabel';
 
 interface QuadroOficinaPageProps {
   orders: ServiceOrder[];
@@ -294,7 +295,7 @@ export default function QuadroOficinaPage({
           <div className="text-center py-16 text-muted-foreground">
             <Wrench className="h-12 w-12 mx-auto mb-3 opacity-30" />
             <p className="font-medium">
-              {sorted.length === 0 ? 'Nenhuma moto na oficina' : 'Nenhuma moto neste status'}
+              {sorted.length === 0 ? `Nenhum${VEHICLE_CAP === 'Moto' ? 'a moto' : ' ' + VEHICLE_CAP.toLowerCase()} na oficina` : `Nenhum${VEHICLE_CAP === 'Moto' ? 'a moto' : ' ' + VEHICLE_CAP.toLowerCase()} neste status`}
             </p>
             <p className="text-sm mt-1">
               {sorted.length === 0 ? 'As OS abertas aparecerão aqui' : 'Tente outro filtro'}

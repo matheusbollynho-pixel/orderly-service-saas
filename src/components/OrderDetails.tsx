@@ -67,6 +67,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { VEHICLE_CAP } from '@/lib/vehicleLabel';
 
 interface OrderDetailsProps {
   order: ServiceOrder;
@@ -1450,7 +1451,7 @@ const renderDeliverySection = () => {
             </div>
 
             <div className="space-y-3">
-              <h4 className="text-sm font-semibold">Moto</h4>
+              <h4 className="text-sm font-semibold">{VEHICLE_CAP}</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label>Placa</Label>
@@ -1485,7 +1486,7 @@ const renderDeliverySection = () => {
             </div>
 
             <div className="space-y-2">
-              <Label>O que fazer na moto?</Label>
+              <Label>O que fazer n{VEHICLE_CAP === 'Moto' ? 'a moto' : 'o ' + VEHICLE_CAP.toLowerCase()}?</Label>
               <Textarea
                 value={expressDescription}
                 onChange={(e) => setExpressDescription(e.target.value)}
@@ -1495,7 +1496,7 @@ const renderDeliverySection = () => {
             </div>
 
             <div className="space-y-2">
-              <Label>Quem vai pegar a moto?</Label>
+              <Label>Quem vai pegar {VEHICLE_CAP === 'Moto' ? 'a moto' : 'o ' + VEHICLE_CAP.toLowerCase()}?</Label>
               <Select value={expressQuemPega} onValueChange={(v) => setExpressQuemPega(v as 'cliente' | 'outro')}>
                 <SelectTrigger>
                   <SelectValue />
@@ -1711,7 +1712,7 @@ const renderDeliverySection = () => {
           {showFullClient && order.equipment && (
             <div className="flex items-start gap-3">
               <Wrench className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-              <p className="text-sm text-foreground">Moto: {order.equipment}</p>
+              <p className="text-sm text-foreground">{VEHICLE_CAP}: {order.equipment}</p>
             </div>
           )}
 
@@ -1789,11 +1790,11 @@ const renderDeliverySection = () => {
                     <body>
                       <h1>Detalhes do Serviço</h1>
                       <div class="section">
-                        <div class="label">MOTO</div>
+                        <div class="label">${VEHICLE_CAP.toUpperCase()}</div>
                         <div class="value">${order.equipment}</div>
                       </div>
                       <div class="section">
-                        <div class="label">O que fazer na moto?</div>
+                        <div class="label">O que fazer n${VEHICLE_CAP === 'Moto' ? 'a moto' : 'o ' + VEHICLE_CAP.toLowerCase()}?</div>
                         <div class="value">${order.problem_description?.split('\n\nRetirada:')[0] || order.problem_description}</div>
                       </div>
                     </body>
@@ -1826,7 +1827,7 @@ const renderDeliverySection = () => {
             <FileText className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
             <div className="flex-1">
               <div className="flex items-center justify-between mb-1">
-                <p className="text-xs text-muted-foreground">O que fazer na moto?</p>
+                <p className="text-xs text-muted-foreground">O que fazer n{VEHICLE_CAP === 'Moto' ? 'a moto' : 'o ' + VEHICLE_CAP.toLowerCase()}?</p>
                 {!isEditingServicesTodo ? (
                   <Button
                     variant="ghost"
@@ -1870,7 +1871,7 @@ const renderDeliverySection = () => {
                 <Textarea
                   value={editedServicesTodo}
                   onChange={(e) => setEditedServicesTodo(e.target.value)}
-                  placeholder="Descreva o que fazer na moto"
+                  placeholder={`Descreva o que fazer n${VEHICLE_CAP === 'Moto' ? 'a moto' : 'o ' + VEHICLE_CAP.toLowerCase()}`}
                   rows={4}
                   className="mt-2"
                 />

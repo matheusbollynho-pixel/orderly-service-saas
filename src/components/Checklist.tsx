@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { Star } from 'lucide-react';
+import { VEHICLE_CAP } from '@/lib/vehicleLabel';
 
 interface ChecklistProps {
   items: ChecklistItem[];
@@ -67,8 +68,8 @@ export function Checklist({ items, onItemToggle, onRatingChange, onObservationsC
 
   // Mapa de ordenação e normalização de labels
   const orderMap: Record<string, number> = {
-    'Chave da MOTO': 1,
-    'Chave da Moto': 1,
+    [`Chave d${VEHICLE_CAP === 'Moto' ? 'a MOTO' : 'o ' + VEHICLE_CAP.toUpperCase()}`]: 1,
+    [`Chave d${VEHICLE_CAP === 'Moto' ? 'a Moto' : 'o ' + VEHICLE_CAP}`]: 1,
     'Funcionamento do Motor': 2,
     'FUNCIONAMENTO': 2,
     'Elétrica': 3,
@@ -79,7 +80,7 @@ export function Checklist({ items, onItemToggle, onRatingChange, onObservationsC
   };
 
   const normalizeLabel = (label: string) => {
-    if (label === 'Chave da Moto') return 'Chave da MOTO';
+    if (label === `Chave d${VEHICLE_CAP === 'Moto' ? 'a Moto' : 'o ' + VEHICLE_CAP}`) return `Chave d${VEHICLE_CAP === 'Moto' ? 'a MOTO' : 'o ' + VEHICLE_CAP.toUpperCase()}`;
     if (label === 'FUNCIONAMENTO') return 'Funcionamento do Motor';
     if (label === 'ELETRICA') return 'Elétrica';
     if (label === 'NIVEL DE GASOLINA') return 'NÍVEL DE GASOLINA';

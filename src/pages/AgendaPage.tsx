@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { ChevronLeft, ChevronRight, Plus, Phone, Wrench, Trash2, CalendarDays, LayoutDashboard, Clock3, Loader2, CheckCircle2, ClipboardList, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { VEHICLE_CAP } from '@/lib/vehicleLabel';
 
 const SHIFTS: AppointmentShift[] = ['manha', 'tarde'];
 const SHIFT_ICONS: Record<AppointmentShift, string> = {
@@ -586,9 +587,9 @@ export default function AgendaPage({ onConvertToOS }: AgendaPageProps = {}) {
 
             {/* Moto */}
             <div className="space-y-1">
-              <Label className="text-xs">Moto</Label>
+              <Label className="text-xs">{VEHICLE_CAP}</Label>
               <Input
-                placeholder="Ex: Honda CG 160 2022"
+                placeholder={VEHICLE_CAP === 'Carro' ? 'Ex: Fiat Uno 1.0 2020' : 'Ex: Honda CG 160 2022'}
                 value={form.equipment}
                 onChange={e => setForm(f => ({ ...f, equipment: e.target.value }))}
                 className="h-9 text-sm"

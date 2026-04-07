@@ -37,6 +37,7 @@ import {
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { VEHICLE_CAP } from '@/lib/vehicleLabel';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -272,12 +273,12 @@ function ProductFormDialog({ open, product, isEditing, isSaving, onChange, onBul
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Aplicação da peça</h3>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Marca da moto</Label>
-                <Input value={product.moto_brand ?? ''} onChange={(e) => onChange('moto_brand', e.target.value)} placeholder="Ex: Honda, Yamaha" />
+                <Label>Marca d{VEHICLE_CAP === 'Moto' ? 'a moto' : 'o ' + VEHICLE_CAP.toLowerCase()}</Label>
+                <Input value={product.moto_brand ?? ''} onChange={(e) => onChange('moto_brand', e.target.value)} placeholder={VEHICLE_CAP === 'Carro' ? 'Ex: Fiat, Volkswagen' : 'Ex: Honda, Yamaha'} />
               </div>
               <div>
                 <Label>Modelo</Label>
-                <Input value={product.moto_model ?? ''} onChange={(e) => onChange('moto_model', e.target.value)} placeholder="Ex: CG 160, Factor" />
+                <Input value={product.moto_model ?? ''} onChange={(e) => onChange('moto_model', e.target.value)} placeholder={VEHICLE_CAP === 'Carro' ? 'Ex: Uno, Gol, Palio' : 'Ex: CG 160, Factor'} />
               </div>
               <div>
                 <Label>Ano</Label>
@@ -308,7 +309,7 @@ function ProductFormDialog({ open, product, isEditing, isSaving, onChange, onBul
             </div>
             <div className="mt-3">
               <Label>Compatibilidade (texto livre)</Label>
-              <Textarea value={product.compatibility ?? ''} onChange={(e) => onChange('compatibility', e.target.value)} placeholder="Ex: compatível com CG 125/150/160 2014 em diante" rows={2} />
+              <Textarea value={product.compatibility ?? ''} onChange={(e) => onChange('compatibility', e.target.value)} placeholder={VEHICLE_CAP === 'Carro' ? 'Ex: compatível com Uno 1.0/1.4 2010 em diante' : 'Ex: compatível com CG 125/150/160 2014 em diante'} rows={2} />
             </div>
           </section>
 

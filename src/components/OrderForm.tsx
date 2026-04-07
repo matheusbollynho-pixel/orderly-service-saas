@@ -426,7 +426,7 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting, initialData }: { o
 
               {moto.moto_info && (
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <Label className="font-medium text-blue-800">ℹ️ Informações da moto:</Label>
+                  <Label className="font-medium text-blue-800">ℹ️ Informações d{VEHICLE_CAP === 'Moto' ? 'a moto' : 'o ' + VEHICLE_CAP.toLowerCase()}:</Label>
                   <div className="mt-1 font-semibold text-blue-900">{moto.moto_info}</div>
                 </div>
               )}
@@ -456,7 +456,7 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting, initialData }: { o
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-3">
                 <Label className="flex items-center gap-2 font-semibold">
-                  <Truck className="h-5 w-5" /> Quem vai pegar a moto?
+                  <Truck className="h-5 w-5" /> Quem vai pegar {VEHICLE_CAP === 'Moto' ? 'a moto' : 'o ' + VEHICLE_CAP.toLowerCase()}?
                 </Label>
                 <Select value={formData.servicos.quem_pega} onValueChange={(v) => updateField('servicos', 0, 'quem_pega', v)}>
                   <SelectTrigger>
@@ -535,7 +535,7 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting, initialData }: { o
 
             <div className="space-y-2">
               <Label className="flex items-center gap-2 font-semibold text-lg">
-                <Wrench className="h-5 w-5" /> O que fazer na moto?
+                <Wrench className="h-5 w-5" /> O que fazer n{VEHICLE_CAP === 'Moto' ? 'a moto' : 'o ' + VEHICLE_CAP.toLowerCase()}?
               </Label>
               <Textarea
                 placeholder="Trocar óleo, alinhamento, revisão freios, etc..."
