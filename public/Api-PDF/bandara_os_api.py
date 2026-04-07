@@ -323,6 +323,12 @@ def create_os_pdf(output_path: str, dados: dict) -> None:
             'eletrica': chk_get(['eletric', 'electr']),
             'gasolina': gasolina_val,
         }
+        # Lista ordenada de itens para renderização dinâmica (sem textarea/observações)
+        _raw_chk_items = [
+            item for item in dados.get('checklist_items', [])
+            if sv(item.get('item_type') or '').lower() != 'textarea'
+            and 'observa' not in sv(item.get('label') or '').lower()
+        ]
         obs          = sv(dados.get('observacoes') or dados.get('observations') or obs_checklist or '')
         sig_inspecao  = dados.get('signature_data', '')         or ''
         sig_entrega   = dados.get('delivery_signature_data', '') or ''
@@ -339,6 +345,7 @@ def create_os_pdf(output_path: str, dados: dict) -> None:
         ter       = dados.get("terceiro", {})
         vei       = dados.get("veiculo", {})
         chk       = dados.get("checklist", {})
+        _raw_chk_items = []  # sem suporte no formato legado
         obs       = dados.get("observacoes", "")
         pecas        = dados.get("pecas", [])
         fin          = dados.get("financeiro", {})
@@ -564,35 +571,87 @@ def create_os_pdf(output_path: str, dados: dict) -> None:
     y = section_header('Checklist de Inspecao', y)
     half = CW / 2
 
-    # Linha 1: Chave | Gasolina
-    checklist_item(M, y, 'Chave da MOTO', chk.get('chave', 'Nao'), half)
-    c.setStrokeColor(SILVER)
-    c.setLineWidth(0.3)
-    c.line(M + half, y - RH + 1*mm, M + half, y - 1*mm)
-    c.setFillColor(WHITE)
-    c.rect(M + half, y - RH, half, RH, fill=1, stroke=0)
-    c.setStrokeColor(SILVER)
-    c.line(M + half, y - RH, M + CW, y - RH)
-    c.setFillColor(MUTED)
-    c.setFont('Helvetica-Bold', 6.8)
-    c.drawString(M + half + 3*mm, y - RH + 2*mm, 'Nivel de Gasolina')
-    gasolina_stars = int(chk.get('gasolina', 0))
-    for i in range(5):
-        c.setFillColor(AMBER if i < gasolina_stars else SILVER)
-        c.setStrokeColor(colors.HexColor('#E0E0E0'))
-        c.setLineWidth(0.2)
-        c.circle(M + half + 32*mm + i*4.8*mm, y - RH/2, 1.7*mm, fill=1, stroke=1)
-    c.setFillColor(MUTED)
-    c.setFont('Helvetica', 6.5)
-    c.drawString(M + half + 57*mm, y - RH + 2*mm, f'{gasolina_stars}/5')
-    y -= RH
+    def draw_rating_full(item_label, stars, ypos, alt=False):
+        """Renderiza item de rating (estrelas) em largura total."""
+        bg = ROW_ALT if alt else WHITE
+        c.setFillColor(bg)
+        c.rect(M, ypos - RH, CW, RH, fill=1, stroke=0)
+        c.setStrokeColor(SILVER); c.setLineWidth(0.3)
+        c.line(M, ypos - RH, M + CW, ypos - RH)
+        c.setFillColor(MUTED); c.setFont('Helvetica-Bold', 6.8)
+        c.drawString(M + 3*mm, ypos - RH + 2*mm, item_label)
+        stars_i = int(stars) if stars else 0
+        for si in range(5):
+            c.setFillColor(AMBER if si < stars_i else SILVER)
+            c.setStrokeColor(colors.HexColor('#E0E0E0')); c.setLineWidth(0.2)
+            c.circle(M + CW * 0.55 + si * 4.8*mm, ypos - RH/2, 1.7*mm, fill=1, stroke=1)
+        c.setFillColor(MUTED); c.setFont('Helvetica', 6.5)
+        c.drawString(M + CW * 0.55 + 28*mm, ypos - RH + 2*mm, f'{stars_i}/5')
+        return ypos - RH
 
-    # Linha 2: Motor | Elétrica
-    checklist_item(M, y, 'Funcionamento do Motor', chk.get('motor', 'Nao'), half, alt=True)
-    c.setStrokeColor(SILVER)
-    c.line(M + half, y - RH + 1*mm, M + half, y - 1*mm)
-    checklist_item(M + half, y, 'Eletrica', chk.get('eletrica', 'Nao'), half, alt=True)
-    y -= RH
+    def _resolve_status(item):
+        completed = item.get('completed')
+        if completed is True or str(completed).lower() in ('true', 'sim', '1', 'yes'):
+            return 'Sim'
+        return 'Nao'
+
+    if _raw_chk_items:
+        idx = 0
+        row_alt = False
+        while idx < len(_raw_chk_items):
+            item = _raw_chk_items[idx]
+            itype = sv(item.get('item_type') or '').lower()
+            item_label = sv(item.get('label') or '')
+            y = check_y(y, RH)
+            if itype == 'rating':
+                stars_val = 0
+                try: stars_val = int(float(item.get('rating') or 0))
+                except: pass
+                y = draw_rating_full(item_label, stars_val, y, alt=row_alt)
+                idx += 1
+            else:
+                # yesno ou checkbox — tenta parear com o próximo item do mesmo tipo
+                status1 = _resolve_status(item)
+                next_item = _raw_chk_items[idx + 1] if idx + 1 < len(_raw_chk_items) else None
+                next_type = sv(next_item.get('item_type') or '').lower() if next_item else ''
+                if next_item and next_type != 'rating':
+                    label2 = sv(next_item.get('label') or '')
+                    status2 = _resolve_status(next_item)
+                    checklist_item(M, y, item_label, status1, half, alt=row_alt)
+                    c.setStrokeColor(SILVER)
+                    c.line(M + half, y - RH + 1*mm, M + half, y - 1*mm)
+                    checklist_item(M + half, y, label2, status2, half, alt=row_alt)
+                    y -= RH
+                    idx += 2
+                else:
+                    checklist_item(M, y, item_label, status1, CW, alt=row_alt)
+                    y -= RH
+                    idx += 1
+            row_alt = not row_alt
+    else:
+        # Fallback formato legado
+        checklist_item(M, y, 'Chave da MOTO', chk.get('chave', 'Nao'), half)
+        c.setStrokeColor(SILVER); c.setLineWidth(0.3)
+        c.line(M + half, y - RH + 1*mm, M + half, y - 1*mm)
+        gasolina_stars = int(chk.get('gasolina', 0))
+        c.setFillColor(WHITE)
+        c.rect(M + half, y - RH, half, RH, fill=1, stroke=0)
+        c.setStrokeColor(SILVER)
+        c.line(M + half, y - RH, M + CW, y - RH)
+        c.setFillColor(MUTED); c.setFont('Helvetica-Bold', 6.8)
+        c.drawString(M + half + 3*mm, y - RH + 2*mm, 'Nivel de Gasolina')
+        for si in range(5):
+            c.setFillColor(AMBER if si < gasolina_stars else SILVER)
+            c.setStrokeColor(colors.HexColor('#E0E0E0')); c.setLineWidth(0.2)
+            c.circle(M + half + 32*mm + si*4.8*mm, y - RH/2, 1.7*mm, fill=1, stroke=1)
+        c.setFillColor(MUTED); c.setFont('Helvetica', 6.5)
+        c.drawString(M + half + 57*mm, y - RH + 2*mm, f'{gasolina_stars}/5')
+        y -= RH
+        checklist_item(M, y, 'Funcionamento do Motor', chk.get('motor', 'Nao'), half, alt=True)
+        c.setStrokeColor(SILVER)
+        c.line(M + half, y - RH + 1*mm, M + half, y - 1*mm)
+        checklist_item(M + half, y, 'Eletrica', chk.get('eletrica', 'Nao'), half, alt=True)
+        y -= RH
 
     # Observações
     obs_h = 18*mm
