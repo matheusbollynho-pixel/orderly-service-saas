@@ -83,9 +83,9 @@ export function Checklist({ items, onItemToggle, onRatingChange, onObservationsC
     'Nível de Óleo': 10,
     'Nível de Água/Radiador': 11,
     'Fluido de Freio': 12,
-    'NIVEL DE GASOLINA': 13,
-    'NÍVEL DE GASOLINA': 13,
-    'NÍVEL DE COMBUSTÍVEL': 13,
+    'NIVEL DE GASOLINA': 0,
+    'NÍVEL DE GASOLINA': 0,
+    'NÍVEL DE COMBUSTÍVEL': 0,
     'Observações': 99,
   };
 

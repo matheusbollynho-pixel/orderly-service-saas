@@ -170,6 +170,7 @@ const _vehicleLabel = (import.meta.env.VITE_VEHICLE_LABEL || 'moto').toLowerCase
 
 export const DEFAULT_CHECKLIST_ITEMS = _vehicleLabel === 'carro'
   ? [
+      { label: 'NÍVEL DE COMBUSTÍVEL', type: 'rating' as const },
       { label: 'Chave do CARRO', type: 'yesno' as const },
       { label: 'Lataria (amassados/riscos)', type: 'yesno' as const },
       { label: 'Vidros (trincas)', type: 'yesno' as const },
@@ -182,7 +183,6 @@ export const DEFAULT_CHECKLIST_ITEMS = _vehicleLabel === 'carro'
       { label: 'Nível de Óleo', type: 'yesno' as const },
       { label: 'Nível de Água/Radiador', type: 'yesno' as const },
       { label: 'Fluido de Freio', type: 'yesno' as const },
-      { label: 'NÍVEL DE COMBUSTÍVEL', type: 'rating' as const },
       { label: 'Observações', type: 'textarea' as const },
     ]
   : [
