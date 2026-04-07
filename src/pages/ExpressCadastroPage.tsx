@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { createMaintenanceReminder, getMaintenanceKeywords, findKeywordInText } from '@/services/maintenanceReminderService';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
+import { VEHICLE_CAP, VEHICLES_CAP } from '@/lib/vehicleLabel';
 
 interface ExpressCadastroPageProps {
   onBack?: () => void;
@@ -159,23 +160,23 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
       return;
     }
     if (!moto.placa.trim()) {
-      toast.error('Placa da moto é obrigatória');
+      toast.error(`Placa d${VEHICLE_CAP === 'Moto' ? 'a moto' : 'o ' + VEHICLE_CAP.toLowerCase()} é obrigatória`);
       return;
     }
     if (!moto.marca.trim()) {
-      toast.error('Marca da moto é obrigatória');
+      toast.error(`Marca d${VEHICLE_CAP === 'Moto' ? 'a moto' : 'o ' + VEHICLE_CAP.toLowerCase()} é obrigatória`);
       return;
     }
     if (!moto.modelo.trim()) {
-      toast.error('Modelo da moto é obrigatório');
+      toast.error(`Modelo d${VEHICLE_CAP === 'Moto' ? 'a moto' : 'o ' + VEHICLE_CAP.toLowerCase()} é obrigatório`);
       return;
     }
     if (!moto.ano.trim()) {
-      toast.error('Ano da moto é obrigatório');
+      toast.error(`Ano d${VEHICLE_CAP === 'Moto' ? 'a moto' : 'o ' + VEHICLE_CAP.toLowerCase()} é obrigatório`);
       return;
     }
     if (!moto.cor.trim()) {
-      toast.error('Cor da moto é obrigatória');
+      toast.error(`Cor d${VEHICLE_CAP === 'Moto' ? 'a moto' : 'o ' + VEHICLE_CAP.toLowerCase()} é obrigatória`);
       return;
     }
     if (!serviceDescription.trim()) {
@@ -342,7 +343,7 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
 
           {selectedClient && clientMotorcycles.length > 0 && (
             <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Motos do cliente:</p>
+              <p className="text-sm text-muted-foreground">{VEHICLES_CAP} do cliente:</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {clientMotorcycles.map((m) => (
                   <button
@@ -390,7 +391,7 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
 
       <Card className="card-elevated">
         <CardHeader>
-          <CardTitle>Moto</CardTitle>
+          <CardTitle>{VEHICLE_CAP}</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
