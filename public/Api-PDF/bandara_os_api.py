@@ -589,6 +589,24 @@ def create_os_pdf(output_path: str, dados: dict) -> None:
         c.drawString(M + CW * 0.55 + 28*mm, ypos - RH + 2*mm, f'{stars_i}/5')
         return ypos - RH
 
+    def draw_rating_half(cx, item_label, stars, ypos, iw, alt=False):
+        """Renderiza item de rating (estrelas) em meia largura."""
+        bg = ROW_ALT if alt else WHITE
+        c.setFillColor(bg)
+        c.rect(cx, ypos - RH, iw, RH, fill=1, stroke=0)
+        c.setStrokeColor(SILVER); c.setLineWidth(0.3)
+        c.line(cx, ypos - RH, cx + iw, ypos - RH)
+        c.setFillColor(MUTED); c.setFont('Helvetica-Bold', 6.3)
+        c.drawString(cx + 3*mm, ypos - RH + 2*mm, item_label)
+        stars_i = int(stars) if stars else 0
+        star_x0 = cx + iw * 0.55
+        for si in range(5):
+            c.setFillColor(AMBER if si < stars_i else SILVER)
+            c.setStrokeColor(colors.HexColor('#E0E0E0')); c.setLineWidth(0.2)
+            c.circle(star_x0 + si * 4.2*mm, ypos - RH/2, 1.5*mm, fill=1, stroke=1)
+        c.setFillColor(MUTED); c.setFont('Helvetica', 6)
+        c.drawString(star_x0 + 23*mm, ypos - RH + 2*mm, f'{stars_i}/5')
+
     def _resolve_status(item):
         completed = item.get('completed')
         if completed is True or str(completed).lower() in ('true', 'sim', '1', 'yes'):
@@ -603,18 +621,32 @@ def create_os_pdf(output_path: str, dados: dict) -> None:
             itype = sv(item.get('item_type') or '').lower()
             item_label = sv(item.get('label') or '')
             y = check_y(y, RH)
+            next_item = _raw_chk_items[idx + 1] if idx + 1 < len(_raw_chk_items) else None
+            next_type = sv(next_item.get('item_type') or '').lower() if next_item else ''
+
             if itype == 'rating':
+                # Rating sozinho → largura total
                 stars_val = 0
                 try: stars_val = int(float(item.get('rating') or 0))
                 except: pass
                 y = draw_rating_full(item_label, stars_val, y, alt=row_alt)
                 idx += 1
-            else:
-                # yesno ou checkbox — tenta parear com o próximo item do mesmo tipo
+            elif itype in ('yesno', 'checkbox', '') and next_item and next_type == 'rating':
+                # Yesno + Rating → lado a lado na mesma linha
                 status1 = _resolve_status(item)
-                next_item = _raw_chk_items[idx + 1] if idx + 1 < len(_raw_chk_items) else None
-                next_type = sv(next_item.get('item_type') or '').lower() if next_item else ''
-                if next_item and next_type != 'rating':
+                checklist_item(M, y, item_label, status1, half, alt=row_alt)
+                c.setStrokeColor(SILVER)
+                c.line(M + half, y - RH + 1*mm, M + half, y - 1*mm)
+                stars_val = 0
+                try: stars_val = int(float(next_item.get('rating') or 0))
+                except: pass
+                draw_rating_half(M + half, sv(next_item.get('label') or ''), stars_val, y, half, alt=row_alt)
+                y -= RH
+                idx += 2
+            else:
+                # Yesno/checkbox — tenta parear com próximo yesno
+                status1 = _resolve_status(item)
+                if next_item and next_type not in ('rating',):
                     label2 = sv(next_item.get('label') or '')
                     status2 = _resolve_status(next_item)
                     checklist_item(M, y, item_label, status1, half, alt=row_alt)
