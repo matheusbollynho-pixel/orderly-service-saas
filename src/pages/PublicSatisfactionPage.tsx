@@ -7,12 +7,13 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Moon, Star, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStoreSettings } from '@/hooks/useStoreSettings';
+import { VEHICLE_CAP } from '@/lib/vehicleLabel';
 
 const BALCAO_POSITIVE_TAGS = ['Educação', 'Rapidez', 'Transparência', 'Simpatia', 'Agilidade'];
 const BALCAO_IMPROVEMENT_TAGS = ['Demora no balcão', 'Falta de Atenção', 'Falta de Informação', 'Não Entendia'];
 
-const OFICINA_POSITIVE_TAGS = ['Qualidade', 'Prazo Cumprido', 'Moto Limpa', 'Bem Feito', 'Perfeição'];
-const OFICINA_IMPROVEMENT_TAGS = ['Problema não resolvido', 'Sujeira', 'Demora', 'Moto com Defeito', 'Peças Trocadas Sem Avisar'];
+const OFICINA_POSITIVE_TAGS = ['Qualidade', 'Prazo Cumprido', `${VEHICLE_CAP} Limpo`, 'Bem Feito', 'Perfeição'];
+const OFICINA_IMPROVEMENT_TAGS = ['Problema não resolvido', 'Sujeira', 'Demora', `${VEHICLE_CAP} com Defeito`, 'Peças Trocadas Sem Avisar'];
 
 const STORE_POSITIVE_TAGS = ['Atendimento rápido', 'Mecânico atencioso', 'Preço justo', 'Loja organizada', 'Serviço de confiança'];
 const STORE_IMPROVEMENT_TAGS = ['Demora no atendimento', 'Preço elevado', 'Falta de peças', 'Dificuldade de contato', 'Ambiente desconfortável'];
@@ -719,8 +720,8 @@ export default function PublicSatisfactionPage() {
 
                   <p className="font-medium text-base">
                     {mechanic?.name
-                      ? `Como ficou o serviço de ${mechanic.name} na sua moto?`
-                      : 'Como ficou o serviço na sua moto?'}
+                      ? `Como ficou o serviço de ${mechanic.name} no seu ${VEHICLE_CAP.toLowerCase()}?`
+                      : `Como ficou o serviço no seu ${VEHICLE_CAP.toLowerCase()}?`}
                   </p>
                   <Stars value={servicoRating} onChange={setServicoRating} />
 

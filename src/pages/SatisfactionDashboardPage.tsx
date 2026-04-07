@@ -332,7 +332,7 @@ export default function SatisfactionDashboardPage() {
   const positiveTagRanking = useMemo(() => {
     const POSITIVE_TAGS = [
       'Educação', 'Rapidez', 'Transparência', 'Simpatia', 'Agilidade',
-      'Qualidade', 'Prazo Cumprido', 'Moto Limpa', 'Bem Feito', 'Perfeição',
+      'Qualidade', 'Prazo Cumprido', 'Carro Limpo', 'Moto Limpa', 'Bem Feito', 'Perfeição',
       'Atendimento rápido', 'Mecânico atencioso', 'Preço justo', 'Loja organizada', 'Serviço de confiança'
     ];
     return allTags
@@ -343,7 +343,7 @@ export default function SatisfactionDashboardPage() {
   const negativeTagRanking = useMemo(() => {
     const NEGATIVE_TAGS = [
       'Demora no balcão', 'Falta de Atenção', 'Falta de Informação', 'Não Entendia',
-      'Problema não resolvido', 'Sujeira', 'Demora', 'Moto com Defeito', 'Peças Trocadas Sem Avisar',
+      'Problema não resolvido', 'Sujeira', 'Demora', 'Moto com Defeito', 'Carro com Defeito', 'Peças Trocadas Sem Avisar',
       'Demora no atendimento', 'Preço elevado', 'Falta de peças', 'Dificuldade de contato', 'Ambiente desconfortável'
     ];
     return allTags

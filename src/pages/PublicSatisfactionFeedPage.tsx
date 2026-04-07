@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card } from '@/components/ui/card';
 import { Star } from 'lucide-react';
+import { useStoreSettings } from '@/hooks/useStoreSettings';
 
 type Review = {
   id: string;
@@ -98,6 +99,12 @@ export default function PublicSatisfactionFeedPage() {
     };
   }, []);
 
+  const { settings } = useStoreSettings();
+  const companyName = settings?.company_name || 'Nossa Oficina';
+  const companyPhone = settings?.store_phone || '';
+  const companyInstagram = settings?.instagram || '';
+  const companyAddress = settings?.store_address || '';
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white px-4 py-10 flex items-center justify-center">
@@ -111,7 +118,7 @@ export default function PublicSatisfactionFeedPage() {
       <div className="mx-auto max-w-2xl">
         <div className="mb-8 text-center space-y-2">
           <h1 className="text-3xl font-bold text-slate-900">O que nossos clientes dizem</h1>
-          <p className="text-muted-foreground">Avaliações de 5 estrelas da Bandara Motos</p>
+          <p className="text-muted-foreground">Avaliações de 5 estrelas da {companyName}</p>
           <div className="flex items-center justify-center gap-1">
             {Array.from({ length: 5 }).map((_, i) => (
               <Star key={i} className="h-5 w-5 fill-yellow-400 text-yellow-400" />
@@ -160,8 +167,8 @@ export default function PublicSatisfactionFeedPage() {
 
         <div className="mt-12 text-center space-y-4">
           <p className="text-muted-foreground text-sm">
-            Bandara Motos • Paulo Afonso-BA<br/>
-            (75) 98804-6356 • @BandaraMotos
+            {companyName}{companyAddress ? ` • ${companyAddress}` : ''}<br/>
+            {companyPhone}{companyInstagram ? ` • ${companyInstagram}` : ''}
           </p>
         </div>
       </div>
