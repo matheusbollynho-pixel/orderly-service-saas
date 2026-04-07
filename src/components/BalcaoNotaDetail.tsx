@@ -92,6 +92,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   const [isSendingOrc, setIsSendingOrc] = useState(false);
 
   // ── Asaas ──────────────────────────────────────────────────────
+  const [asaasOpen, setAsaasOpen] = useState(false);
   const [asaasLoading, setAsaasLoading] = useState(false);
   const [asaasResult, setAsaasResult] = useState<null | { invoice_url?: string; bank_slip_url?: string; value?: number }>(null);
   const [asaasCopied, setAsaasCopied] = useState(false);
@@ -1070,7 +1071,16 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
           {/* ── Asaas ── */}
           {order.status !== 'cancelada' && total > 0 && (
             <div>
-              <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Cobrar via Asaas</p>
+              <button
+                type="button"
+                onClick={() => setAsaasOpen(o => !o)}
+                className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 w-full text-left"
+              >
+                <span>Cobrar via Asaas</span>
+                <span className="ml-1 text-xs">{asaasOpen ? '▲' : '▼'}</span>
+              </button>
+              {asaasOpen && (
+              <div>
               {!editClientCpf && (
                 <p className="text-xs text-amber-600 mb-2">⚠ CPF do cliente necessário para PIX/Boleto. Preencha o campo CPF acima.</p>
               )}
@@ -1184,6 +1194,8 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
                     Nova cobrança
                   </button>
                 </div>
+              )}
+              </div>
               )}
             </div>
           )}
