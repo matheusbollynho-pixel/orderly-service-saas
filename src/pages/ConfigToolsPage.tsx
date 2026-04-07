@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { useState, useEffect } from 'react';
+import { VEHICLE_CAP, VEHICLES_CAP } from '@/lib/vehicleLabel';
 import { useServiceOrders } from '@/hooks/useServiceOrders';
 import { useAuth } from '@/hooks/useAuth';
 import { MaintenanceKeywordsManager } from '@/components/MaintenanceKeywordsManager';
@@ -29,7 +30,7 @@ const MESSAGE_CONFIGS: MessageConfig[] = [
       .replace(/\{\{empresa\}\}/g, c)
       .replace(/\{\{data\}\}/g, 'quarta-feira, 19/03/2026')
       .replace(/\{\{turno\}\}/g, 'Manhã')
-      .replace(/\{\{moto\}\}/g, 'CG 125 2020')
+      .replace(/\{\{moto\}\}/g, `Civic 2022`)
       .replace(/\{\{servico\}\}/g, 'Troca de óleo'),
   },
   {
@@ -177,11 +178,11 @@ export default function ConfigToolsPage() {
           ) : (
             <>
               {[
-                { label: 'Nome da empresa', value: companyName, set: setCompanyName, placeholder: 'Ex: Bandara Motos' },
+                { label: 'Nome da empresa', value: companyName, set: setCompanyName, placeholder: 'Ex: SpeedSeek Auto Center' },
                 { label: 'Telefone / WhatsApp', value: storePhone, set: setStorePhone, placeholder: 'Ex: (75) 98804-6356' },
-                { label: 'Endereço', value: storeAddress, set: setStoreAddress, placeholder: 'Ex: Rua das Motos, 123 - Cidade-BA' },
+                { label: 'Endereço', value: storeAddress, set: setStoreAddress, placeholder: 'Ex: Rua das Oficinas, 123 - Cidade-BA' },
                 { label: 'CNPJ', value: storeCnpj, set: setStoreCnpj, placeholder: 'Ex: 00.000.000/0001-00' },
-                { label: 'Instagram', value: storeInstagram, set: setStoreInstagram, placeholder: 'Ex: @BandaraMotos' },
+                { label: 'Instagram', value: storeInstagram, set: setStoreInstagram, placeholder: 'Ex: @speedseekos' },
                 { label: 'Razão Social', value: storeOwner, set: setStoreOwner, placeholder: 'Ex: João da Silva ME' },
               ].map(({ label, value, set, placeholder }) => (
                 <div key={label} className="space-y-1">
@@ -238,7 +239,7 @@ export default function ConfigToolsPage() {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs text-neutral-400 font-medium">Capacidade máxima de motos por dia</label>
+                <label className="text-xs text-neutral-400 font-medium">Capacidade máxima de {VEHICLES_CAP.toLowerCase()} por dia</label>
                 <input
                   type="number"
                   min={1}
@@ -246,7 +247,7 @@ export default function ConfigToolsPage() {
                   value={maxAgendamentosDia}
                   onChange={e => setMaxAgendamentosDia(Number(e.target.value) || 1)}
                   placeholder="Ex: 10"
-                  title="Capacidade máxima de motos por dia"
+                  title={`Capacidade máxima de ${VEHICLES_CAP.toLowerCase()} por dia`}
                   className="w-full p-2 border border-white/20 rounded text-sm bg-black/30 text-neutral-200"
                 />
                 <p className="text-xs text-neutral-500">Máximo de agendamentos aceitos por dia (distribuídos entre manhã e tarde)</p>
@@ -294,8 +295,8 @@ export default function ConfigToolsPage() {
                   <ul className="text-xs text-neutral-400 space-y-1">
                     <li>🔧 <span className="text-neutral-300">Serviços especiais:</span> "Fazemos funilaria, pintura e customização"</li>
                     <li>💰 <span className="text-neutral-300">Preços fixos:</span> "Troca de óleo a partir de R$ 45, revisão completa R$ 120"</li>
-                    <li>🚫 <span className="text-neutral-300">Restrições:</span> "Não atendemos motos acima de 600cc" ou "Só trabalhamos com Honda e Yamaha"</li>
-                    <li>⏰ <span className="text-neutral-300">Regras de agendamento:</span> "Cliente deve chegar 10 min antes" ou "Deixar a moto o dia todo"</li>
+                    <li>🚫 <span className="text-neutral-300">Restrições:</span> "Não atendemos {VEHICLE_CAP.toLowerCase()}s acima de 2.0" ou "Só trabalhamos com Honda e Toyota"</li>
+                    <li>⏰ <span className="text-neutral-300">Regras de agendamento:</span> "Cliente deve chegar 10 min antes" ou {`"Deixar o ${VEHICLE_CAP.toLowerCase()} o dia todo"`}</li>
                     <li>🎯 <span className="text-neutral-300">Promoções ativas:</span> "Todo mês de abril, troca de óleo com 20% de desconto"</li>
                     <li>💬 <span className="text-neutral-300">Tom de atendimento:</span> "Seja mais formal" ou "Use linguagem bem descontraída"</li>
                   </ul>
@@ -305,7 +306,7 @@ export default function ConfigToolsPage() {
                   rows={7}
                   value={aiNotes}
                   onChange={e => setAiNotes(e.target.value)}
-                  placeholder="Ex: Fazemos revisão completa por R$ 150. Não atendemos motos acima de 300cc. Cliente deve deixar a moto o dia todo para serviços grandes..."
+                  placeholder={`Ex: Fazemos revisão completa por R$ 350. Não atendemos ${VEHICLE_CAP.toLowerCase()}s acima de 2.0 turbo. Cliente deve deixar o ${VEHICLE_CAP.toLowerCase()} o dia todo para serviços grandes...`}
                   className="w-full p-2 border border-white/20 rounded text-sm bg-black/30 text-neutral-200"
                 />
                 <p className="text-xs text-neutral-500">Essas instruções são adicionadas ao conhecimento da IA sobre sua oficina. Quanto mais detalhado, melhor o atendimento.</p>
@@ -371,7 +372,7 @@ export default function ConfigToolsPage() {
                   type="text"
                   value={companyName}
                   onChange={e => setCompanyName(e.target.value)}
-                  placeholder="Ex: Bandara Motos"
+                  placeholder="Ex: SpeedSeek Auto Center"
                   className="w-full p-2 border border-white/20 rounded text-sm bg-black/30 text-neutral-200"
                 />
               </div>
