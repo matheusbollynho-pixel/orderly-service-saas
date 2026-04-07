@@ -1818,7 +1818,7 @@ const renderDeliverySection = () => {
           <div className="flex items-start gap-3">
             <Wrench className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
             <div>
-              <p className="text-xs text-muted-foreground">MOTO</p>
+              <p className="text-xs text-muted-foreground">{VEHICLE_CAP.toUpperCase()}</p>
               <p className="text-sm text-foreground">{order.equipment}</p>
             </div>
           </div>

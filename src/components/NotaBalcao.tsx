@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react"
 import { Check, MapPin, Phone, Instagram, Star } from "lucide-react"
 import LOGO_BASE64 from "@/assets/logo"
+import { useStoreSettings } from "@/hooks/useStoreSettings"
+import { VEHICLE_CAP } from "@/lib/vehicleLabel"
 
 interface ChecklistItem {
   name: string
@@ -100,6 +102,7 @@ export function NotaBalcao({
     console.warn('⚠️ NotaBalcao: dados incompletos', { cliente: data?.cliente, veiculo: data?.veiculo });
   }
 
+  const { settings: storeSettings } = useStoreSettings()
   const [logoBase64, setLogoBase64] = useState<string>('')
   useEffect(() => {
     const path = import.meta.env.VITE_LOGO_PATH || '/client-logo.png'
@@ -380,16 +383,26 @@ export function NotaBalcao({
           onPointerDown={(e) => startDrag("header-contacts", e)}
           onWheel={(e) => handleWheelResize("header-contacts", e)}
         >
+          {storeSettings?.store_address && (
+            <p className="flex items-center justify-center gap-1">
+              <MapPin className="w-3 h-3" />
+              <span>{storeSettings.store_address}</span>
+            </p>
+          )}
           <p className="flex items-center justify-center gap-1">
-            <MapPin className="w-3 h-3" />
-            <span>Rodovia BA 210, Nº913-A, BTN 02, Paulo Afonso-BA</span>
-          </p>
-          <p className="flex items-center justify-center gap-1">
-            <Phone className="w-3 h-3" />
-            <span>(75) 98804-6356</span>
-            <span>|</span>
-            <Instagram className="w-3 h-3" />
-            <span>@BandaraMotos</span>
+            {storeSettings?.store_phone && (
+              <>
+                <Phone className="w-3 h-3" />
+                <span>{storeSettings.store_phone}</span>
+              </>
+            )}
+            {storeSettings?.store_instagram && (
+              <>
+                <span>|</span>
+                <Instagram className="w-3 h-3" />
+                <span>{storeSettings.store_instagram}</span>
+              </>
+            )}
           </p>
         </div>
 
@@ -709,7 +722,10 @@ export function NotaBalcao({
       >
       <footer className="mt-8 pt-4 border-t border-gray-200 text-center">
         <p className="text-xs text-gray-700">
-          Agradecemos a preferência! Sua moto foi cuidada por especialistas apaixonados por duas rodas.
+          {VEHICLE_CAP === 'Carro'
+            ? `Agradecemos a preferência! Seu ${VEHICLE_CAP.toLowerCase()} foi cuidado por especialistas apaixonados por motores.`
+            : 'Agradecemos a preferência! Sua moto foi cuidada por especialistas apaixonados por duas rodas.'
+          }
         </p>
       </footer>
       </div>
