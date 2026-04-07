@@ -530,35 +530,32 @@ export function NotaBalcao({
             <h2 className="text-xs font-semibold text-[#C1272D] uppercase tracking-wide mb-3 border-b border-gray-100 pb-2">
               Checklist de Inspecao
             </h2>
-            <div className="grid grid-cols-1 gap-1.5">
-              {data.checklist.map((item, index) => (
-                <div key={index} className="flex items-start justify-between gap-2 text-xs leading-tight min-h-5">
-                  {normalizeLabel(item.name).includes("NIVEL DE GASOLINA") ? (
+            {/* Itens de rating (combustível) aparecem primeiro, em linha inteira */}
+            <div className="grid grid-cols-1 gap-1.5 mb-2">
+              {data.checklist.filter(item => (item.rating !== undefined && item.rating !== null) || normalizeLabel(item.name).includes("NIVEL DE")).map((item, index) => (
+                <div key={`rating-${index}`} className="flex items-start justify-between gap-2 text-xs leading-tight min-h-5">
+                  {true ? (
                     <>
-                      <div
-                        className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 mt-[1px] ${
-                          item.checked
-                            ? "bg-[#C1272D] text-white"
-                            : "border border-gray-300"
-                        }`}
-                      >
+                      <div className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 mt-[1px] ${item.checked ? "bg-[#C1272D] text-white" : "border border-gray-300"}`}>
                         {item.checked && <Check className="w-3 h-3" />}
                       </div>
                       <span className="text-gray-700 flex-1 break-words">{item.name}</span>
                       <div className="flex items-center gap-[2px] flex-shrink-0 border border-gray-300 rounded px-1 py-[2px] bg-gray-50">
                         {[1, 2, 3, 4, 5].map((star) => {
                           const active = (item.rating || 0) >= star
-                          return (
-                            <Star
-                              key={`fuel-star-${index}-${star}`}
-                              className={`w-3 h-3 ${active ? "text-yellow-500 fill-yellow-500" : "text-gray-300"}`}
-                            />
-                          )
+                          return <Star key={`fuel-star-${index}-${star}`} className={`w-3 h-3 ${active ? "text-yellow-500 fill-yellow-500" : "text-gray-300"}`} />
                         })}
                       </div>
                     </>
-                  ) : (
-                    <>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+            {/* Itens yesno em 2 colunas */}
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+              {data.checklist.filter(item => (item.rating === undefined || item.rating === null) && !normalizeLabel(item.name).includes("NIVEL DE")).map((item, index) => (
+                <div key={index} className="flex items-center gap-1.5 text-xs leading-tight min-h-5">
+                  <>
                       <div
                         className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 mt-[1px] ${
                           item.checked
@@ -570,10 +567,9 @@ export function NotaBalcao({
                       </div>
                       <span className="text-gray-700 flex-1 break-words">{item.name}</span>
                     </>
-                  )}
                 </div>
               ))}
-            </div>
+            </div>{/* end grid-cols-2 */}
             {data.observacoesChecklist && (
               <div className="mt-3 pt-3 border-t border-gray-100">
                 <p className="text-xs text-gray-500">Observacoes:</p>
