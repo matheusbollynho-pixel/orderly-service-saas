@@ -419,7 +419,7 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
             <Input
               value={moto.modelo}
               onChange={(e) => setMoto((prev) => ({ ...prev, modelo: e.target.value }))}
-              placeholder="CG 160"
+              placeholder={VEHICLE_CAP === 'Carro' ? 'Uno 1.0' : 'CG 160'}
               spellCheck
               lang="pt-BR"
               className="h-11"

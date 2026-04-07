@@ -397,7 +397,7 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting, initialData }: { o
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="font-semibold">Modelo</Label>
-                  <Input placeholder="Honda CG 160" value={moto.model || ''} onChange={(e) => updateField('motos', index, 'model', e.target.value)} spellCheck lang="pt-BR" className="h-12" />
+                  <Input placeholder={VEHICLE_CAP === 'Carro' ? 'Fiat Uno 1.0' : 'Honda CG 160'} value={moto.model || ''} onChange={(e) => updateField('motos', index, 'model', e.target.value)} spellCheck lang="pt-BR" className="h-12" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
