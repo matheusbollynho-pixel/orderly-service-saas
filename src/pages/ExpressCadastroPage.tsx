@@ -223,7 +223,7 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
       });
 
       if (!savedMoto) {
-        toast.error('Erro ao salvar moto');
+        toast.error(`Erro ao salvar ${VEHICLE_CAP.toLowerCase()}`);
         return;
       }
 
@@ -454,7 +454,7 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label>O que fazer na moto? *</Label>
+            <Label>O que fazer n{VEHICLE_CAP === 'Moto' ? 'a moto' : 'o ' + VEHICLE_CAP.toLowerCase()}? *</Label>
             <Textarea
               value={serviceDescription}
               onChange={(e) => setServiceDescription(e.target.value)}

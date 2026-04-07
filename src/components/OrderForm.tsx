@@ -538,7 +538,7 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting, initialData }: { o
                 <Wrench className="h-5 w-5" /> O que fazer n{VEHICLE_CAP === 'Moto' ? 'a moto' : 'o ' + VEHICLE_CAP.toLowerCase()}?
               </Label>
               <Textarea
-                placeholder="Trocar óleo, alinhamento, revisão freios, etc..."
+                placeholder={VEHICLE_CAP === 'Carro' ? 'Trocar óleo, alinhamento, revisão freios, etc...' : 'Trocar óleo, alinhamento, revisão freios, etc...'}
                 value={formData.servicos.o_que_fazer}
                 onChange={(e) => updateField('servicos', 0, 'o_que_fazer', e.target.value)}
                 rows={4}
