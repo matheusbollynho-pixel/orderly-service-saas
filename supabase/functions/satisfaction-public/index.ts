@@ -26,6 +26,15 @@ function normalizeTags(input: Record<string, unknown>) {
   }
 }
 
+async function getStoreId(): Promise<string | null> {
+  const { data } = await supabase
+    .from('store_settings')
+    .select('id')
+    .limit(1)
+    .maybeSingle()
+  return data?.id ?? null
+}
+
 Deno.serve(async (req) => {
   try {
     if (req.method === 'OPTIONS') {
@@ -210,6 +219,12 @@ Deno.serve(async (req) => {
           return json({ success: false, message: 'Nome e telefone são obrigatórios' }, 400)
         }
 
+        const storeId = await getStoreId()
+        if (!storeId) {
+          console.error('❌ store_id não encontrado')
+          return json({ success: false, message: 'Loja não encontrada' }, 500)
+        }
+
         // Buscar ou criar cliente
         console.log('🔍 Buscando cliente por telefone:', clientPhone)
         let clientId = null
@@ -217,6 +232,7 @@ Deno.serve(async (req) => {
           .from('clients')
           .select('id')
           .eq('phone', clientPhone)
+          .eq('store_id', storeId)
           .limit(1)
 
         console.log('Busca cliente:', { existingClients, clientSearchError })
@@ -231,16 +247,17 @@ Deno.serve(async (req) => {
           console.log('✅ Cliente encontrado:', clientId)
         } else {
           console.log('➕ Criando novo cliente...')
-          
+
           // Gerar CPF fictício baseado no telefone (pegar últimos 11 dígitos ou completar com zeros)
           const phoneCPF = clientPhone.padStart(11, '0').slice(-11);
-          
+
           const { data: newClient, error: createClientError } = await supabase
             .from('clients')
             .insert({
+              store_id: storeId,
               name: clientName,
               phone: clientPhone,
-              cpf: phoneCPF, // CPF gerado do telefone
+              cpf: phoneCPF,
             })
             .select('id')
             .single()
@@ -265,6 +282,7 @@ Deno.serve(async (req) => {
         console.log('🎟️ Token gerado:', publicToken)
 
         const ratingData: Record<string, unknown> = {
+          store_id: storeId,
           order_id: null,
           client_id: clientId,
           public_token: publicToken,
@@ -295,6 +313,7 @@ Deno.serve(async (req) => {
           const { data: createdPlaceholder, error: createPlaceholderError } = await supabase
             .from('service_orders')
             .insert({
+              store_id: storeId,
               client_id: null,
               client_name: 'SISTEMA QR',
               client_phone: '00000000000',
