@@ -1,6 +1,8 @@
 import { ServiceOrder, OrderStatus } from '@/types/service-order';
 import { cn } from '@/lib/utils';
 import { ClipboardList, Clock3, Loader2, CheckCircle2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
 interface DashboardStatsProps {
   orders: ServiceOrder[];
@@ -45,7 +47,16 @@ function MetricItem({
 }
 
 export function DashboardStats({ orders, onStatusClick, activeFilter }: DashboardStatsProps) {
-  const total = orders.length;
+  const [totalReal, setTotalReal] = useState<number | null>(null);
+
+  useEffect(() => {
+    supabase
+      .from('service_orders')
+      .select('*', { count: 'exact', head: true })
+      .then(({ count }) => { if (count !== null) setTotalReal(count); });
+  }, []);
+
+  const total = totalReal ?? orders.length;
   const abertas = orders.filter((o) => o.status === 'aberta').length;
   const emAndamento = orders.filter((o) => o.status === 'em_andamento').length;
   const concluidas = orders.filter((o) => o.status === 'concluida').length;
