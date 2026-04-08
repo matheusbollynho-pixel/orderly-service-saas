@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { sendWhatsAppText, sendWhatsAppDocument } from '@/lib/whatsappService';
 import { supabase } from '@/integrations/supabase/client';
 import { useStoreSettings } from '@/hooks/useStoreSettings';
+import { useStore } from '@/contexts/StoreContext';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import LOGO_BASE64 from '@/assets/logo';
@@ -50,6 +51,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   const { products } = useInventory();
   const { members: teamMembers } = useTeamMembers();
   const { settings: storeSettings } = useStoreSettings();
+  const { storeId } = useStore();
 
   const items: BalcaoItem[] = order.balcao_items ?? [];
   const isEditable = order.status === 'aberta';
@@ -258,6 +260,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     const amountAlreadyPaid = paymentEntries.reduce((s, e) => s + e.amount, 0);
     const pending = Math.max(total - amountAlreadyPaid, 0);
     const { error } = await supabase.from('fiados').insert([{
+      store_id: storeId!,
       origin_type: 'balcao',
       origin_id: order.id,
       client_name: editClientName || order.client_name || 'Cliente',

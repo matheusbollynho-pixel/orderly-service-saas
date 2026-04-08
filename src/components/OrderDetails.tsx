@@ -49,6 +49,7 @@ import { useMechanics } from '@/hooks/useMechanics';
 import { useClients } from '@/hooks/useClients';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
 import { useStoreSettings } from '@/hooks/useStoreSettings';
+import { useStore } from '@/contexts/StoreContext';
 import { sendWhatsAppText, sendWhatsAppDocument } from '@/lib/whatsappService';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -121,6 +122,7 @@ export function OrderDetails({
   const { mechanics } = useMechanics();
   const { getClientById, getMotorcycleById, updateClientById, updateMotorcycleById } = useClients();
   const { settings: storeSettings } = useStoreSettings();
+  const { storeId } = useStore();
   const printRef = useRef<HTMLDivElement>(null);
   // Corrigido: declarar isExpress apenas uma vez, usando problem_description
   const isExpress = (order.problem_description || '').toLowerCase().includes('cadastro express');
@@ -572,6 +574,7 @@ export function OrderDetails({
     })).filter(i => i.desc);
 
     const { error: fiadoErr } = await supabase.from('fiados').insert([{
+      store_id: storeId!,
       origin_type: 'os',
       origin_id: order.id,
       client_name: order.client_name,
