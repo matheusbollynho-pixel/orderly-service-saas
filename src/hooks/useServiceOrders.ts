@@ -349,7 +349,7 @@ export function useServiceOrders() {
       const { client_temp_id, ...serverMaterial } = material || {};
       const { data, error } = await supabase
         .from('materials')
-        .insert(serverMaterial)
+        .insert({ ...serverMaterial, store_id: storeId! })
         .select()
         .single();
 
