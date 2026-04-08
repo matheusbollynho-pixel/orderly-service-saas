@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { createMaintenanceReminder, getMaintenanceKeywords, findKeywordInText } from '@/services/maintenanceReminderService';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
+import { useStore } from '@/contexts/StoreContext';
 import { VEHICLE_CAP, VEHICLES_CAP } from '@/lib/vehicleLabel';
 
 interface ExpressCadastroPageProps {
@@ -28,6 +29,7 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
     getClientMotorcycles,
   } = useClients();
   const { createOrder } = useServiceOrders();
+  const { storeId } = useStore();
   const { members: teamMembers } = useTeamMembers();
   const [isSaving, setIsSaving] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
@@ -261,7 +263,8 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
                         savedClient.id,
                         savedClient.phone || '',
                         detectedKeyword.id,
-                        new Date()
+                        new Date(),
+                        storeId ?? undefined
                       );
                     }
                   } catch (err) {

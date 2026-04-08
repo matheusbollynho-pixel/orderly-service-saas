@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useStore } from '@/contexts/StoreContext';
 import { supabase } from '@/integrations/supabase/client';
 import {
   getActiveBirthdayDiscounts,
@@ -44,6 +45,7 @@ interface ClientDiscount {
 
 export default function AfterSalesPage() {
   const { isRestrictedUser } = useAuth();
+  const { storeId } = useStore();
   const [clients, setClients] = useState<ClientDiscount[]>([]);
   const [loading, setLoading] = useState(true);
   const [sendingId, setSendingId] = useState<string | null>(null);
@@ -190,7 +192,8 @@ export default function AfterSalesPage() {
           order.client_id,
           order.client_phone || '',
           detectedKeyword.id,
-          serviceDate
+          serviceDate,
+          storeId ?? undefined
         );
 
         if (reminder) createdCount++;

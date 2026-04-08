@@ -99,7 +99,8 @@ export async function createMaintenanceReminder(
   clientId: string | null,
   clientPhone: string,
   keywordId: string,
-  serviceDate: Date
+  serviceDate: Date,
+  storeId?: string
 ): Promise<MaintenanceReminder | null> {
   try {
     const startOfDay = new Date(serviceDate);
@@ -134,6 +135,7 @@ export async function createMaintenanceReminder(
     const { data, error } = await sb
       .from('maintenance_reminders')
       .insert({
+        ...(storeId ? { store_id: storeId } : {}),
         order_id: orderId,
         client_id: clientId,
         keyword_id: keywordId,
@@ -461,7 +463,8 @@ export async function rescheduleMaintenanceReminder(
   clientId: string | null,
   clientPhone: string,
   keywordId: string,
-  newServiceDate: Date
+  newServiceDate: Date,
+  storeId?: string
 ): Promise<{ cancelled: number; created: MaintenanceReminder | null }> {
   try {
     // Step 1: Cancel existing pending reminders
@@ -478,7 +481,8 @@ export async function rescheduleMaintenanceReminder(
       clientId,
       clientPhone,
       keywordId,
-      newServiceDate
+      newServiceDate,
+      storeId
     );
 
     console.log(`📅 Lembrete reprogramado: ${cancelledCount} cancelado(s), 1 novo criado`);
