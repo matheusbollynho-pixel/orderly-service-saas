@@ -198,13 +198,20 @@ export function useClients() {
       const clientData = {
         ...client,
         store_id: storeId!,
+        // NULL para CPF vazio — índice único permite múltiplos NULLs
+        cpf: client.cpf?.trim() || null,
         autoriza_lembretes: client.autoriza_lembretes !== false ? true : false,
         autoriza_instagram: client.autoriza_instagram !== false ? true : false,
       };
 
+      // Só usa onConflict quando há CPF (índice único é em store_id,cpf)
+      const upsertOptions = clientData.cpf
+        ? { onConflict: 'store_id,cpf' }
+        : undefined;
+
       const { data, error } = await supabase
         .from('clients')
-        .upsert(clientData as Partial<Client>, { onConflict: 'store_id,cpf' })
+        .upsert(clientData as Partial<Client>, upsertOptions)
         .select()
         .single();
 
@@ -221,7 +228,10 @@ export function useClients() {
     try {
       const { data, error } = await supabase
         .from('motorcycles')
-        .upsert({ ...motorcycle, store_id: storeId! } as Partial<Motorcycle>, { onConflict: 'store_id,placa' })
+        .upsert(
+          { ...motorcycle, store_id: storeId!, placa: motorcycle.placa?.trim() || null } as Partial<Motorcycle>,
+          motorcycle.placa?.trim() ? { onConflict: 'store_id,placa' } : undefined
+        )
         .select()
         .single();
 
