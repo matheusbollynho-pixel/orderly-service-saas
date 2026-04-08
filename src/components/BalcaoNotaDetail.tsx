@@ -278,8 +278,8 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     setFiadoLoading(false);
     if (error) { toast.error('Erro ao registrar fiado'); return; }
 
-    // Marca a nota de balcão como 'fiado'
-    await supabase.from('balcao_orders').update({ status: 'fiado' }).eq('id', order.id);
+    // Marca a nota de balcão como 'fiado' e invalida o cache
+    await updateOrder({ id: order.id, status: 'fiado' as const });
 
     setShowFiadoDialog(false);
     setFiadoDueDate('');
