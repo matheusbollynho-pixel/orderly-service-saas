@@ -528,24 +528,7 @@ Retirada: ${retiradaInfo}`;
       return;
     }
 
-    // Primeiro tenta filtrar localmente
-    const localResults = orders.filter((order) => {
-      const query = q.toLowerCase();
-      return (
-        order.client_name?.toLowerCase().includes(query) ||
-        order.client_phone?.toLowerCase().includes(query) ||
-        order.equipment?.toLowerCase().includes(query) ||
-        order.id?.toLowerCase().includes(query)
-      );
-    });
-
-    // Se achou localmente, usa isso — não precisa ir ao banco
-    if (localResults.length > 0) {
-      setDbSearchResults(null);
-      return;
-    }
-
-    // Nenhum resultado local — busca no banco após 400ms de pausa
+    // Sempre busca no banco para garantir que OS antigas apareçam
     searchDebounceRef.current = setTimeout(async () => {
       setIsSearching(true);
       try {
@@ -561,11 +544,11 @@ Retirada: ${retiradaInfo}`;
           `)
           .ilike('client_name', `%${q}%`)
           .order('created_at', { ascending: false })
-          .limit(50);
+          .limit(100);
 
         setDbSearchResults((data as ServiceOrder[]) || []);
       } catch {
-        setDbSearchResults([]);
+        setDbSearchResults(null);
       } finally {
         setIsSearching(false);
       }
