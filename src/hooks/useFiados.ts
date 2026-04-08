@@ -89,9 +89,10 @@ export function useFiados() {
   useEffect(() => { load(); }, [load]);
 
   const createFiado = async (input: CreateFiadoInput) => {
+    if (!storeId) { toast.error('Aguarde o sistema carregar e tente novamente.'); return null; }
     const { data, error } = await supabase.from('fiados').insert([{
       ...input,
-      store_id: storeId!,
+      store_id: storeId,
       items: input.items,
       interest_rate_monthly: input.interest_rate_monthly ?? 2.0,
     }]).select('*, fiado_payments(*), fiado_messages(*)').single();

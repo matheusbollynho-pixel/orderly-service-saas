@@ -67,9 +67,10 @@ export function useBalcao() {
   // ── Criar nova nota ───────────────────────────────────────────
   const createOrderMutation = useMutation({
     mutationFn: async (clientName?: string) => {
+      if (!storeId) throw new Error('Store não carregada. Tente novamente.');
       const { data, error } = await supabase
         .from('balcao_orders')
-        .insert({ store_id: storeId!, client_name: clientName || null })
+        .insert({ store_id: storeId, client_name: clientName || null })
         .select()
         .single();
       if (error) throw error;

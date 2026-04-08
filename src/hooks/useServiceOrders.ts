@@ -169,11 +169,12 @@ export function useServiceOrders() {
       >
     ) => {
       console.log('🔧 Criando OS com dados:', order);
-      
+      if (!storeId) throw new Error('Store não carregada. Tente novamente.');
+
       const { data: newOrder, error: orderError } = await supabase
         .from('service_orders')
         .insert({
-          store_id: storeId!,
+          store_id: storeId,
           client_id: order.client_id ?? null,
           motorcycle_id: order.motorcycle_id ?? null,
           atendimento_id: order.atendimento_id ?? null,
