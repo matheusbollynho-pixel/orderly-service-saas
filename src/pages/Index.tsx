@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useServiceOrders } from '@/hooks/useServiceOrders';
 import { useMechanics } from '@/hooks/useMechanics';
 import { useAuth } from '@/hooks/useAuth';
@@ -44,6 +44,9 @@ export default function Index() {
   const [selectedOrder, setSelectedOrder] = useState<ServiceOrder | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<OrderStatus | null>(null);
+  const [dbSearchResults, setDbSearchResults] = useState<ServiceOrder[] | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [initialBalcaoOrderId, setInitialBalcaoOrderId] = useState<string | null>(null);
   const [orderFormInitialData, setOrderFormInitialData] = useState<{ client_name?: string; client_phone?: string; equipment?: string; service_description?: string; client_id?: string } | undefined>();
 
@@ -515,16 +518,72 @@ Retirada: ${retiradaInfo}`;
   const navView = currentView === 'details' || currentView === 'materials' ? 'orders' : currentView as string;
 
   // Filtrar ordens por busca
+  // Busca no banco quando query não está nos 200 resultados em memória
+  useEffect(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+
+    const q = searchQuery.trim();
+    if (!q) {
+      setDbSearchResults(null);
+      return;
+    }
+
+    // Primeiro tenta filtrar localmente
+    const localResults = orders.filter((order) => {
+      const query = q.toLowerCase();
+      return (
+        order.client_name?.toLowerCase().includes(query) ||
+        order.client_phone?.toLowerCase().includes(query) ||
+        order.equipment?.toLowerCase().includes(query) ||
+        order.id?.toLowerCase().includes(query)
+      );
+    });
+
+    // Se achou localmente, usa isso — não precisa ir ao banco
+    if (localResults.length > 0) {
+      setDbSearchResults(null);
+      return;
+    }
+
+    // Nenhum resultado local — busca no banco após 400ms de pausa
+    searchDebounceRef.current = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const { data } = await supabase
+          .from('service_orders')
+          .select(`
+            id, client_id, motorcycle_id, atendimento_id, client_name, client_cpf,
+            client_apelido, client_instagram, autoriza_instagram, client_phone,
+            client_address, client_birth_date, equipment, problem_description,
+            status, terms_accepted, delivery_terms_accepted, entry_date, exit_date,
+            conclusion_date, previsao_entrega, status_oficina, created_at, updated_at,
+            mechanic_id, checklist_items(*), materials(*), payments(*)
+          `)
+          .ilike('client_name', `%${q}%`)
+          .order('created_at', { ascending: false })
+          .limit(50);
+
+        setDbSearchResults((data as ServiceOrder[]) || []);
+      } catch {
+        setDbSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 400);
+  }, [searchQuery, orders]);
+
   const filteredOrders = searchQuery.trim()
-    ? orders.filter((order) => {
-        const query = searchQuery.toLowerCase();
-        return (
-          order.client_name.toLowerCase().includes(query) ||
-          order.client_phone.toLowerCase().includes(query) ||
-          order.equipment.toLowerCase().includes(query) ||
-          order.id.toLowerCase().includes(query)
-        );
-      })
+    ? (dbSearchResults !== null
+        ? dbSearchResults
+        : orders.filter((order) => {
+            const query = searchQuery.toLowerCase();
+            return (
+              order.client_name?.toLowerCase().includes(query) ||
+              order.client_phone?.toLowerCase().includes(query) ||
+              order.equipment?.toLowerCase().includes(query) ||
+              order.id?.toLowerCase().includes(query)
+            );
+          }))
     : orders;
 
   // Filtrar por status se selecionado
@@ -740,9 +799,12 @@ Retirada: ${retiradaInfo}`;
               <Input
                 placeholder="Buscar por nome, telefone, placa ou ID..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => { setSearchQuery(e.target.value); setDbSearchResults(null); }}
                 className="pl-10 h-11"
               />
+              {isSearching && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground animate-pulse">buscando...</span>
+              )}
             </div>
             
             {isLoading ? (
