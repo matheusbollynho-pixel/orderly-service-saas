@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useStore } from '@/contexts/StoreContext';
 
 export interface Client {
   id: string;
@@ -43,6 +44,7 @@ export function useClients() {
   const [clients, setClients] = useState<Client[]>([]);
   const [motorcycles, setMotorcycles] = useState<Motorcycle[]>([]);
   const [loading, setLoading] = useState(false);
+  const { storeId } = useStore();
 
   // Buscar cliente por CPF
   const searchClientByCPF = async (cpf: string): Promise<Client | null> => {
@@ -195,13 +197,14 @@ export function useClients() {
       // Garantir que autoriza_lembretes e autoriza_instagram sejam true por padrão
       const clientData = {
         ...client,
+        store_id: storeId!,
         autoriza_lembretes: client.autoriza_lembretes !== false ? true : false,
         autoriza_instagram: client.autoriza_instagram !== false ? true : false,
       };
 
       const { data, error } = await supabase
         .from('clients')
-        .upsert(clientData as Partial<Client>, { onConflict: 'cpf' })
+        .upsert(clientData as Partial<Client>, { onConflict: 'store_id,cpf' })
         .select()
         .single();
 
@@ -218,7 +221,7 @@ export function useClients() {
     try {
       const { data, error } = await supabase
         .from('motorcycles')
-        .upsert(motorcycle as Partial<Motorcycle>, { onConflict: 'placa' })
+        .upsert({ ...motorcycle, store_id: storeId! } as Partial<Motorcycle>, { onConflict: 'store_id,placa' })
         .select()
         .single();
 
