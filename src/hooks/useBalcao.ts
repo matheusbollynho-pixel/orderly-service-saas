@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useStore } from '@/contexts/StoreContext';
 
 export interface PaymentEntry {
   method: string;
@@ -46,6 +47,7 @@ const toISODate = () =>
 
 export function useBalcao() {
   const queryClient = useQueryClient();
+  const { storeId } = useStore();
 
   // ── Lista de notas ────────────────────────────────────────────
   const ordersQuery = useQuery({
@@ -67,7 +69,7 @@ export function useBalcao() {
     mutationFn: async (clientName?: string) => {
       const { data, error } = await supabase
         .from('balcao_orders')
-        .insert({ client_name: clientName || null })
+        .insert({ store_id: storeId!, client_name: clientName || null })
         .select()
         .single();
       if (error) throw error;
@@ -104,6 +106,7 @@ export function useBalcao() {
       const { data, error } = await supabase
         .from('balcao_items')
         .insert({
+          store_id: storeId!,
           order_id: item.order_id,
           type: item.type,
           product_id: item.product_id ?? null,
@@ -184,6 +187,7 @@ export function useBalcao() {
           const { data: mov, error: movErr } = await supabase
             .from('inventory_movements')
             .insert({
+              store_id: storeId!,
               product_id: item.product_id,
               type: 'saida_balcao',
               quantity: item.quantity,
@@ -230,6 +234,7 @@ export function useBalcao() {
         const pm = payments[i];
         if (!pm.amount || pm.amount <= 0) continue;
         const { error: cfErr } = await supabase.from('cash_flow').insert({
+          store_id: storeId!,
           type: 'entrada',
           amount: pm.amount,
           description,

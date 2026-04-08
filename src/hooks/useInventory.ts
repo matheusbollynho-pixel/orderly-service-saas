@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { Database } from '@/integrations/supabase/types';
+import { useStore } from '@/contexts/StoreContext';
 
 export type InventoryProduct = Database['public']['Tables']['inventory_products']['Row'];
 export type InventoryProductInsert = Database['public']['Tables']['inventory_products']['Insert'];
@@ -11,6 +12,7 @@ export type InventoryMovementInsert = Database['public']['Tables']['inventory_mo
 
 export function useInventory() {
   const queryClient = useQueryClient();
+  const { storeId } = useStore();
 
   // ── PRODUTOS ──────────────────────────────────────────────────
   const productsQuery = useQuery({
@@ -29,7 +31,7 @@ export function useInventory() {
     mutationFn: async (product: InventoryProductInsert) => {
       const { data, error } = await supabase
         .from('inventory_products')
-        .insert(product)
+        .insert({ ...product, store_id: storeId! })
         .select()
         .single();
       if (error) throw error;
@@ -103,7 +105,7 @@ export function useInventory() {
     mutationFn: async (movement: InventoryMovementInsert) => {
       const { data, error } = await supabase
         .from('inventory_movements')
-        .insert(movement)
+        .insert({ ...movement, store_id: storeId! })
         .select()
         .single();
       if (error) throw error;

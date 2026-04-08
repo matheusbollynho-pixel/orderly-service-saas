@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useStore } from '@/contexts/StoreContext';
 
 export type BoletoCategoria = 'fornecedor' | 'aluguel' | 'conta_fixa' | 'imposto' | 'outro';
 export type BoletoRecorrencia = 'nenhuma' | 'mensal' | 'bimestral' | 'trimestral' | 'anual';
@@ -45,6 +46,7 @@ export function getBoletoStatus(boleto: Boleto): BoletoStatus {
 
 export function useBoletos() {
   const queryClient = useQueryClient();
+  const { storeId } = useStore();
 
   const { data: boletos = [], isLoading } = useQuery({
     queryKey: ['boletos'],
@@ -60,11 +62,9 @@ export function useBoletos() {
 
   const createMutation = useMutation({
     mutationFn: async (payload: Omit<Boleto, 'id' | 'store_id' | 'created_at' | 'updated_at'>) => {
-      const { data: storeData } = await supabase.from('store_settings').select('id').limit(1).single();
-      if (!storeData) throw new Error('Store não encontrada');
       const { data, error } = await supabase
         .from('boletos')
-        .insert({ ...payload, store_id: storeData.id })
+        .insert({ ...payload, store_id: storeId! })
         .select()
         .single();
       if (error) throw error;

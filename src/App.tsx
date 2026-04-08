@@ -18,6 +18,7 @@ import { PrintOrderPage } from "./pages/PrintOrderPage";
 import { DebugOrderPage } from "./pages/DebugOrderPage";
 import ConfigToolsPage from "./pages/ConfigToolsPage";
 import { useAuth } from "./hooks/useAuth";
+import { StoreProvider } from "./contexts/StoreContext";
 import { useEffect } from "react";
 import { cleanupOldPhotos } from "./lib/photoService";
 import { useLocalSync } from "./hooks/useLocalSync";
@@ -72,6 +73,7 @@ function AppRoutes() {
 function AuthenticatedApp() {
   const { user, loading } = useAuth();
 
+
   // Limpar fotos antigas uma vez por dia (100+ dias)
   useEffect(() => {
     const lastCleanup = localStorage.getItem('lastPhotoCleanup');
@@ -99,15 +101,17 @@ function AuthenticatedApp() {
   }
 
   return (
-    <Routes>
-      <Route path="/" element={<Index />} />
-      <Route path="/config" element={<ConfigToolsPage />} />
-      <Route path="/pos-venda" element={<AfterSalesPage />} />
-      <Route path="/fluxo-caixa" element={<CashFlowPage />} />
-      <Route path="/debug-os/:id" element={<DebugOrderPage />} />
-      <Route path="/print/:id" element={<PrintOrderPage />} />
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+    <StoreProvider user={user}>
+      <Routes>
+        <Route path="/" element={<Index />} />
+        <Route path="/config" element={<ConfigToolsPage />} />
+        <Route path="/pos-venda" element={<AfterSalesPage />} />
+        <Route path="/fluxo-caixa" element={<CashFlowPage />} />
+        <Route path="/debug-os/:id" element={<DebugOrderPage />} />
+        <Route path="/print/:id" element={<PrintOrderPage />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </StoreProvider>
   );
 }
 

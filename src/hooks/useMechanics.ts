@@ -2,9 +2,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Mechanic } from '@/types/service-order';
 import { toast } from 'sonner';
+import { useStore } from '@/contexts/StoreContext';
 
 export function useMechanics() {
   const queryClient = useQueryClient();
+  const { storeId } = useStore();
   const mechanicsQuery = useQuery({
     queryKey: ['mechanics'],
     queryFn: async () => {
@@ -30,6 +32,7 @@ export function useMechanics() {
           name: payload.name,
           commission_rate: payload.commission_rate ?? 0,
           photo_url: payload.photo_url ?? null,
+          store_id: storeId!,
         })
         .select()
         .single();

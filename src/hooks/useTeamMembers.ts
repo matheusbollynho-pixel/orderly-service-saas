@@ -2,9 +2,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { StaffMember } from '@/types/service-order';
 import { toast } from 'sonner';
+import { useStore } from '@/contexts/StoreContext';
 
 export function useTeamMembers() {
   const queryClient = useQueryClient();
+  const { storeId } = useStore();
 
   const query = useQuery({
     queryKey: ['staff-members'],
@@ -30,6 +32,7 @@ export function useTeamMembers() {
           photo_url: payload.photo_url ?? null,
           commission_rate: payload.commission_rate ?? 0,
           commission_on_parts: payload.commission_on_parts ?? false,
+          store_id: storeId!,
         })
         .select()
         .single();

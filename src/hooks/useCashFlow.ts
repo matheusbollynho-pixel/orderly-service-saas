@@ -2,9 +2,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { CashFlow, CashFlowSummary, CashFlowPeriodSummary } from '@/types/service-order';
 import { toast } from 'sonner';
+import { useStore } from '@/contexts/StoreContext';
 
 export function useCashFlow(selectedDate?: string) {
   const queryClient = useQueryClient();
+  const { storeId } = useStore();
   // Usar a data em timezone de Paulo Afonso (UTC-3)
   const getLocalDate = () => {
     const now = new Date();
@@ -115,6 +117,7 @@ export function useCashFlow(selectedDate?: string) {
       });
 
       const insertPayload = {
+        store_id: storeId!,
         type: entry.type,
         amount: entry.amount,
         description: entry.description,

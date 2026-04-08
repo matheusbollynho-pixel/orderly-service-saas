@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useStore } from '@/contexts/StoreContext';
 
 export type AppointmentShift = 'manha' | 'tarde' | 'dia_todo';
 export type AppointmentStatus = 'agendado' | 'confirmado' | 'cancelado' | 'realizado';
@@ -46,6 +47,7 @@ export const STATUS_COLORS: Record<AppointmentStatus, string> = {
 
 export function useAppointments(startDate?: string, endDate?: string) {
   const queryClient = useQueryClient();
+  const { storeId } = useStore();
 
   const appointmentsQuery = useQuery({
     queryKey: ['appointments', startDate, endDate],
@@ -69,7 +71,7 @@ export function useAppointments(startDate?: string, endDate?: string) {
     mutationFn: async (payload: CreateAppointmentPayload) => {
       const { data, error } = await supabase
         .from('appointments')
-        .insert(payload)
+        .insert({ ...payload, store_id: storeId! })
         .select()
         .single();
       if (error) throw error;

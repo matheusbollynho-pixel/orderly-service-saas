@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { ServiceOrder, ChecklistItem, OrderStatus, DEFAULT_CHECKLIST_ITEMS } from '@/types/service-order';
 import { toast } from 'sonner';
+import { useStore } from '@/contexts/StoreContext';
 
 const QR_PLACEHOLDER_EQUIPMENT = '__QR_WALKIN_PLACEHOLDER__';
 const FULL_QUERY_LIMIT = 200;
@@ -43,6 +44,7 @@ const SERVICE_ORDERS_BASE_COLUMNS = [
 
 export function useServiceOrders() {
   const queryClient = useQueryClient();
+  const { storeId } = useStore();
 
   // NOTA: Realtime sync está centralizado em useRealtimeSync para melhor performance
   // Removido daqui para evitar subscriptions duplicadas
@@ -171,6 +173,7 @@ export function useServiceOrders() {
       const { data: newOrder, error: orderError } = await supabase
         .from('service_orders')
         .insert({
+          store_id: storeId!,
           client_id: order.client_id ?? null,
           motorcycle_id: order.motorcycle_id ?? null,
           atendimento_id: order.atendimento_id ?? null,
@@ -198,6 +201,7 @@ export function useServiceOrders() {
       console.log('✅ OS criada:', newOrder);
 
       const checklistItems = DEFAULT_CHECKLIST_ITEMS.map(item => ({
+        store_id: storeId!,
         order_id: newOrder.id,
         label: typeof item === 'string' ? item : item.label,
         item_type: typeof item === 'string' ? 'checkbox' : item.type,
@@ -495,6 +499,7 @@ export function useServiceOrders() {
       const { data, error } = await supabase
         .from('payments')
         .insert({
+          store_id: storeId!,
           order_id: payload.order_id,
           amount: payload.amount,
           discount_amount: payload.discount_amount ?? 0,

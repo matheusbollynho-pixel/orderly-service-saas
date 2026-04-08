@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { sendWhatsAppText } from '@/lib/whatsappService';
+import { useStore } from '@/contexts/StoreContext';
 
 export interface FiadoItem {
   desc: string;
@@ -73,6 +74,7 @@ export type CreateFiadoInput = {
 export function useFiados() {
   const [fiados, setFiados] = useState<Fiado[]>([]);
   const [loading, setLoading] = useState(true);
+  const { storeId } = useStore();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -89,6 +91,7 @@ export function useFiados() {
   const createFiado = async (input: CreateFiadoInput) => {
     const { data, error } = await supabase.from('fiados').insert([{
       ...input,
+      store_id: storeId!,
       items: input.items,
       interest_rate_monthly: input.interest_rate_monthly ?? 2.0,
     }]).select('*, fiado_payments(*), fiado_messages(*)').single();
@@ -109,6 +112,7 @@ export function useFiados() {
 
   const addPayment = async (fiado_id: string, amount: number, method: string, received_by: string, notes?: string) => {
     const { error: pe } = await supabase.from('fiado_payments').insert([{
+      store_id: storeId!,
       fiado_id, amount, method, notes, received_by,
     }]);
     if (pe) { toast.error('Erro ao registrar pagamento'); return false; }
@@ -127,6 +131,7 @@ export function useFiados() {
     if (fiado.origin_type === 'os' && fiado.origin_id) {
       // Registra o valor parcial ou total pago na OS (trigger cria cash_flow)
       await supabase.from('payments').insert({
+        store_id: storeId!,
         order_id: fiado.origin_id,
         amount,
         discount_amount: 0,
@@ -146,6 +151,7 @@ export function useFiados() {
         await supabase.from('balcao_orders').update({ status: 'finalizada' }).eq('id', fiado.origin_id);
       }
       await supabase.from('cash_flow').insert([{
+        store_id: storeId!,
         type: 'entrada',
         description: `Fiado recebido - ${fiado.client_name || 'Cliente'}`,
         amount,
@@ -179,6 +185,7 @@ export function useFiados() {
           const newStock = (prod.stock_current || 0) + item.qty;
           await supabase.from('inventory_products').update({ stock_current: newStock, updated_at: new Date().toISOString() }).eq('id', item.inventory_product_id!);
           await supabase.from('inventory_movements').insert([{
+            store_id: storeId!,
             product_id: item.inventory_product_id!,
             type: 'entrada',
             quantity: item.qty,
@@ -209,7 +216,7 @@ export function useFiados() {
 
     const message = messages[level] || messages[1];
 
-    await supabase.from('fiado_messages').insert([{ fiado_id: fiado.id, level, message, status: 'sent' }]);
+    await supabase.from('fiado_messages').insert([{ store_id: storeId!, fiado_id: fiado.id, level, message, status: 'sent' }]);
     await supabase.from('fiados').update({ last_reminder_level: level, last_reminder_at: new Date().toISOString() }).eq('id', fiado.id);
 
     if (fiado.client_phone) {
