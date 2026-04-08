@@ -126,8 +126,9 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   const total = subtotal - discountAmount;
 
   // ── Salvar totais no servidor ─────────────────────────────────
-  const saveTotals = async (pct: number) => {
-    const sub = items.reduce((s, i) => s + i.unit_price * i.quantity, 0);
+  // overrideSub permite passar o subtotal já calculado antes da query ser invalidada
+  const saveTotals = async (pct: number, overrideSub?: number) => {
+    const sub = overrideSub ?? items.reduce((s, i) => s + i.unit_price * i.quantity, 0);
     const disc = sub * (pct / 100);
     await updateOrder({
       id: order.id,
@@ -328,6 +329,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     const qty = parseFloat(newQty) || 1;
     const price = parseFloat(newPrice) || 0;
 
+    let effectivePrice = price;
     if (selectedProduct) {
       const alreadyInCart = items.find(i => i.product_id === selectedProduct.id);
       const qtdNoCarrinho = alreadyInCart ? alreadyInCart.quantity : 0;
@@ -335,14 +337,15 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
         toast.error(`Estoque insuficiente (disponível: ${selectedProduct.stock_current - qtdNoCarrinho} ${selectedProduct.unit})`);
         return;
       }
+      effectivePrice = price || (selectedProduct.sale_price ?? selectedProduct.cost_price ?? 0);
       await addItem({
         order_id: order.id,
         type: 'estoque',
         product_id: selectedProduct.id,
         description: stripAccents(selectedProduct.name),
         quantity: qty,
-        unit_price: price || (selectedProduct.sale_price ?? selectedProduct.cost_price ?? 0),
-        total_price: (price || (selectedProduct.sale_price ?? 0)) * qty,
+        unit_price: effectivePrice,
+        total_price: effectivePrice * qty,
       });
     } else {
       await addItem({
@@ -360,7 +363,9 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     setNewQty('1');
     setNewPrice('');
     setSelectedProduct(null);
-    await saveTotals(discPct);
+    // Calcula subtotal incluindo o item recém adicionado (items ainda não foi atualizado)
+    const newSub = items.reduce((s, i) => s + i.unit_price * i.quantity, 0) + effectivePrice * qty;
+    await saveTotals(discPct, newSub);
   };
 
   const handleUpdateItem = async (itemId: string, field: 'quantity' | 'unit_price' | 'description', val: string) => {
@@ -368,23 +373,33 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     if (!item) return;
     if (field === 'quantity') {
       const qty = parseFloat(val) || 0;
-      if (qty <= 0) { await removeItem(itemId); await saveTotals(discPct); return; }
+      if (qty <= 0) {
+        await removeItem(itemId);
+        const sub = items.filter(i => i.id !== itemId).reduce((s, i) => s + i.unit_price * i.quantity, 0);
+        await saveTotals(discPct, sub);
+        return;
+      }
       if (item.type === 'estoque' && item.product_id) {
         const prod = products.find(p => p.id === item.product_id);
         if (prod && qty > prod.stock_current) { toast.error(`Estoque máximo: ${prod.stock_current} ${prod.unit}`); return; }
       }
       await updateItem({ id: itemId, quantity: qty });
+      const sub = items.reduce((s, i) => s + (i.id === itemId ? qty : i.quantity) * i.unit_price, 0);
+      await saveTotals(discPct, sub);
     } else if (field === 'unit_price') {
-      await updateItem({ id: itemId, unit_price: parseFloat(val) || 0 });
+      const newPrice = parseFloat(val) || 0;
+      await updateItem({ id: itemId, unit_price: newPrice });
+      const sub = items.reduce((s, i) => s + i.quantity * (i.id === itemId ? newPrice : i.unit_price), 0);
+      await saveTotals(discPct, sub);
     } else {
       await updateItem({ id: itemId, description: val });
     }
-    await saveTotals(discPct);
   };
 
   const handleRemoveItem = async (itemId: string) => {
     await removeItem(itemId);
-    await saveTotals(discPct);
+    const sub = items.filter(i => i.id !== itemId).reduce((s, i) => s + i.unit_price * i.quantity, 0);
+    await saveTotals(discPct, sub);
   };
 
   // ── Finalizar ─────────────────────────────────────────────────
