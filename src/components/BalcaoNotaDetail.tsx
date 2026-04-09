@@ -282,7 +282,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     // Deduz estoque dos itens tipo 'estoque'
     for (const item of items) {
       if (item.type === 'estoque' && item.product_id) {
-        await supabase.from('inventory_movements').insert({
+        const { error: movErr } = await supabase.from('inventory_movements').insert({
           store_id: storeId!,
           product_id: item.product_id,
           type: 'saida_balcao',
@@ -291,6 +291,10 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
           notes: `Fiado Balcão #${order.id.slice(0, 8)}${order.client_name ? ` - ${order.client_name}` : ''}`,
           balcao_order_id: order.id,
         });
+        if (movErr) {
+          console.error('Erro ao deduzir estoque (fiado):', movErr);
+          toast.error(`Erro ao deduzir estoque: ${movErr.message}`);
+        }
       }
     }
 
