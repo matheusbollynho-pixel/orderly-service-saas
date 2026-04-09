@@ -5,9 +5,13 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 )
 
+const ASAAS_API_KEY = Deno.env.get('ASAAS_API_KEY')!
+const ASAAS_WEBHOOK_TOKEN = Deno.env.get('ASAAS_WEBHOOK_TOKEN')!
+const ASAAS_API_URL = 'https://api.asaas.com/v3'
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, asaas-access-token',
 }
 
 function json(data: unknown, status = 200) {
@@ -25,6 +29,165 @@ function toISODate(): string {
   return new Date().toISOString().split('T')[0]
 }
 
+function planFromRef(ref: string): string | null {
+  if (!ref) return null
+  const r = ref.toLowerCase()
+  if (r.includes('basico') || r.includes('básico') || r.includes('basic')) return 'basico'
+  if (r.includes('profissional') || r.includes('pro')) return 'profissional'
+  if (r.includes('premium') || r.includes('enterprise')) return 'premium'
+  return null
+}
+
+function planFromValue(value: number): string {
+  if (value <= 90) return 'basico'
+  if (value <= 160) return 'profissional'
+  return 'premium'
+}
+
+// ── Buscar dados do cliente no Asaas ─────────────────────────────────────────
+async function fetchAsaasCustomer(customerId: string) {
+  const res = await fetch(`${ASAAS_API_URL}/customers/${customerId}`, {
+    headers: { 'access_token': ASAAS_API_KEY },
+  })
+  if (!res.ok) return null
+  return await res.json()
+}
+
+// ── Provisionar novo cliente SaaS ─────────────────────────────────────────────
+async function provisionarCliente(payment: Record<string, unknown>) {
+  const asaasPaymentId = payment.id as string
+  const asaasCustomerId = payment.customer as string
+  const valor = parseFloat(String(payment.value || '0'))
+  const externalRef = (payment.externalReference as string) || ''
+  const subscriptionId = (payment.subscription as string) || null
+
+  // Determina o plano
+  const plan = planFromRef(externalRef) || planFromValue(valor)
+
+  console.log(`Provisionando: asaas_payment=${asaasPaymentId} customer=${asaasCustomerId} plan=${plan} valor=${valor}`)
+
+  // Evita duplicata — verifica se já existe store com esse asaas_customer_id
+  const { data: existingStore } = await supabase
+    .from('store_settings')
+    .select('id, owner_email')
+    .eq('asaas_customer_id', asaasCustomerId)
+    .maybeSingle()
+
+  if (existingStore) {
+    // Cliente já existe — atualiza plano e registra renovação
+    console.log(`Cliente já existe (${existingStore.id}) — registrando renovação`)
+    await supabase.from('store_settings')
+      .update({ plan, active: true, updated_at: new Date().toISOString() })
+      .eq('id', existingStore.id)
+
+    await supabase.from('saas_subscriptions').insert({
+      store_id: existingStore.id,
+      asaas_payment_id: asaasPaymentId,
+      asaas_customer_id: asaasCustomerId,
+      plan,
+      status: 'active',
+      owner_email: existingStore.owner_email,
+      owner_name: existingStore.owner_email,
+      amount: valor,
+      paid_at: new Date().toISOString(),
+    })
+
+    return { ok: true, action: 'renovacao', store_id: existingStore.id, plan }
+  }
+
+  // Cliente novo — buscar dados no Asaas
+  const customer = await fetchAsaasCustomer(asaasCustomerId)
+  if (!customer) {
+    throw new Error(`Cliente Asaas não encontrado: ${asaasCustomerId}`)
+  }
+
+  const ownerEmail = customer.email as string
+  const ownerName = (customer.company || customer.name) as string
+  const ownerPhone = (customer.mobilePhone || customer.phone || '') as string
+  const companyName = (customer.company || customer.name) as string
+
+  if (!ownerEmail) {
+    throw new Error(`Cliente ${asaasCustomerId} não tem email cadastrado no Asaas`)
+  }
+
+  console.log(`Novo cliente: ${ownerName} <${ownerEmail}> plano=${plan}`)
+
+  // Criar store em store_settings
+  const subdomain = ownerEmail.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '') + Date.now().toString().slice(-4)
+
+  const { data: newStore, error: storeErr } = await supabase
+    .from('store_settings')
+    .insert({
+      company_name: companyName,
+      owner_email: ownerEmail,
+      store_phone: ownerPhone,
+      subdomain,
+      plan,
+      active: true,
+      asaas_customer_id: asaasCustomerId,
+    })
+    .select('id')
+    .single()
+
+  if (storeErr || !newStore) {
+    throw new Error(`Erro ao criar store: ${storeErr?.message}`)
+  }
+
+  const storeId = newStore.id
+  console.log(`Store criada: ${storeId}`)
+
+  // Criar usuário no Supabase Auth e enviar convite
+  const { data: inviteData, error: inviteErr } = await supabase.auth.admin.inviteUserByEmail(ownerEmail, {
+    data: { store_id: storeId, plan, company_name: companyName },
+    redirectTo: `https://speedseekos-demo.vercel.app/`,
+  })
+
+  if (inviteErr) {
+    console.error(`Erro ao convidar usuário: ${inviteErr.message}`)
+    // Não lança erro — store já foi criada, pode reenviar depois
+  } else {
+    const userId = inviteData?.user?.id
+    console.log(`Usuário convidado: ${userId}`)
+
+    if (userId) {
+      // Criar store_member
+      const { error: memberErr } = await supabase.from('store_members').insert({
+        store_id: storeId,
+        user_id: userId,
+        role: 'owner',
+        active: true,
+      })
+      if (memberErr) console.error(`Erro ao criar store_member: ${memberErr.message}`)
+    }
+  }
+
+  // Registrar na saas_subscriptions
+  await supabase.from('saas_subscriptions').insert({
+    store_id: storeId,
+    asaas_payment_id: asaasPaymentId,
+    asaas_customer_id: asaasCustomerId,
+    plan,
+    status: 'active',
+    owner_name: ownerName,
+    owner_email: ownerEmail,
+    owner_phone: ownerPhone,
+    company_name: companyName,
+    amount: valor,
+    paid_at: new Date().toISOString(),
+  })
+
+  // Notificar dono (você) via WhatsApp
+  const donoPhone = Deno.env.get('DONO_PHONE')
+  if (donoPhone) {
+    const msg = `🎉 *Novo cliente SpeedSeekOS!*\n\n👤 ${ownerName}\n📧 ${ownerEmail}\n📱 ${ownerPhone}\n💼 Plano: ${plan.toUpperCase()}\n💰 R$ ${valor.toFixed(2)}\n\n✅ Conta criada automaticamente. Email de acesso enviado!`
+    await supabase.functions.invoke('enviar-documento-whatsapp', {
+      body: { phone: donoPhone, text: msg, type: 'text' },
+    }).catch(() => null)
+  }
+
+  return { ok: true, action: 'novo_cliente', store_id: storeId, plan, email: ownerEmail }
+}
+
 // ── Nota de Balcão ─────────────────────────────────────────────────────────
 async function finalizarBalcao(orderId: string, valor: number, metodo: string, asaasPaymentId: string) {
   const { data: order, error: fetchErr } = await supabase
@@ -37,7 +200,6 @@ async function finalizarBalcao(orderId: string, valor: number, metodo: string, a
   if (!order) return { skipped: true, reason: 'Nota de balcão não encontrada' }
   if (order.status === 'finalizada') return { skipped: true, reason: 'Nota já finalizada' }
 
-  // Evita duplicata: verifica se esse pagamento Asaas já foi registrado
   const { data: existingCf } = await supabase
     .from('cash_flow')
     .select('id')
@@ -50,18 +212,15 @@ async function finalizarBalcao(orderId: string, valor: number, metodo: string, a
   const items: { type: string; product_id: string | null; quantity: number; unit_price: number; description: string }[]
     = order.balcao_items ?? []
 
-  // ── Calcular total efetivo da nota (com desconto) ──────────────────────
   const subtotal = items.reduce((s, i) => s + i.unit_price * i.quantity, 0)
   const effectiveTotal = order.discount_pct > 0
     ? subtotal * (1 - order.discount_pct / 100)
     : subtotal
 
-  // ── Pagamentos manuais já registrados na nota (payment_methods JSON) ───
   const manualPayments: { method: string; amount: number }[] =
     Array.isArray(order.payment_methods) ? order.payment_methods : []
   const totalManual = manualPayments.reduce((s, p) => s + (p.amount || 0), 0)
 
-  // ── Pagamentos Asaas anteriores já no cash_flow ────────────────────────
   const { data: cfPrev } = await supabase
     .from('cash_flow')
     .select('amount')
@@ -70,13 +229,11 @@ async function finalizarBalcao(orderId: string, valor: number, metodo: string, a
 
   const totalPaidAfter = totalManual + totalCfPrev + valor
 
-  console.log(`Balcão ${orderId.slice(0, 8)}: total=${effectiveTotal.toFixed(2)} manual=${totalManual.toFixed(2)} cf_prev=${totalCfPrev.toFixed(2)} asaas=${valor.toFixed(2)} soma=${totalPaidAfter.toFixed(2)}`)
-
-  // ── Registra pagamento no caixa ────────────────────────────────────────
   const itemsSummary = items.map(i => `${i.quantity}x ${i.description}`).join(', ')
   const description = `Nota Balcão${order.client_name ? ` - ${order.client_name}` : ''}: ${itemsSummary}`
 
   const { error: cfErr } = await supabase.from('cash_flow').insert({
+    store_id: order.store_id,
     type: 'entrada',
     amount: valor,
     description,
@@ -88,23 +245,22 @@ async function finalizarBalcao(orderId: string, valor: number, metodo: string, a
   })
   if (cfErr) throw cfErr
 
-  // ── Finaliza só se o total pago cobre o valor da nota ─────────────────
   if (totalPaidAfter < effectiveTotal - 0.01) {
-    return { ok: true, order_id: orderId, amount: valor, method: metodo, status: 'parcial', faltam: effectiveTotal - totalPaidAfter }
+    return { ok: true, order_id: orderId, amount: valor, method: metodo, status: 'parcial' }
   }
 
-  // Movimentações de estoque
   let firstMovId: string | null = null
   for (const item of items) {
     if (item.type === 'estoque' && item.product_id) {
       const { data: mov, error: movErr } = await supabase
         .from('inventory_movements')
         .insert({
+          store_id: order.store_id,
           product_id: item.product_id,
           type: 'saida_balcao',
           quantity: item.quantity,
           unit_price: item.unit_price,
-          notes: `Nota Balcão #${orderId.slice(0, 8)}${order.client_name ? ` - ${order.client_name}` : ''} (Asaas)`,
+          notes: `Nota Balcão #${orderId.slice(0, 8)} (Asaas)`,
           balcao_order_id: orderId,
         })
         .select()
@@ -114,22 +270,17 @@ async function finalizarBalcao(orderId: string, valor: number, metodo: string, a
     }
   }
 
-  // Atualiza inventory_movement_id no primeiro cash_flow desta nota
   if (firstMovId) {
-    await supabase
-      .from('cash_flow')
+    await supabase.from('cash_flow')
       .update({ inventory_movement_id: firstMovId })
       .eq('balcao_order_id', orderId)
       .is('inventory_movement_id', null)
       .limit(1)
   }
 
-  // Finaliza a nota
-  const { error: updErr } = await supabase
-    .from('balcao_orders')
+  await supabase.from('balcao_orders')
     .update({ status: 'finalizada', finalized_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq('id', orderId)
-  if (updErr) throw updErr
 
   return { ok: true, order_id: orderId, amount: valor, method: metodo, status: 'finalizada' }
 }
@@ -138,14 +289,13 @@ async function finalizarBalcao(orderId: string, valor: number, metodo: string, a
 async function finalizarOS(orderId: string, valor: number, metodo: string, asaasPaymentId: string) {
   const { data: order, error: fetchErr } = await supabase
     .from('service_orders')
-    .select('id, status, client_name, equipment')
+    .select('id, status, client_name, equipment, store_id')
     .eq('id', orderId)
     .maybeSingle()
 
   if (fetchErr) throw fetchErr
   if (!order) return { skipped: true, reason: 'OS não encontrada' }
 
-  // Evita duplicata
   const { data: existing } = await supabase
     .from('payments')
     .select('id')
@@ -155,8 +305,8 @@ async function finalizarOS(orderId: string, valor: number, metodo: string, asaas
 
   if (existing) return { skipped: true, reason: 'Pagamento já registrado' }
 
-  // Registra pagamento (trigger do banco cria o cash_flow automaticamente)
   const { error: payErr } = await supabase.from('payments').insert({
+    store_id: order.store_id,
     order_id: orderId,
     amount: valor,
     discount_amount: 0,
@@ -166,7 +316,6 @@ async function finalizarOS(orderId: string, valor: number, metodo: string, asaas
   })
   if (payErr) throw payErr
 
-  // Calcula total da OS e total pago
   const { data: materials } = await supabase
     .from('materials')
     .select('valor, quantidade')
@@ -180,25 +329,21 @@ async function finalizarOS(orderId: string, valor: number, metodo: string, asaas
   const totalOS = (materials || []).reduce((s, m) => s + ((m.valor || 0) * (parseFloat(m.quantidade) || 0)), 0)
   const totalPaid = (payments || []).reduce((s, p) => s + (p.amount || 0) + (p.discount_amount || 0), 0)
 
-  console.log(`OS ${orderId.slice(0, 8)}: total=${totalOS.toFixed(2)} pago=${totalPaid.toFixed(2)}`)
-
-  // Finaliza só se cobre o total
   if (totalPaid >= totalOS - 0.01 && totalOS > 0 && order.status !== 'concluida_entregue') {
-    await supabase
-      .from('service_orders')
+    await supabase.from('service_orders')
       .update({ status: 'concluida_entregue', exit_date: new Date().toISOString() })
       .eq('id', orderId)
     return { ok: true, order_id: orderId, amount: valor, method: metodo, status: 'concluida_entregue' }
   }
 
-  return { ok: true, order_id: orderId, amount: valor, method: metodo, status: 'parcial', faltam: totalOS - totalPaid }
+  return { ok: true, order_id: orderId, amount: valor, method: metodo, status: 'parcial' }
 }
 
 // ── Fiado ───────────────────────────────────────────────────────────────────
 async function finalizarFiado(fiadoId: string, valor: number, metodo: string, asaasPaymentId: string) {
   const { data: fiado, error: fetchErr } = await supabase
     .from('fiados')
-    .select('id, client_name, amount_paid, original_amount, interest_accrued, status, origin_type, origin_id')
+    .select('id, client_name, amount_paid, original_amount, interest_accrued, status, origin_type, origin_id, store_id')
     .eq('id', fiadoId)
     .maybeSingle()
 
@@ -206,7 +351,6 @@ async function finalizarFiado(fiadoId: string, valor: number, metodo: string, as
   if (!fiado) return { skipped: true, reason: 'Fiado não encontrado' }
   if (fiado.status === 'pago') return { skipped: true, reason: 'Fiado já quitado' }
 
-  // Evita duplicata
   const { data: existing } = await supabase
     .from('fiado_payments')
     .select('id')
@@ -215,8 +359,8 @@ async function finalizarFiado(fiadoId: string, valor: number, metodo: string, as
     .maybeSingle()
   if (existing) return { skipped: true, reason: 'Pagamento Asaas já registrado' }
 
-  // Registra o pagamento
   await supabase.from('fiado_payments').insert({
+    store_id: fiado.store_id,
     fiado_id: fiadoId,
     amount: valor,
     method: metodo,
@@ -224,7 +368,6 @@ async function finalizarFiado(fiadoId: string, valor: number, metodo: string, as
     received_by: 'Asaas',
   })
 
-  // Atualiza saldo e status
   const newAmountPaid = (fiado.amount_paid || 0) + valor
   const totalOwed = (fiado.original_amount || 0) + (fiado.interest_accrued || 0)
   const newStatus = newAmountPaid >= totalOwed ? 'pago' : 'parcial'
@@ -235,13 +378,12 @@ async function finalizarFiado(fiadoId: string, valor: number, metodo: string, as
     updated_at: new Date().toISOString(),
   }).eq('id', fiadoId)
 
-  // Se quitado, finaliza nota de balcão (OS já foi marcada como entregue na criação do fiado)
   if (newStatus === 'pago' && fiado.origin_id && fiado.origin_type === 'balcao') {
     await supabase.from('balcao_orders').update({ status: 'finalizada' }).eq('id', fiado.origin_id)
   }
 
-  // Lança no caixa
   await supabase.from('cash_flow').insert({
+    store_id: fiado.store_id,
     type: 'entrada',
     description: `Fiado recebido - ${fiado.client_name || 'Cliente'}`,
     amount: valor,
@@ -250,7 +392,6 @@ async function finalizarFiado(fiadoId: string, valor: number, metodo: string, as
     notes: `Pago via Asaas (${asaasPaymentId})`,
   })
 
-  console.log(`Fiado ${fiadoId.slice(0, 8)}: pago R$${valor} status=${newStatus}`)
   return { ok: true, fiado_id: fiadoId, amount: valor, method: metodo, status: newStatus }
 }
 
@@ -259,9 +400,16 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
+    // Verificar token de autenticação do Asaas
+    const webhookToken = req.headers.get('asaas-access-token')
+    if (ASAAS_WEBHOOK_TOKEN && webhookToken !== ASAAS_WEBHOOK_TOKEN) {
+      console.warn('Token inválido:', webhookToken)
+      return json({ error: 'Unauthorized' }, 401)
+    }
+
     const body = await req.json()
-    const event = body?.event
-    const payment = body?.payment
+    const event = body?.event as string
+    const payment = body?.payment as Record<string, unknown>
 
     console.log('asaas-webhook event:', event, 'ref:', payment?.externalReference, 'id:', payment?.id)
 
@@ -269,14 +417,34 @@ Deno.serve(async (req) => {
       return json({ skipped: true, event })
     }
 
-    const orderId = payment?.externalReference
-    if (!orderId) return json({ skipped: true, reason: 'Sem externalReference' })
+    const externalRef = (payment?.externalReference as string) || ''
+    const valor = parseFloat(String(payment?.value || '0'))
+    const metodo = mapBillingType((payment?.billingType as string) || '')
+    const asaasPaymentId: string = (payment?.id as string) || ''
 
-    const valor = parseFloat(payment?.value || '0')
-    const metodo = mapBillingType(payment?.billingType || '')
-    const asaasPaymentId: string = payment?.id || ''
+    // ── Detectar se é provisionamento SaaS ─────────────────────────────────
+    // Referências de planos SaaS: "basico", "profissional", "premium" (e variações)
+    // Referências internas de OS/Balcão/Fiado: UUIDs ou "fiado-{uuid}"
+    const isSaasRef = planFromRef(externalRef) !== null
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(externalRef)
+    const isFiado = externalRef.startsWith('fiado-')
 
-    // Tenta OS primeiro
+    if (!isUUID && !isFiado && (isSaasRef || !externalRef)) {
+      // É pagamento de assinatura SaaS
+      const result = await provisionarCliente(payment)
+      return json(result)
+    }
+
+    // ── Pagamento interno (OS / Balcão / Fiado) ─────────────────────────────
+    const orderId = externalRef
+
+    if (isFiado) {
+      const fiadoId = orderId.replace('fiado-', '')
+      const result = await finalizarFiado(fiadoId, valor, metodo, asaasPaymentId)
+      return json(result)
+    }
+
+    // Tenta OS
     const { data: os } = await supabase
       .from('service_orders')
       .select('id')
@@ -300,14 +468,7 @@ Deno.serve(async (req) => {
       return json(result)
     }
 
-    // Tenta fiado (externalReference = "fiado-{uuid}")
-    if (orderId.startsWith('fiado-')) {
-      const fiadoId = orderId.replace('fiado-', '')
-      const result = await finalizarFiado(fiadoId, valor, metodo, asaasPaymentId)
-      return json(result)
-    }
-
-    return json({ skipped: true, reason: 'Pedido não encontrado em OS, Balcão nem Fiado' })
+    return json({ skipped: true, reason: 'Referência não reconhecida', externalRef })
 
   } catch (err) {
     console.error('asaas-webhook error:', err)
