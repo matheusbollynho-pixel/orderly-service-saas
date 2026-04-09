@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { sendWhatsAppText, normalizeBrPhone } from '../_shared/whatsapp.ts'
+import { sendWhatsAppText, normalizeBrPhone, type StoreWhatsAppConfig } from '../_shared/whatsapp.ts'
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -70,7 +70,12 @@ REGRAS:
   }
 }
 
-async function processarLoja(store: { id: string; company_name: string; whatsapp_birthday_template: string | null }) {
+async function processarLoja(store: { id: string; company_name: string; whatsapp_birthday_template: string | null; whatsapp_provider: string | null; whatsapp_instance_url: string | null; whatsapp_instance_token: string | null }) {
+  const wppConfig: StoreWhatsAppConfig = {
+    provider: store.whatsapp_provider || undefined,
+    instance_url: store.whatsapp_instance_url || undefined,
+    instance_token: store.whatsapp_instance_token || undefined,
+  }
   const today = new Date()
   const month = String(today.getMonth() + 1).padStart(2, '0')
   const day = String(today.getDate()).padStart(2, '0')
@@ -125,7 +130,7 @@ async function processarLoja(store: { id: string; company_name: string; whatsapp
       const apelido = cliente?.apelido || person.client_name.split(' ')[0]
       const message = await personalizarMensagem(template, company_name, person.client_name, apelido, motos, null)
 
-      await sendWhatsAppText(normalizeBrPhone(person.client_phone), message)
+      await sendWhatsAppText(normalizeBrPhone(person.client_phone), message, wppConfig)
 
       const now = new Date()
       await supabase.from('birthday_discounts').insert({
@@ -154,7 +159,7 @@ Deno.serve(async (_req) => {
 
     const { data: stores, error } = await supabase
       .from('store_settings')
-      .select('id, company_name, whatsapp_birthday_template')
+      .select('id, company_name, whatsapp_birthday_template, whatsapp_provider, whatsapp_instance_url, whatsapp_instance_token')
       .eq('active', true)
 
     if (error) throw error

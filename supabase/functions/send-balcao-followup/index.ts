@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { sendWhatsAppText, normalizeBrPhone } from '../_shared/whatsapp.ts'
+import { sendWhatsAppText, normalizeBrPhone, type StoreWhatsAppConfig } from '../_shared/whatsapp.ts'
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -26,7 +26,12 @@ function buildFollowUpMessage(clientName: string | null, numero: number, avaliac
     .replace(/\{\{atendente\}\}/g, atendente)
 }
 
-async function processarLoja(store: { id: string; company_name: string; whatsapp_balcao_followup_template: string | null }) {
+async function processarLoja(store: { id: string; company_name: string; whatsapp_balcao_followup_template: string | null; whatsapp_provider: string | null; whatsapp_instance_url: string | null; whatsapp_instance_token: string | null }) {
+  const wppConfig: StoreWhatsAppConfig = {
+    provider: store.whatsapp_provider || undefined,
+    instance_url: store.whatsapp_instance_url || undefined,
+    instance_token: store.whatsapp_instance_token || undefined,
+  }
   const company_name = store.company_name || 'Minha Oficina'
   const template = store.whatsapp_balcao_followup_template ||
     'Olá{{nome}}! 👋\n\nAqui é da *{{empresa}}*.\n\nPassando para saber se tudo ficou certinho com seu atendimento da nota *#{{numero}}*. Ficou alguma dúvida ou podemos ajudar em algo? 😊\n\nSe quiser, deixa sua avaliação — leva menos de 1 minuto e nos ajuda muito! ⭐\n\n{{link}}\n\nAtt, {{atendente}} 🏍️🔧'
@@ -53,7 +58,7 @@ async function processarLoja(store: { id: string; company_name: string; whatsapp
       const atendenteName = (order.staff_members as { name?: string } | null)?.name ?? null
       const message = buildFollowUpMessage(order.client_name, order.numero, avaliacaoUrl, atendenteName, company_name, template)
 
-      await sendWhatsAppText(phone, message)
+      await sendWhatsAppText(phone, message, wppConfig)
       await supabase.from('balcao_orders')
         .update({ follow_up_sent_at: new Date().toISOString() })
         .eq('id', order.id)
@@ -74,7 +79,7 @@ Deno.serve(async (req) => {
   try {
     const { data: stores, error } = await supabase
       .from('store_settings')
-      .select('id, company_name, whatsapp_balcao_followup_template')
+      .select('id, company_name, whatsapp_balcao_followup_template, whatsapp_provider, whatsapp_instance_url, whatsapp_instance_token')
       .eq('active', true)
 
     if (error) throw error

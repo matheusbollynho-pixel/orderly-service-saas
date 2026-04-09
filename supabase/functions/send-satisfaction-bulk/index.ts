@@ -5,7 +5,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { sendWhatsAppText, normalizeBrPhone } from '../_shared/whatsapp.ts'
+import { sendWhatsAppText, normalizeBrPhone, type StoreWhatsAppConfig } from '../_shared/whatsapp.ts'
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -38,9 +38,14 @@ function phoneValido(phone: string): boolean {
 }
 
 async function processarLoja(
-  store: { id: string; company_name: string; whatsapp_satisfaction_template: string | null },
+  store: { id: string; company_name: string; whatsapp_satisfaction_template: string | null; whatsapp_provider: string | null; whatsapp_instance_url: string | null; whatsapp_instance_token: string | null },
   force: boolean
 ): Promise<{ store_id: string; enviados: number; erros: number }> {
+  const wppConfig: StoreWhatsAppConfig = {
+    provider: store.whatsapp_provider || undefined,
+    instance_url: store.whatsapp_instance_url || undefined,
+    instance_token: store.whatsapp_instance_token || undefined,
+  }
   const company = store.company_name || 'Minha Oficina'
   const template = store.whatsapp_satisfaction_template ||
     'Olá, {{nome}}! 👋\n\nAqui é da *{{empresa}}*.\n\nSua opinião é muito importante para melhorarmos sempre.\nPode avaliar seu atendimento em menos de 1 minuto? ⭐\n\n{{link}}\n\nObrigado pela confiança! 🏍️🔧'
@@ -102,7 +107,7 @@ async function processarLoja(
       const message = buildMessage(order.client_name, link, company, template)
       const phone = normalizeBrPhone(order.client_phone.replace(/\D/g, ''))
 
-      await sendWhatsAppText(phone, message)
+      await sendWhatsAppText(phone, message, wppConfig)
 
       await supabase.from('service_orders')
         .update({ satisfaction_survey_sent_at: new Date().toISOString() })
@@ -130,7 +135,7 @@ Deno.serve(async (req) => {
 
     const { data: stores, error } = await supabase
       .from('store_settings')
-      .select('id, company_name, whatsapp_satisfaction_template')
+      .select('id, company_name, whatsapp_satisfaction_template, whatsapp_provider, whatsapp_instance_url, whatsapp_instance_token')
       .eq('active', true)
 
     if (error) throw error

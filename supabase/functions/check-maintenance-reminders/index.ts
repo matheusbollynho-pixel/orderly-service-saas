@@ -1,12 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.0";
-import { sendWhatsAppText } from "../_shared/whatsapp.ts";
+import { sendWhatsAppText, type StoreWhatsAppConfig } from "../_shared/whatsapp.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 );
 
-async function processarLoja(storeId: string, companyName: string) {
+async function processarLoja(storeId: string, companyName: string, wppConfig: StoreWhatsAppConfig) {
   const { data: dueReminders, error } = await supabase
     .from("maintenance_reminders")
     .select(`
@@ -50,7 +50,7 @@ async function processarLoja(storeId: string, companyName: string) {
         .replace("{days}", String(daysAgo))
         .replace("{keyword}", reminder.keyword?.keyword || "serviço");
 
-      await sendWhatsAppText(fullPhone, message);
+      await sendWhatsAppText(fullPhone, message, wppConfig);
 
       await supabase.from("maintenance_reminders")
         .update({ reminder_sent_at: new Date().toISOString() })
@@ -73,14 +73,19 @@ Deno.serve(async (req) => {
   try {
     const { data: stores, error } = await supabase
       .from("store_settings")
-      .select("id, company_name")
+      .select("id, company_name, whatsapp_provider, whatsapp_instance_url, whatsapp_instance_token")
       .eq("active", true);
 
     if (error) throw error;
 
     const results = [];
     for (const store of stores || []) {
-      const result = await processarLoja(store.id, store.company_name || "Oficina");
+      const wppConfig: StoreWhatsAppConfig = {
+        provider: store.whatsapp_provider || undefined,
+        instance_url: store.whatsapp_instance_url || undefined,
+        instance_token: store.whatsapp_instance_token || undefined,
+      };
+      const result = await processarLoja(store.id, store.company_name || "Oficina", wppConfig);
       results.push(result);
     }
 
