@@ -279,6 +279,21 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     setFiadoLoading(false);
     if (error) { toast.error('Erro ao registrar fiado'); return; }
 
+    // Deduz estoque dos itens tipo 'estoque'
+    for (const item of items) {
+      if (item.type === 'estoque' && item.product_id) {
+        await supabase.from('inventory_movements').insert({
+          store_id: storeId!,
+          product_id: item.product_id,
+          type: 'saida_balcao',
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          notes: `Fiado Balcão #${order.id.slice(0, 8)}${order.client_name ? ` - ${order.client_name}` : ''}`,
+          balcao_order_id: order.id,
+        });
+      }
+    }
+
     // Marca a nota de balcão como 'fiado' e invalida o cache
     await updateOrder({ id: order.id, status: 'fiado' as const });
 
