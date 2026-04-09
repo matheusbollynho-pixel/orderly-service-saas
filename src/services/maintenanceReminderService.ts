@@ -132,10 +132,12 @@ export async function createMaintenanceReminder(
     const reminderDueDate = new Date(serviceDate);
     reminderDueDate.setDate(reminderDueDate.getDate() + keyword.reminder_days);
 
+    if (!storeId) throw new Error('store_id não disponível. Recarregue a página.');
+
     const { data, error } = await sb
       .from('maintenance_reminders')
       .insert({
-        ...(storeId ? { store_id: storeId } : {}),
+        store_id: storeId,
         order_id: orderId,
         client_id: clientId,
         keyword_id: keywordId,

@@ -106,6 +106,7 @@ export function useCashFlow(selectedDate?: string) {
   // Criar entrada manual
   const createEntryMutation = useMutation({
     mutationFn: async (entry: Omit<CashFlow, 'id' | 'created_at' | 'created_by'>) => {
+      if (!storeId) throw new Error('Loja não carregada. Recarregue a página.');
       const dateToInsert = getLocalDate();
       console.log('💾 Preparando para salvar:', {
         dateReceived: entry.date,
@@ -117,7 +118,7 @@ export function useCashFlow(selectedDate?: string) {
       });
 
       const insertPayload = {
-        store_id: storeId!,
+        store_id: storeId,
         type: entry.type,
         amount: entry.amount,
         description: entry.description,
