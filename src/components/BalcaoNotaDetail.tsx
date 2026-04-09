@@ -279,8 +279,14 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     setFiadoLoading(false);
     if (error) { toast.error('Erro ao registrar fiado'); return; }
 
+    // Busca os itens frescos do banco para garantir type e product_id corretos
+    const { data: freshItems } = await supabase
+      .from('balcao_items')
+      .select('*')
+      .eq('order_id', order.id);
+
     // Deduz estoque dos itens tipo 'estoque'
-    for (const item of items) {
+    for (const item of (freshItems ?? items)) {
       if (item.type === 'estoque' && item.product_id) {
         const { error: movErr } = await supabase.from('inventory_movements').insert({
           store_id: storeId!,
