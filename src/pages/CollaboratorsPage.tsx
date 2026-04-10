@@ -142,7 +142,7 @@ export default function CollaboratorsPage() {
             <UserPlus className="h-4 w-4" /> Convidar colaborador
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
           <form onSubmit={handleInvite} className="flex gap-2">
             <Input
               type="email"
@@ -156,6 +156,9 @@ export default function CollaboratorsPage() {
               {inviting ? 'Enviando...' : 'Convidar'}
             </Button>
           </form>
+          <p className="text-xs text-yellow-500">
+            Avise o colaborador para verificar a pasta de <strong>spam</strong> caso o email não chegue na caixa de entrada.
+          </p>
         </CardContent>
       </Card>
 
