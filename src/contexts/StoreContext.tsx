@@ -53,7 +53,6 @@ export function StoreProvider({ user, children }: { user: User | null; children:
       .maybeSingle()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .then(({ data, error }: { data: any; error: unknown }) => {
-        console.log('StoreContext data:', data, 'error:', error);
         if (error) console.error('StoreContext error:', error);
         if (data) {
           setStoreId(data.store_id);
