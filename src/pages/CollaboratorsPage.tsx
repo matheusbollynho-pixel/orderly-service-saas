@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useStore } from '@/contexts/StoreContext';
-import { useAuth, type MemberPermissions } from '@/hooks/useAuth';
+import type { MemberPermissions } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -44,8 +44,7 @@ const DEFAULT_PERMISSIONS: MemberPermissions = {
 };
 
 export default function CollaboratorsPage() {
-  const { storeId } = useStore();
-  const { isOwner } = useAuth();
+  const { storeId, isOwner } = useStore();
   const queryClient = useQueryClient();
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviting, setInviting] = useState(false);

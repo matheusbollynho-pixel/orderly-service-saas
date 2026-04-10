@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { VEHICLE_CAP, VEHICLES_CAP } from '@/lib/vehicleLabel';
 import { useServiceOrders } from '@/hooks/useServiceOrders';
 import { useAuth } from '@/hooks/useAuth';
+import { useStore } from '@/contexts/StoreContext';
 import { MaintenanceKeywordsManager } from '@/components/MaintenanceKeywordsManager';
 import { useStoreSettings, StoreSettings } from '@/hooks/useStoreSettings';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -68,7 +69,9 @@ const MESSAGE_CONFIGS: MessageConfig[] = [
 ];
 
 export default function ConfigToolsPage() {
-  const { user, isRestrictedUser, isOwner } = useAuth();
+  const { user } = useAuth();
+  const { isOwner, role } = useStore();
+  const isRestrictedUser = !!user && role !== null && role !== 'owner';
   const navigate = useNavigate();
   const [showKeywords, setShowKeywords] = useState(false);
   const [removeOsId, setRemoveOsId] = useState('');

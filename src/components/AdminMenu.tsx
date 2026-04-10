@@ -6,9 +6,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { Settings, Trash2, MessageCircle, Clock, Zap, Send, RotateCcw } from 'lucide-react';
 import { MaintenanceKeywordsManager } from './MaintenanceKeywordsManager';
 import { useAuth } from '@/hooks/useAuth';
+import { useStore } from '@/contexts/StoreContext';
 
 export const AdminMenu = () => {
-  const { user, isRestrictedUser } = useAuth();
+  const { user } = useAuth();
+  const { isOwner } = useStore();
+  const isRestrictedUser = !!user && !isOwner;
   const [isOpen, setIsOpen] = useState(false);
   const [cleanupDays, setCleanupDays] = useState(100);
   const [isLoading, setIsLoading] = useState(false);

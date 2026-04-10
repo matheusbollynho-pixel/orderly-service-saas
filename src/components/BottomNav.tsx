@@ -1,6 +1,7 @@
 import { LayoutDashboard, Plus, ClipboardList, ChartBar, Users, LogOut, Heart, Wallet, Bolt, Circle, Star, Package, ShoppingCart, Gauge, CalendarDays, FileText, HandCoins } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
+import { useStore } from '@/contexts/StoreContext';
 import { toast } from 'sonner';
 
 type View = 'dashboard' | 'new' | 'express' | 'orders' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa' | 'satisfacao' | 'estoque' | 'balcao' | 'quadro' | 'agenda' | 'boletos' | 'fiados';
@@ -12,7 +13,8 @@ interface BottomNavProps {
 }
 
 export function BottomNav({ activeView, onViewChange, isAdmin }: BottomNavProps) {
-  const { signOut, permissions } = useAuth();
+  const { signOut } = useAuth();
+  const { permissions } = useStore();
 
   const handleLogout = async () => {
     await signOut();
