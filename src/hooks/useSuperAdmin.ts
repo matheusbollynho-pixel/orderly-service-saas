@@ -3,12 +3,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
 export function useSuperAdmin() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    if (!user) { setIsSuperAdmin(false); setLoading(false); return; }
+    if (authLoading) return; // aguarda auth terminar
+    if (!user) { setIsSuperAdmin(false); setChecking(false); return; }
     supabase
       .from('super_admins' as never)
       .select('user_id')
@@ -16,9 +17,9 @@ export function useSuperAdmin() {
       .maybeSingle()
       .then(({ data }) => {
         setIsSuperAdmin(!!data);
-        setLoading(false);
+        setChecking(false);
       });
-  }, [user?.id]);
+  }, [user?.id, authLoading]);
 
-  return { isSuperAdmin, loading };
+  return { isSuperAdmin, loading: checking || authLoading };
 }
