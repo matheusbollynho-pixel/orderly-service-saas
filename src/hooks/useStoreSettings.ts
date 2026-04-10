@@ -83,7 +83,7 @@ Att, {{atendente}} 🏍️🔧`,
 
 export function useStoreSettings() {
   const [settings, setSettings] = useState<StoreSettings | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
   const { storeId } = useStore();

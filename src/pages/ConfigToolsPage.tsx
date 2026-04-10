@@ -157,7 +157,7 @@ export default function ConfigToolsPage() {
     return <div className="p-8 text-center text-red-500">Acesso restrito.</div>;
   }
 
-  if (storeLoading || loadingSettings) {
+  if (storeLoading) {
     return <div className="p-8 text-center text-muted-foreground">Carregando configurações...</div>;
   }
 
