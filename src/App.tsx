@@ -17,6 +17,7 @@ import PublicSatisfactionFeedPage from "./pages/PublicSatisfactionFeedPage";
 import { PrintOrderPage } from "./pages/PrintOrderPage";
 import { DebugOrderPage } from "./pages/DebugOrderPage";
 import ConfigToolsPage from "./pages/ConfigToolsPage";
+import SuperAdminPage from "./pages/SuperAdminPage";
 import { useAuth } from "./hooks/useAuth";
 import { StoreProvider } from "./contexts/StoreContext";
 import { useEffect } from "react";
@@ -108,6 +109,7 @@ function AuthenticatedApp() {
         <Route path="/pos-venda" element={<AfterSalesPage />} />
         <Route path="/fluxo-caixa" element={<CashFlowPage />} />
         <Route path="/debug-os/:id" element={<DebugOrderPage />} />
+        <Route path="/super-admin" element={<SuperAdminPage />} />
         <Route path="/print/:id" element={<PrintOrderPage />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
