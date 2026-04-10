@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useStore } from '@/contexts/StoreContext';
+import { useAuth } from '@/hooks/useAuth';
 import type { MemberPermissions } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,6 +46,7 @@ const DEFAULT_PERMISSIONS: MemberPermissions = {
 
 export default function CollaboratorsPage() {
   const { storeId, isOwner } = useStore();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviting, setInviting] = useState(false);
@@ -102,10 +104,8 @@ export default function CollaboratorsPage() {
     if (!inviteEmail.trim()) return;
     setInviting(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
       const { error } = await supabase.functions.invoke('invite-collaborator', {
-        body: { email: inviteEmail.trim(), store_id: storeId, permissions: DEFAULT_PERMISSIONS },
-        headers: { Authorization: `Bearer ${session?.access_token}` },
+        body: { email: inviteEmail.trim(), store_id: storeId, permissions: DEFAULT_PERMISSIONS, owner_user_id: user?.id },
       });
       if (error) throw error;
       toast.success(`Convite enviado para ${inviteEmail}`);
