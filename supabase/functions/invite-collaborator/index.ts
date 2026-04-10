@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
       .maybeSingle()
 
     const redirectTo = `${Deno.env.get('SUPABASE_URL')?.replace('supabase.co', 'supabase.co') || ''}`
-    const appUrl = 'https://speedseekos-demo.vercel.app/'
+    const appUrl = 'https://app.speedseekos.com.br/'
 
     // Tenta enviar convite; se usuário já existe, busca pelo email
     let userId: string | undefined
