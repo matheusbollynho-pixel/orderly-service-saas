@@ -116,6 +116,7 @@ function AuthenticatedApp() {
 
   return (
     <StoreProvider user={user}>
+      <StoreTitle />
       <Routes>
         <Route path="/" element={<Index />} />
         <Route path="/config" element={<ConfigToolsPage />} />
@@ -134,14 +135,6 @@ function AppContent() {
   // Inicializar sistema de sincronização local (dentro do QueryClientProvider)
   const { status: syncStatus } = useLocalSync();
   useRealtimeSync();
-  const { settings: storeSettings } = useStoreSettings();
-
-  // Atualiza título globalmente pelo nome da empresa
-  useEffect(() => {
-    if (storeSettings?.company_name) {
-      document.title = storeSettings.company_name;
-    }
-  }, [storeSettings?.company_name]);
 
   useEffect(() => {
     if (syncStatus.isReady) {
@@ -152,6 +145,17 @@ function AppContent() {
   }, [syncStatus]);
 
   return <AppRoutes />;
+}
+
+// Componente interno ao StoreProvider para atualizar o título da página
+function StoreTitle() {
+  const { settings: storeSettings } = useStoreSettings();
+  useEffect(() => {
+    if (storeSettings?.company_name) {
+      document.title = storeSettings.company_name;
+    }
+  }, [storeSettings?.company_name]);
+  return null;
 }
 
 const App = () => {
