@@ -102,8 +102,10 @@ export default function CollaboratorsPage() {
     if (!inviteEmail.trim()) return;
     setInviting(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
       const { error } = await supabase.functions.invoke('invite-collaborator', {
         body: { email: inviteEmail.trim(), store_id: storeId, permissions: DEFAULT_PERMISSIONS },
+        headers: { Authorization: `Bearer ${session?.access_token}` },
       });
       if (error) throw error;
       toast.success(`Convite enviado para ${inviteEmail}`);
