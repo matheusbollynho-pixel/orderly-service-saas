@@ -34,8 +34,8 @@ export function LoginPage() {
         toast.error('Erro ao definir senha', { description: error.message });
       } else {
         toast.success('Senha definida! Bem-vindo ao SpeedSeek OS!');
-        // Limpa o hash da URL
-        window.history.replaceState(null, '', window.location.pathname);
+        // Redireciona para o app (reload limpa o INITIAL_URL_HASH)
+        window.location.replace('/');
       }
     } finally {
       setLoading(false);
