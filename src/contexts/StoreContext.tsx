@@ -32,7 +32,7 @@ export function StoreProvider({ user, children }: { user: User | null; children:
       .select('store_id, store_settings(plan)')
       .eq('user_id', user.id)
       .eq('active', true)
-      .single()
+      .maybeSingle()
       .then(({ data }) => {
         if (data) {
           setStoreId(data.store_id);

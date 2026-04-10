@@ -99,6 +99,10 @@ function AuthenticatedApp() {
   }
 
   if (!user) {
+    // Salva a rota atual para redirecionar após login
+    if (location.pathname !== '/') {
+      localStorage.setItem('redirectAfterLogin', location.pathname);
+    }
     return <LoginPage />;
   }
 
