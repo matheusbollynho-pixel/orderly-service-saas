@@ -32,16 +32,16 @@ function toISODate(): string {
 function planFromRef(ref: string): string | null {
   if (!ref) return null
   const r = ref.toLowerCase()
-  if (r.includes('basico') || r.includes('básico') || r.includes('basic')) return 'basico'
-  if (r.includes('profissional') || r.includes('pro')) return 'profissional'
-  if (r.includes('premium') || r.includes('enterprise')) return 'premium'
+  if (r.includes('basico') || r.includes('básico') || r.includes('basic')) return 'basic'
+  if (r.includes('profissional') || r.includes('pro')) return 'pro'
+  if (r.includes('premium') || r.includes('enterprise')) return 'enterprise'
   return null
 }
 
 function planFromValue(value: number): string {
-  if (value <= 90) return 'basico'
-  if (value <= 160) return 'profissional'
-  return 'premium'
+  if (value <= 90) return 'basic'
+  if (value <= 160) return 'pro'
+  return 'enterprise'
 }
 
 // ── Buscar dados do cliente no Asaas ─────────────────────────────────────────
@@ -95,8 +95,8 @@ async function provisionarCliente(payment: Record<string, unknown>) {
     return { ok: true, action: 'renovacao', store_id: existingStore.id, plan }
   }
 
-  // Cliente novo — buscar dados no Asaas
-  const customer = await fetchAsaasCustomer(asaasCustomerId)
+  // Cliente novo — buscar dados no Asaas (ou usar dados de teste)
+  const customer = (payment._customer as Record<string, unknown>) || await fetchAsaasCustomer(asaasCustomerId)
   if (!customer) {
     throw new Error(`Cliente Asaas não encontrado: ${asaasCustomerId}`)
   }
