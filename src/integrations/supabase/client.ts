@@ -2,6 +2,9 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
+// Captura o hash ANTES do SDK processar e limpar o token de invite/recovery
+export const INITIAL_URL_HASH = typeof window !== 'undefined' ? window.location.hash : '';
+
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 

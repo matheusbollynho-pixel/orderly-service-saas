@@ -20,6 +20,7 @@ import ConfigToolsPage from "./pages/ConfigToolsPage";
 import SuperAdminPage from "./pages/SuperAdminPage";
 import { useAuth } from "./hooks/useAuth";
 import { StoreProvider } from "./contexts/StoreContext";
+import { INITIAL_URL_HASH } from "./integrations/supabase/client";
 import { useEffect, useState } from "react";
 import { cleanupOldPhotos } from "./lib/photoService";
 import { useLocalSync } from "./hooks/useLocalSync";
@@ -75,8 +76,8 @@ function AuthenticatedApp() {
   const { user, loading } = useAuth();
   const location = useLocation();
 
-  // Detecta convite pendente — captura no mount antes do Supabase limpar o hash
-  const [isInvite] = useState(() => window.location.hash.includes('type=invite'));
+  // Usa hash capturado antes do SDK processar
+  const [isInvite] = useState(() => INITIAL_URL_HASH.includes('type=invite'));
 
   // Limpar fotos antigas uma vez por dia (100+ dias)
   useEffect(() => {

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, INITIAL_URL_HASH } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,11 +10,10 @@ export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  // Captura o hash no mount, antes do Supabase SDK limpá-lo
-  const [isInvite] = useState(() => {
-    const hash = window.location.hash;
-    return hash.includes('type=invite') || hash.includes('type=recovery');
-  });
+  // Usa hash capturado antes do SDK processar
+  const [isInvite] = useState(() =>
+    INITIAL_URL_HASH.includes('type=invite') || INITIAL_URL_HASH.includes('type=recovery')
+  );
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
