@@ -175,23 +175,53 @@ export function useFiados() {
   const deleteFiado = async (fiado_id: string) => {
     const fiado = fiados.find(f => f.id === fiado_id);
     if (fiado) {
-      const itemsWithProduct = (fiado.items || []).filter(i => i.inventory_product_id);
-      for (const item of itemsWithProduct) {
-        const { data: prod } = await supabase
-          .from('inventory_products')
-          .select('stock_current')
-          .eq('id', item.inventory_product_id!)
-          .single();
-        if (prod) {
-          const newStock = (prod.stock_current || 0) + item.qty;
-          await supabase.from('inventory_products').update({ stock_current: newStock, updated_at: new Date().toISOString() }).eq('id', item.inventory_product_id!);
-          await supabase.from('inventory_movements').insert([{
+      if (fiado.origin_type === 'balcao' && fiado.origin_id) {
+        // Fiado de balcão: restaura estoque via inventory_movements
+        const { data: movements } = await supabase
+          .from('inventory_movements')
+          .select('id, product_id, quantity')
+          .eq('balcao_order_id', fiado.origin_id)
+          .in('type', ['saida_balcao', 'saida_venda']);
+
+        for (const mov of (movements ?? [])) {
+          // Restaura o estoque
+          await supabase.rpc('increment_stock', { p_product_id: mov.product_id, p_qty: mov.quantity }).catch(async () => {
+            // fallback: update direto
+            const { data: prod } = await supabase.from('inventory_products').select('stock_current').eq('id', mov.product_id).single();
+            if (prod) {
+              await supabase.from('inventory_products').update({ stock_current: (prod.stock_current || 0) + mov.quantity, updated_at: new Date().toISOString() }).eq('id', mov.product_id);
+            }
+          });
+          // Registra movimentação de devolução
+          await supabase.from('inventory_movements').insert({
             store_id: storeId!,
-            product_id: item.inventory_product_id!,
+            product_id: mov.product_id,
             type: 'entrada',
-            quantity: item.qty,
+            quantity: mov.quantity,
             notes: `Devolução - fiado excluído (${fiado.client_name})`,
-          }]);
+            balcao_order_id: fiado.origin_id,
+          });
+        }
+      } else {
+        // Fiado de OS: lógica original por inventory_product_id nos itens
+        const itemsWithProduct = (fiado.items || []).filter(i => i.inventory_product_id);
+        for (const item of itemsWithProduct) {
+          const { data: prod } = await supabase
+            .from('inventory_products')
+            .select('stock_current')
+            .eq('id', item.inventory_product_id!)
+            .single();
+          if (prod) {
+            const newStock = (prod.stock_current || 0) + item.qty;
+            await supabase.from('inventory_products').update({ stock_current: newStock, updated_at: new Date().toISOString() }).eq('id', item.inventory_product_id!);
+            await supabase.from('inventory_movements').insert([{
+              store_id: storeId!,
+              product_id: item.inventory_product_id!,
+              type: 'entrada',
+              quantity: item.qty,
+              notes: `Devolução - fiado excluído (${fiado.client_name})`,
+            }]);
+          }
         }
       }
     }
