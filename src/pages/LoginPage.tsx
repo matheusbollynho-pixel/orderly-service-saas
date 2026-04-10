@@ -16,6 +16,7 @@ export function LoginPage() {
   );
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showForgot, setShowForgot] = useState(false);
 
   const handleSetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,6 +37,28 @@ export function LoginPage() {
         toast.success('Senha definida! Bem-vindo ao SpeedSeek OS!');
         // Redireciona para o app (reload limpa o INITIAL_URL_HASH)
         window.location.replace('/');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) {
+      toast.error('Digite seu email primeiro');
+      return;
+    }
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/`,
+      });
+      if (error) {
+        toast.error('Erro ao enviar email', { description: error.message });
+      } else {
+        toast.success('Email enviado! Verifique sua caixa de entrada.');
+        setShowForgot(false);
       }
     } finally {
       setLoading(false);
@@ -112,6 +135,36 @@ export function LoginPage() {
                 {loading ? 'Salvando...' : 'Definir senha e entrar'}
               </Button>
             </form>
+          ) : showForgot ? (
+            <form onSubmit={handleForgotPassword} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-foreground">Seu email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="seu@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  disabled={loading}
+                  className="!bg-muted/50 border-border/50 text-foreground placeholder:text-muted-foreground"
+                />
+              </div>
+              <Button
+                type="submit"
+                className="w-full bg-[#C1272D] hover:bg-red-700 text-white font-semibold"
+                disabled={loading}
+              >
+                {loading ? 'Enviando...' : 'Enviar link de recuperação'}
+              </Button>
+              <button
+                type="button"
+                onClick={() => setShowForgot(false)}
+                className="w-full text-sm text-muted-foreground hover:text-foreground text-center"
+              >
+                Voltar ao login
+              </button>
+            </form>
           ) : (
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
@@ -147,6 +200,13 @@ export function LoginPage() {
               >
                 {loading ? 'Entrando...' : 'Entrar'}
               </Button>
+              <button
+                type="button"
+                onClick={() => setShowForgot(true)}
+                className="w-full text-sm text-muted-foreground hover:text-foreground text-center"
+              >
+                Esqueci minha senha
+              </button>
             </form>
           )}
         </CardContent>
