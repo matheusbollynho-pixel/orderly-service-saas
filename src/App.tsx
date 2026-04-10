@@ -20,7 +20,7 @@ import ConfigToolsPage from "./pages/ConfigToolsPage";
 import CollaboratorsPage from "./pages/CollaboratorsPage";
 import SuperAdminPage from "./pages/SuperAdminPage";
 import { useAuth } from "./hooks/useAuth";
-import { StoreProvider } from "./contexts/StoreContext";
+import { StoreProvider, useStore } from "./contexts/StoreContext";
 import { INITIAL_URL_HASH } from "./integrations/supabase/client";
 import { useEffect, useState } from "react";
 import { cleanupOldPhotos } from "./lib/photoService";
@@ -117,16 +117,18 @@ function AuthenticatedApp() {
   return (
     <StoreProvider user={user}>
       <StoreTitle />
-      <Routes>
-        <Route path="/" element={<Index />} />
-        <Route path="/config" element={<ConfigToolsPage />} />
-        <Route path="/colaboradores" element={<CollaboratorsPage />} />
-        <Route path="/pos-venda" element={<AfterSalesPage />} />
-        <Route path="/fluxo-caixa" element={<CashFlowPage />} />
-        <Route path="/debug-os/:id" element={<DebugOrderPage />} />
-        <Route path="/print/:id" element={<PrintOrderPage />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+      <StoreGuard>
+        <Routes>
+          <Route path="/" element={<Index />} />
+          <Route path="/config" element={<ConfigToolsPage />} />
+          <Route path="/colaboradores" element={<CollaboratorsPage />} />
+          <Route path="/pos-venda" element={<AfterSalesPage />} />
+          <Route path="/fluxo-caixa" element={<CashFlowPage />} />
+          <Route path="/debug-os/:id" element={<DebugOrderPage />} />
+          <Route path="/print/:id" element={<PrintOrderPage />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </StoreGuard>
     </StoreProvider>
   );
 }
@@ -145,6 +147,34 @@ function AppContent() {
   }, [syncStatus]);
 
   return <AppRoutes />;
+}
+
+// Bloqueia acesso se usuário não tem loja ativa vinculada
+function StoreGuard({ children }: { children: React.ReactNode }) {
+  const { storeId, loading } = useStore();
+  const { signOut } = useAuth();
+
+  if (loading) return null;
+
+  if (!storeId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-8">
+        <div className="text-center space-y-4">
+          <p className="text-lg font-semibold text-foreground">Acesso revogado</p>
+          <p className="text-sm text-muted-foreground">Sua conta não tem acesso a nenhuma loja ativa.</p>
+          <button
+            type="button"
+            onClick={signOut}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm"
+          >
+            Sair
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
 }
 
 // Componente interno ao StoreProvider para atualizar o título da página
