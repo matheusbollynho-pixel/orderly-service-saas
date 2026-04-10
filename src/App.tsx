@@ -75,8 +75,8 @@ function AuthenticatedApp() {
   const { user, loading } = useAuth();
   const location = useLocation();
 
-  // Detecta convite pendente (type=invite no hash)
-  const isInvite = window.location.hash.includes('type=invite');
+  // Detecta convite pendente — captura no mount antes do Supabase limpar o hash
+  const [isInvite] = useState(() => window.location.hash.includes('type=invite'));
 
   // Limpar fotos antigas uma vez por dia (100+ dias)
   useEffect(() => {

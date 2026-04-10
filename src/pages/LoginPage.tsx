@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,18 +10,13 @@ export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isInvite, setIsInvite] = useState(false);
+  // Captura o hash no mount, antes do Supabase SDK limpá-lo
+  const [isInvite] = useState(() => {
+    const hash = window.location.hash;
+    return hash.includes('type=invite') || hash.includes('type=recovery');
+  });
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-
-  useEffect(() => {
-    // Detecta token de convite no hash da URL
-    const hash = window.location.hash;
-    if (hash.includes('type=invite') || hash.includes('type=recovery')) {
-      setIsInvite(true);
-      // Supabase já processa o token automaticamente via onAuthStateChange
-    }
-  }, []);
 
   const handleSetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
