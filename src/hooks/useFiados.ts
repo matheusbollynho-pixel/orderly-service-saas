@@ -88,6 +88,13 @@ export function useFiados() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Recarrega quando o usuário volta para a aba/página
+  useEffect(() => {
+    const onFocus = () => load();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [load]);
+
   const createFiado = async (input: CreateFiadoInput) => {
     if (!storeId) { toast.error('Aguarde o sistema carregar e tente novamente.'); return null; }
     const { data, error } = await supabase.from('fiados').insert([{
