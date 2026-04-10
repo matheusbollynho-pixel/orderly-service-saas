@@ -73,6 +73,7 @@ function AppRoutes() {
 
 function AuthenticatedApp() {
   const { user, loading } = useAuth();
+  const location = useLocation();
 
 
   // Limpar fotos antigas uma vez por dia (100+ dias)
@@ -101,6 +102,14 @@ function AuthenticatedApp() {
     return <LoginPage />;
   }
 
+  if (location.pathname.startsWith('/super-admin')) {
+    return (
+      <Routes>
+        <Route path="/super-admin" element={<SuperAdminPage />} />
+      </Routes>
+    );
+  }
+
   return (
     <StoreProvider user={user}>
       <Routes>
@@ -109,7 +118,6 @@ function AuthenticatedApp() {
         <Route path="/pos-venda" element={<AfterSalesPage />} />
         <Route path="/fluxo-caixa" element={<CashFlowPage />} />
         <Route path="/debug-os/:id" element={<DebugOrderPage />} />
-        <Route path="/super-admin" element={<SuperAdminPage />} />
         <Route path="/print/:id" element={<PrintOrderPage />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
