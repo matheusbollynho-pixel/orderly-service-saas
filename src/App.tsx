@@ -75,6 +75,8 @@ function AuthenticatedApp() {
   const { user, loading } = useAuth();
   const location = useLocation();
 
+  // Detecta convite pendente (type=invite no hash)
+  const isInvite = window.location.hash.includes('type=invite');
 
   // Limpar fotos antigas uma vez por dia (100+ dias)
   useEffect(() => {
@@ -98,7 +100,7 @@ function AuthenticatedApp() {
     );
   }
 
-  if (!user) {
+  if (!user || isInvite) {
     return <LoginPage />;
   }
 
