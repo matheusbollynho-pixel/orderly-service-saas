@@ -44,19 +44,20 @@ export function StoreProvider({ user, children }: { user: User | null; children:
       return;
     }
 
+    // Query original que funcionava — busca store_id e plan
     supabase
-      .from('store_members' as never)
+      .from('store_members')
       .select('store_id, role, permissions, store_settings(plan)')
       .eq('user_id', user.id)
       .eq('active', true)
       .maybeSingle()
-      .then(({ data, error }: { data: { store_id: string; role: string; permissions: MemberPermissions | null; store_settings: { plan?: string } | null } | null; error: unknown }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .then(({ data, error }: { data: any; error: unknown }) => {
         if (error) console.error('StoreContext error:', error);
         if (data) {
           setStoreId(data.store_id);
-          setRole(data.role);
-          const settings = data.store_settings;
-          setPlan(settings?.plan ?? 'basic');
+          setRole(data.role ?? null);
+          setPlan(data.store_settings?.plan ?? 'basic');
           if (data.role === 'owner') {
             setPermissions(ALL_PERMISSIONS);
           } else {
