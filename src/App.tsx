@@ -20,7 +20,7 @@ import ConfigToolsPage from "./pages/ConfigToolsPage";
 import SuperAdminPage from "./pages/SuperAdminPage";
 import { useAuth } from "./hooks/useAuth";
 import { StoreProvider } from "./contexts/StoreContext";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { cleanupOldPhotos } from "./lib/photoService";
 import { useLocalSync } from "./hooks/useLocalSync";
 import { useRealtimeSync } from "./hooks/useRealtimeSync";
