@@ -179,7 +179,7 @@ export function useFiados() {
         // Fiado de balcão: restaura estoque via inventory_movements
         const { data: movements } = await supabase
           .from('inventory_movements')
-          .select('id, product_id, quantity')
+          .select('id, product_id, quantity, unit_price')
           .eq('balcao_order_id', fiado.origin_id)
           .in('type', ['saida_balcao', 'saida_venda']);
 
@@ -190,8 +190,8 @@ export function useFiados() {
             product_id: mov.product_id,
             type: 'entrada',
             quantity: mov.quantity,
+            unit_price: mov.unit_price ?? 0,
             notes: `Devolução - fiado excluído (${fiado.client_name})`,
-            balcao_order_id: fiado.origin_id,
           });
         }
       } else {
