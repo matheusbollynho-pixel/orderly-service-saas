@@ -6,7 +6,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { MaintenanceKeywordsManager } from '@/components/MaintenanceKeywordsManager';
 import { useStoreSettings, StoreSettings } from '@/hooks/useStoreSettings';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Settings, Zap, MessageSquare, CalendarCheck, Star, Cake, ShoppingCart, Store, Bot } from 'lucide-react';
+import { Settings, Zap, MessageSquare, CalendarCheck, Star, Cake, ShoppingCart, Store, Bot, Users } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 
 type MessageKey = 'whatsapp_confirmation_template' | 'whatsapp_satisfaction_template' | 'whatsapp_birthday_template' | 'whatsapp_balcao_followup_template';
@@ -67,7 +68,8 @@ const MESSAGE_CONFIGS: MessageConfig[] = [
 ];
 
 export default function ConfigToolsPage() {
-  const { user, isRestrictedUser } = useAuth();
+  const { user, isRestrictedUser, isOwner } = useAuth();
+  const navigate = useNavigate();
   const [showKeywords, setShowKeywords] = useState(false);
   const [removeOsId, setRemoveOsId] = useState('');
   const { settings, loading: loadingSettings, saving, saveSettings } = useStoreSettings();
@@ -175,6 +177,11 @@ export default function ConfigToolsPage() {
           <TabsTrigger value="ferramentas" className="flex-1 flex items-center gap-2">
             <Settings size={15} /> Ferramentas
           </TabsTrigger>
+          {isOwner && (
+            <TabsTrigger value="colaboradores" className="flex-1 flex items-center gap-2" onClick={() => navigate('/colaboradores')}>
+              <Users size={15} /> Equipe
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* ABA LOJA */}

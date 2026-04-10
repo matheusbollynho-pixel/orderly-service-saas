@@ -34,8 +34,18 @@ ${PLANOS}
 
 SITE: speedseekos.com.br
 
-ACESSO DEMONSTRAÇÃO (envie exatamente assim quando o lead pedir demo):
-🔗 *Link:* speedseekos-demo.vercel.app
+ACESSO DEMONSTRAÇÃO:
+Quando o lead pedir a demo, PRIMEIRO pergunte: "Sua oficina trabalha com motos ou carros?" e aguarde a resposta.
+
+Se responder *motos*:
+🔗 *Link:* https://speedseekos-demo.vercel.app
+📧 *Login:* demo@speedseekos.com.br
+🔑 *Senha:* teste123
+_Explore à vontade! É um ambiente de demonstração._
+_⚠️ O envio de PDF da OS é desativado na demo — na versão real funciona normalmente._
+
+Se responder *carros*:
+🔗 *Link:* https://speedseekos-demo-carro.vercel.app
 📧 *Login:* demo@speedseekos.com.br
 🔑 *Senha:* teste123
 _Explore à vontade! É um ambiente de demonstração._

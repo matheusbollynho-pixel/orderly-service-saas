@@ -17,6 +17,7 @@ import PublicSatisfactionFeedPage from "./pages/PublicSatisfactionFeedPage";
 import { PrintOrderPage } from "./pages/PrintOrderPage";
 import { DebugOrderPage } from "./pages/DebugOrderPage";
 import ConfigToolsPage from "./pages/ConfigToolsPage";
+import CollaboratorsPage from "./pages/CollaboratorsPage";
 import SuperAdminPage from "./pages/SuperAdminPage";
 import { useAuth } from "./hooks/useAuth";
 import { StoreProvider } from "./contexts/StoreContext";
@@ -118,6 +119,7 @@ function AuthenticatedApp() {
       <Routes>
         <Route path="/" element={<Index />} />
         <Route path="/config" element={<ConfigToolsPage />} />
+        <Route path="/colaboradores" element={<CollaboratorsPage />} />
         <Route path="/pos-venda" element={<AfterSalesPage />} />
         <Route path="/fluxo-caixa" element={<CashFlowPage />} />
         <Route path="/debug-os/:id" element={<DebugOrderPage />} />

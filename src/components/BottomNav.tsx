@@ -12,7 +12,7 @@ interface BottomNavProps {
 }
 
 export function BottomNav({ activeView, onViewChange, isAdmin }: BottomNavProps) {
-  const { signOut, canAccessReports, canAccessCashFlow } = useAuth();
+  const { signOut, permissions } = useAuth();
 
   const handleLogout = async () => {
     await signOut();
@@ -20,28 +20,22 @@ export function BottomNav({ activeView, onViewChange, isAdmin }: BottomNavProps)
   };
 
   const navItems = [
-    { id: 'dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'new' as const, label: 'Nova OS', icon: Plus },
-    { id: 'express' as const, label: 'Express', icon: Bolt },
-    { id: 'orders' as const, label: 'Ordens', icon: ClipboardList },
-    { id: 'agenda' as const, label: 'Agenda', icon: CalendarDays },
-    { id: 'quadro' as const, label: 'Oficina', icon: Gauge },
-    ...(canAccessCashFlow ? [
-      { id: 'fluxo-caixa' as const, label: 'Caixa', icon: Wallet },
-      { id: 'balcao' as const, label: 'Balcão', icon: ShoppingCart },
-    ] : []),
-    ...(canAccessReports ? [
-      { id: 'reports' as const, label: 'Relatórios', icon: ChartBar }
-    ] : []),
-    ...(canAccessCashFlow ? [
-      { id: 'boletos' as const, label: 'Boletos', icon: FileText },
-      { id: 'fiados' as const, label: 'Fiados', icon: HandCoins },
-      { id: 'estoque' as const, label: 'Estoque', icon: Package },
-    ] : []),
-    { id: 'mechanics' as const, label: 'Equipe', icon: Users },
-    { id: 'pos-venda' as const, label: 'Pós-Venda', icon: Heart },
-    { id: 'satisfacao' as const, label: 'Satisfação', icon: Star },
-  ];
+    { id: 'dashboard' as const, label: 'Dashboard', icon: LayoutDashboard, show: true },
+    { id: 'new' as const, label: 'Nova OS', icon: Plus, show: permissions.nova_os },
+    { id: 'express' as const, label: 'Express', icon: Bolt, show: permissions.express },
+    { id: 'orders' as const, label: 'Ordens', icon: ClipboardList, show: permissions.orders },
+    { id: 'agenda' as const, label: 'Agenda', icon: CalendarDays, show: permissions.agenda },
+    { id: 'quadro' as const, label: 'Oficina', icon: Gauge, show: permissions.quadro },
+    { id: 'fluxo-caixa' as const, label: 'Caixa', icon: Wallet, show: permissions.caixa },
+    { id: 'balcao' as const, label: 'Balcão', icon: ShoppingCart, show: permissions.balcao },
+    { id: 'reports' as const, label: 'Relatórios', icon: ChartBar, show: permissions.relatorios },
+    { id: 'boletos' as const, label: 'Boletos', icon: FileText, show: permissions.boletos },
+    { id: 'fiados' as const, label: 'Fiados', icon: HandCoins, show: permissions.fiados },
+    { id: 'estoque' as const, label: 'Estoque', icon: Package, show: permissions.estoque },
+    { id: 'mechanics' as const, label: 'Equipe', icon: Users, show: permissions.equipe },
+    { id: 'pos-venda' as const, label: 'Pós-Venda', icon: Heart, show: permissions.pos_venda },
+    { id: 'satisfacao' as const, label: 'Satisfação', icon: Star, show: permissions.satisfacao },
+  ].filter(item => item.show);
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-neutral-900 text-white backdrop-blur-md supports-[backdrop-filter]:bg-neutral-900/95">
