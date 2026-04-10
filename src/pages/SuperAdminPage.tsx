@@ -5,7 +5,10 @@ import { useSuperAdmin } from '@/hooks/useSuperAdmin';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, Users, CheckCircle, XCircle, Clock, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Loader2, Users, CheckCircle, XCircle, Clock, ChevronRight, ArrowLeft, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface StoreClient {
@@ -40,6 +43,17 @@ export default function SuperAdminPage() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<StoreClient | null>(null);
   const [testingWpp, setTestingWpp] = useState(false);
+  const [showNewClient, setShowNewClient] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [newClient, setNewClient] = useState({
+    company_name: '',
+    phone: '',
+    plan: 'basic',
+    owner_email: '',
+    owner_password: '',
+    whatsapp_instance: '',
+    whatsapp_token: '',
+  });
 
   useEffect(() => {
     if (!authLoading && !isSuperAdmin) {
@@ -120,6 +134,66 @@ export default function SuperAdminPage() {
       toast.error('Erro ao conectar na UazAPI');
     } finally {
       setTestingWpp(false);
+    }
+  };
+
+  const createClient = async () => {
+    if (!newClient.company_name || !newClient.owner_email || !newClient.owner_password) {
+      toast.error('Preencha nome da loja, e-mail e senha');
+      return;
+    }
+    setCreating(true);
+    try {
+      const sb = supabase as unknown as { from: typeof supabase.from };
+
+      // 1. Cria o usuário no Auth
+      const { data: authData, error: authErr } = await supabase.auth.admin?.createUser?.({
+        email: newClient.owner_email,
+        password: newClient.owner_password,
+        email_confirm: true,
+      }) ?? await supabase.auth.signUp({ email: newClient.owner_email, password: newClient.owner_password });
+
+      // Tenta via signUp se admin não disponível
+      let userId: string | null = null;
+      if (authErr || !authData) {
+        toast.error(`Erro ao criar usuário: ${authErr?.message}`);
+        setCreating(false);
+        return;
+      }
+      userId = (authData as { user?: { id: string } }).user?.id ?? null;
+      if (!userId) { toast.error('Usuário criado mas sem ID'); setCreating(false); return; }
+
+      // 2. Cria store_settings
+      const { data: store, error: storeErr } = await sb
+        .from('store_settings')
+        .insert({
+          company_name: newClient.company_name,
+          phone: newClient.phone || null,
+          plan: newClient.plan,
+          active: true,
+          whatsapp_instance: newClient.whatsapp_instance || null,
+          whatsapp_token: newClient.whatsapp_token || null,
+        })
+        .select('id')
+        .single();
+
+      if (storeErr || !store) { toast.error(`Erro ao criar loja: ${storeErr?.message}`); setCreating(false); return; }
+
+      // 3. Cria store_members
+      const { error: memberErr } = await sb
+        .from('store_members')
+        .insert({ store_id: store.id, user_id: userId, role: 'dono', active: true });
+
+      if (memberErr) { toast.error(`Erro ao vincular usuário: ${memberErr.message}`); setCreating(false); return; }
+
+      toast.success(`Cliente ${newClient.company_name} criado com sucesso!`);
+      setShowNewClient(false);
+      setNewClient({ company_name: '', phone: '', plan: 'basic', owner_email: '', owner_password: '', whatsapp_instance: '', whatsapp_token: '' });
+      loadClients();
+    } catch (e: unknown) {
+      toast.error(`Erro: ${(e as Error).message}`);
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -224,7 +298,12 @@ export default function SuperAdminPage() {
           <h1 className="text-2xl font-bold text-foreground">Painel Admin</h1>
           <p className="text-muted-foreground text-sm">SpeedSeekOS</p>
         </div>
-        <Button variant="outline" onClick={loadClients} size="sm">Atualizar</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={loadClients} size="sm">Atualizar</Button>
+          <Button size="sm" onClick={() => setShowNewClient(true)} className="gap-2">
+            <Plus className="h-4 w-4" /> Novo Cliente
+          </Button>
+        </div>
       </div>
 
       {/* Resumo */}
@@ -288,6 +367,59 @@ export default function SuperAdminPage() {
           ))}
         </CardContent>
       </Card>
+
+      {/* Dialog novo cliente */}
+      <Dialog open={showNewClient} onOpenChange={setShowNewClient}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Novo Cliente</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-muted-foreground">Nome da loja *</label>
+              <Input value={newClient.company_name} onChange={e => setNewClient(p => ({ ...p, company_name: e.target.value }))} placeholder="Ex: Bandara Motos" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Telefone da loja</label>
+              <Input value={newClient.phone} onChange={e => setNewClient(p => ({ ...p, phone: e.target.value }))} placeholder="75999999999" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Plano</label>
+              <Select value={newClient.plan} onValueChange={v => setNewClient(p => ({ ...p, plan: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="basic">Básico</SelectItem>
+                  <SelectItem value="pro">Profissional</SelectItem>
+                  <SelectItem value="premium">Premium</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="border-t border-border/50 pt-3">
+              <label className="text-xs text-muted-foreground">E-mail do dono *</label>
+              <Input type="email" value={newClient.owner_email} onChange={e => setNewClient(p => ({ ...p, owner_email: e.target.value }))} placeholder="dono@email.com" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Senha inicial *</label>
+              <Input type="password" value={newClient.owner_password} onChange={e => setNewClient(p => ({ ...p, owner_password: e.target.value }))} placeholder="Mínimo 6 caracteres" />
+            </div>
+            <div className="border-t border-border/50 pt-3">
+              <label className="text-xs text-muted-foreground">WhatsApp — Instância</label>
+              <Input value={newClient.whatsapp_instance} onChange={e => setNewClient(p => ({ ...p, whatsapp_instance: e.target.value }))} placeholder="nome-da-instancia" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">WhatsApp — Token</label>
+              <Input value={newClient.whatsapp_token} onChange={e => setNewClient(p => ({ ...p, whatsapp_token: e.target.value }))} placeholder="token da UazAPI" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNewClient(false)}>Cancelar</Button>
+            <Button onClick={createClient} disabled={creating} className="gap-2">
+              {creating && <Loader2 className="h-4 w-4 animate-spin" />}
+              Criar Cliente
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
