@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useStore } from '@/contexts/StoreContext';
 
 export interface StoreSettings {
   id: string;
@@ -85,24 +86,16 @@ export function useStoreSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
+  const { storeId } = useStore();
 
   useEffect(() => {
-    load();
-  }, []);
+    if (storeId) load();
+  }, [storeId]);
 
   async function load() {
     setLoading(true);
-    const { data } = await supabase.from('store_settings').select('*').limit(1).maybeSingle();
-    if (data) {
-      setSettings(data as StoreSettings);
-    } else {
-      const { data: created } = await supabase
-        .from('store_settings')
-        .insert(DEFAULTS)
-        .select()
-        .single();
-      if (created) setSettings(created as StoreSettings);
-    }
+    const { data } = await supabase.from('store_settings').select('*').eq('id', storeId!).maybeSingle();
+    if (data) setSettings(data as StoreSettings);
     setLoading(false);
   }
 
