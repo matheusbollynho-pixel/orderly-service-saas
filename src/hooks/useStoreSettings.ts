@@ -94,9 +94,13 @@ export function useStoreSettings() {
 
   async function load() {
     setLoading(true);
-    const { data } = await supabase.from('store_settings').select('*').eq('id', storeId!).maybeSingle();
-    if (data) setSettings(data as StoreSettings);
-    setLoading(false);
+    try {
+      const { data, error } = await supabase.from('store_settings').select('*').eq('id', storeId!).maybeSingle();
+      if (error) console.error('useStoreSettings error:', error);
+      if (data) setSettings(data as StoreSettings);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function saveSettings(updated: Partial<StoreSettings>) {
