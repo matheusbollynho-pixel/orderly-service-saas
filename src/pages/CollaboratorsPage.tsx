@@ -157,7 +157,7 @@ export default function CollaboratorsPage() {
             </Button>
           </form>
           <p className="text-xs text-yellow-500">
-            Avise o colaborador para verificar a pasta de <strong>spam</strong> caso o email não chegue na caixa de entrada.
+            Oriente o colaborador: caso o email não chegue na caixa de entrada, verificar a pasta de <strong>spam</strong> e clicar em <strong>"Não é spam"</strong> para garantir o recebimento de próximas notificações.
           </p>
         </CardContent>
       </Card>
