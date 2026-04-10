@@ -153,7 +153,7 @@ export function useFiados() {
       }
       await supabase.from('cash_flow').insert([{
         store_id: storeId!,
-        type: 'entrada',
+        type: 'devolucao',
         description: `Fiado recebido - ${fiado.client_name || 'Cliente'}`,
         amount,
         payment_method: method,
@@ -188,7 +188,7 @@ export function useFiados() {
           const { error: movErr } = await supabase.from('inventory_movements').insert({
             store_id: storeId!,
             product_id: mov.product_id,
-            type: 'entrada',
+            type: 'devolucao',
             quantity: mov.quantity,
             unit_price: mov.unit_price ?? 0,
             notes: `Devolução - fiado excluído (${fiado.client_name})`,
@@ -210,7 +210,7 @@ export function useFiados() {
             await supabase.from('inventory_movements').insert([{
               store_id: storeId!,
               product_id: item.inventory_product_id!,
-              type: 'entrada',
+              type: 'devolucao',
               quantity: item.qty,
               notes: `Devolução - fiado excluído (${fiado.client_name})`,
             }]);
