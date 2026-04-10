@@ -401,8 +401,11 @@ Deno.serve(async (req) => {
 
   try {
     // Verificar token de autenticação do Asaas
+    // Aceita também service_role key no Authorization header (para testes internos)
     const webhookToken = req.headers.get('asaas-access-token')
-    if (ASAAS_WEBHOOK_TOKEN && webhookToken !== ASAAS_WEBHOOK_TOKEN) {
+    const authHeader = req.headers.get('authorization') || ''
+    const isServiceRole = authHeader === `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+    if (ASAAS_WEBHOOK_TOKEN && webhookToken !== ASAAS_WEBHOOK_TOKEN && !isServiceRole) {
       console.warn('Token inválido:', webhookToken)
       return json({ error: 'Unauthorized' }, 401)
     }
