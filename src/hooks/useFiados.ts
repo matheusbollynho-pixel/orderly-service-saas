@@ -183,9 +183,9 @@ export function useFiados() {
           .eq('balcao_order_id', fiado.origin_id)
           .in('type', ['saida_balcao', 'saida_venda']);
 
+        console.log('🔄 Restaurando estoque fiado balcão:', { origin_id: fiado.origin_id, movements });
         for (const mov of (movements ?? [])) {
-          // Registra movimentação de entrada — o trigger fn_update_stock_on_movement restaura o estoque automaticamente
-          await supabase.from('inventory_movements').insert({
+          const { error: movErr } = await supabase.from('inventory_movements').insert({
             store_id: storeId!,
             product_id: mov.product_id,
             type: 'entrada',
@@ -193,6 +193,7 @@ export function useFiados() {
             unit_price: mov.unit_price ?? 0,
             notes: `Devolução - fiado excluído (${fiado.client_name})`,
           });
+          if (movErr) console.error('❌ Erro ao restaurar estoque:', movErr);
         }
       } else {
         // Fiado de OS: lógica original por inventory_product_id nos itens
