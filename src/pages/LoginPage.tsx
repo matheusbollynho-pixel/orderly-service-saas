@@ -101,6 +101,9 @@ export function LoginPage() {
         <CardContent>
           {isInvite ? (
             <form onSubmit={handleSetPassword} className="space-y-4">
+              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-md p-3 text-xs text-yellow-400 text-center">
+                Caso este email tenha chegado na pasta de spam, marque como <strong>"Não é spam"</strong> para receber próximas notificações normalmente.
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="newPassword" className="text-foreground">Nova senha</Label>
                 <Input
