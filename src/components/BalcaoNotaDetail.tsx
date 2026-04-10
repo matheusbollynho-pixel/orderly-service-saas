@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useBalcao, type BalcaoOrder, type BalcaoItem, type PaymentEntry } from '@/hooks/useBalcao';
 import { useInventory, type InventoryProduct } from '@/hooks/useInventory';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
@@ -52,6 +53,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   const { members: teamMembers } = useTeamMembers();
   const { settings: storeSettings } = useStoreSettings();
   const { storeId } = useStore();
+  const queryClient = useQueryClient();
 
   const items: BalcaoItem[] = order.balcao_items ?? [];
   const isEditable = order.status === 'aberta';
@@ -303,6 +305,9 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
         }
       }
     }
+
+    // Invalida cache de estoque para refletir imediatamente
+    queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
 
     // Marca a nota de balcão como 'fiado' e invalida o cache
     await updateOrder({ id: order.id, status: 'fiado' as const });
