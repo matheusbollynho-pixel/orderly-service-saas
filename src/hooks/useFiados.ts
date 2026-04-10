@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { sendWhatsAppText } from '@/lib/whatsappService';
@@ -75,6 +76,7 @@ export function useFiados() {
   const [fiados, setFiados] = useState<Fiado[]>([]);
   const [loading, setLoading] = useState(true);
   const { storeId } = useStore();
+  const queryClient = useQueryClient();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -229,6 +231,7 @@ export function useFiados() {
     const { error } = await supabase.from('fiados').delete().eq('id', fiado_id);
     if (error) { toast.error('Erro ao excluir'); return; }
     setFiados(prev => prev.filter(f => f.id !== fiado_id));
+    queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
     toast.success('Fiado removido');
   };
 
