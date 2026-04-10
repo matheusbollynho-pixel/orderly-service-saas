@@ -50,7 +50,8 @@ export function StoreProvider({ user, children }: { user: User | null; children:
       .eq('user_id', user.id)
       .eq('active', true)
       .maybeSingle()
-      .then(({ data }: { data: { store_id: string; role: string; permissions: MemberPermissions | null; store_settings: { plan?: string } | null } | null }) => {
+      .then(({ data, error }: { data: { store_id: string; role: string; permissions: MemberPermissions | null; store_settings: { plan?: string } | null } | null; error: unknown }) => {
+        if (error) console.error('StoreContext error:', error);
         if (data) {
           setStoreId(data.store_id);
           setRole(data.role);

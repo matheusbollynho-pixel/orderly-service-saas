@@ -70,7 +70,7 @@ const MESSAGE_CONFIGS: MessageConfig[] = [
 
 export default function ConfigToolsPage() {
   const { user } = useAuth();
-  const { isOwner, role } = useStore();
+  const { isOwner, role, loading: storeLoading } = useStore();
   const isRestrictedUser = !!user && role !== null && role !== 'owner';
   const navigate = useNavigate();
   const [showKeywords, setShowKeywords] = useState(false);
@@ -153,8 +153,12 @@ export default function ConfigToolsPage() {
     } as Partial<StoreSettings>);
   }
 
-  if (!user || isRestrictedUser) {
+  if (!user || (role !== null && isRestrictedUser)) {
     return <div className="p-8 text-center text-red-500">Acesso restrito.</div>;
+  }
+
+  if (storeLoading || loadingSettings) {
+    return <div className="p-8 text-center text-muted-foreground">Carregando configurações...</div>;
   }
 
   const currentConfig = MESSAGE_CONFIGS.find(m => m.key === selectedMessage)!;
