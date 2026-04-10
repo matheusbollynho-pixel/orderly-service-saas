@@ -184,15 +184,7 @@ export function useFiados() {
           .in('type', ['saida_balcao', 'saida_venda']);
 
         for (const mov of (movements ?? [])) {
-          // Restaura o estoque
-          await supabase.rpc('increment_stock', { p_product_id: mov.product_id, p_qty: mov.quantity }).catch(async () => {
-            // fallback: update direto
-            const { data: prod } = await supabase.from('inventory_products').select('stock_current').eq('id', mov.product_id).single();
-            if (prod) {
-              await supabase.from('inventory_products').update({ stock_current: (prod.stock_current || 0) + mov.quantity, updated_at: new Date().toISOString() }).eq('id', mov.product_id);
-            }
-          });
-          // Registra movimentação de devolução
+          // Registra movimentação de entrada — o trigger fn_update_stock_on_movement restaura o estoque automaticamente
           await supabase.from('inventory_movements').insert({
             store_id: storeId!,
             product_id: mov.product_id,
