@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useServiceOrders } from '@/hooks/useServiceOrders';
 import { useMechanics } from '@/hooks/useMechanics';
 import { useAuth } from '@/hooks/useAuth';
+import { useStore } from '@/contexts/StoreContext';
 import { useClients } from '@/hooks/useClients';
 import { ServiceOrder, OrderStatus, PaymentMethod } from '@/types/service-order';
 import { DashboardStats } from '@/components/DashboardStats';
@@ -38,7 +39,10 @@ import { getMaintenanceKeywords, findKeywordInText, rescheduleMaintenanceReminde
 type View = 'dashboard' | 'new' | 'express' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa' | 'satisfacao' | 'estoque' | 'balcao' | 'quadro' | 'agenda' | 'mensagens' | 'boletos' | 'fiados';
 
 export default function Index() {
-  const { isAdmin, canAccessCashFlow, canAccessReports } = useAuth();
+  const { isAdmin } = useAuth();
+  const { permissions } = useStore();
+  const canAccessCashFlow = permissions.caixa;
+  const canAccessReports = permissions.relatorios;
   const { settings: storeSettings } = useStoreSettings();
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [selectedOrder, setSelectedOrder] = useState<ServiceOrder | null>(null);

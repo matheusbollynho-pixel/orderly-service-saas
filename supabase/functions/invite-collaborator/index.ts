@@ -45,15 +45,22 @@ Deno.serve(async (req) => {
     const redirectTo = `${Deno.env.get('SUPABASE_URL')?.replace('supabase.co', 'supabase.co') || ''}`
     const appUrl = 'https://speedseekos-demo.vercel.app/'
 
-    // Envia convite via Supabase Auth
+    // Tenta enviar convite; se usuário já existe, busca pelo email
+    let userId: string | undefined
     const { data: inviteData, error: inviteErr } = await supabase.auth.admin.inviteUserByEmail(email, {
       data: { store_id, permissions, company_name: store?.company_name },
       redirectTo: appUrl,
     })
 
-    if (inviteErr) throw inviteErr
-
-    const userId = inviteData?.user?.id
+    if (inviteErr) {
+      // Usuário já cadastrado — busca o ID pelo email
+      const { data: existingUser } = await supabase.auth.admin.listUsers()
+      const found = existingUser?.users?.find((u: { email?: string }) => u.email === email)
+      if (!found) throw inviteErr
+      userId = found.id
+    } else {
+      userId = inviteData?.user?.id
+    }
 
     // Verifica se já existe member para essa loja+email
     const { data: existing } = await supabase
@@ -64,14 +71,15 @@ Deno.serve(async (req) => {
       .maybeSingle()
 
     if (!existing && userId) {
-      await supabase.from('store_members').insert({
+      const { error: insertErr } = await supabase.from('store_members').insert({
         store_id,
         user_id: userId,
-        role: 'collaborator',
+        role: 'admin',
         active: true,
         email,
         permissions: permissions || {},
       })
+      if (insertErr) throw insertErr
     }
 
     return json({ ok: true, email })
