@@ -201,15 +201,29 @@ export default function SuperAdminPage() {
     setWppStatus(null);
     try {
       const base = wppUrl.replace(/\/$/, '');
-      // UazAPI usa header 'token' e endpoint /instance/connect
-      const res = await fetch(`${base}/instance/connect`, {
-        headers: { token: wppToken },
-      });
-      const data = await res.json();
-      // UazAPI retorna { instance: { state: 'open' | 'close' | ... } } ou { state: ... }
-      const state = data?.instance?.state ?? data?.state ?? data?.status ?? (res.ok ? 'conectado' : 'desconhecido');
+      const headers = { token: wppToken, 'Content-Type': 'application/json' };
+
+      // Tenta vários endpoints até um responder
+      const endpoints = ['/instance/info', '/instance/connect', '/instance/status', '/'];
+      let state = 'desconhecido';
+      let found = false;
+
+      for (const ep of endpoints) {
+        const res = await fetch(`${base}${ep}`, { headers }).catch(() => null);
+        if (!res) continue;
+        if (res.status === 404) continue;
+        const raw = await res.text().catch(() => '{}');
+        let data: any = {};
+        try { data = JSON.parse(raw); } catch { /* ignore */ }
+        state = data?.instance?.state ?? data?.state ?? data?.status ?? data?.connectionState ?? (res.ok ? 'connected' : 'desconhecido');
+        found = true;
+        break;
+      }
+
       setWppStatus(state);
-      if (state === 'open' || state === 'connected') {
+      if (!found) {
+        toast.error('Nenhum endpoint respondeu — verifique a URL');
+      } else if (state === 'open' || state === 'connected') {
         toast.success(`WhatsApp conectado ✅`);
       } else {
         toast.warning(`Status: ${state}`);
