@@ -102,12 +102,6 @@ export default function SuperAdminPage() {
           .limit(1)
           .maybeSingle();
 
-        let ownerEmail: string | null = null;
-        if (member?.user_id) {
-          const { data: userData } = await (supabase as any).auth.admin?.getUserById?.(member.user_id) ?? { data: { user: null } };
-          ownerEmail = userData?.user?.email ?? null;
-        }
-
         return {
           store_id: s.id,
           company_name: s.company_name,
@@ -115,7 +109,7 @@ export default function SuperAdminPage() {
           plan: s.plan,
           active: s.active,
           created_at: s.created_at,
-          owner_email: ownerEmail,
+          owner_email: member?.user_id ? `user:${member.user_id.slice(0, 8)}...` : null,
           whatsapp_instance_url: s.whatsapp_instance_url,
           whatsapp_instance_token: s.whatsapp_instance_token,
           whatsapp_provider: s.whatsapp_provider,
