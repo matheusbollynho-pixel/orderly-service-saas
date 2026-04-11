@@ -200,16 +200,21 @@ export default function SuperAdminPage() {
     setTestingWpp(true);
     setWppStatus(null);
     try {
-      const instanceName = wppUrl.split('/').pop() || 'test';
-      const res = await fetch(`${wppUrl}/instance/connectionState/${instanceName}`, {
+      const base = wppUrl.replace(/\/$/, '');
+      // UazAPI: GET /instance/connect retorna status da instância autenticada pelo token
+      const res = await fetch(`${base}/instance/connect`, {
         headers: { apikey: wppToken },
       });
       const data = await res.json();
-      const state = data?.instance?.state ?? data?.state ?? 'desconhecido';
+      const state = data?.instance?.state ?? data?.state ?? data?.status ?? (res.ok ? 'conectado' : 'erro');
       setWppStatus(state);
-      toast.success(`Status: ${state}`);
+      if (state === 'open' || state === 'conectado') {
+        toast.success(`WhatsApp conectado ✅`);
+      } else {
+        toast.warning(`Status: ${state}`);
+      }
     } catch {
-      toast.error('Erro ao conectar');
+      toast.error('Erro ao conectar na instância');
       setWppStatus('erro');
     } finally {
       setTestingWpp(false);
