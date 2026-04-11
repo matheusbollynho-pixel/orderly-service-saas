@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { ServiceOrder, ChecklistItem, OrderStatus, DEFAULT_CHECKLIST_ITEMS } from '@/types/service-order';
+import { ServiceOrder, ChecklistItem, OrderStatus, getDefaultChecklistItems } from '@/types/service-order';
 import { toast } from 'sonner';
 import { useStore } from '@/contexts/StoreContext';
 
@@ -44,7 +44,7 @@ const SERVICE_ORDERS_BASE_COLUMNS = [
 
 export function useServiceOrders() {
   const queryClient = useQueryClient();
-  const { storeId } = useStore();
+  const { storeId, vehicleType } = useStore();
 
   // NOTA: Realtime sync está centralizado em useRealtimeSync para melhor performance
   // Removido daqui para evitar subscriptions duplicadas
@@ -201,7 +201,7 @@ export function useServiceOrders() {
 
       console.log('✅ OS criada:', newOrder);
 
-      const checklistItems = DEFAULT_CHECKLIST_ITEMS.map(item => ({
+      const checklistItems = getDefaultChecklistItems(vehicleType).map(item => ({
         store_id: storeId!,
         order_id: newOrder.id,
         label: typeof item === 'string' ? item : item.label,

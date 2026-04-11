@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ChecklistItem } from '@/types/service-order';
-import { DEFAULT_CHECKLIST_ITEMS } from '@/types/service-order';
+import { getDefaultChecklistItems } from '@/types/service-order';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -19,7 +19,7 @@ interface ChecklistProps {
 
 // Mapear label para tipo de checklist
 const getItemType = (label: string): 'checkbox' | 'yesno' | 'rating' | 'textarea' => {
-  const defaultItem = DEFAULT_CHECKLIST_ITEMS.find(
+  const defaultItem = getDefaultChecklistItems(VEHICLE_CAP === 'Carro' ? 'carro' : 'moto').find(
     item => typeof item !== 'string' && item.label === label
   );
 

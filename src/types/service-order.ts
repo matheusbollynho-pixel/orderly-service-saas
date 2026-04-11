@@ -166,32 +166,37 @@ export interface Mechanic {
   updated_at: string;
 }
 
-const _vehicleLabel = (import.meta.env.VITE_VEHICLE_LABEL || 'moto').toLowerCase().trim();
+export function getDefaultChecklistItems(vehicleType: string) {
+  return vehicleType === 'carro'
+    ? [
+        { label: 'Chave do CARRO', type: 'yesno' as const },
+        { label: 'NÍVEL DE COMBUSTÍVEL', type: 'rating' as const },
+        { label: 'Lataria sem amassados/riscos', type: 'yesno' as const },
+        { label: 'Vidros sem trincas', type: 'yesno' as const },
+        { label: 'Faróis e Lanternas funcionando', type: 'yesno' as const },
+        { label: 'Pneus e Rodas em boas condições', type: 'yesno' as const },
+        { label: 'Painel sem alertas', type: 'yesno' as const },
+        { label: 'Funcionamento do Motor', type: 'yesno' as const },
+        { label: 'Elétrica funcionando', type: 'yesno' as const },
+        { label: 'Ar Condicionado funcionando', type: 'yesno' as const },
+        { label: 'Nível de Óleo adequado', type: 'yesno' as const },
+        { label: 'Nível de Água/Radiador adequado', type: 'yesno' as const },
+        { label: 'Fluido de Freio adequado', type: 'yesno' as const },
+        { label: 'Observações', type: 'textarea' as const },
+      ]
+    : [
+        { label: 'Chave da MOTO', type: 'yesno' as const },
+        { label: 'Funcionamento do Motor', type: 'yesno' as const },
+        { label: 'Elétrica', type: 'yesno' as const },
+        { label: 'NÍVEL DE GASOLINA', type: 'rating' as const },
+        { label: 'Observações', type: 'textarea' as const },
+      ];
+}
 
-export const DEFAULT_CHECKLIST_ITEMS = _vehicleLabel === 'carro'
-  ? [
-      { label: 'Chave do CARRO', type: 'yesno' as const },
-      { label: 'NÍVEL DE COMBUSTÍVEL', type: 'rating' as const },
-      { label: 'Lataria sem amassados/riscos', type: 'yesno' as const },
-      { label: 'Vidros sem trincas', type: 'yesno' as const },
-      { label: 'Faróis e Lanternas funcionando', type: 'yesno' as const },
-      { label: 'Pneus e Rodas em boas condições', type: 'yesno' as const },
-      { label: 'Painel sem alertas', type: 'yesno' as const },
-      { label: 'Funcionamento do Motor', type: 'yesno' as const },
-      { label: 'Elétrica funcionando', type: 'yesno' as const },
-      { label: 'Ar Condicionado funcionando', type: 'yesno' as const },
-      { label: 'Nível de Óleo adequado', type: 'yesno' as const },
-      { label: 'Nível de Água/Radiador adequado', type: 'yesno' as const },
-      { label: 'Fluido de Freio adequado', type: 'yesno' as const },
-      { label: 'Observações', type: 'textarea' as const },
-    ]
-  : [
-      { label: 'Chave da MOTO', type: 'yesno' as const },
-      { label: 'Funcionamento do Motor', type: 'yesno' as const },
-      { label: 'Elétrica', type: 'yesno' as const },
-      { label: 'NÍVEL DE GASOLINA', type: 'rating' as const },
-      { label: 'Observações', type: 'textarea' as const },
-    ];
+// Compatibilidade retroativa
+export const DEFAULT_CHECKLIST_ITEMS = getDefaultChecklistItems(
+  (import.meta.env.VITE_VEHICLE_LABEL || 'moto').toLowerCase().trim()
+);
 
 export const STATUS_LABELS: Record<OrderStatus, string> = {
   aberta: 'Aberta',
