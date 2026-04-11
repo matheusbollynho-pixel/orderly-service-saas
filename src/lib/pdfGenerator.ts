@@ -15,10 +15,7 @@ function buildOrderPDFDocument(order: ServiceOrder) {
     const logoWidth = 50;
     const logoHeight = 22;
     const logoX = (pageWidth - logoWidth) / 2;
-    // Fundo branco explícito para garantir transparência correta
-    doc.setFillColor(255, 255, 255);
-    doc.rect(logoX, yPosition, logoWidth, logoHeight, 'F');
-    doc.addImage(LOGO_BASE64, 'PNG', logoX, yPosition, logoWidth, logoHeight);
+    doc.addImage(LOGO_BASE64, 'JPEG', logoX, yPosition, logoWidth, logoHeight);
     yPosition += logoHeight + 3;
   } catch (error) {
     console.error('Erro ao carregar logo:', error);
