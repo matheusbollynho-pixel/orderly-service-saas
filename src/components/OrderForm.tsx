@@ -195,9 +195,9 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting, initialData }: { o
     if (motorcycles.length > 0) {
       const motosFormatadas = motorcycles.map(moto => ({
         placa: moto.placa,
-        moto_info: moto.modelo,
-        equipment: `${moto.modelo} ${moto.ano || ''} ${moto.cor || ''}`.trim(),
-        model: moto.modelo,
+        moto_info: `${moto.marca ?? ''} ${moto.modelo}`.trim(),
+        equipment: `${moto.marca ?? ''} ${moto.modelo} ${moto.ano || ''} ${moto.cor || ''}`.trim(),
+        model: `${moto.marca ?? ''} ${moto.modelo}`.trim(),
         year: moto.ano?.toString() || '',
         color: moto.cor || '',
         km: ''
