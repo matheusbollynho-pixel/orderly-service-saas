@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useStore } from '@/contexts/StoreContext';
+import { QRCodeSVG } from 'qrcode.react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -383,13 +384,18 @@ export default function SatisfactionDashboardPage() {
 
       {storeLink && (
         <Card className="border-border/50">
-          <CardContent className="pt-4 pb-3">
-            <p className="text-xs text-muted-foreground mb-2 font-medium">Link de avaliação da loja (QR Code / WhatsApp)</p>
-            <div className="flex items-center gap-2">
-              <code className="text-xs bg-muted px-2 py-1 rounded flex-1 truncate">{storeLink}</code>
-              <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(storeLink); toast.success('Link copiado!'); }}>
-                Copiar
-              </Button>
+          <CardContent className="pt-4 pb-3 space-y-3">
+            <p className="text-xs text-muted-foreground font-medium">Link de avaliação da loja (QR Code / WhatsApp)</p>
+            <div className="flex gap-4 items-start">
+              <div className="bg-white p-2 rounded">
+                <QRCodeSVG value={storeLink} size={100} />
+              </div>
+              <div className="flex-1 space-y-2">
+                <code className="text-xs bg-muted px-2 py-1 rounded block break-all">{storeLink}</code>
+                <Button size="sm" variant="outline" type="button" onClick={() => { navigator.clipboard.writeText(storeLink); toast.success('Link copiado!'); }}>
+                  Copiar link
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
