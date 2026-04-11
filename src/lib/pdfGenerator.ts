@@ -10,21 +10,24 @@ function buildOrderPDFDocument(order: ServiceOrder) {
   const pageHeight = 297;
   let yPosition = margin;
 
-  // ============ CABEÇALHO BANDARA MOTOS ============
+  // ============ CABEÇALHO ============
+  const headerHeight = 30;
+  doc.setFillColor(18, 18, 18);
+  doc.rect(0, 0, pageWidth, headerHeight, 'F');
   try {
     const logoWidth = 50;
     const logoHeight = 22;
     const logoX = (pageWidth - logoWidth) / 2;
-    doc.addImage(LOGO_BASE64, 'JPEG', logoX, yPosition, logoWidth, logoHeight);
-    yPosition += logoHeight + 3;
+    const logoY = (headerHeight - logoHeight) / 2;
+    doc.addImage(LOGO_BASE64, 'PNG', logoX, logoY, logoWidth, logoHeight);
   } catch (error) {
     console.error('Erro ao carregar logo:', error);
-    doc.setTextColor(185, 28, 46);
-    doc.setFontSize(32);
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
-    doc.text('BANDARA MOTOS', pageWidth / 2, yPosition + 15, { align: 'center' });
-    yPosition += 30;
+    doc.text('SpeedSeek OS', pageWidth / 2, headerHeight / 2 + 3, { align: 'center' });
   }
+  yPosition = headerHeight + 5;
 
   // Dados da empresa
   doc.setFontSize(8);
