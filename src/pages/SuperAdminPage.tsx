@@ -203,27 +203,31 @@ export default function SuperAdminPage() {
       const base = wppUrl.replace(/\/$/, '');
       const headers = { token: wppToken, 'Content-Type': 'application/json' };
 
-      // Tenta vários endpoints até um responder
-      const endpoints = ['/instance/info', '/instance/connect', '/instance/status', '/'];
-      let state = 'desconhecido';
-      let found = false;
+      const res = await fetch(`${base}/instance/status`, { headers }).catch(() => null);
 
-      for (const ep of endpoints) {
-        const res = await fetch(`${base}${ep}`, { headers }).catch(() => null);
-        if (!res) continue;
-        if (res.status === 404) continue;
-        const raw = await res.text().catch(() => '{}');
-        let data: any = {};
-        try { data = JSON.parse(raw); } catch { /* ignore */ }
-        state = data?.instance?.state ?? data?.state ?? data?.status ?? data?.connectionState ?? (res.ok ? 'connected' : 'desconhecido');
-        found = true;
-        break;
+      if (!res || res.status === 404) {
+        toast.error('Endpoint não encontrado — verifique a URL');
+        setWppStatus('erro');
+        return;
+      }
+
+      const raw = await res.text().catch(() => '{}');
+      let data: any = {};
+      try { data = JSON.parse(raw); } catch { /* ignore */ }
+
+      // UazAPI pode retornar data.state como objeto {connected, jid, loggedIn, resetting}
+      const stateRaw = data?.instance?.state ?? data?.state ?? data?.status ?? data?.connectionState;
+      let state: string;
+      if (typeof stateRaw === 'object' && stateRaw !== null) {
+        state = stateRaw.connected ? 'connected' : 'disconnected';
+      } else if (typeof stateRaw === 'boolean') {
+        state = stateRaw ? 'connected' : 'disconnected';
+      } else {
+        state = String(stateRaw ?? (res.ok ? 'connected' : 'desconhecido'));
       }
 
       setWppStatus(state);
-      if (!found) {
-        toast.error('Nenhum endpoint respondeu — verifique a URL');
-      } else if (state === 'open' || state === 'connected') {
+      if (state === 'open' || state === 'connected') {
         toast.success(`WhatsApp conectado ✅`);
       } else {
         toast.warning(`Status: ${state}`);
