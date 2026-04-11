@@ -25,9 +25,9 @@ const SYSTEM_PROMPT = `Você é o assistente virtual de vendas do *SpeedSeek OS*
 Seu objetivo é:
 1. Perguntar o nome do lead logo no início (se ainda não souber)
 2. Entender o perfil da oficina (tamanho, quantos mecânicos, se usa papel ou planilha)
-3. Recomendar o plano ideal
-4. Enviar o acesso demo quando solicitado
-5. Fechar a venda ou conectar com o responsável
+3. Perguntar se a oficina trabalha com *motos* ou *carros* — isso é essencial para mostrar a demo correta
+4. Recomendar o plano ideal
+5. Quando o lead quiser testar ou contratar: coletar nome completo, e-mail e criar o acesso automaticamente
 
 PLANOS DISPONÍVEIS:
 ${PLANOS}
@@ -35,36 +35,37 @@ ${PLANOS}
 SITE: speedseekos.com.br
 
 ACESSO DEMONSTRAÇÃO:
-Quando o lead pedir a demo, PRIMEIRO pergunte: "Sua oficina trabalha com motos ou carros?" e aguarde a resposta.
+Quando o lead pedir demo/teste:
+- Se ainda não souber se é moto ou carro, pergunte primeiro
+- Se já souber, envie o link da demo correspondente:
 
-Se responder *motos*:
-🔗 *Link:* https://speedseekos-demo.vercel.app
-📧 *Login:* demo@speedseekos.com.br
-🔑 *Senha:* teste123
-_Explore à vontade! É um ambiente de demonstração._
-_⚠️ O envio de PDF da OS é desativado na demo — na versão real funciona normalmente._
+Se *motos*:
+🔗 https://speedseekos-demo.vercel.app
+📧 demo@speedseekos.com.br | 🔑 teste123
 
-Se responder *carros*:
-🔗 *Link:* https://speedseekos-demo-carro.vercel.app
-📧 *Login:* demo@speedseekos.com.br
-🔑 *Senha:* teste123
-_Explore à vontade! É um ambiente de demonstração._
-_⚠️ O envio de PDF da OS é desativado na demo — na versão real funciona normalmente._
+Se *carros*:
+🔗 https://speedseekos-demo-carro.vercel.app
+📧 demo@speedseekos.com.br | 🔑 teste123
+
+CRIAÇÃO DE CONTA (teste grátis de 5 dias):
+Quando o lead quiser começar o teste gratuito real (não só a demo):
+1. Pergunte o *nome da oficina*
+2. Pergunte o *e-mail* para acesso
+3. Quando tiver nome da oficina + e-mail + tipo de veículo, responda EXATAMENTE neste formato (sem mais nada antes ou depois):
+CRIAR_CONTA|nome_oficina|email|tipo_veiculo
+Exemplo: CRIAR_CONTA|Bandara Motos|dono@email.com|moto
 
 ATENDIMENTO HUMANO:
-O responsável está disponível a qualquer hora — se o lead quiser conversar diretamente, diga: "Pode mandar mensagem aqui mesmo que o responsável já vai te atender!"
+Se o lead quiser conversar com o responsável diretamente, diga: "Pode mandar mensagem aqui mesmo que o responsável já vai te atender!"
 
 REGRAS:
 - Responda sempre em português brasileiro
 - Seja amigável, direto e profissional
 - Máximo 3 parágrafos por resposta
 - Use emojis moderadamente
-- Pergunte o nome do lead na primeira ou segunda mensagem se ele não se apresentou
-- Quando o lead pedir demonstração: envie o acesso acima diretamente, sem pedir e-mail
-- Quando o lead quiser fechar/contratar: avise que o responsável vai entrar em contato em breve
-- Não invente funcionalidades que não existem nos planos acima
-- Se perguntar sobre preço, mostre os 3 planos
-- Para iniciar o teste gratuito de 7 dias, o lead deve entrar em contato com o responsável`;
+- Pergunte o nome na primeira ou segunda mensagem
+- Não invente funcionalidades
+- Se perguntar sobre preço, mostre os 3 planos`;
 
 async function sendWhatsApp(phone: string, message: string) {
   const url = `${UAZAPI_BASE_URL}/send/text`;
@@ -198,6 +199,61 @@ Me conta: sua oficina hoje usa papel, planilha ou já tem algum sistema?`;
   console.log('📌 Enviando WhatsApp para:', phone);
   await sendWhatsApp(phone, reply);
   console.log('📌 WhatsApp enviado!');
+
+  // Detecta comando de criar conta
+  const criarMatch = reply.match(/^CRIAR_CONTA\|([^|]+)\|([^|]+)\|([^|]+)/m);
+  if (criarMatch) {
+    const [, nomeOficina, emailLead, tipoVeiculo] = criarMatch;
+    const senha = Math.random().toString(36).slice(2, 10);
+
+    try {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL') || sbUrl;
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || sbKey;
+      const res = await fetch(`${supabaseUrl}/functions/v1/provision-client`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
+        body: JSON.stringify({
+          company_name: nomeOficina.trim(),
+          owner_email: emailLead.trim(),
+          owner_password: senha,
+          vehicle_type: tipoVeiculo.trim().toLowerCase().includes('carro') ? 'carro' : 'moto',
+          is_trial: true,
+        }),
+      });
+      const result = await res.json();
+
+      if (result.success) {
+        const appUrl = 'https://app.speedseekos.com.br';
+        const msgConfirm =
+          `✅ *Sua conta foi criada!*\n\n` +
+          `🔗 *Acesso:* ${appUrl}\n` +
+          `📧 *E-mail:* ${emailLead.trim()}\n` +
+          `🔑 *Senha:* ${senha}\n\n` +
+          `Você tem *5 dias grátis* para testar tudo! 🚀\n\n` +
+          `Na primeira vez que entrar, vamos te guiar pela configuração da sua oficina. Qualquer dúvida é só chamar aqui! 😊`;
+        await sendWhatsApp(phone, msgConfirm);
+        if (DONO_PHONE) {
+          await sendWhatsApp(DONO_PHONE,
+            `🎉 *Nova conta criada via WhatsApp!*\n📱 ${phone}\n🏪 ${nomeOficina}\n📧 ${emailLead}\n🚗 ${tipoVeiculo}`
+          );
+        }
+        // Salva histórico sem o comando CRIAR_CONTA
+        recentHistory[recentHistory.length - 1].content = msgConfirm;
+        await sb.from('conversation_state').upsert({
+          phone, state: 'conta_criada', data: { history: recentHistory },
+        }, { onConflict: 'phone' });
+        return new Response('ok', { status: 200 });
+      } else {
+        await sendWhatsApp(phone, `Ops, tive um problema ao criar sua conta 😕\nErro: ${result.error}\n\nVou avisar o responsável agora!`);
+        if (DONO_PHONE) await sendWhatsApp(DONO_PHONE, `❌ Erro ao criar conta para ${phone}: ${result.error}`);
+      }
+    } catch (err) {
+      console.error('Erro provision-client:', err);
+      await sendWhatsApp(phone, `Ops, algo deu errado. O responsável já foi avisado e vai te atender em breve! 😊`);
+      if (DONO_PHONE) await sendWhatsApp(DONO_PHONE, `❌ Erro crítico ao criar conta para ${phone}`);
+    }
+    return new Response('ok', { status: 200 });
+  }
 
   // Avisa dono se lead demonstrou interesse forte
   const interessePalavras = ['fechar', 'contratar', 'assinar', 'quanto custa', 'como faço', 'quero comprar', 'vou pegar', 'quero assinar', 'quero contratar', 'vou assinar', 'quero fechar', 'vou fechar', 'quero o plano', 'quero começar', 'como contrato', 'como assino', 'iniciar', 'ativar', 'quero testar', 'quero a demo', 'quero demonstração'];
