@@ -35,6 +35,22 @@ export function StoreProvider({ user, children }: { user: User | null; children:
   const [permissions, setPermissions] = useState<MemberPermissions>(ALL_PERMISSIONS);
 
   useEffect(() => {
+    // Modo single-tenant: VITE_STORE_ID definido no ambiente
+    const envStoreId = import.meta.env.VITE_STORE_ID as string | undefined;
+    if (envStoreId) {
+      if (user) {
+        setStoreId(envStoreId);
+        setRole('owner');
+        setPermissions(ALL_PERMISSIONS);
+      } else {
+        setStoreId(null);
+        setRole(null);
+        setPermissions(ALL_PERMISSIONS);
+      }
+      setLoading(false);
+      return;
+    }
+
     if (!user) {
       setStoreId(null);
       setPlan(null);
@@ -44,7 +60,7 @@ export function StoreProvider({ user, children }: { user: User | null; children:
       return;
     }
 
-    // Query original que funcionava — busca store_id e plan
+    // Modo SaaS: busca store_id e plan na tabela store_members
     supabase
       .from('store_members')
       .select('store_id, role, permissions, store_settings(plan)')
