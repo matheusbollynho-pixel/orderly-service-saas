@@ -621,12 +621,31 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    phone = (body.phone as string || '').replace(/\D/g, '');
-    text = (body.text as string || '').trim();
-    senderName = (body.sender_name as string || '');
+
+    // Suporte ao formato UazAPI (EventType + message)
+    const event = (body.event || body.EventType) as string || '';
+    if (event && !event.toLowerCase().includes('message')) return new Response('ok', { status: 200 });
+
+    // UazAPI: mensagem em body.message, contato em body.chat
+    const msg = (body.message || body.data || body) as Record<string, unknown>;
+    const fromMe = (msg.fromMe ?? msg.from_me) as boolean;
+    if (fromMe) return new Response('ok', { status: 200 });
+
+    // Phone vem de body.chat.wa_chatid ou body.message.chatid ou body.phone
+    const chat = (body.chat || {}) as Record<string, unknown>;
+    const rawPhone = ((chat.wa_chatid || msg.chatid || msg.phone || msg.from || body.phone) as string || '');
+    phone = rawPhone.replace(/@.*$/, '').replace(/[^0-9]/g, '');
+
+    // Texto vem de body.message.content ou body.text
+    const textRaw = msg.content ?? (msg.text as Record<string,unknown>)?.message ?? msg.text ?? msg.body ?? body.text ?? '';
+    text = (typeof textRaw === 'string' ? textRaw : JSON.stringify(textRaw)).trim();
+
+    senderName = (body.sender_name as string || (chat.name as string) || '');
+
+    console.log(`📌 phone: ${phone} | text: ${text.slice(0, 80)} | fromMe: ${fromMe}`);
 
     if (!phone || !text) {
-      return new Response(JSON.stringify({ error: 'phone e text são obrigatórios' }), { status: 400 });
+      return new Response('ok', { status: 200 });
     }
 
     console.log(`🤖 IA processando mensagem de ${phone}: "${text.slice(0, 80)}"`);
