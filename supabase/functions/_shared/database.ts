@@ -487,12 +487,20 @@ export interface StoreInfo {
   max_agendamentos_dia: number;
 }
 
-export async function buscarStoreSettings(sb: SupabaseClient): Promise<StoreInfo> {
-  const { data } = await sb
+export async function buscarStoreSettings(sb: SupabaseClient, storeId?: string): Promise<StoreInfo> {
+  const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN') || Deno.env.get('UAZAPI_TOKEN') || '';
+
+  let query = sb
     .from('store_settings')
-    .select('company_name, store_address, store_phone, opening_hours, payment_methods, ai_notes, max_agendamentos_dia')
-    .limit(1)
-    .maybeSingle();
+    .select('company_name, store_address, store_phone, opening_hours, payment_methods, ai_notes, max_agendamentos_dia, google_maps_url');
+
+  if (storeId) {
+    query = query.eq('id', storeId);
+  } else if (instanceToken) {
+    query = query.eq('whatsapp_instance_token', instanceToken);
+  }
+
+  const { data } = await query.limit(1).maybeSingle();
 
   const d = data as (StoreInfo & { max_agendamentos_dia?: number }) | null;
   return {
