@@ -19,6 +19,7 @@ import { DebugOrderPage } from "./pages/DebugOrderPage";
 import ConfigToolsPage from "./pages/ConfigToolsPage";
 import CollaboratorsPage from "./pages/CollaboratorsPage";
 import SuperAdminPage from "./pages/SuperAdminPage";
+import OnboardingPage from "./pages/OnboardingPage";
 import { useAuth } from "./hooks/useAuth";
 import { StoreProvider, useStore } from "./contexts/StoreContext";
 import { INITIAL_URL_HASH, INITIAL_URL_SEARCH } from "./integrations/supabase/client";
@@ -153,8 +154,13 @@ function AppContent() {
 
 // Bloqueia acesso se usuário não tem loja ativa vinculada
 function StoreGuard({ children }: { children: React.ReactNode }) {
-  const { storeId, loading } = useStore();
+  const { storeId, loading, onboarded } = useStore();
   const { signOut } = useAuth();
+  const location = useLocation();
+
+  if (!loading && storeId && !onboarded && location.pathname !== '/onboarding') {
+    return <OnboardingPage />;
+  }
 
   if (loading) return null;
 

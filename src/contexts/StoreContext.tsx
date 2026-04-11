@@ -16,6 +16,8 @@ interface StoreContextValue {
   role: string | null;
   permissions: MemberPermissions;
   isOwner: boolean;
+  vehicleType: 'moto' | 'carro';
+  onboarded: boolean;
 }
 
 const StoreContext = createContext<StoreContextValue>({
@@ -25,6 +27,8 @@ const StoreContext = createContext<StoreContextValue>({
   role: null,
   permissions: ALL_PERMISSIONS,
   isOwner: false,
+  vehicleType: 'moto',
+  onboarded: true,
 });
 
 export function StoreProvider({ user, children }: { user: User | null; children: ReactNode }) {
@@ -33,6 +37,8 @@ export function StoreProvider({ user, children }: { user: User | null; children:
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<string | null>(null);
   const [permissions, setPermissions] = useState<MemberPermissions>(ALL_PERMISSIONS);
+  const [vehicleType, setVehicleType] = useState<'moto' | 'carro'>('moto');
+  const [onboarded, setOnboarded] = useState(true);
 
   useEffect(() => {
     // Modo single-tenant: VITE_STORE_ID definido no ambiente
@@ -63,7 +69,7 @@ export function StoreProvider({ user, children }: { user: User | null; children:
     // Modo SaaS: busca store_id e plan na tabela store_members
     supabase
       .from('store_members')
-      .select('store_id, role, permissions, store_settings(plan)')
+      .select('store_id, role, permissions, store_settings(plan, vehicle_type, onboarded)')
       .eq('user_id', user.id)
       .eq('active', true)
       .maybeSingle()
@@ -74,6 +80,8 @@ export function StoreProvider({ user, children }: { user: User | null; children:
           setStoreId(data.store_id);
           setRole(data.role ?? null);
           setPlan(data.store_settings?.plan ?? 'basic');
+          setVehicleType(data.store_settings?.vehicle_type ?? 'moto');
+          setOnboarded(data.store_settings?.onboarded ?? true);
           if (data.role === 'owner') {
             setPermissions(ALL_PERMISSIONS);
           } else {
@@ -87,7 +95,7 @@ export function StoreProvider({ user, children }: { user: User | null; children:
   const isOwner = role === 'owner';
 
   return (
-    <StoreContext.Provider value={{ storeId, plan, loading, role, permissions, isOwner }}>
+    <StoreContext.Provider value={{ storeId, plan, loading, role, permissions, isOwner, vehicleType, onboarded }}>
       {children}
     </StoreContext.Provider>
   );
