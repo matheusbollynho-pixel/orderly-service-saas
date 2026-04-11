@@ -3,6 +3,9 @@ project_id = "cdigibzeweugjysiyicw"
 [functions.enviar-documento-whatsapp]
 verify_jwt = false
 
+[functions.enviar-imagem-whatsapp]
+verify_jwt = false
+
 [functions.check-maintenance-reminders]
 verify_jwt = false
 
@@ -16,4 +19,52 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.send-appointment-confirmation]
+verify_jwt = false
+
+[functions.ia-atendimento]
+verify_jwt = false
+
+[functions.ia-vendas]
+verify_jwt = false
+
+[functions.webhook-whatsapp]
+verify_jwt = false
+
+[functions.zapi-webhook]
+verify_jwt = false
+
+[functions.asaas-webhook]
+verify_jwt = false
+
+[functions.os-pronta-aviso]
+verify_jwt = false
+
+[functions.send-satisfaction-bulk]
+verify_jwt = false
+
+[functions.invite-collaborator]
+verify_jwt = false
+
+[functions.agendamento-lembrete-dia-anterior]
+verify_jwt = false
+
+[functions.boleto-alertas]
+verify_jwt = false
+
+[functions.crisis-alert]
+verify_jwt = false
+
+[functions.send-birthday-messages]
+verify_jwt = false
+
+[functions.fiado-cobranca-auto]
+verify_jwt = false
+
+[functions.fiado-ia-agenda]
+verify_jwt = false
+
+[functions.asaas-cobranca]
+verify_jwt = false
+
+[functions.fiado-asaas-cobranca]
 verify_jwt = false
