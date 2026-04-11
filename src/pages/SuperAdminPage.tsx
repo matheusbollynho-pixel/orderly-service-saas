@@ -201,14 +201,15 @@ export default function SuperAdminPage() {
     setWppStatus(null);
     try {
       const base = wppUrl.replace(/\/$/, '');
-      // UazAPI: GET /instance/connect retorna status da instância autenticada pelo token
+      // UazAPI usa header 'token' e endpoint /instance/connect
       const res = await fetch(`${base}/instance/connect`, {
-        headers: { apikey: wppToken },
+        headers: { token: wppToken },
       });
       const data = await res.json();
-      const state = data?.instance?.state ?? data?.state ?? data?.status ?? (res.ok ? 'conectado' : 'erro');
+      // UazAPI retorna { instance: { state: 'open' | 'close' | ... } } ou { state: ... }
+      const state = data?.instance?.state ?? data?.state ?? data?.status ?? (res.ok ? 'conectado' : 'desconhecido');
       setWppStatus(state);
-      if (state === 'open' || state === 'conectado') {
+      if (state === 'open' || state === 'connected') {
         toast.success(`WhatsApp conectado ✅`);
       } else {
         toast.warning(`Status: ${state}`);
