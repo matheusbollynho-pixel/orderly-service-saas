@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useStore } from '@/contexts/StoreContext';
-import { QRCodeSVG } from 'qrcode.react';
+import { QRCodeCanvas } from 'qrcode.react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -387,14 +387,27 @@ export default function SatisfactionDashboardPage() {
           <CardContent className="pt-4 pb-3 space-y-3">
             <p className="text-xs text-muted-foreground font-medium">Link de avaliação da loja (QR Code / WhatsApp)</p>
             <div className="flex gap-4 items-start">
-              <div className="bg-white p-2 rounded">
-                <QRCodeSVG value={storeLink} size={100} />
+              <div className="bg-white p-2 rounded" id="qr-code-container">
+                <QRCodeCanvas value={storeLink} size={200} id="qr-code-canvas" />
               </div>
               <div className="flex-1 space-y-2">
                 <code className="text-xs bg-muted px-2 py-1 rounded block break-all">{storeLink}</code>
-                <Button size="sm" variant="outline" type="button" onClick={() => { navigator.clipboard.writeText(storeLink); toast.success('Link copiado!'); }}>
-                  Copiar link
-                </Button>
+                <div className="flex gap-2 flex-wrap">
+                  <Button size="sm" variant="outline" type="button" onClick={() => { navigator.clipboard.writeText(storeLink); toast.success('Link copiado!'); }}>
+                    Copiar link
+                  </Button>
+                  <Button size="sm" variant="outline" type="button" onClick={() => {
+                    const canvas = document.getElementById('qr-code-canvas') as HTMLCanvasElement;
+                    if (!canvas) return;
+                    const url = canvas.toDataURL('image/png');
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'qrcode-avaliacao.png';
+                    a.click();
+                  }}>
+                    Baixar QR Code
+                  </Button>
+                </div>
               </div>
             </div>
           </CardContent>
