@@ -71,3 +71,6 @@ verify_jwt = false
 
 [functions.check-trial-expiry]
 verify_jwt = false
+
+[functions.provision-client]
+verify_jwt = false

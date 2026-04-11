@@ -292,6 +292,13 @@ export default function SuperAdminPage() {
     setEditSub(false);
   };
 
+  const provisionClient = async (payload: Record<string, any>) => {
+    const { data, error } = await supabase.functions.invoke('provision-client', { body: payload });
+    if (error) throw new Error(error.message);
+    if (data?.error) throw new Error(data.error);
+    return data;
+  };
+
   const createDemo = async () => {
     if (!demoClient.company_name || !demoClient.owner_email || !demoClient.owner_password) {
       toast.error('Preencha nome da loja, e-mail e senha');
@@ -299,42 +306,14 @@ export default function SuperAdminPage() {
     }
     setCreatingDemo(true);
     try {
-      const sb = supabase as any;
-      const { data: authData, error: authErr } = await supabase.auth.signUp({
-        email: demoClient.owner_email,
-        password: demoClient.owner_password,
-      });
-      if (authErr || !authData.user) { toast.error(`Erro ao criar usuário: ${authErr?.message}`); setCreatingDemo(false); return; }
-      const userId = authData.user.id;
-
-      const trialEndsAt = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString();
-
-      const { data: store, error: storeErr } = await sb
-        .from('store_settings')
-        .insert({
-          company_name: demoClient.company_name,
-          store_phone: demoClient.store_phone || null,
-          plan: 'trial',
-          active: true,
-          trial_ends_at: trialEndsAt,
-        })
-        .select('id')
-        .single();
-      if (storeErr || !store) { toast.error(`Erro ao criar loja: ${storeErr?.message}`); setCreatingDemo(false); return; }
-
-      await sb.from('store_members').insert({ store_id: store.id, user_id: userId, role: 'owner', active: true });
-
-      await sb.from('saas_subscriptions').insert({
-        store_id: store.id,
-        owner_name: demoClient.company_name,
-        owner_email: demoClient.owner_email,
-        owner_phone: demoClient.store_phone || null,
+      const data = await provisionClient({
         company_name: demoClient.company_name,
-        plan: 'trial',
-        status: 'pending',
-        due_date: trialEndsAt.split('T')[0],
+        store_phone: demoClient.store_phone || null,
+        owner_email: demoClient.owner_email,
+        owner_password: demoClient.owner_password,
+        is_trial: true,
       });
-
+      const trialEndsAt = data.trial_ends_at;
       toast.success(`Demo criado! Expira em 5 dias (${new Date(trialEndsAt).toLocaleDateString('pt-BR')})`);
       setShowDemo(false);
       setDemoClient({ company_name: '', owner_email: '', owner_password: '', store_phone: '' });
@@ -353,44 +332,19 @@ export default function SuperAdminPage() {
     }
     setCreating(true);
     try {
-      const sb = supabase as any;
-      const { data: authData, error: authErr } = await supabase.auth.signUp({
-        email: newClient.owner_email,
-        password: newClient.owner_password,
+      await provisionClient({
+        company_name: newClient.company_name,
+        store_phone: newClient.store_phone || null,
+        owner_name: newClient.owner_name || null,
+        owner_email: newClient.owner_email,
+        owner_password: newClient.owner_password,
+        plan: newClient.plan,
+        is_trial: false,
+        due_date: newClient.due_date || null,
+        amount: newClient.amount || null,
+        whatsapp_instance_url: newClient.whatsapp_instance_url || null,
+        whatsapp_instance_token: newClient.whatsapp_instance_token || null,
       });
-      if (authErr || !authData.user) { toast.error(`Erro ao criar usuário: ${authErr?.message}`); setCreating(false); return; }
-      const userId = authData.user.id;
-
-      const { data: store, error: storeErr } = await sb
-        .from('store_settings')
-        .insert({
-          company_name: newClient.company_name,
-          store_phone: newClient.store_phone || null,
-          plan: newClient.plan,
-          active: true,
-          whatsapp_instance_url: newClient.whatsapp_instance_url || null,
-          whatsapp_instance_token: newClient.whatsapp_instance_token || null,
-        })
-        .select('id')
-        .single();
-      if (storeErr || !store) { toast.error(`Erro ao criar loja: ${storeErr?.message}`); setCreating(false); return; }
-
-      await sb.from('store_members').insert({ store_id: store.id, user_id: userId, role: 'owner', active: true });
-
-      if (newClient.owner_name || newClient.due_date || newClient.amount) {
-        await sb.from('saas_subscriptions').insert({
-          store_id: store.id,
-          owner_name: newClient.owner_name || newClient.company_name,
-          owner_email: newClient.owner_email,
-          owner_phone: newClient.store_phone || null,
-          company_name: newClient.company_name,
-          plan: newClient.plan,
-          status: 'active',
-          due_date: newClient.due_date || null,
-          amount: newClient.amount ? parseFloat(newClient.amount) : null,
-        });
-      }
-
       toast.success(`${newClient.company_name} criado!`);
       setShowNewClient(false);
       setNewClient({ company_name: '', store_phone: '', owner_name: '', owner_email: '', owner_password: '', plan: 'basic', amount: '', due_date: '', whatsapp_instance_url: '', whatsapp_instance_token: '' });
