@@ -438,6 +438,8 @@ export async function criarAgendamento(
     client_name: string;
     client_phone: string;
     client_id?: string | null;
+    store_id?: string | null;
+    status?: string;
     appointment_date: string;
     shift: string;
     equipment: string;
@@ -451,12 +453,13 @@ export async function criarAgendamento(
       client_name: dados.client_name,
       client_phone: dados.client_phone,
       client_id: dados.client_id || null,
+      store_id: dados.store_id || null,
       appointment_date: dados.appointment_date,
       shift: dados.shift,
       equipment: dados.equipment,
       service_description: dados.service_description,
       mechanic_id: dados.mechanic_id || null,
-      status: 'agendado',
+      status: dados.status || 'confirmado',
     })
     .select('id')
     .single();
@@ -474,6 +477,7 @@ export async function criarAgendamento(
 // ============================================================
 
 export interface StoreInfo {
+  id: string | null;
   company_name: string;
   store_address: string | null;
   store_phone: string | null;
@@ -492,7 +496,7 @@ export async function buscarStoreSettings(sb: SupabaseClient, storeId?: string):
 
   let query = sb
     .from('store_settings')
-    .select('company_name, store_address, store_phone, opening_hours, payment_methods, ai_notes, max_agendamentos_dia, google_maps_url');
+    .select('id, company_name, store_address, store_phone, opening_hours, payment_methods, ai_notes, max_agendamentos_dia, google_maps_url');
 
   if (storeId) {
     query = query.eq('id', storeId);
@@ -504,6 +508,7 @@ export async function buscarStoreSettings(sb: SupabaseClient, storeId?: string):
 
   const d = data as (StoreInfo & { max_agendamentos_dia?: number }) | null;
   return {
+    id: d?.id || null,
     company_name: d?.company_name || 'Bandara Motos',
     store_address: d?.store_address || null,
     store_phone: d?.store_phone || null,

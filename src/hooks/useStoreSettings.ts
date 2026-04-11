@@ -23,6 +23,8 @@ export interface StoreSettings {
   asaas_api_key?: string | null;
   instagram_url?: string | null;
   google_maps_url?: string | null;
+  opening_hours?: string | null;
+  payment_methods?: string | null;
 }
 
 const DEFAULTS: Omit<StoreSettings, 'id'> = {

@@ -338,10 +338,12 @@ async function executarFerramenta(
     }
 
     case 'criar_agendamento': {
+      const storeForAppt = await buscarStoreSettings(sb);
       const result = await criarAgendamento(sb, {
         client_name: input.client_name as string,
         client_phone: input.client_phone as string,
         client_id: (input.client_id as string) || conversationContext.client_id || null,
+        store_id: storeForAppt.id || null,
         appointment_date: input.appointment_date as string,
         shift: input.shift as string,
         equipment: input.equipment as string,

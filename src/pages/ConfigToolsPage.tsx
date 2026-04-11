@@ -90,6 +90,8 @@ export default function ConfigToolsPage() {
   const [asaasApiKey, setAsaasApiKey] = useState('');
   const [instagramUrl, setInstagramUrl] = useState('');
   const [googleMapsUrl, setGoogleMapsUrl] = useState('');
+  const [openingHours, setOpeningHours] = useState('');
+  const [paymentMethods, setPaymentMethods] = useState('');
   const [templates, setTemplates] = useState<Record<MessageKey, string>>({
     whatsapp_confirmation_template: '',
     whatsapp_satisfaction_template: '',
@@ -117,6 +119,8 @@ export default function ConfigToolsPage() {
       setAsaasApiKey((settings as any).asaas_api_key || '');
       setInstagramUrl(settings.instagram_url || '');
       setGoogleMapsUrl(settings.google_maps_url || '');
+      setOpeningHours(settings.opening_hours || '');
+      setPaymentMethods(settings.payment_methods || '');
       setTemplates({
         whatsapp_confirmation_template: settings.whatsapp_confirmation_template,
         whatsapp_satisfaction_template: settings.whatsapp_satisfaction_template,
@@ -149,6 +153,8 @@ export default function ConfigToolsPage() {
       asaas_api_key: asaasApiKey || null,
       instagram_url: instagramUrl || null,
       google_maps_url: googleMapsUrl || null,
+      opening_hours: openingHours || null,
+      payment_methods: paymentMethods || null,
       ...templates,
     } as Partial<StoreSettings>);
   }
@@ -218,6 +224,33 @@ export default function ConfigToolsPage() {
                   />
                 </div>
               ))}
+
+              {/* Horário de Funcionamento */}
+              <div className="space-y-1">
+                <label className="text-xs text-neutral-400 font-medium">Horário de Funcionamento</label>
+                <textarea
+                  rows={3}
+                  value={openingHours}
+                  onChange={e => setOpeningHours(e.target.value)}
+                  placeholder={`Ex:\nSeg a Sex: 08h às 18h\nSábados: 08h às 12h\nDomingos: Fechado`}
+                  className="w-full p-2 border border-white/20 rounded text-sm bg-black/30 text-neutral-200"
+                />
+                <p className="text-xs text-neutral-500">Usado pela IA para informar clientes sobre o funcionamento</p>
+              </div>
+
+              {/* Formas de Pagamento */}
+              <div className="space-y-1">
+                <label className="text-xs text-neutral-400 font-medium">Formas de Pagamento Aceitas</label>
+                <input
+                  type="text"
+                  value={paymentMethods}
+                  onChange={e => setPaymentMethods(e.target.value)}
+                  placeholder="Ex: PIX, Dinheiro, Cartão de crédito/débito"
+                  className="w-full p-2 border border-white/20 rounded text-sm bg-black/30 text-neutral-200"
+                />
+                <p className="text-xs text-neutral-500">Usado pela IA para informar clientes sobre pagamento</p>
+              </div>
+
               {/* WhatsApp alertas internos */}
               <div className="border border-white/10 rounded-lg p-3 space-y-3 bg-black/20">
                 <p className="text-xs text-neutral-400 font-semibold uppercase tracking-wide">WhatsApp — Alertas Internos (Boletos)</p>
