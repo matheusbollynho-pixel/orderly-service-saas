@@ -50,10 +50,33 @@ export async function saveConversationState(
   sb: SupabaseClient,
   phone: string,
   state: string,
-  context: ConversationContext
+  context: ConversationContext,
+  storeId?: string
 ): Promise<void> {
+  // Se não passou storeId, tenta buscar da tabela ou usar o primeiro disponível
+  let resolvedStoreId = storeId;
+  if (!resolvedStoreId) {
+    // Tenta pegar o store_id existente para este phone
+    const { data: existing } = await sb
+      .from('conversation_state')
+      .select('store_id')
+      .eq('phone', phone)
+      .maybeSingle();
+    if (existing?.store_id) {
+      resolvedStoreId = existing.store_id;
+    } else {
+      // Fallback: primeiro store disponível
+      const { data: store } = await sb
+        .from('store_settings')
+        .select('id')
+        .limit(1)
+        .maybeSingle();
+      resolvedStoreId = store?.id;
+    }
+  }
+
   await sb.from('conversation_state').upsert(
-    { phone, state, context, updated_at: new Date().toISOString() },
+    { phone, state, context, store_id: resolvedStoreId, updated_at: new Date().toISOString() },
     { onConflict: 'phone' }
   );
 }
