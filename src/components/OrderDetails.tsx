@@ -68,7 +68,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { VEHICLE_CAP } from '@/lib/vehicleLabel';
+import { useVehicleLabel } from '@/hooks/useVehicleLabel';
 
 interface OrderDetailsProps {
   order: ServiceOrder;
@@ -122,6 +122,7 @@ export function OrderDetails({
   const { mechanics } = useMechanics();
   const { getClientById, getMotorcycleById, updateClientById, updateMotorcycleById } = useClients();
   const { settings: storeSettings } = useStoreSettings();
+  const { VEHICLE_CAP } = useVehicleLabel();
   const { storeId } = useStore();
   const printRef = useRef<HTMLDivElement>(null);
   // Corrigido: declarar isExpress apenas uma vez, usando problem_description

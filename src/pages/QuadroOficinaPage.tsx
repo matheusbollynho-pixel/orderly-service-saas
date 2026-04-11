@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { VEHICLE_CAP, VEHICLES_CAP } from '@/lib/vehicleLabel';
+import { useVehicleLabel } from '@/hooks/useVehicleLabel';
 
 interface QuadroOficinaPageProps {
   orders: ServiceOrder[];
@@ -181,6 +181,7 @@ export default function QuadroOficinaPage({
   onUpdateOrder,
 }: QuadroOficinaPageProps) {
   const [statusFilter, setStatusFilter] = useState<StatusOficina | 'todos'>('todos');
+  const { VEHICLE_CAP, VEHICLES_CAP } = useVehicleLabel();
 
   // Apenas OS que ainda não foram entregues
   const activeOrders = useMemo(

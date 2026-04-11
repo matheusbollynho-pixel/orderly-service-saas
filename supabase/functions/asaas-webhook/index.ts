@@ -124,6 +124,7 @@ async function provisionarCliente(payment: Record<string, unknown>) {
       subdomain,
       plan,
       active: true,
+      onboarded: false,
       asaas_customer_id: asaasCustomerId,
     })
     .select('id')

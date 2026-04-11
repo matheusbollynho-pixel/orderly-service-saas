@@ -29,7 +29,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { ChevronLeft, ChevronRight, Plus, Phone, Wrench, Trash2, CalendarDays, LayoutDashboard, Clock3, Loader2, CheckCircle2, ClipboardList, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { VEHICLE_CAP } from '@/lib/vehicleLabel';
+import { useVehicleLabel } from '@/hooks/useVehicleLabel';
 
 const SHIFTS: AppointmentShift[] = ['manha', 'tarde'];
 const SHIFT_ICONS: Record<AppointmentShift, string> = {
@@ -119,6 +119,7 @@ export default function AgendaPage({ onConvertToOS }: AgendaPageProps = {}) {
   const [currentWeekRef, setCurrentWeekRef] = useState(new Date());
   const weekDays = useMemo(() => getWeekDays(currentWeekRef), [currentWeekRef]);
 
+  const { VEHICLE_CAP } = useVehicleLabel();
   const startDate = format(weekDays[0], 'yyyy-MM-dd');
   const endDate = format(weekDays[weekDays.length - 1], 'yyyy-MM-dd');
 

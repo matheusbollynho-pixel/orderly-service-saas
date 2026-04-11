@@ -37,7 +37,7 @@ import {
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { VEHICLE_CAP } from '@/lib/vehicleLabel';
+import { useVehicleLabel } from '@/hooks/useVehicleLabel';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -133,6 +133,7 @@ interface ProductFormProps {
 }
 
 function ProductFormDialog({ open, product, isEditing, isSaving, onChange, onBulkChange, onSave, onClose }: ProductFormProps) {
+  const { VEHICLE_CAP } = useVehicleLabel();
   const [aiDescription, setAiDescription] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
 
@@ -542,6 +543,7 @@ export default function InventoryPage() {
     isCreatingMovement,
   } = useInventory();
 
+  const { VEHICLE_CAP } = useVehicleLabel();
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('produtos');
   const [filterLowStock, setFilterLowStock] = useState(false);

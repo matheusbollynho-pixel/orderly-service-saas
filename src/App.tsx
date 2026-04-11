@@ -80,7 +80,9 @@ function AuthenticatedApp() {
 
   // Usa hash capturado antes do SDK processar
   const [isInvite] = useState(() =>
-    INITIAL_URL_HASH.includes('type=invite') || INITIAL_URL_SEARCH.includes('type=invite')
+    INITIAL_URL_HASH.includes('type=invite') || INITIAL_URL_SEARCH.includes('type=invite') ||
+    INITIAL_URL_HASH.includes('type=recovery') || INITIAL_URL_SEARCH.includes('type=recovery') ||
+    (INITIAL_URL_HASH.includes('access_token') && !INITIAL_URL_HASH.includes('type=magiclink'))
   );
 
   // Limpar fotos antigas uma vez por dia (100+ dias)

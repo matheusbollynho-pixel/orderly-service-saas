@@ -12,7 +12,7 @@ import { ClientSearch } from '@/components/ClientSearch';
 import { Client, Motorcycle } from '@/hooks/useClients';
 import { getMaintenanceKeywords, findKeywordInText, type MaintenanceKeyword } from '@/services/maintenanceReminderService';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
-import { VEHICLE_CAP, VEHICLES_CAP } from '@/lib/vehicleLabel';
+import { useVehicleLabel } from '@/hooks/useVehicleLabel';
 
 interface ClientData {
   name: string;
@@ -70,6 +70,7 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting, initialData }: { o
   const [maintenanceKeywords, setMaintenanceKeywords] = useState<MaintenanceKeyword[]>([]);
   const [detectedKeywords, setDetectedKeywords] = useState<MaintenanceKeyword[]>([]);
   const { members: teamMembers } = useTeamMembers();
+  const { VEHICLE_CAP, VEHICLES_CAP } = useVehicleLabel();
 
   const getTodayLocal = () => {
     const now = new Date();

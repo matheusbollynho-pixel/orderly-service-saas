@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { useState, useEffect } from 'react';
-import { VEHICLE_CAP, VEHICLES_CAP } from '@/lib/vehicleLabel';
+import { useVehicleLabel } from '@/hooks/useVehicleLabel';
 import { useServiceOrders } from '@/hooks/useServiceOrders';
 import { useAuth } from '@/hooks/useAuth';
 import { useStore } from '@/contexts/StoreContext';
@@ -72,6 +72,7 @@ export default function ConfigToolsPage() {
   const { user } = useAuth();
   const { isOwner, role, loading: storeLoading } = useStore();
   const isRestrictedUser = !!user && role !== null && role !== 'owner';
+  const { VEHICLE_CAP, VEHICLES_CAP } = useVehicleLabel();
   const navigate = useNavigate();
   const [showKeywords, setShowKeywords] = useState(false);
   const [removeOsId, setRemoveOsId] = useState('');

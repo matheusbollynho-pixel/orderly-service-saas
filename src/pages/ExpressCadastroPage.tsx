@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import { createMaintenanceReminder, getMaintenanceKeywords, findKeywordInText } from '@/services/maintenanceReminderService';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
 import { useStore } from '@/contexts/StoreContext';
-import { VEHICLE_CAP, VEHICLES_CAP } from '@/lib/vehicleLabel';
+import { useVehicleLabel } from '@/hooks/useVehicleLabel';
 
 interface ExpressCadastroPageProps {
   onBack?: () => void;
@@ -29,6 +29,7 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
     getClientMotorcycles,
   } = useClients();
   const { createOrder } = useServiceOrders();
+  const { VEHICLE_CAP, VEHICLES_CAP } = useVehicleLabel();
   const { storeId } = useStore();
   const { members: teamMembers } = useTeamMembers();
   const [isSaving, setIsSaving] = useState(false);

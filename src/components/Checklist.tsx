@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { Star } from 'lucide-react';
-import { VEHICLE_CAP } from '@/lib/vehicleLabel';
+import { useVehicleLabel } from '@/hooks/useVehicleLabel';
 
 interface ChecklistProps {
   items: ChecklistItem[];
@@ -41,6 +41,7 @@ const getLabelColor = (itemType?: string, completed?: boolean) => {
 };
 
 export function Checklist({ items, onItemToggle, onRatingChange, onObservationsChange, disabled, orderId = '' }: ChecklistProps) {
+  const { VEHICLE_CAP } = useVehicleLabel();
 
   const observationItem = items.find(item => {
     const itemType = item.item_type || getItemType(item.label);
