@@ -75,10 +75,12 @@ export async function saveConversationState(
     }
   }
 
-  await sb.from('conversation_state').upsert(
+  const { error } = await sb.from('conversation_state').upsert(
     { phone, state, context, store_id: resolvedStoreId, updated_at: new Date().toISOString() },
     { onConflict: 'phone' }
   );
+  if (error) console.error(`❌ saveConversationState error (phone=${phone}, state=${state}, store_id=${resolvedStoreId}):`, error.message, error.details, error.hint);
+  else console.log(`✅ saveConversationState OK (phone=${phone}, state=${state})`);
 }
 
 export async function clearConversationState(sb: SupabaseClient, phone: string): Promise<void> {

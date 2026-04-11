@@ -371,13 +371,25 @@ async function executarFerramenta(
     }
 
     case 'enviar_localizacao': {
-      await sendWhatsAppLocation(
-        normalizeBrPhone(phone),
-        -9.444226,
-        -38.222471,
-        'Bandara Motos',
-        'Rodovia BA-210, 913A, BTN II, Paulo Afonso-BA'
-      );
+      const storeInfo = await buscarStoreSettings(sb);
+      const endereco = storeInfo.store_address || '';
+      const nome = storeInfo.company_name || 'Nossa loja';
+
+      // Tenta extrair coordenadas do google_maps_url (formato: @lat,lng)
+      const { data: storeRow } = await sb.from('store_settings').select('google_maps_url').limit(1).maybeSingle();
+      const mapsUrl = (storeRow as Record<string, unknown> | null)?.google_maps_url as string | null;
+      const coordMatch = mapsUrl?.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+
+      if (coordMatch) {
+        const lat = parseFloat(coordMatch[1]);
+        const lng = parseFloat(coordMatch[2]);
+        await sendWhatsAppLocation(normalizeBrPhone(phone), lat, lng, nome, endereco);
+      } else if (mapsUrl) {
+        // Envia o link do Google Maps direto
+        await sendWhatsAppText(normalizeBrPhone(phone), `📍 *${nome}*\n${endereco}\n\n${mapsUrl}`);
+      } else {
+        await sendWhatsAppText(normalizeBrPhone(phone), `📍 *${nome}*\n${endereco || 'Consulte o endereço com nossa equipe.'}`);
+      }
       return { enviado: true };
     }
 
