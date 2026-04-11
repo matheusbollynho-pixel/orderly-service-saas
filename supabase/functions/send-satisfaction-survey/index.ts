@@ -1,21 +1,13 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { sendWhatsAppText, normalizeBrPhone } from '../_shared/whatsapp.ts'
+import { sendWhatsAppText, normalizeBrPhone, type StoreWhatsAppConfig } from '../_shared/whatsapp.ts'
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 )
 
-const _rawBaseUrl = Deno.env.get('APP_BASE_URL') || 'https://os-bandara.vercel.app'
+const _rawBaseUrl = Deno.env.get('APP_BASE_URL') || 'https://app.speedseekos.com.br'
 const APP_BASE_URL = (_rawBaseUrl.startsWith('http') ? _rawBaseUrl : `https://${_rawBaseUrl}`).replace(/\/$/, '')
-
-async function loadSettings() {
-  const { data } = await supabase.from('store_settings').select('company_name, whatsapp_satisfaction_template').limit(1).maybeSingle()
-  return {
-    company_name: data?.company_name || 'Minha Oficina',
-    template: data?.whatsapp_satisfaction_template || 'Olá, {{nome}}! 👋\n\nAqui é da *{{empresa}}*.\n\nSua opinião é muito importante para melhorarmos sempre.\nPode avaliar seu atendimento em menos de 1 minuto? ⭐\n\n{{link}}\n\nObrigado pela confiança! 🏍️🔧',
-  }
-}
 
 function buildSatisfactionMessage(clientName: string, link: string, company_name: string, template: string) {
   return template
@@ -41,6 +33,7 @@ async function ensureSatisfactionRow(order: any) {
   const { data: inserted, error } = await supabase
     .from('satisfaction_ratings')
     .insert({
+      store_id: order.store_id,
       order_id: order.id,
       client_id: order.client_id,
       atendimento_id: order.atendimento_id || null,
@@ -74,16 +67,32 @@ Deno.serve(async (req) => {
     if (body && body.order_id) {
       const { data: order } = await supabase
         .from('service_orders')
-        .select('id, client_id, atendimento_id, mechanic_id, client_name, client_phone')
+        .select('id, store_id, client_id, atendimento_id, mechanic_id, client_name, client_phone')
         .eq('id', body.order_id)
         .single()
 
       if (order) {
+        // Busca configurações da loja específica
+        const { data: settings } = await supabase
+          .from('store_settings')
+          .select('company_name, whatsapp_satisfaction_template, whatsapp_provider, whatsapp_instance_url, whatsapp_instance_token')
+          .eq('id', order.store_id)
+          .maybeSingle()
+
+        const company_name = settings?.company_name || 'Minha Oficina'
+        const template = settings?.whatsapp_satisfaction_template ||
+          'Olá, {{nome}}! 👋\n\nAqui é da *{{empresa}}*.\n\nSua opinião é muito importante para melhorarmos sempre.\nPode avaliar seu atendimento em menos de 1 minuto? ⭐\n\n{{link}}\n\nObrigado pela confiança! 🏍️🔧'
+
+        const wppConfig: StoreWhatsAppConfig = {
+          provider: settings?.whatsapp_provider || undefined,
+          instance_url: settings?.whatsapp_instance_url || undefined,
+          instance_token: settings?.whatsapp_instance_token || undefined,
+        }
+
         const ratingRow = await ensureSatisfactionRow(order)
         const link = `${APP_BASE_URL}/avaliar/${ratingRow.public_token}`
-        const { company_name, template } = await loadSettings()
         const message = buildSatisfactionMessage(order.client_name, link, company_name, template)
-        await sendWhatsAppText(normalizeBrPhone(order.client_phone), message)
+        await sendWhatsAppText(normalizeBrPhone(order.client_phone), message, wppConfig)
         await supabase.from('service_orders').update({ satisfaction_survey_sent_at: new Date().toISOString() }).eq('id', order.id)
       }
     }
