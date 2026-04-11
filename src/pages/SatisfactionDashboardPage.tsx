@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useStore } from '@/contexts/StoreContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -48,6 +49,8 @@ function average(nums: number[]) {
 export default function SatisfactionDashboardPage() {
   const { mechanics } = useMechanics();
   const { members } = useTeamMembers();
+  const { storeId } = useStore();
+  const storeLink = storeId ? `${window.location.origin}/avaliar/loja?store=${storeId}` : '';
 
   const [rows, setRows] = useState<RatingRow[]>([]);
   const [ordersMap, setOrdersMap] = useState<Record<string, OrderLite>>({});
@@ -377,6 +380,20 @@ export default function SatisfactionDashboardPage() {
   return (
     <div className="min-h-screen bg-background p-6 space-y-4">
       <h2 className="text-lg font-semibold text-foreground">Satisfação • Atendimento + Oficina</h2>
+
+      {storeLink && (
+        <Card className="border-border/50">
+          <CardContent className="pt-4 pb-3">
+            <p className="text-xs text-muted-foreground mb-2 font-medium">Link de avaliação da loja (QR Code / WhatsApp)</p>
+            <div className="flex items-center gap-2">
+              <code className="text-xs bg-muted px-2 py-1 rounded flex-1 truncate">{storeLink}</code>
+              <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(storeLink); toast.success('Link copiado!'); }}>
+                Copiar
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="glass-card border-border/50">
         <CardContent className="pt-6 space-y-4">
