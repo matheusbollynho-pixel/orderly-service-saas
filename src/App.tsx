@@ -21,7 +21,7 @@ import CollaboratorsPage from "./pages/CollaboratorsPage";
 import SuperAdminPage from "./pages/SuperAdminPage";
 import { useAuth } from "./hooks/useAuth";
 import { StoreProvider, useStore } from "./contexts/StoreContext";
-import { INITIAL_URL_HASH } from "./integrations/supabase/client";
+import { INITIAL_URL_HASH, INITIAL_URL_SEARCH } from "./integrations/supabase/client";
 import { useEffect, useState } from "react";
 import { cleanupOldPhotos } from "./lib/photoService";
 import { useLocalSync } from "./hooks/useLocalSync";
@@ -78,7 +78,9 @@ function AuthenticatedApp() {
   const location = useLocation();
 
   // Usa hash capturado antes do SDK processar
-  const [isInvite] = useState(() => INITIAL_URL_HASH.includes('type=invite'));
+  const [isInvite] = useState(() =>
+    INITIAL_URL_HASH.includes('type=invite') || INITIAL_URL_SEARCH.includes('type=invite')
+  );
 
   // Limpar fotos antigas uma vez por dia (100+ dias)
   useEffect(() => {

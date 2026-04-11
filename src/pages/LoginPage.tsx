@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { supabase, INITIAL_URL_HASH } from '@/integrations/supabase/client';
+import { supabase, INITIAL_URL_HASH, INITIAL_URL_SEARCH } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,7 +12,8 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false);
   // Usa hash capturado antes do SDK processar
   const [isInvite] = useState(() =>
-    INITIAL_URL_HASH.includes('type=invite') || INITIAL_URL_HASH.includes('type=recovery')
+    INITIAL_URL_HASH.includes('type=invite') || INITIAL_URL_HASH.includes('type=recovery') ||
+    INITIAL_URL_SEARCH.includes('type=invite') || INITIAL_URL_SEARCH.includes('type=recovery')
   );
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
