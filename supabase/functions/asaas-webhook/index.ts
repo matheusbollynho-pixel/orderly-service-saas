@@ -139,7 +139,7 @@ async function provisionarCliente(payment: Record<string, unknown>) {
   // Criar usuário no Supabase Auth e enviar convite
   const { data: inviteData, error: inviteErr } = await supabase.auth.admin.inviteUserByEmail(ownerEmail, {
     data: { store_id: storeId, plan, company_name: companyName },
-    redirectTo: `https://speedseekos-demo.vercel.app/`,
+    redirectTo: `https://app.speedseekos.com.br/`,
   })
 
   if (inviteErr) {
@@ -156,6 +156,7 @@ async function provisionarCliente(payment: Record<string, unknown>) {
         user_id: userId,
         role: 'owner',
         active: true,
+        email: ownerEmail,
       })
       if (memberErr) console.error(`Erro ao criar store_member: ${memberErr.message}`)
     }
