@@ -68,3 +68,6 @@ verify_jwt = false
 
 [functions.fiado-asaas-cobranca]
 verify_jwt = false
+
+[functions.check-trial-expiry]
+verify_jwt = false

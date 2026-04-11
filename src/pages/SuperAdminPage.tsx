@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Loader2, Users, CheckCircle, XCircle, ChevronRight, ArrowLeft, Plus,
   Wifi, WifiOff, Pencil, Save, Calendar, DollarSign, AlertTriangle,
-  Ban, RefreshCw, Phone, Mail, Building2, CreditCard
+  Ban, RefreshCw, Phone, Building2, CreditCard, FlaskConical
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -87,7 +87,10 @@ export default function SuperAdminPage() {
   const [testingWpp, setTestingWpp] = useState(false);
   const [wppStatus, setWppStatus] = useState<string | null>(null);
   const [showNewClient, setShowNewClient] = useState(false);
+  const [showDemo, setShowDemo] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [creatingDemo, setCreatingDemo] = useState(false);
+  const [demoClient, setDemoClient] = useState({ company_name: '', owner_email: '', owner_password: '', store_phone: '' });
   const [saving, setSaving] = useState(false);
   const [editWpp, setEditWpp] = useState(false);
   const [editPlan, setEditPlan] = useState(false);
@@ -287,6 +290,60 @@ export default function SuperAdminPage() {
     toast.success('Assinatura atualizada!');
     loadClients();
     setEditSub(false);
+  };
+
+  const createDemo = async () => {
+    if (!demoClient.company_name || !demoClient.owner_email || !demoClient.owner_password) {
+      toast.error('Preencha nome da loja, e-mail e senha');
+      return;
+    }
+    setCreatingDemo(true);
+    try {
+      const sb = supabase as any;
+      const { data: authData, error: authErr } = await supabase.auth.signUp({
+        email: demoClient.owner_email,
+        password: demoClient.owner_password,
+      });
+      if (authErr || !authData.user) { toast.error(`Erro ao criar usuário: ${authErr?.message}`); setCreatingDemo(false); return; }
+      const userId = authData.user.id;
+
+      const trialEndsAt = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString();
+
+      const { data: store, error: storeErr } = await sb
+        .from('store_settings')
+        .insert({
+          company_name: demoClient.company_name,
+          store_phone: demoClient.store_phone || null,
+          plan: 'trial',
+          active: true,
+          trial_ends_at: trialEndsAt,
+        })
+        .select('id')
+        .single();
+      if (storeErr || !store) { toast.error(`Erro ao criar loja: ${storeErr?.message}`); setCreatingDemo(false); return; }
+
+      await sb.from('store_members').insert({ store_id: store.id, user_id: userId, role: 'owner', active: true });
+
+      await sb.from('saas_subscriptions').insert({
+        store_id: store.id,
+        owner_name: demoClient.company_name,
+        owner_email: demoClient.owner_email,
+        owner_phone: demoClient.store_phone || null,
+        company_name: demoClient.company_name,
+        plan: 'trial',
+        status: 'pending',
+        due_date: trialEndsAt.split('T')[0],
+      });
+
+      toast.success(`Demo criado! Expira em 5 dias (${new Date(trialEndsAt).toLocaleDateString('pt-BR')})`);
+      setShowDemo(false);
+      setDemoClient({ company_name: '', owner_email: '', owner_password: '', store_phone: '' });
+      loadClients();
+    } catch (e: any) {
+      toast.error(`Erro: ${e.message}`);
+    } finally {
+      setCreatingDemo(false);
+    }
   };
 
   const createClient = async () => {
@@ -637,6 +694,9 @@ export default function SuperAdminPage() {
           <Button variant="outline" onClick={loadClients} size="sm" className="gap-1">
             <RefreshCw className="h-3.5 w-3.5" /> Atualizar
           </Button>
+          <Button size="sm" variant="outline" onClick={() => setShowDemo(true)} className="gap-2 border-amber-500/50 text-amber-400 hover:bg-amber-500/10">
+            <FlaskConical className="h-4 w-4" /> Demo
+          </Button>
           <Button size="sm" onClick={() => setShowNewClient(true)} className="gap-2">
             <Plus className="h-4 w-4" /> Novo Cliente
           </Button>
@@ -742,6 +802,45 @@ export default function SuperAdminPage() {
           })}
         </CardContent>
       </Card>
+
+      {/* Dialog demo */}
+      <Dialog open={showDemo} onOpenChange={setShowDemo}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FlaskConical className="h-4 w-4 text-amber-400" /> Criar Demo — 5 dias grátis
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-3 text-xs text-amber-300">
+              Acesso completo por 5 dias. Após isso o app é desativado automaticamente.
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Nome da loja *</label>
+              <Input value={demoClient.company_name} onChange={e => setDemoClient(p => ({ ...p, company_name: e.target.value }))} placeholder="Ex: Oficina do João" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Telefone</label>
+              <Input value={demoClient.store_phone} onChange={e => setDemoClient(p => ({ ...p, store_phone: e.target.value }))} placeholder="75999999999" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">E-mail *</label>
+              <Input type="email" value={demoClient.owner_email} onChange={e => setDemoClient(p => ({ ...p, owner_email: e.target.value }))} placeholder="cliente@email.com" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Senha *</label>
+              <Input type="password" value={demoClient.owner_password} onChange={e => setDemoClient(p => ({ ...p, owner_password: e.target.value }))} placeholder="Mínimo 6 caracteres" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDemo(false)}>Cancelar</Button>
+            <Button onClick={createDemo} disabled={creatingDemo} className="gap-2 bg-amber-600 hover:bg-amber-700">
+              {creatingDemo && <Loader2 className="h-4 w-4 animate-spin" />}
+              Criar Demo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog novo cliente */}
       <Dialog open={showNewClient} onOpenChange={setShowNewClient}>
