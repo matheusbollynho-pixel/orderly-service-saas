@@ -1,5 +1,5 @@
 ﻿import { FormEvent, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,8 @@ function normalizePhone(value: string) {
 
 export default function PublicStoreSatisfactionPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const storeId = searchParams.get('store') || '';
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +73,7 @@ export default function PublicStoreSatisfactionPage() {
 
       console.log('🔍 Verificando se cliente já tem avaliação pendente...');
       
-      const res = await fetch(`${supabaseUrl}/functions/v1/satisfaction-public?mode=check-pending&client_name=${encodeURIComponent(name.trim())}&client_phone=${normalizePhone(phone)}`);
+      const res = await fetch(`${supabaseUrl}/functions/v1/satisfaction-public?mode=check-pending&client_name=${encodeURIComponent(name.trim())}&client_phone=${normalizePhone(phone)}${storeId ? `&store_id=${storeId}` : ''}`);
       const data = await res.json();
 
       if (data?.success && data?.pending_token) {
@@ -90,6 +92,7 @@ export default function PublicStoreSatisfactionPage() {
           mode: 'create_walkin',
           client_name: name.trim(),
           client_phone: normalizePhone(phone),
+          store_id: storeId || undefined,
         }),
       });
 

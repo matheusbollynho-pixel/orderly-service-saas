@@ -26,7 +26,8 @@ function normalizeTags(input: Record<string, unknown>) {
   }
 }
 
-async function getStoreId(): Promise<string | null> {
+async function getStoreId(requestedStoreId?: string | null): Promise<string | null> {
+  if (requestedStoreId) return requestedStoreId
   const { data } = await supabase
     .from('store_settings')
     .select('id')
@@ -50,17 +51,21 @@ Deno.serve(async (req) => {
       if (mode === 'check-pending') {
         const clientName = url.searchParams.get('client_name')
         const clientPhone = url.searchParams.get('client_phone')
+        const storeIdParam = url.searchParams.get('store_id')
 
         if (!clientName || !clientPhone) {
           return json({ success: false, message: 'Nome e telefone são obrigatórios' }, 400)
         }
 
         // Buscar cliente por telefone ou nome
-        const { data: clients } = await supabase
+        const storeIdForCheck = storeIdParam || null
+        const clientsQuery = supabase
           .from('clients')
           .select('id')
           .or(`phone.eq.${clientPhone},name.ilike.%${clientName}%`)
           .limit(1)
+        if (storeIdForCheck) clientsQuery.eq('store_id', storeIdForCheck)
+        const { data: clients } = await clientsQuery
 
         if (!clients || clients.length === 0) {
           return json({ success: true, pending_token: null })
@@ -211,15 +216,16 @@ Deno.serve(async (req) => {
         const clientPhone = body?.client_phone
         const attendantType = body?.attendant_type
         const attendantId = body?.attendant_id
+        const requestedStoreId = body?.store_id
 
-        console.log('Dados recebidos:', { clientName, clientPhone, attendantType, attendantId })
+        console.log('Dados recebidos:', { clientName, clientPhone, attendantType, attendantId, requestedStoreId })
 
         if (!clientName || !clientPhone) {
           console.error('❌ Nome ou telefone faltando')
           return json({ success: false, message: 'Nome e telefone são obrigatórios' }, 400)
         }
 
-        const storeId = await getStoreId()
+        const storeId = await getStoreId(requestedStoreId)
         if (!storeId) {
           console.error('❌ store_id não encontrado')
           return json({ success: false, message: 'Loja não encontrada' }, 500)
