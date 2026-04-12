@@ -318,8 +318,9 @@ export default function SuperAdminPage() {
     }
     setSaving(false);
     toast.success('Plano atualizado!');
-    setSelected(prev => prev ? { ...prev, plan: newPlan, subscription: prev.subscription ? { ...prev.subscription, plan: newPlan } : null } : null);
-    setClients(prev => prev.map(c => c.store_id === selected.store_id ? { ...c, plan: newPlan } : c));
+    const newAmount = PLAN_AMOUNTS[newPlan] ?? selected.subscription?.amount ?? null;
+    setSelected(prev => prev ? { ...prev, plan: newPlan, custom_features: null, subscription: prev.subscription ? { ...prev.subscription, plan: newPlan, amount: newAmount } : null } : null);
+    setClients(prev => prev.map(c => c.store_id === selected.store_id ? { ...c, plan: newPlan, custom_features: null, subscription: c.subscription ? { ...c.subscription, plan: newPlan, amount: newAmount } : null } : c));
     setEditPlan(false);
   };
 
