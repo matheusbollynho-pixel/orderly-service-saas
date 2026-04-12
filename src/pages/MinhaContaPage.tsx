@@ -5,7 +5,7 @@ import { useStore } from '@/contexts/StoreContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, CreditCard, Calendar, CheckCircle, AlertTriangle, XCircle, Copy, ExternalLink, Loader2, RefreshCw, Zap, Clock } from 'lucide-react';
+import { ArrowLeft, CreditCard, Calendar, CheckCircle, AlertTriangle, XCircle, Copy, ExternalLink, Loader2, RefreshCw, Zap, Clock, History } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Subscription {
@@ -14,6 +14,14 @@ interface Subscription {
   amount: number | null;
   due_date: string | null;
   paid_at: string | null;
+}
+
+interface HistoricoItem {
+  plan: string;
+  status: string;
+  amount: number | null;
+  paid_at: string | null;
+  due_date: string | null;
 }
 
 const PLAN_LABELS: Record<string, string> = {
@@ -64,6 +72,7 @@ export default function MinhaContaPage() {
   const navigate = useNavigate();
   const { storeId, plan } = useStore();
   const [sub, setSub] = useState<Subscription | null>(null);
+  const [historico, setHistorico] = useState<HistoricoItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [pixData, setPixData] = useState<PixData | null>(null);
@@ -83,6 +92,15 @@ export default function MinhaContaPage() {
       .limit(1)
       .maybeSingle();
     setSub(data ?? null);
+
+    const { data: hist } = await (supabase as any)
+      .from('saas_subscriptions')
+      .select('plan, status, amount, paid_at, due_date')
+      .eq('store_id', storeId)
+      .order('created_at', { ascending: false })
+      .limit(6);
+    setHistorico(hist ?? []);
+
     setLoading(false);
   };
 
@@ -301,6 +319,40 @@ export default function MinhaContaPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Histórico de pagamentos */}
+          {historico.length > 1 && (
+            <Card className="glass-card border-border/50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <History className="h-4 w-4 text-muted-foreground" /> Histórico de pagamentos
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {historico.map((item, i) => {
+                  const statusCfg = STATUS_CONFIG[item.status] ?? STATUS_CONFIG.pending;
+                  const Icon = statusCfg.icon;
+                  return (
+                    <div key={i} className="flex items-center justify-between py-2 border-b border-border/30 last:border-0">
+                      <div className="flex items-center gap-2">
+                        <Icon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <div>
+                          <p className="text-xs text-foreground font-medium">{PLAN_LABELS[item.plan] ?? item.plan}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {item.paid_at ? `Pago em ${fmt(item.paid_at)}` : item.due_date ? `Vence ${fmt(item.due_date)}` : '—'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-foreground font-semibold">{fmtMoney(item.amount)}</p>
+                        <Badge className={`text-[10px] px-1.5 py-0 ${statusCfg.color}`}>{statusCfg.label}</Badge>
+                      </div>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Suporte */}
           <Card className="glass-card border-border/50">
