@@ -5,17 +5,36 @@ import { supabase } from '@/integrations/supabase/client';
 import { useStore } from '@/contexts/StoreContext';
 import { toast } from 'sonner';
 
-const PRO_FEATURES = [
-  'Balcão / PDV',
-  'Estoque completo',
-  'Fluxo de caixa e relatórios',
-  'Pesquisa de satisfação',
-  'WhatsApp automático completo',
-  'Lembretes de manutenção e aniversário',
-  'Fiados e crédito de clientes',
-  'Boletos e contas a pagar',
-  'Usuários ilimitados',
-];
+const PLAN_CONFIG: Record<string, { label: string; price: string; features: string[] }> = {
+  pro: {
+    label: 'Profissional',
+    price: 'R$ 149/mês',
+    features: [
+      'Balcão / PDV',
+      'Estoque completo',
+      'Fluxo de caixa e relatórios',
+      'Pesquisa de satisfação',
+      'WhatsApp automático completo',
+      'Lembretes de manutenção e aniversário',
+      'Fiados e crédito de clientes',
+      'Boletos e contas a pagar',
+      'Usuários ilimitados',
+    ],
+  },
+  premium: {
+    label: 'Premium',
+    price: 'R$ 219/mês',
+    features: [
+      'Tudo do Profissional',
+      'IA de atendimento 24h no WhatsApp',
+      'IA de estoque inteligente',
+      'Domínio próprio',
+      'Logo personalizada no sistema',
+      'Suporte prioritário',
+      'Onboarding personalizado',
+    ],
+  },
+};
 
 interface UpgradeModalProps {
   feature: string;
@@ -39,16 +58,19 @@ export function UpgradeModal({ feature, requiredPlan, upgradeLink, onClose }: Up
   const [generating, setGenerating] = useState(false);
   const [pixData, setPixData] = useState<PixData | null>(null);
 
+  // Mapeia label do plano para o ID interno
+  const planId = requiredPlan.toLowerCase().includes('premium') ? 'premium' : 'pro';
+  const planCfg = PLAN_CONFIG[planId];
+
   const gerarPix = async () => {
     if (!storeId) {
-      // Sem store_id (ex: demo), abre link estático
       window.open(upgradeLink, '_blank');
       return;
     }
     setGenerating(true);
     try {
       const { data, error } = await supabase.functions.invoke('gerar-cobranca', {
-        body: { store_id: storeId, plan: 'pro' },
+        body: { store_id: storeId, plan: planId },
       });
       if (error || !data?.success) {
         toast.error(data?.error || 'Erro ao gerar cobrança. Tente pelo link.');
@@ -92,10 +114,10 @@ export function UpgradeModal({ feature, requiredPlan, upgradeLink, onClose }: Up
             <div className="bg-neutral-800 rounded-xl p-4 mb-6">
               <div className="flex items-center gap-2 mb-3">
                 <Star className="h-4 w-4 text-yellow-400" />
-                <span className="text-sm font-semibold text-foreground">Plano Profissional — R$ 149/mês</span>
+                <span className="text-sm font-semibold text-foreground">Plano {planCfg.label} — {planCfg.price}</span>
               </div>
               <ul className="space-y-1.5">
-                {PRO_FEATURES.map((f) => (
+                {planCfg.features.map((f) => (
                   <li key={f} className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Zap className="h-3 w-3 text-primary flex-shrink-0" />
                     {f}
