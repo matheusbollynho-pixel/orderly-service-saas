@@ -303,12 +303,17 @@ export default function SuperAdminPage() {
     setEditWpp(false);
   };
 
+  const PLAN_AMOUNTS: Record<string, number> = { basic: 79, pro: 149, premium: 219 };
+
   const savePlan = async () => {
     if (!selected) return;
     setSaving(true);
     await (supabase as any).from('store_settings').update({ plan: newPlan }).eq('id', selected.store_id);
     if (selected.subscription) {
-      await (supabase as any).from('saas_subscriptions').update({ plan: newPlan }).eq('id', selected.subscription.id);
+      await (supabase as any).from('saas_subscriptions').update({
+        plan: newPlan,
+        amount: PLAN_AMOUNTS[newPlan] ?? selected.subscription.amount,
+      }).eq('id', selected.subscription.id);
     }
     setSaving(false);
     toast.success('Plano atualizado!');
