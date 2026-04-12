@@ -220,9 +220,10 @@ export function PaymentAlertModal() {
                 </Button>
               )}
 
-              <p className="text-xs text-muted-foreground">
-                Após o pagamento seu acesso é liberado automaticamente ✅
-              </p>
+              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2 space-y-1">
+                <p className="text-xs text-emerald-400 font-medium">✅ Após confirmar o pagamento:</p>
+                <p className="text-xs text-muted-foreground">Atualize a página e seu acesso será liberado automaticamente.</p>
+              </div>
 
               <Button
                 size="sm"

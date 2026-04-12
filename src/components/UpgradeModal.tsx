@@ -241,9 +241,10 @@ export function UpgradeModal({ feature, requiredPlan, upgradeLink, onClose }: Up
               ← Voltar para planos
             </button>
 
-            <p className="text-center text-xs text-muted-foreground mt-2">
-              Após o pagamento seu plano é atualizado automaticamente 🚀
-            </p>
+            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2 mt-2 space-y-1">
+              <p className="text-xs text-emerald-400 font-medium text-center">✅ Após confirmar o pagamento:</p>
+              <p className="text-xs text-muted-foreground text-center">Atualize a página e seu novo plano será liberado automaticamente.</p>
+            </div>
           </>
         )}
       </div>
