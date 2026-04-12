@@ -8,6 +8,20 @@ const supabase = createClient(
 const ASAAS_API_KEY = Deno.env.get('ASAAS_API_KEY')!
 const ASAAS_WEBHOOK_TOKEN = Deno.env.get('ASAAS_WEBHOOK_TOKEN')!
 const ASAAS_API_URL = 'https://api.asaas.com/v3'
+const UAZAPI_BASE_URL = Deno.env.get('UAZAPI_BASE_URL') || 'https://bandara.uazapi.com'
+const UAZAPI_INSTANCE_TOKEN = Deno.env.get('UAZAPI_INSTANCE_TOKEN') || ''
+const DONO_PHONE = Deno.env.get('DONO_PHONE') || '75988388629'
+
+async function notifyDono(msg: string) {
+  if (!DONO_PHONE || !UAZAPI_INSTANCE_TOKEN) return
+  try {
+    await fetch(`${UAZAPI_BASE_URL}/send/text`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'token': UAZAPI_INSTANCE_TOKEN },
+      body: JSON.stringify({ number: DONO_PHONE, text: msg }),
+    })
+  } catch { /* silencioso */ }
+}
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -129,6 +143,8 @@ async function provisionarCliente(payment: Record<string, unknown>) {
       due_date: nextDueDate(),
     })
 
+    const planLabel: Record<string, string> = { basic: 'Básico', pro: 'Profissional', premium: 'Premium' }
+    await notifyDono(`💰 *Pagamento recebido!*\n🏪 ${existingStore.owner_email}\n💼 Plano: ${planLabel[plan] || plan}\n💵 R$ ${valor.toFixed(2)}\n📅 Próximo vencimento: ${nextDueDate()}`)
     return { ok: true, action: 'renovacao', store_id: existingStore.id, plan }
   }
 
@@ -216,14 +232,9 @@ async function provisionarCliente(payment: Record<string, unknown>) {
     due_date: nextDueDate(),
   })
 
-  // Notificar dono (você) via WhatsApp
-  const donoPhone = Deno.env.get('DONO_PHONE')
-  if (donoPhone) {
-    const msg = `🎉 *Novo cliente SpeedSeekOS!*\n\n👤 ${ownerName}\n📧 ${ownerEmail}\n📱 ${ownerPhone}\n💼 Plano: ${plan.toUpperCase()}\n💰 R$ ${valor.toFixed(2)}\n\n✅ Conta criada automaticamente. Email de acesso enviado!`
-    await supabase.functions.invoke('enviar-documento-whatsapp', {
-      body: { phone: donoPhone, text: msg, type: 'text' },
-    }).catch(() => null)
-  }
+  // Notificar dono via WhatsApp
+  const planLabel: Record<string, string> = { basic: 'Básico', pro: 'Profissional', premium: 'Premium' }
+  await notifyDono(`🎉 *Novo cliente SpeedSeek OS!*\n\n👤 ${ownerName}\n📧 ${ownerEmail}\n📱 ${ownerPhone}\n🏪 ${companyName}\n💼 Plano: ${planLabel[plan] || plan}\n💰 R$ ${valor.toFixed(2)}\n\n⚙️ Configure o WhatsApp e IA para este cliente.`)
 
   return { ok: true, action: 'novo_cliente', store_id: storeId, plan, email: ownerEmail }
 }

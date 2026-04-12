@@ -1,5 +1,20 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+const UAZAPI_BASE_URL = Deno.env.get('UAZAPI_BASE_URL') || 'https://bandara.uazapi.com'
+const UAZAPI_INSTANCE_TOKEN = Deno.env.get('UAZAPI_INSTANCE_TOKEN') || ''
+const DONO_PHONE = Deno.env.get('DONO_PHONE') || '75988388629'
+
+async function notifyDono(msg: string) {
+  if (!DONO_PHONE || !UAZAPI_INSTANCE_TOKEN) return
+  try {
+    await fetch(`${UAZAPI_BASE_URL}/send/text`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'token': UAZAPI_INSTANCE_TOKEN },
+      body: JSON.stringify({ number: DONO_PHONE, text: msg }),
+    })
+  } catch { /* silencioso */ }
+}
+
 const sb = createClient(
   Deno.env.get('SUPABASE_URL')!,
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
@@ -82,6 +97,10 @@ Deno.serve(async (req) => {
       due_date: is_trial ? trialEndsAt?.split('T')[0] : (due_date || null),
       amount: amount ? parseFloat(amount) : null,
     })
+
+    // Notifica dono
+    const planLabel: Record<string, string> = { basic: 'Básico', pro: 'Profissional', premium: 'Premium', trial: 'Trial' }
+    await notifyDono(`🆕 *Nova conta criada!*\n\n🏪 ${company_name}\n📧 ${owner_email}\n📱 ${store_phone || '—'}\n💼 Plano: ${planLabel[is_trial ? 'trial' : plan] || plan}\n\n⚙️ Configure o WhatsApp e IA para este cliente.`)
 
     return new Response(JSON.stringify({ success: true, store_id: store.id, user_id: userId, trial_ends_at: trialEndsAt }), {
       status: 200,
