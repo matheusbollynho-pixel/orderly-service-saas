@@ -92,9 +92,9 @@ export function PaymentAlertModal() {
     }
   };
 
-  // Inicia polling quando PIX é exibido
+  // Inicia polling quando PIX é exibido — só para contas bloqueadas (overdue/cancelled)
   useEffect(() => {
-    if (!pixData || !storeId) return;
+    if (!pixData || !storeId || !blocked) return;
     pollRef.current = setInterval(async () => {
       setChecking(true);
       try {
