@@ -52,6 +52,10 @@ async function callEdgeFunction(payload: Record<string, unknown>): Promise<Recor
     json = { raw: await res.text() };
   }
 
+  // success:false com status 200 = sem WhatsApp configurado (fallback para wa.me)
+  if (res.ok && json?.success === false && json?.error === 'WhatsApp não configurado para esta loja') {
+    return json;
+  }
   if (!res.ok || json?.success === false) {
     const details = json && json.z_api_error ? ' | Detalhes: ' + JSON.stringify(json.z_api_error) : '';
     const statusInfo = (json && json.z_api_status) ? ' | Z-API status: ' + json.z_api_status : '';
@@ -117,14 +121,26 @@ export async function sendWhatsAppDocument(params: {
   const caption = params.caption || 'Ordem de Serviço';
   const safeFileName = sanitizeFileName(params.fileName);
 
-  // Fazer upload para Storage e enviar URL pública
+  // Fazer upload para Storage primeiro (necessário para ambos os caminhos)
+  const fileUrl = await uploadBase64PdfToSupabaseStorage(params.base64, safeFileName);
+
+  // Tenta enviar via API da loja
   try {
-    const fileUrl = await uploadBase64PdfToSupabaseStorage(params.base64, safeFileName);
     const res = await callEdgeFunction({ to: phone, fileUrl, caption, fileName: safeFileName, ...(params.store_id ? { store_id: params.store_id } : {}) });
+    // Se API retornou sucesso=false (sem WhatsApp configurado), abre wa.me
+    if ((res as { success?: boolean }).success === false) {
+      const msg = encodeURIComponent(`${caption}\n\n📄 PDF: ${fileUrl}`);
+      const waPhone = phone.startsWith('55') ? phone : `55${phone}`;
+      window.open(`https://wa.me/${waPhone}?text=${msg}`, '_blank');
+      return true;
+    }
     return !!res;
-  } catch (error) {
-    console.error('Erro no upload/envio:', error);
-    throw error;
+  } catch {
+    // Fallback: abre WhatsApp Web com link do PDF
+    const msg = encodeURIComponent(`${caption}\n\n📄 PDF: ${fileUrl}`);
+    const waPhone = phone.startsWith('55') ? phone : `55${phone}`;
+    window.open(`https://wa.me/${waPhone}?text=${msg}`, '_blank');
+    return true;
   }
 }
 
