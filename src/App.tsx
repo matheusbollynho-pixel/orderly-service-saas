@@ -23,6 +23,7 @@ import OnboardingPage from "./pages/OnboardingPage";
 import MinhaContaPage from "./pages/MinhaContaPage";
 import { useAuth } from "./hooks/useAuth";
 import { StoreProvider, useStore } from "./contexts/StoreContext";
+import { PaymentAlertModal } from "./components/PaymentAlertModal";
 import { INITIAL_URL_HASH, INITIAL_URL_SEARCH } from "./integrations/supabase/client";
 import { useEffect, useState } from "react";
 import { cleanupOldPhotos } from "./lib/photoService";
@@ -186,7 +187,12 @@ function StoreGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      <PaymentAlertModal />
+      {children}
+    </>
+  );
 }
 
 // Componente interno ao StoreProvider para atualizar o título da página
