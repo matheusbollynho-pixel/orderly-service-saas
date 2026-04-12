@@ -185,21 +185,32 @@ Deno.serve(async (req) => {
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return new Response('ok', { status: 200 }); }
 
+  console.log('BODY:', JSON.stringify(body).slice(0, 1000));
+
   const event = (body.event || body.EventType) as string || '';
-  if (event && !event.toLowerCase().includes('message')) return new Response('ok', { status: 200 });
+  console.log('EVENT:', event);
+  if (event && !event.toLowerCase().includes('message')) {
+    console.log('SKIP: event filtered', event);
+    return new Response('ok', { status: 200 });
+  }
 
   const msg = (body.message || body.data || body) as Record<string, unknown>;
   const fromMe = (msg.fromMe ?? msg.from_me) as boolean;
+  console.log('fromMe:', fromMe);
   if (fromMe) return new Response('ok', { status: 200 });
 
   const chat = (body.chat || {}) as Record<string, unknown>;
   const rawPhone = ((chat.wa_chatid || msg.chatid || msg.phone || msg.from) as string || '');
   const phone = rawPhone.replace(/@.*$/, '').replace(/[^0-9]/g, '');
 
-  const textRaw = msg.content ?? msg.text?.message ?? msg.text ?? msg.body ?? '';
+  const textRaw = msg.content ?? (msg.text as Record<string,unknown>)?.message ?? msg.text ?? msg.body ?? '';
   const text = (typeof textRaw === 'string' ? textRaw : JSON.stringify(textRaw)).trim();
 
-  if (!phone || !text) return new Response('ok', { status: 200 });
+  console.log('phone:', phone, 'text:', text);
+  if (!phone || !text) {
+    console.log('SKIP: phone or text empty');
+    return new Response('ok', { status: 200 });
+  }
 
   const msgId = (msg.id || msg.messageId) as string;
   const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -224,6 +235,7 @@ Deno.serve(async (req) => {
 
   const stateData = (stateRow?.data || {}) as Record<string, unknown>;
   const currentState = (stateRow?.state as string) || 'inicio';
+  console.log('currentState:', currentState, 'stateRow:', stateRow ? 'found' : 'null');
   const history = (stateData.history as { role: string; content: string }[]) || [];
   const clienteStoreId = stateData.store_id as string | undefined;
   const clienteNome = stateData.company_name as string | undefined;
@@ -238,11 +250,13 @@ Você é novo por aqui ou já é nosso cliente?
 2️⃣ *Já sou cliente SpeedSeek*`;
 
     await sendWhatsApp(phone, welcome);
-    await sb.from('conversation_state').upsert({
+    const { error: upsertErr } = await sb.from('conversation_state').upsert({
       phone,
       state: 'aguardando_tipo',
       data: { history: [{ role: 'assistant', content: welcome }] },
+      updated_at: new Date().toISOString(),
     }, { onConflict: 'phone' });
+    console.log('upsert result:', upsertErr ? upsertErr.message : 'ok');
     return new Response('ok', { status: 200 });
   }
 

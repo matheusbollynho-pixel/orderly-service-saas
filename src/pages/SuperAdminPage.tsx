@@ -338,9 +338,19 @@ export default function SuperAdminPage() {
         status: subStatus,
         amount: subAmount ? parseFloat(subAmount) : null,
       }).eq('id', selected.subscription.id);
-      if (subStatus === 'active') await sb.from('store_settings').update({ active: true }).eq('id', selected.store_id);
-      if (subStatus === 'cancelled') await sb.from('store_settings').update({ active: false }).eq('id', selected.store_id);
+    } else {
+      await sb.from('saas_subscriptions').insert({
+        store_id: selected.store_id,
+        plan: selected.plan || 'basic',
+        status: subStatus,
+        amount: subAmount ? parseFloat(subAmount) : null,
+        due_date: subDueDate || null,
+        owner_name: selected.company_name || 'Cliente',
+        owner_email: selected.owner_email || 'sem-email@speedseekos.com.br',
+      });
     }
+    if (subStatus === 'active') await sb.from('store_settings').update({ active: true }).eq('id', selected.store_id);
+    if (subStatus === 'cancelled') await sb.from('store_settings').update({ active: false }).eq('id', selected.store_id);
     setSaving(false);
     toast.success('Assinatura atualizada!');
     loadClients();
