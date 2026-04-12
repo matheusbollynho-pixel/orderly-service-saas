@@ -8,10 +8,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import {
   Loader2, Users, CheckCircle, XCircle, ChevronRight, ArrowLeft, Plus,
   Wifi, WifiOff, Pencil, Save, Calendar, DollarSign, AlertTriangle,
-  Ban, RefreshCw, Phone, Building2, CreditCard, FlaskConical
+  Ban, RefreshCw, Phone, Building2, CreditCard, FlaskConical, Bolt
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -41,7 +42,36 @@ interface StoreClient {
   whatsapp_instance_token: string | null;
   whatsapp_provider: string | null;
   subscription: Subscription | null;
+  custom_features: string[] | null;
 }
+
+const ALL_FEATURES = [
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'new', label: 'Nova OS' },
+  { id: 'express', label: 'Express' },
+  { id: 'orders', label: 'Ordens' },
+  { id: 'agenda', label: 'Agenda' },
+  { id: 'quadro', label: 'Oficina' },
+  { id: 'fluxo-caixa', label: 'Caixa' },
+  { id: 'balcao', label: 'Balcão' },
+  { id: 'reports', label: 'Relatórios' },
+  { id: 'boletos', label: 'Boletos' },
+  { id: 'fiados', label: 'Fiados' },
+  { id: 'estoque', label: 'Estoque' },
+  { id: 'mechanics', label: 'Equipe' },
+  { id: 'pos-venda', label: 'Pós-Venda' },
+  { id: 'satisfacao', label: 'Satisfação' },
+];
+
+const BASIC_FEATURES = ['dashboard', 'new', 'express', 'orders', 'agenda', 'quadro', 'mechanics'];
+const ALL_FEATURE_IDS = ALL_FEATURES.map(f => f.id);
+const PLAN_FEATURES_BY_PLAN: Record<string, string[]> = {
+  trial: BASIC_FEATURES,
+  basic: BASIC_FEATURES,
+  pro: ALL_FEATURE_IDS,
+  premium: ALL_FEATURE_IDS,
+  enterprise: ALL_FEATURE_IDS,
+};
 
 const PLAN_LABELS: Record<string, string> = {
   basic: 'Básico',
@@ -95,6 +125,8 @@ export default function SuperAdminPage() {
   const [editWpp, setEditWpp] = useState(false);
   const [editPlan, setEditPlan] = useState(false);
   const [editSub, setEditSub] = useState(false);
+  const [editFeatures, setEditFeatures] = useState(false);
+  const [customFeatures, setCustomFeatures] = useState<string[] | null>(null);
   const [wppUrl, setWppUrl] = useState('');
   const [wppToken, setWppToken] = useState('');
   const [wppProvider, setWppProvider] = useState('uazapi');
@@ -135,10 +167,12 @@ export default function SuperAdminPage() {
       setSubDueDate(selected.subscription?.due_date || '');
       setSubStatus(selected.subscription?.status || 'active');
       setSubAmount(selected.subscription?.amount?.toString() || '');
+      setCustomFeatures(selected.custom_features ?? null);
       setWppStatus(null);
       setEditWpp(false);
       setEditPlan(false);
       setEditSub(false);
+      setEditFeatures(false);
     }
   }, [selected]);
 
@@ -148,7 +182,7 @@ export default function SuperAdminPage() {
 
     const { data: stores } = await sb
       .from('store_settings')
-      .select('id, company_name, store_phone, plan, active, created_at, whatsapp_instance_url, whatsapp_instance_token, whatsapp_provider')
+      .select('id, company_name, store_phone, plan, active, created_at, whatsapp_instance_url, whatsapp_instance_token, whatsapp_provider, custom_features')
       .order('created_at', { ascending: false });
 
     if (!stores) { setLoading(false); return; }
@@ -173,6 +207,7 @@ export default function SuperAdminPage() {
       whatsapp_instance_url: s.whatsapp_instance_url,
       whatsapp_instance_token: s.whatsapp_instance_token,
       whatsapp_provider: s.whatsapp_provider,
+      custom_features: s.custom_features ?? null,
       subscription: subsByStore[s.id] ?? null,
     }));
 
@@ -271,6 +306,17 @@ export default function SuperAdminPage() {
     setSelected(prev => prev ? { ...prev, plan: newPlan, subscription: prev.subscription ? { ...prev.subscription, plan: newPlan } : null } : null);
     setClients(prev => prev.map(c => c.store_id === selected.store_id ? { ...c, plan: newPlan } : c));
     setEditPlan(false);
+  };
+
+  const saveCustomFeatures = async () => {
+    if (!selected) return;
+    setSaving(true);
+    await (supabase as any).from('store_settings').update({ custom_features: customFeatures }).eq('id', selected.store_id);
+    setSaving(false);
+    toast.success('Funcionalidades salvas!');
+    setSelected(prev => prev ? { ...prev, custom_features: customFeatures } : null);
+    setClients(prev => prev.map(c => c.store_id === selected.store_id ? { ...c, custom_features: customFeatures } : c));
+    setEditFeatures(false);
   };
 
   const saveSubscription = async () => {
@@ -530,6 +576,85 @@ export default function SuperAdminPage() {
               <Badge className={PLAN_COLORS[selected.plan ?? 'basic']}>
                 {PLAN_LABELS[selected.plan ?? 'basic'] ?? selected.plan}
               </Badge>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Funcionalidades */}
+        <Card className="glass-card border-border/50">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Bolt className="h-4 w-4" /> Funcionalidades
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                {customFeatures !== null && (
+                  <Badge className="text-xs bg-amber-500/20 text-amber-300 border-amber-500/30">override ativo</Badge>
+                )}
+                <Button size="sm" variant="ghost" onClick={() => setEditFeatures(v => !v)} className="gap-1 h-7 text-xs">
+                  <Pencil className="h-3 w-3" /> {editFeatures ? 'Cancelar' : 'Editar'}
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {editFeatures ? (
+              <div className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  Quando ativo, o override substitui as permissões do plano. Desative o override para voltar ao comportamento padrão do plano.
+                </p>
+                <div className="flex items-center gap-2 mb-2">
+                  <Switch
+                    checked={customFeatures !== null}
+                    onCheckedChange={(v) => setCustomFeatures(v ? (PLAN_FEATURES_BY_PLAN[selected.plan ?? 'basic'] ?? BASIC_FEATURES).slice() : null)}
+                  />
+                  <span className="text-xs font-medium text-foreground">Usar override de funcionalidades</span>
+                </div>
+                {customFeatures !== null && (
+                  <div className="grid grid-cols-2 gap-2">
+                    {ALL_FEATURES.map(f => (
+                      <div key={f.id} className="flex items-center justify-between rounded-md border border-border/40 bg-muted/20 px-3 py-2">
+                        <span className="text-xs text-foreground">{f.label}</span>
+                        <Switch
+                          checked={customFeatures.includes(f.id)}
+                          onCheckedChange={(v) => setCustomFeatures(prev =>
+                            v ? [...(prev ?? []), f.id] : (prev ?? []).filter(x => x !== f.id)
+                          )}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-2 pt-1">
+                  {customFeatures !== null && (
+                    <>
+                      <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setCustomFeatures(ALL_FEATURES.map(f => f.id))}>
+                        Tudo ON
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setCustomFeatures(BASIC_FEATURES.slice())}>
+                        Resetar para Básico
+                      </Button>
+                    </>
+                  )}
+                  <Button size="sm" onClick={saveCustomFeatures} disabled={saving} className="gap-1 h-8 ml-auto">
+                    {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />} Salvar
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-1.5">
+                {ALL_FEATURES.map(f => {
+                  const active = customFeatures !== null
+                    ? customFeatures.includes(f.id)
+                    : (PLAN_FEATURES_BY_PLAN[selected.plan ?? 'basic'] ?? BASIC_FEATURES).includes(f.id);
+                  return (
+                    <div key={f.id} className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-md ${active ? 'text-emerald-300' : 'text-muted-foreground line-through'}`}>
+                      {active ? <CheckCircle className="h-3 w-3 shrink-0" /> : <XCircle className="h-3 w-3 shrink-0" />}
+                      {f.label}
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </CardContent>
         </Card>

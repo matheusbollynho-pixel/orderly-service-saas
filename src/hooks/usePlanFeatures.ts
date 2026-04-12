@@ -28,9 +28,12 @@ export const REQUIRED_PLAN: Record<string, 'pro' | 'premium'> = {
 };
 
 export function usePlanFeatures() {
-  const { plan } = useStore();
+  const { plan, customFeatures } = useStore();
   const currentPlan = plan || 'basic';
-  const allowedFeatures = PLAN_FEATURES[currentPlan] || PLAN_FEATURES.basic;
+  // custom_features override takes priority when set by super admin
+  const allowedFeatures = customFeatures !== null
+    ? customFeatures
+    : (PLAN_FEATURES[currentPlan] || PLAN_FEATURES.basic);
 
   function canAccess(feature: string): boolean {
     return allowedFeatures.includes(feature);

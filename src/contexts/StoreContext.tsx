@@ -18,6 +18,7 @@ interface StoreContextValue {
   isOwner: boolean;
   vehicleType: 'moto' | 'carro';
   onboarded: boolean;
+  customFeatures: string[] | null;
 }
 
 const StoreContext = createContext<StoreContextValue>({
@@ -29,6 +30,7 @@ const StoreContext = createContext<StoreContextValue>({
   isOwner: false,
   vehicleType: 'moto',
   onboarded: true,
+  customFeatures: null,
 });
 
 export function StoreProvider({ user, children }: { user: User | null; children: ReactNode }) {
@@ -39,6 +41,7 @@ export function StoreProvider({ user, children }: { user: User | null; children:
   const [permissions, setPermissions] = useState<MemberPermissions>(ALL_PERMISSIONS);
   const [vehicleType, setVehicleType] = useState<'moto' | 'carro'>('moto');
   const [onboarded, setOnboarded] = useState(true);
+  const [customFeatures, setCustomFeatures] = useState<string[] | null>(null);
 
   useEffect(() => {
     // Modo single-tenant: VITE_STORE_ID definido no ambiente
@@ -69,7 +72,7 @@ export function StoreProvider({ user, children }: { user: User | null; children:
     // Modo SaaS: busca store_id e plan na tabela store_members
     supabase
       .from('store_members')
-      .select('store_id, role, permissions, store_settings(plan, vehicle_type, onboarded)')
+      .select('store_id, role, permissions, store_settings(plan, vehicle_type, onboarded, custom_features)')
       .eq('user_id', user.id)
       .eq('active', true)
       .maybeSingle()
@@ -82,6 +85,7 @@ export function StoreProvider({ user, children }: { user: User | null; children:
           setPlan(data.store_settings?.plan ?? 'basic');
           setVehicleType(data.store_settings?.vehicle_type ?? 'moto');
           setOnboarded(data.store_settings?.onboarded ?? true);
+          setCustomFeatures(data.store_settings?.custom_features ?? null);
           if (data.role === 'owner') {
             setPermissions(ALL_PERMISSIONS);
           } else {
@@ -95,7 +99,7 @@ export function StoreProvider({ user, children }: { user: User | null; children:
   const isOwner = role === 'owner';
 
   return (
-    <StoreContext.Provider value={{ storeId, plan, loading, role, permissions, isOwner, vehicleType, onboarded }}>
+    <StoreContext.Provider value={{ storeId, plan, loading, role, permissions, isOwner, vehicleType, onboarded, customFeatures }}>
       {children}
     </StoreContext.Provider>
   );
