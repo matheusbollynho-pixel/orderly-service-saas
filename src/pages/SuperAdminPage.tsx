@@ -66,7 +66,7 @@ const ALL_FEATURES = [
 const BASIC_FEATURES = ['dashboard', 'new', 'express', 'orders', 'agenda', 'quadro', 'mechanics'];
 const ALL_FEATURE_IDS = ALL_FEATURES.map(f => f.id);
 const PLAN_FEATURES_BY_PLAN: Record<string, string[]> = {
-  trial: BASIC_FEATURES,
+  trial: ALL_FEATURE_IDS,
   basic: BASIC_FEATURES,
   pro: ALL_FEATURE_IDS,
   premium: ALL_FEATURE_IDS,
