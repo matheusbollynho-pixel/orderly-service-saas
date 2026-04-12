@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useStore } from '@/contexts/StoreContext';
 import { Button } from '@/components/ui/button';
@@ -41,6 +41,8 @@ export function PaymentAlertModal() {
   const [dismissed, setDismissed] = useState(false);
   const [pixData, setPixData] = useState<PixData | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const envPlan = import.meta.env.VITE_PLAN as string | undefined;
   const isDemo = import.meta.env.VITE_DEMO === 'true' || window.location.hostname.includes('demo');
@@ -89,6 +91,32 @@ export function PaymentAlertModal() {
       }
     }
   };
+
+  // Inicia polling quando PIX é exibido
+  useEffect(() => {
+    if (!pixData || !storeId) return;
+    pollRef.current = setInterval(async () => {
+      setChecking(true);
+      try {
+        const { data } = await (supabase as any)
+          .from('saas_subscriptions')
+          .select('status')
+          .eq('store_id', storeId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (data?.status === 'active') {
+          clearInterval(pollRef.current!);
+          toast.success('Pagamento confirmado! Seu acesso foi liberado. 🎉');
+          setShow(false);
+          setDismissed(true);
+        }
+      } finally {
+        setChecking(false);
+      }
+    }, 15000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [pixData, storeId]);
 
   const gerarPix = async () => {
     if (!storeId) return;
@@ -222,8 +250,11 @@ export function PaymentAlertModal() {
               )}
 
               <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2 space-y-1">
-                <p className="text-xs text-emerald-400 font-medium">✅ Após confirmar o pagamento:</p>
-                <p className="text-xs text-muted-foreground">Atualize a página e seu acesso será liberado automaticamente.</p>
+                {checking
+                  ? <p className="text-xs text-emerald-400 font-medium flex items-center gap-1.5"><Loader2 className="h-3 w-3 animate-spin" /> Verificando pagamento...</p>
+                  : <p className="text-xs text-emerald-400 font-medium">✅ Verificação automática a cada 15s</p>
+                }
+                <p className="text-xs text-muted-foreground">Seu acesso será liberado automaticamente após o pagamento.</p>
               </div>
 
               <Button
