@@ -308,7 +308,7 @@ export default function SuperAdminPage() {
   const savePlan = async () => {
     if (!selected) return;
     setSaving(true);
-    await (supabase as any).from('store_settings').update({ plan: newPlan }).eq('id', selected.store_id);
+    await (supabase as any).from('store_settings').update({ plan: newPlan, custom_features: null }).eq('id', selected.store_id);
     if (selected.subscription) {
       await (supabase as any).from('saas_subscriptions').update({
         plan: newPlan,
