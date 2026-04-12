@@ -11,7 +11,8 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { UserPlus, Trash2, Mail } from 'lucide-react';
+import { UserPlus, Trash2, Mail, ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 type Member = {
   id: string;
@@ -51,6 +52,7 @@ export default function CollaboratorsPage() {
   const { storeId, isOwner } = useStore();
   const { user } = useAuth();
   const { currentPlan, getUpgradeLink } = usePlanFeatures();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviting, setInviting] = useState(false);
@@ -144,7 +146,12 @@ export default function CollaboratorsPage() {
 
   return (
     <div className="p-4 max-w-2xl mx-auto space-y-6 pb-32">
-      <h1 className="text-xl font-bold text-foreground">Colaboradores</h1>
+      <div className="flex items-center gap-3 pt-2">
+        <Button variant="ghost" size="sm" onClick={() => navigate('/config')} className="gap-2 px-2">
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <h1 className="text-xl font-bold text-foreground">Colaboradores</h1>
+      </div>
 
       {/* Convidar */}
       <Card>
