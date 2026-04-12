@@ -51,6 +51,9 @@ Deno.serve(async (req) => {
   const store_id = body.store_id as string
   if (!store_id) return json({ error: 'store_id obrigatório' }, 400)
 
+  // Plano alvo: se veio 'plan' no body é upgrade, senão renova o plano atual
+  const targetPlan = body.plan as string | undefined
+
   // Busca dados da loja e assinatura
   const { data: store } = await sb
     .from('store_settings')
@@ -72,10 +75,17 @@ Deno.serve(async (req) => {
   const asaasCustomerId = store.asaas_customer_id || sub?.asaas_customer_id
   if (!asaasCustomerId) return json({ error: 'Cliente não encontrado no Asaas. Entre em contato com o suporte.' }, 400)
 
-  const plan = sub?.plan || store.plan || 'basic'
-  const amount = sub?.amount || PLAN_VALUES[plan] || 79
+  const plan = targetPlan || sub?.plan || store.plan || 'basic'
+  // Upgrade usa o valor fixo do plano; renovação usa o valor da assinatura (pode ter desconto)
+  const amount = targetPlan ? (PLAN_VALUES[plan] || 79) : (sub?.amount || PLAN_VALUES[plan] || 79)
   const dueDate = nextDueDate()
-  const description = `Mensalidade SpeedSeek OS — Plano ${PLAN_LABELS[plan] || plan} | ${store.company_name || store.owner_email}`
+  const isUpgrade = targetPlan && targetPlan !== (sub?.plan || store.plan)
+  const description = isUpgrade
+    ? `Upgrade SpeedSeek OS → Plano ${PLAN_LABELS[plan] || plan} | ${store.company_name || store.owner_email}`
+    : `Mensalidade SpeedSeek OS — Plano ${PLAN_LABELS[plan] || plan} | ${store.company_name || store.owner_email}`
+
+  // externalReference inclui plano E store_id para o webhook identificar tudo
+  const externalReference = `speedseek_${plan}_${store_id}`
 
   // Cria cobrança PIX no Asaas
   const createRes = await fetch(`${ASAAS_API_URL}/payments`, {
@@ -90,7 +100,7 @@ Deno.serve(async (req) => {
       value: amount,
       dueDate,
       description,
-      externalReference: `speedseek_renovacao_${store_id}`,
+      externalReference,
     }),
   })
 
@@ -121,5 +131,6 @@ Deno.serve(async (req) => {
     due_date: dueDate,
     plan,
     plan_label: PLAN_LABELS[plan] || plan,
+    is_upgrade: !!isUpgrade,
   })
 })

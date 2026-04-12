@@ -46,6 +46,14 @@ function planFromRef(ref: string): string | null {
   return null
 }
 
+// Extrai store_id do externalReference — formato: speedseek_{plan}_{store_id}
+function storeIdFromRef(ref: string): string | null {
+  if (!ref) return null
+  // UUID tem 36 chars: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+  const uuidMatch = ref.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)
+  return uuidMatch ? uuidMatch[0] : null
+}
+
 function planFromValue(value: number): string {
   if (value <= 90) return 'basic'
   if (value <= 160) return 'pro'
@@ -74,12 +82,30 @@ async function provisionarCliente(payment: Record<string, unknown>) {
 
   console.log(`Provisionando: asaas_payment=${asaasPaymentId} customer=${asaasCustomerId} plan=${plan} valor=${valor}`)
 
-  // Evita duplicata — verifica se já existe store com esse asaas_customer_id
-  const { data: existingStore } = await supabase
-    .from('store_settings')
-    .select('id, owner_email')
-    .eq('asaas_customer_id', asaasCustomerId)
-    .maybeSingle()
+  // Prioridade 1: store_id embutido no externalReference (pagamentos gerados pelo sistema)
+  const refStoreId = storeIdFromRef(externalRef)
+  let existingStore: { id: string; owner_email: string } | null = null
+
+  if (refStoreId) {
+    const { data } = await supabase
+      .from('store_settings')
+      .select('id, owner_email')
+      .eq('id', refStoreId)
+      .maybeSingle()
+    existingStore = data ?? null
+    if (existingStore) console.log(`Store identificada via externalRef: ${refStoreId}`)
+  }
+
+  // Prioridade 2: asaas_customer_id (pagamentos via links do Asaas)
+  if (!existingStore) {
+    const { data } = await supabase
+      .from('store_settings')
+      .select('id, owner_email')
+      .eq('asaas_customer_id', asaasCustomerId)
+      .maybeSingle()
+    existingStore = data ?? null
+    if (existingStore) console.log(`Store identificada via asaas_customer_id: ${asaasCustomerId}`)
+  }
 
   if (existingStore) {
     // Cliente já existe — atualiza plano e registra renovação
