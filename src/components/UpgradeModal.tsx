@@ -1,29 +1,44 @@
 import { useState } from 'react';
-import { X, Lock, Zap, Star, CreditCard, Copy, Loader2, ExternalLink } from 'lucide-react';
+import { X, Lock, Zap, Star, Diamond, CreditCard, Copy, Loader2, ExternalLink, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useStore } from '@/contexts/StoreContext';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
-const PLAN_CONFIG: Record<string, { label: string; price: string; features: string[] }> = {
+const PLAN_CONFIG = {
   pro: {
+    id: 'pro',
     label: 'Profissional',
-    price: 'R$ 149/mês',
+    price: 'R$ 149',
+    period: '/mês',
+    color: 'border-blue-500/50 bg-blue-500/5',
+    badgeColor: 'bg-blue-500/20 text-blue-300',
+    buttonClass: 'bg-blue-600 hover:bg-blue-700 text-white',
+    icon: Star,
+    popular: true,
     features: [
       'Balcão / PDV',
       'Estoque completo',
       'Fluxo de caixa e relatórios',
       'Pesquisa de satisfação',
       'WhatsApp automático completo',
-      'Lembretes de manutenção e aniversário',
+      'Lembretes de manutenção',
       'Fiados e crédito de clientes',
       'Boletos e contas a pagar',
       'Usuários ilimitados',
     ],
   },
   premium: {
+    id: 'premium',
     label: 'Premium',
-    price: 'R$ 219/mês',
+    price: 'R$ 219',
+    period: '/mês',
+    color: 'border-amber-500/50 bg-amber-500/5',
+    badgeColor: 'bg-amber-500/20 text-amber-300',
+    buttonClass: 'bg-amber-600 hover:bg-amber-700 text-white',
+    icon: Diamond,
+    popular: false,
     features: [
       'Tudo do Profissional',
       'IA de atendimento 24h no WhatsApp',
@@ -34,7 +49,7 @@ const PLAN_CONFIG: Record<string, { label: string; price: string; features: stri
       'Onboarding personalizado',
     ],
   },
-};
+} as const;
 
 interface UpgradeModalProps {
   feature: string;
@@ -51,37 +66,33 @@ interface PixData {
   amount: number;
   due_date: string;
   plan_label: string;
+  plan: string;
 }
 
 export function UpgradeModal({ feature, requiredPlan, upgradeLink, onClose }: UpgradeModalProps) {
   const { storeId } = useStore();
-  const [generating, setGenerating] = useState(false);
+  const [generating, setGenerating] = useState<string | null>(null); // planId being generated
   const [pixData, setPixData] = useState<PixData | null>(null);
 
-  // Mapeia label do plano para o ID interno
-  const planId = requiredPlan.toLowerCase().includes('premium') ? 'premium' : 'pro';
-  const planCfg = PLAN_CONFIG[planId];
-
-  const gerarPix = async () => {
+  const gerarPix = async (planId: 'pro' | 'premium') => {
     if (!storeId) {
       window.open(upgradeLink, '_blank');
       return;
     }
-    setGenerating(true);
+    setGenerating(planId);
     try {
       const { data, error } = await supabase.functions.invoke('gerar-cobranca', {
         body: { store_id: storeId, plan: planId },
       });
       if (error || !data?.success) {
-        toast.error(data?.error || 'Erro ao gerar cobrança. Tente pelo link.');
-        window.open(upgradeLink, '_blank');
+        toast.error(data?.error || 'Erro ao gerar cobrança. Tente novamente.');
         return;
       }
       setPixData(data as PixData);
     } catch {
-      window.open(upgradeLink, '_blank');
+      toast.error('Erro inesperado. Tente novamente.');
     } finally {
-      setGenerating(false);
+      setGenerating(null);
     }
   };
 
@@ -93,63 +104,96 @@ export function UpgradeModal({ feature, requiredPlan, upgradeLink, onClose }: Up
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="bg-neutral-900 border border-border rounded-2xl w-full max-w-md p-6 relative max-h-[90vh] overflow-y-auto">
+      <div className="bg-neutral-900 border border-border rounded-2xl w-full max-w-lg p-6 relative max-h-[90vh] overflow-y-auto">
         <button type="button" aria-label="Fechar" onClick={onClose} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground">
           <X className="h-5 w-5" />
         </button>
 
         {!pixData ? (
           <>
+            {/* Header */}
             <div className="flex flex-col items-center text-center mb-6">
-              <div className="bg-primary/10 p-4 rounded-full mb-4">
-                <Lock className="h-8 w-8 text-primary" />
+              <div className="bg-primary/10 p-3 rounded-full mb-3">
+                <Lock className="h-7 w-7 text-primary" />
               </div>
               <h2 className="text-xl font-bold text-foreground mb-1">Funcionalidade bloqueada</h2>
               <p className="text-muted-foreground text-sm">
-                <span className="text-foreground font-medium">{feature}</span> está disponível no plano{' '}
-                <span className="text-primary font-semibold">{requiredPlan}</span>
+                <span className="text-foreground font-medium">{feature}</span> requer upgrade de plano
               </p>
             </div>
 
-            <div className="bg-neutral-800 rounded-xl p-4 mb-6">
-              <div className="flex items-center gap-2 mb-3">
-                <Star className="h-4 w-4 text-yellow-400" />
-                <span className="text-sm font-semibold text-foreground">Plano {planCfg.label} — {planCfg.price}</span>
-              </div>
-              <ul className="space-y-1.5">
-                {planCfg.features.map((f) => (
-                  <li key={f} className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Zap className="h-3 w-3 text-primary flex-shrink-0" />
-                    {f}
-                  </li>
-                ))}
-              </ul>
+            {/* Cards dos planos */}
+            <div className="grid grid-cols-2 gap-3 mb-5">
+              {(['pro', 'premium'] as const).map((planKey) => {
+                const plan = PLAN_CONFIG[planKey];
+                const Icon = plan.icon;
+                const isGenerating = generating === planKey;
+
+                return (
+                  <div
+                    key={planKey}
+                    className={cn('rounded-xl border p-4 flex flex-col', plan.color)}
+                  >
+                    {/* Badge popular */}
+                    <div className="flex items-center justify-between mb-3">
+                      <span className={cn('text-xs font-semibold px-2 py-0.5 rounded-full', plan.badgeColor)}>
+                        {plan.label}
+                      </span>
+                      {plan.popular && (
+                        <span className="text-xs bg-primary/20 text-primary border border-primary/30 px-1.5 py-0.5 rounded-full font-medium">
+                          Popular
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Preço */}
+                    <div className="mb-3">
+                      <span className="text-2xl font-bold text-foreground">{plan.price}</span>
+                      <span className="text-xs text-muted-foreground">{plan.period}</span>
+                    </div>
+
+                    {/* Features */}
+                    <ul className="space-y-1.5 mb-4 flex-1">
+                      {plan.features.map((f) => (
+                        <li key={f} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                          <CheckCircle className="h-3 w-3 text-emerald-400 shrink-0 mt-0.5" />
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
+
+                    {/* Botão */}
+                    <Button
+                      size="sm"
+                      className={cn('w-full gap-1.5 h-9 text-xs font-semibold', plan.buttonClass)}
+                      onClick={() => gerarPix(planKey)}
+                      disabled={!!generating}
+                    >
+                      {isGenerating
+                        ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Gerando...</>
+                        : <><CreditCard className="h-3.5 w-3.5" /> Assinar via PIX</>
+                      }
+                    </Button>
+                  </div>
+                );
+              })}
             </div>
 
-            <Button
-              className="w-full bg-primary hover:bg-primary/90 text-white font-bold text-base py-6 gap-2"
-              onClick={gerarPix}
-              disabled={generating}
-            >
-              {generating
-                ? <><Loader2 className="h-4 w-4 animate-spin" /> Gerando PIX...</>
-                : <><CreditCard className="h-4 w-4" /> Fazer upgrade via PIX</>
-              }
-            </Button>
-
-            <p className="text-center text-xs text-muted-foreground mt-3">
+            <p className="text-center text-xs text-muted-foreground">
               Após o pagamento o plano é atualizado automaticamente
             </p>
           </>
         ) : (
           <>
+            {/* PIX gerado */}
             <div className="flex flex-col items-center text-center mb-4">
-              <div className="bg-emerald-500/10 p-4 rounded-full mb-3">
-                <CreditCard className="h-8 w-8 text-emerald-400" />
+              <div className="bg-emerald-500/10 p-3 rounded-full mb-3">
+                <CreditCard className="h-7 w-7 text-emerald-400" />
               </div>
               <h2 className="text-xl font-bold text-foreground mb-1">PIX gerado!</h2>
               <p className="text-sm text-muted-foreground">
-                Plano {pixData.plan_label} —{' '}
+                Plano <span className="text-foreground font-semibold">{pixData.plan_label}</span>
+                {' — '}
                 <span className="text-foreground font-semibold">
                   {pixData.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </span>
@@ -161,7 +205,7 @@ export function UpgradeModal({ feature, requiredPlan, upgradeLink, onClose }: Up
                 <img
                   src={`data:image/png;base64,${pixData.pix_image}`}
                   alt="QR Code PIX"
-                  className="w-48 h-48 rounded-xl"
+                  className="w-44 h-44 rounded-xl"
                 />
               </div>
             )}
@@ -189,7 +233,15 @@ export function UpgradeModal({ feature, requiredPlan, upgradeLink, onClose }: Up
               </Button>
             )}
 
-            <p className="text-center text-xs text-muted-foreground mt-3">
+            <button
+              type="button"
+              className="w-full text-xs text-muted-foreground hover:text-foreground mt-2 py-1"
+              onClick={() => setPixData(null)}
+            >
+              ← Voltar para planos
+            </button>
+
+            <p className="text-center text-xs text-muted-foreground mt-2">
               Após o pagamento seu plano é atualizado automaticamente 🚀
             </p>
           </>
