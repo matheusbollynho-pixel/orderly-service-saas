@@ -29,6 +29,14 @@ function toISODate(): string {
   return new Date().toISOString().split('T')[0]
 }
 
+// Retorna o dia 10 do próximo mês como YYYY-MM-DD
+function nextDueDate(): string {
+  const now = new Date()
+  const year = now.getDate() < 10 ? now.getFullYear() : (now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear())
+  const month = now.getDate() < 10 ? now.getMonth() : (now.getMonth() === 11 ? 0 : now.getMonth() + 1)
+  return `${year}-${String(month + 1).padStart(2, '0')}-10`
+}
+
 function planFromRef(ref: string): string | null {
   if (!ref) return null
   const r = ref.toLowerCase()
@@ -90,6 +98,7 @@ async function provisionarCliente(payment: Record<string, unknown>) {
       owner_name: existingStore.owner_email,
       amount: valor,
       paid_at: new Date().toISOString(),
+      due_date: nextDueDate(),
     })
 
     return { ok: true, action: 'renovacao', store_id: existingStore.id, plan }
@@ -176,6 +185,7 @@ async function provisionarCliente(payment: Record<string, unknown>) {
     company_name: companyName,
     amount: valor,
     paid_at: new Date().toISOString(),
+    due_date: nextDueDate(),
   })
 
   // Notificar dono (você) via WhatsApp

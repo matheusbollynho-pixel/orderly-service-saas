@@ -164,10 +164,19 @@ export default function SuperAdminPage() {
       setWppToken(selected.whatsapp_instance_token || '');
       setWppProvider(selected.whatsapp_provider || 'uazapi');
       setNewPlan(selected.plan || 'basic');
-      setSubDueDate(selected.subscription?.due_date || '');
       setSubStatus(selected.subscription?.status || 'active');
       setSubAmount(selected.subscription?.amount?.toString() || '');
       setCustomFeatures(selected.custom_features ?? null);
+      // Se não tem due_date, defaulta para o dia 10 do próximo mês
+      const existingDue = selected.subscription?.due_date;
+      if (!existingDue) {
+        const now = new Date();
+        const year = now.getDate() < 10 ? now.getFullYear() : (now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear());
+        const month = now.getDate() < 10 ? now.getMonth() : (now.getMonth() === 11 ? 0 : now.getMonth() + 1);
+        setSubDueDate(`${year}-${String(month + 1).padStart(2, '0')}-10`);
+      } else {
+        setSubDueDate(existingDue);
+      }
       setWppStatus(null);
       setEditWpp(false);
       setEditPlan(false);
