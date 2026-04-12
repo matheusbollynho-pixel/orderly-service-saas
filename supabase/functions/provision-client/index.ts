@@ -41,6 +41,8 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'company_name, owner_email e owner_password são obrigatórios' }), { status: 400, headers: corsHeaders })
     }
 
+    console.log('provision: iniciando para', owner_email, '| company:', company_name)
+
     // 1. Cria usuário via admin (sem afetar sessão atual)
     const { data: authData, error: authErr } = await sb.auth.admin.createUser({
       email: owner_email,
@@ -48,9 +50,11 @@ Deno.serve(async (req) => {
       email_confirm: true,
     })
     if (authErr || !authData.user) {
+      console.error('provision: erro auth', authErr?.message)
       return new Response(JSON.stringify({ error: authErr?.message ?? 'Erro ao criar usuário' }), { status: 400, headers: corsHeaders })
     }
     const userId = authData.user.id
+    console.log('provision: usuário criado', userId)
 
     // 2. Cria store_settings
     const trialEndsAt = is_trial ? new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString() : null
@@ -70,9 +74,11 @@ Deno.serve(async (req) => {
       .single()
 
     if (storeErr || !store) {
+      console.error('provision: erro store_settings', storeErr?.message)
       await sb.auth.admin.deleteUser(userId)
       return new Response(JSON.stringify({ error: storeErr?.message ?? 'Erro ao criar loja' }), { status: 400, headers: corsHeaders })
     }
+    console.log('provision: store criada', store.id)
 
     // 3. Cria store_members
     const { error: memberErr } = await sb
@@ -80,19 +86,22 @@ Deno.serve(async (req) => {
       .insert({ store_id: store.id, user_id: userId, role: 'owner', active: true })
 
     if (memberErr) {
+      console.error('provision: erro store_members', memberErr.message)
       await sb.auth.admin.deleteUser(userId)
       await sb.from('store_settings').delete().eq('id', store.id)
       return new Response(JSON.stringify({ error: memberErr.message }), { status: 400, headers: corsHeaders })
     }
+    console.log('provision: member criado')
 
     // 4. Cria saas_subscription
+    // Para trial: salva o plano recomendado (não 'trial') para saber o que cobrar depois
     await sb.from('saas_subscriptions').insert({
       store_id: store.id,
       owner_name: owner_name || company_name,
       owner_email,
       owner_phone: store_phone || null,
       company_name,
-      plan: is_trial ? 'trial' : plan,
+      plan: is_trial ? (plan || 'basic') : plan,
       status: is_trial ? 'pending' : 'active',
       due_date: is_trial ? trialEndsAt?.split('T')[0] : (due_date || null),
       amount: amount ? parseFloat(amount) : null,

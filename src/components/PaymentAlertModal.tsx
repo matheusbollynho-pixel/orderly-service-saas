@@ -64,6 +64,9 @@ export function PaymentAlertModal() {
     const status = data.status as string;
     const dueDate = data.due_date as string | null;
 
+    // Trial/pending — não mostra aviso de pagamento
+    if (status === 'pending' || data.plan === 'trial') return;
+
     // Já vencido/cancelado — bloqueia
     if (status === 'overdue' || status === 'cancelled') {
       setSubInfo(data);
@@ -72,7 +75,7 @@ export function PaymentAlertModal() {
       return;
     }
 
-    // Verifica dias restantes
+    // Verifica dias restantes (apenas contas ativas)
     if (dueDate) {
       const due = new Date(dueDate + 'T12:00:00');
       const today = new Date();

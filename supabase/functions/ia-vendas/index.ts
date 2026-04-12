@@ -24,15 +24,48 @@ Tudo do Profissional + IA de atendimento 24h no WhatsApp, IA de estoque, domíni
 
 const SYSTEM_PROMPT = `Você é o assistente virtual de vendas do *SpeedSeek OS*, sistema completo de gestão para oficinas mecânicas.
 
-Seu objetivo é:
-1. Perguntar o nome do lead logo no início (se ainda não souber)
-2. Entender o perfil da oficina (tamanho, quantos mecânicos, se usa papel ou planilha)
-3. Perguntar se a oficina trabalha com *motos* ou *carros* — isso é essencial para mostrar a demo correta
-4. Recomendar o plano ideal
-5. Quando o lead quiser testar ou contratar: coletar nome completo, e-mail e criar o acesso automaticamente
+SEU OBJETIVO PRINCIPAL:
+Transformar o lead em cliente, entendendo o perfil da oficina e recomendando o plano ideal.
+
+FLUXO DE QUALIFICAÇÃO:
+1. Pergunte o *nome* do lead logo na primeira ou segunda mensagem
+2. Entenda o *perfil da oficina*:
+   - Quantos mecânicos/funcionários?
+   - Usa papel, caderno ou planilha hoje?
+   - Qual o maior problema que enfrenta? (OS perdida, fila no balcão, não sabe o que tem em estoque, clientes que somem sem pagar)
+3. Pergunte se trabalha com *motos ou carros* (essencial para demo correta)
+4. Recomende o plano ideal baseado no tamanho
+
+RECOMENDAÇÃO POR TAMANHO DE OFICINA:
+- *1-2 mecânicos* → Recomende Básico (R$79/mês). Foco: acabar com papel, histórico de clientes, OS organizada
+- *3-5 mecânicos* → Recomende Profissional (R$149/mês). Foco: controle de estoque, caixa, relatórios, WhatsApp automático, fiados
+- *6+ mecânicos ou rede de oficinas* → Recomende Premium (R$219/mês). Foco: IA de atendimento 24h, domínio próprio, escalabilidade, suporte prioritário
 
 PLANOS DISPONÍVEIS:
 ${PLANOS}
+
+STORYTELLING (use quando o lead hesitar ou pedir mais detalhes):
+"Imagina a seguinte cena: segunda-feira de manhã, chegam 5 carros ao mesmo tempo. Hoje você anota no papel, procura a OS no caderno, não sabe se a peça tem no estoque... No SpeedSeek OS, você abre o celular, cria a OS em 30 segundos, o mecânico já vê no quadro dele, o cliente assina digital. Quando o carro ficar pronto, o sistema já manda mensagem no WhatsApp do cliente automaticamente. Zero papel, zero confusão, mais tempo pra você focar no que importa."
+
+TRATAMENTO DE OBJEÇÕES:
+
+*"É caro / não tenho dinheiro agora"*
+→ "Entendo! Mas vamos fazer uma conta rápida: se você tem 30 clientes por mês pagando R$300 em média, são R$9.000 de faturamento. O Básico custa R$79 — menos de 1% do seu faturamento. Além disso, oficinas que usam o SpeedSeek costumam recuperar 2 ou 3 clientes por mês que antes simplesmente sumiam. Testa 7 dias grátis, sem cartão, sem compromisso. Se não valer, cancela na hora."
+
+*"Vou pensar / deixa eu ver"*
+→ "Claro, faz todo sentido refletir! Mas que tal pensar usando o sistema? São 7 dias grátis, você usa no dia a dia e decide com a experiência real, não só com o que eu te falo. O que te impede de testar agora mesmo?"
+
+*"Prefiro papel / já funciona assim"*
+→ "Papel funcionou por anos, concordo! Mas me responde uma coisa: quando um cliente liga perguntando 'o que foi feito no meu carro mês passado?', você consegue responder em 10 segundos? Com o SpeedSeek você busca no celular e responde na hora. E quando o mecânico esquece o que combinou com o cliente? No sistema fica registrado tudo, com fotos inclusive. Mas sem pressão — testa 7 dias e compara você mesmo."
+
+*"Já tenho sistema / uso outro software"*
+→ "Que bom que você já tem essa mentalidade! Qual você usa hoje? Boa parte dos nossos clientes veio de outros sistemas porque [1] era muito caro, [2] era complicado demais ou [3] não tinha WhatsApp automático integrado. O SpeedSeek foi feito especificamente para oficinas brasileiras — simples, no celular e com suporte em português. Quer ver a demo e comparar?"
+
+*"Não sei mexer com tecnologia"*
+→ "Essa é a objeção que mais ouço — e a que mais me orgulha de resolver! O SpeedSeek foi criado para mecânicos, não para técnicos de TI. Se você sabe mandar mensagem no WhatsApp, você sabe usar o SpeedSeek. E no início a gente te acompanha passo a passo para configurar tudo."
+
+*"Não tenho tempo pra aprender agora"*
+→ "Entendo, oficina não para! Por isso o onboarding é todo guiado pelo app — você vai aprendendo enquanto usa, no seu ritmo. E a equipe de suporte responde rápido no WhatsApp. Que tal criar sua conta agora e explorar quando tiver 10 minutinhos?"
 
 SITE: speedseekos.com.br
 
@@ -53,21 +86,21 @@ CRIAÇÃO DE CONTA (teste grátis de 5 dias):
 Quando o lead quiser começar o teste gratuito real (não só a demo):
 1. Pergunte o *nome da oficina*
 2. Pergunte o *e-mail* para acesso
-3. Quando tiver nome da oficina + e-mail + tipo de veículo, responda EXATAMENTE neste formato (sem mais nada antes ou depois):
-CRIAR_CONTA|nome_oficina|email|tipo_veiculo
-Exemplo: CRIAR_CONTA|Bandara Motos|dono@email.com|moto
+3. Quando tiver nome da oficina + e-mail + tipo de veículo, responda EXATAMENTE neste formato (sem mais nada antes ou depois na linha):
+CRIAR_CONTA|nome_oficina|email|tipo_veiculo|plano_recomendado
+- plano_recomendado deve ser: basic, pro ou premium (baseado no perfil da oficina)
+Exemplo: CRIAR_CONTA|Bandara Motos|dono@email.com|moto|pro
 
 ATENDIMENTO HUMANO:
 Se o lead quiser conversar com o responsável diretamente, diga: "Pode mandar mensagem aqui mesmo que o responsável já vai te atender!"
 
 REGRAS:
-- Responda sempre em português brasileiro
-- Seja amigável, direto e profissional
-- Máximo 3 parágrafos por resposta
-- Use emojis moderadamente
-- Pergunte o nome na primeira ou segunda mensagem
-- Não invente funcionalidades
-- Se perguntar sobre preço, mostre os 3 planos`;
+- Responda sempre em português brasileiro, linguagem natural e informal (como um vendedor amigo)
+- Máximo 3-4 parágrafos por resposta — direto e objetivo
+- Use emojis moderadamente para dar leveza
+- Nunca invente funcionalidades que não existem nos planos
+- Sempre termine com uma pergunta ou chamada para ação
+- Se o lead demonstrar interesse claro (quero assinar, como contrato, quanto custa), convide para o teste grátis imediatamente`;
 
 const PLAN_LABELS: Record<string, string> = {
   basic: 'Básico', pro: 'Profissional', premium: 'Premium', enterprise: 'Enterprise', trial: 'Trial',
@@ -101,9 +134,9 @@ async function callClaude(messages: { role: string; content: string }[]): Promis
   return data.content?.[0]?.text || 'Desculpe, tive um problema. Tente novamente em instantes.';
 }
 
-// Normaliza telefone para comparação (remove 55, DDD etc)
+// Normaliza telefone para comparação (remove 55, mantém DDD+número = 11 dígitos)
 function normalizePhone(p: string): string {
-  return p.replace(/\D/g, '').replace(/^55/, '').slice(-9);
+  return p.replace(/\D/g, '').replace(/^55/, '').slice(-11);
 }
 
 // Busca store pelo telefone do WhatsApp
@@ -151,12 +184,14 @@ async function getStoreSub(storeId: string, sb: ReturnType<typeof createClient>)
 }
 
 // Chama edge function gerar-cobranca
-async function gerarCobranca(storeId: string): Promise<Record<string, unknown> | null> {
+async function gerarCobranca(storeId: string, targetPlan?: string): Promise<Record<string, unknown> | null> {
   try {
+    const body: Record<string, unknown> = { store_id: storeId }
+    if (targetPlan) body.plan = targetPlan
     const res = await fetch(`${SUPABASE_URL}/functions/v1/gerar-cobranca`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
-      body: JSON.stringify({ store_id: storeId }),
+      body: JSON.stringify(body),
     })
     return await res.json()
   } catch {
@@ -393,7 +428,7 @@ Você é novo por aqui ou já é nosso cliente?
         const statusEmoji: Record<string, string> = { active: '✅', pending: '⏳', overdue: '⚠️', cancelled: '❌' };
         const statusLabel: Record<string, string> = { active: 'Ativa', pending: 'Pendente', overdue: 'Vencida', cancelled: 'Cancelada' };
         const valor = sub.amount ? (sub.amount as number).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—';
-        const venc = sub.due_date ? new Date(sub.due_date as string).toLocaleDateString('pt-BR') : '—';
+        const venc = sub.due_date ? (() => { const [y,m,d] = (sub.due_date as string).split('T')[0].split('-'); return `${d}/${m}/${y}`; })() : '—';
         reply = `📊 *Status da sua assinatura:*\n\n🏪 *${clienteNome}*\n💼 Plano: *${PLAN_LABELS[sub.plan as string] || sub.plan}*\n💰 Valor: *${valor}/mês*\n📅 Próximo vencimento: *${venc}*\n${statusEmoji[sub.status as string] || '•'} Status: *${statusLabel[sub.status as string] || sub.status}*`
         if (sub.status === 'overdue') {
           reply += `\n\n⚠️ Sua conta está com pagamento vencido. Digite *1* para gerar um PIX e regularizar agora!`
@@ -410,10 +445,10 @@ Você é novo por aqui ou já é nosso cliente?
     }
 
     if (opcao3) {
-      const reply = `⬆️ *Opções de upgrade:*\n\n🔹 *Básico — R$ 79/mês*\nOS ilimitadas, agenda, até 2 usuários\n🔗 https://www.asaas.com/c/vz4xmubsyo6qjny1\n\n🔸 *Profissional — R$ 149/mês*\nBalcão/PDV, estoque, relatórios, WhatsApp automático, fiados, boletos\n🔗 https://www.asaas.com/c/8swycr4f636vo1za\n\n💎 *Premium — R$ 219/mês*\nTudo do Profissional + IA de atendimento 24h, domínio próprio, suporte prioritário\n🔗 https://www.asaas.com/c/qocck5e1633zxrpl\n\nApós o pagamento seu plano é atualizado automaticamente! 🚀`
+      const reply = `⬆️ *Qual plano você quer?*\n\n1️⃣ 🔹 *Básico — R$ 79/mês*\nOS ilimitadas, agenda, até 2 usuários\n\n2️⃣ 🔸 *Profissional — R$ 149/mês*\nBalcão/PDV, estoque, relatórios, WhatsApp automático, fiados, boletos\n\n3️⃣ 💎 *Premium — R$ 219/mês*\nTudo do Profissional + IA de atendimento 24h, domínio próprio, suporte prioritário\n\nDigite o número do plano desejado e gero o PIX na hora!`
       await sendWhatsApp(phone, reply);
       await sb.from('conversation_state').upsert({
-        phone, state: 'cliente_menu',
+        phone, state: 'aguardando_plano_upgrade',
         data: { store_id: clienteStoreId, company_name: clienteNome, history: [...history, { role: 'user', content: text }, { role: 'assistant', content: reply }] },
       }, { onConflict: 'phone' });
       return new Response('ok', { status: 200 });
@@ -438,6 +473,47 @@ Você é novo por aqui ou já é nosso cliente?
     return new Response('ok', { status: 200 });
   }
 
+  // ─── UPGRADE — aguardando escolha de plano ────────────────────────────────────
+  if (currentState === 'aguardando_plano_upgrade' && clienteStoreId) {
+    const lower = text.toLowerCase();
+    let targetPlan: string | null = null;
+
+    if (text === '1' || lower.includes('básico') || lower.includes('basico') || lower.includes('79')) targetPlan = 'basic';
+    else if (text === '2' || lower.includes('profissional') || lower.includes('149') || lower.includes('pro')) targetPlan = 'pro';
+    else if (text === '3' || lower.includes('premium') || lower.includes('219')) targetPlan = 'premium';
+
+    if (!targetPlan) {
+      const naoEntendi = `Não entendi qual plano você quer. 😅\n\nDigite *1* para Básico, *2* para Profissional ou *3* para Premium.`;
+      await sendWhatsApp(phone, naoEntendi);
+      return new Response('ok', { status: 200 });
+    }
+
+    const gerando = `⏳ Gerando PIX para o plano selecionado...`;
+    await sendWhatsApp(phone, gerando);
+
+    const cobranca = await gerarCobranca(clienteStoreId, targetPlan);
+
+    let reply: string;
+    if (cobranca?.success) {
+      const valor = (cobranca.amount as number).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      reply = `✅ *PIX gerado para upgrade!*\n\nPlano: *${cobranca.plan_label}*\nValor: *${valor}*\nVencimento: *${cobranca.due_date}*`;
+      if (cobranca.pix_code) reply += `\n\n📋 *Pix Copia e Cola:*\n${cobranca.pix_code}`;
+      if (cobranca.invoice_url) reply += `\n\n🔗 *Ver fatura:*\n${cobranca.invoice_url}`;
+      reply += `\n\nApós o pagamento seu plano é atualizado automaticamente! 🚀`;
+    } else {
+      reply = `Não consegui gerar o PIX agora. 😕\nEntre em contato com o suporte ou acesse *app.speedseekos.com.br → Minha Conta*.`;
+    }
+
+    await sendWhatsApp(phone, reply);
+    const menuVoltar = `\n\nAlguma outra dúvida?\n\n1️⃣ 💳 Gerar pagamento\n2️⃣ 📊 Ver status\n3️⃣ ⬆️ Upgrade\n4️⃣ 🆘 Suporte`;
+    await sendWhatsApp(phone, menuVoltar);
+    await sb.from('conversation_state').upsert({
+      phone, state: 'cliente_menu',
+      data: { store_id: clienteStoreId, company_name: clienteNome, history: [...history, { role: 'user', content: text }, { role: 'assistant', content: reply }] },
+    }, { onConflict: 'phone' });
+    return new Response('ok', { status: 200 });
+  }
+
   // ─── FLUXO DE VENDAS (Claude) ─────────────────────────────────────────────────
   history.push({ role: 'user', content: text });
   const recentHistory = history.slice(-20);
@@ -449,16 +525,12 @@ Você é novo por aqui ou já é nosso cliente?
     return new Response('ok', { status: 200 });
   }
 
-  recentHistory.push({ role: 'assistant', content: reply });
-  await sb.from('conversation_state').upsert({
-    phone, state: 'conversando', data: { history: recentHistory },
-  }, { onConflict: 'phone' });
-  await sendWhatsApp(phone, reply);
-
-  // Detecta comando de criar conta
-  const criarMatch = reply.match(/^CRIAR_CONTA\|([^|]+)\|([^|]+)\|([^|]+)/m);
+  // Detecta comando de criar conta ANTES de enviar o reply ao usuário
+  const criarMatch = reply.match(/CRIAR_CONTA\|([^|\n]+)\|([^|\n]+)\|([^|\n]+)(?:\|([^|\n]+))?/);
   if (criarMatch) {
-    const [, nomeOficina, emailLead, tipoVeiculo] = criarMatch;
+    const [, nomeOficina, emailLead, tipoVeiculo, planoCriacao] = criarMatch;
+    // Não envia o reply bruto — envia mensagem de aguarde
+    await sendWhatsApp(phone, `⏳ Aguarda um segundo, estou criando sua conta...`);
     const senha = Math.random().toString(36).slice(2, 10);
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/provision-client`, {
@@ -469,6 +541,7 @@ Você é novo por aqui ou já é nosso cliente?
           owner_email: emailLead.trim(),
           owner_password: senha,
           vehicle_type: tipoVeiculo.trim().toLowerCase().includes('carro') ? 'carro' : 'moto',
+          plan: planoCriacao?.trim() || 'basic',
           is_trial: true,
         }),
       });
@@ -477,12 +550,19 @@ Você é novo por aqui ou já é nosso cliente?
         const msgConfirm = `✅ *Sua conta foi criada!*\n\n🔗 *Acesso:* https://app.speedseekos.com.br\n📧 *E-mail:* ${emailLead.trim()}\n🔑 *Senha:* ${senha}\n\nVocê tem *5 dias grátis* para testar tudo! 🚀\n\nNa primeira vez que entrar, vamos te guiar pela configuração. Qualquer dúvida é só chamar! 😊`;
         await sendWhatsApp(phone, msgConfirm);
         if (DONO_PHONE) await sendWhatsApp(DONO_PHONE, `🎉 *Nova conta via WhatsApp!*\n📱 ${phone}\n🏪 ${nomeOficina}\n📧 ${emailLead}\n🚗 ${tipoVeiculo}`);
-        recentHistory[recentHistory.length - 1].content = msgConfirm;
+        recentHistory.push({ role: 'assistant', content: msgConfirm });
         await sb.from('conversation_state').upsert({ phone, state: 'conta_criada', data: { history: recentHistory } }, { onConflict: 'phone' });
         return new Response('ok', { status: 200 });
       } else {
-        await sendWhatsApp(phone, `Ops, tive um problema ao criar sua conta 😕\nVou avisar o responsável agora!`);
-        if (DONO_PHONE) await sendWhatsApp(DONO_PHONE, `❌ Erro ao criar conta para ${phone}: ${result.error}`);
+        // Verifica se é erro de email já existente
+        const errMsg = result.error as string || '';
+        const emailExiste = errMsg.toLowerCase().includes('already') || errMsg.toLowerCase().includes('exists') || errMsg.toLowerCase().includes('já existe');
+        if (emailExiste) {
+          await sendWhatsApp(phone, `Parece que esse e-mail *${emailLead.trim()}* já tem uma conta no SpeedSeek! 😊\n\nSe esqueceu a senha, acesse *https://app.speedseekos.com.br* e clique em "Esqueci minha senha".\n\nOu se quiser usar outro e-mail, é só me informar!`);
+        } else {
+          await sendWhatsApp(phone, `Ops, tive um problema ao criar sua conta 😕\nVou avisar o responsável agora!`);
+          if (DONO_PHONE) await sendWhatsApp(DONO_PHONE, `❌ Erro ao criar conta para ${phone}: ${errMsg}`);
+        }
       }
     } catch (err) {
       console.error('Erro provision-client:', err);
@@ -490,6 +570,13 @@ Você é novo por aqui ou já é nosso cliente?
     }
     return new Response('ok', { status: 200 });
   }
+
+  // Sem CRIAR_CONTA — envia reply normalmente
+  recentHistory.push({ role: 'assistant', content: reply });
+  await sb.from('conversation_state').upsert({
+    phone, state: 'conversando', data: { history: recentHistory },
+  }, { onConflict: 'phone' });
+  await sendWhatsApp(phone, reply);
 
   // Alerta dono sobre lead quente
   const interessePalavras = ['fechar', 'contratar', 'assinar', 'quanto custa', 'quero comprar', 'vou pegar', 'quero assinar', 'vou assinar', 'quero fechar', 'quero o plano', 'como contrato', 'como assino'];
