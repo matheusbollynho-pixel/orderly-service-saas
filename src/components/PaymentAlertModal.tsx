@@ -34,7 +34,7 @@ interface SubInfo {
 }
 
 export function PaymentAlertModal() {
-  const { storeId, plan } = useStore();
+  const { storeId } = useStore();
   const [subInfo, setSubInfo] = useState<SubInfo | null>(null);
   const [show, setShow] = useState(false);
   const [blocked, setBlocked] = useState(false);
@@ -42,13 +42,11 @@ export function PaymentAlertModal() {
   const [pixData, setPixData] = useState<PixData | null>(null);
   const [generating, setGenerating] = useState(false);
 
-  // Não mostrar para planos enterprise/bandara nem demos
   const envPlan = import.meta.env.VITE_PLAN as string | undefined;
   const isDemo = import.meta.env.VITE_DEMO === 'true' || window.location.hostname.includes('demo');
-  if (envPlan === 'enterprise' || isDemo) return null;
 
   useEffect(() => {
-    if (!storeId) return;
+    if (!storeId || envPlan === 'enterprise' || isDemo) return;
     checkSubscription();
   }, [storeId]);
 
@@ -115,7 +113,7 @@ export function PaymentAlertModal() {
     toast.success('Código PIX copiado!');
   };
 
-  if (!show || dismissed) return null;
+  if (!show || dismissed || envPlan === 'enterprise' || isDemo) return null;
 
   const daysLeft = subInfo?.due_date
     ? Math.ceil((new Date(subInfo.due_date + 'T12:00:00').getTime() - new Date().setHours(0,0,0,0)) / (1000 * 60 * 60 * 24))
