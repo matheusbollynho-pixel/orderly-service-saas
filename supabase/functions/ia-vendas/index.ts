@@ -396,7 +396,7 @@ Você é novo por aqui ou já é nosso cliente?
     }
 
     if (opcao3) {
-      const reply = `⬆️ *Opções de upgrade:*\n\n🔸 *Profissional — R$ 149/mês*\nBalcão/PDV, estoque, relatórios, WhatsApp automático, fiados, boletos\n\n💎 *Premium — R$ 219/mês*\nTudo do Profissional + IA de atendimento 24h, domínio próprio, suporte prioritário\n\nPara fazer o upgrade, acesse o link e escolha seu plano:\n🔗 https://www.asaas.com/c/8swycr4f636vo1za (Profissional)\n🔗 https://www.asaas.com/c/qocck5e1633zxrpl (Premium)\n\nApós o pagamento seu plano é atualizado automaticamente! 🚀`
+      const reply = `⬆️ *Opções de upgrade:*\n\n🔹 *Básico — R$ 79/mês*\nOS ilimitadas, agenda, até 2 usuários\n🔗 https://www.asaas.com/c/vz4xmubsyo6qjny1\n\n🔸 *Profissional — R$ 149/mês*\nBalcão/PDV, estoque, relatórios, WhatsApp automático, fiados, boletos\n🔗 https://www.asaas.com/c/8swycr4f636vo1za\n\n💎 *Premium — R$ 219/mês*\nTudo do Profissional + IA de atendimento 24h, domínio próprio, suporte prioritário\n🔗 https://www.asaas.com/c/qocck5e1633zxrpl\n\nApós o pagamento seu plano é atualizado automaticamente! 🚀`
       await sendWhatsApp(phone, reply);
       await sb.from('conversation_state').upsert({
         phone, state: 'cliente_menu',

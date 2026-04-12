@@ -2,6 +2,7 @@ import { useStore } from '@/contexts/StoreContext';
 
 // Links de upgrade por plano
 export const UPGRADE_LINKS = {
+  basic: 'https://www.asaas.com/c/vz4xmubsyo6qjny1',
   pro: 'https://www.asaas.com/c/8swycr4f636vo1za',
   premium: 'https://www.asaas.com/c/qocck5e1633zxrpl',
 };
