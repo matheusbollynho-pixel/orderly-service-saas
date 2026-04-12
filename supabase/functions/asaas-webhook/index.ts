@@ -31,9 +31,11 @@ function toISODate(): string {
 
 // Retorna o dia 10 do próximo mês como YYYY-MM-DD
 function nextDueDate(): string {
-  const now = new Date()
-  const year = now.getDate() < 10 ? now.getFullYear() : (now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear())
-  const month = now.getDate() < 10 ? now.getMonth() : (now.getMonth() === 11 ? 0 : now.getMonth() + 1)
+  // Usa horário de Brasília (UTC-3) para evitar bug de fuso
+  const now = new Date(new Date().getTime() - 3 * 60 * 60 * 1000)
+  const day = now.getUTCDate()
+  const year = day < 10 ? now.getUTCFullYear() : (now.getUTCMonth() === 11 ? now.getUTCFullYear() + 1 : now.getUTCFullYear())
+  const month = day < 10 ? now.getUTCMonth() : (now.getUTCMonth() === 11 ? 0 : now.getUTCMonth() + 1)
   return `${year}-${String(month + 1).padStart(2, '0')}-10`
 }
 
