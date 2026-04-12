@@ -7,7 +7,7 @@ import { useStore } from '@/contexts/StoreContext';
 import { MaintenanceKeywordsManager } from '@/components/MaintenanceKeywordsManager';
 import { useStoreSettings, StoreSettings } from '@/hooks/useStoreSettings';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Settings, Zap, MessageSquare, CalendarCheck, Star, Cake, ShoppingCart, Store, Bot, Users } from 'lucide-react';
+import { Settings, Zap, MessageSquare, CalendarCheck, Star, Cake, ShoppingCart, Store, Bot, Users, CreditCard } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 
@@ -194,6 +194,11 @@ export default function ConfigToolsPage() {
           {isOwner && (
             <TabsTrigger value="colaboradores" className="flex-1 flex items-center gap-2" onClick={() => navigate('/colaboradores')}>
               <Users size={15} /> Equipe
+            </TabsTrigger>
+          )}
+          {isOwner && (
+            <TabsTrigger value="minha-conta" className="flex-1 flex items-center gap-2" onClick={() => navigate('/minha-conta')}>
+              <CreditCard size={15} /> Assinatura
             </TabsTrigger>
           )}
         </TabsList>

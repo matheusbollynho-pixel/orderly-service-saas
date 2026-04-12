@@ -4,6 +4,8 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') || '';
 const UAZAPI_BASE_URL = Deno.env.get('UAZAPI_BASE_URL') || 'https://bandara.uazapi.com';
 const UAZAPI_INSTANCE_TOKEN = Deno.env.get('UAZAPI_INSTANCE_TOKEN') || '';
 const DONO_PHONE = Deno.env.get('DONO_PHONE') || '';
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
 const PLANOS = `
 *📋 PLANOS SPEEDSEEK OS:*
@@ -67,6 +69,10 @@ REGRAS:
 - Não invente funcionalidades
 - Se perguntar sobre preço, mostre os 3 planos`;
 
+const PLAN_LABELS: Record<string, string> = {
+  basic: 'Básico', pro: 'Profissional', premium: 'Premium', enterprise: 'Enterprise', trial: 'Trial',
+};
+
 async function sendWhatsApp(phone: string, message: string) {
   const url = `${UAZAPI_BASE_URL}/send/text`;
   await fetch(url, {
@@ -92,8 +98,85 @@ async function callClaude(messages: { role: string; content: string }[]): Promis
     }),
   });
   const data = await res.json();
-  console.log('📌 Claude status:', res.status, '| error:', data.error?.message || 'none');
   return data.content?.[0]?.text || 'Desculpe, tive um problema. Tente novamente em instantes.';
+}
+
+// Normaliza telefone para comparação (remove 55, DDD etc)
+function normalizePhone(p: string): string {
+  return p.replace(/\D/g, '').replace(/^55/, '').slice(-9);
+}
+
+// Busca store pelo telefone do WhatsApp
+async function findStoreByPhone(phone: string, sb: ReturnType<typeof createClient>) {
+  const suffix = normalizePhone(phone);
+
+  // Tenta bater em store_settings.store_phone
+  const { data: stores } = await sb
+    .from('store_settings')
+    .select('id, company_name, plan, store_phone, asaas_customer_id')
+    .like('store_phone', `%${suffix}`)
+
+  if (stores && stores.length > 0) return stores[0] as Record<string, unknown>;
+
+  // Tenta bater em saas_subscriptions.owner_phone
+  const { data: subs } = await sb
+    .from('saas_subscriptions')
+    .select('store_id, plan, amount, due_date, status')
+    .like('owner_phone', `%${suffix}`)
+    .order('created_at', { ascending: false })
+    .limit(1)
+
+  if (subs && subs.length > 0) {
+    const sub = subs[0] as Record<string, unknown>
+    const { data: store } = await sb
+      .from('store_settings')
+      .select('id, company_name, plan, store_phone, asaas_customer_id')
+      .eq('id', sub.store_id)
+      .maybeSingle()
+    return store ?? null
+  }
+  return null
+}
+
+// Busca subscription da loja
+async function getStoreSub(storeId: string, sb: ReturnType<typeof createClient>) {
+  const { data } = await sb
+    .from('saas_subscriptions')
+    .select('plan, amount, status, due_date, paid_at')
+    .eq('store_id', storeId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  return data as Record<string, unknown> | null
+}
+
+// Chama edge function gerar-cobranca
+async function gerarCobranca(storeId: string): Promise<Record<string, unknown> | null> {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/gerar-cobranca`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+      body: JSON.stringify({ store_id: storeId }),
+    })
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
+function menuCliente(companyName: string): string {
+  return `Encontrei sua conta! 🎉
+
+*${companyName}*
+
+O que você precisa hoje?
+
+1️⃣ 💳 Gerar link de pagamento (PIX)
+2️⃣ 📊 Ver status da assinatura
+3️⃣ ⬆️ Fazer upgrade de plano
+4️⃣ 🆘 Falar com suporte
+
+Digite o número da opção ou descreva o que precisa.`
 }
 
 Deno.serve(async (req) => {
@@ -102,45 +185,34 @@ Deno.serve(async (req) => {
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return new Response('ok', { status: 200 }); }
 
-  // Suporte ao formato UazAPI (EventType + message)
   const event = (body.event || body.EventType) as string || '';
   if (event && !event.toLowerCase().includes('message')) return new Response('ok', { status: 200 });
 
-  // UazAPI: mensagem em body.message, contato em body.chat
   const msg = (body.message || body.data || body) as Record<string, unknown>;
   const fromMe = (msg.fromMe ?? msg.from_me) as boolean;
   if (fromMe) return new Response('ok', { status: 200 });
 
-  // Phone vem de body.chat.wa_chatid ou body.message.chatid
   const chat = (body.chat || {}) as Record<string, unknown>;
   const rawPhone = ((chat.wa_chatid || msg.chatid || msg.phone || msg.from) as string || '');
   const phone = rawPhone.replace(/@.*$/, '').replace(/[^0-9]/g, '');
 
-  // Texto vem de body.message.content
   const textRaw = msg.content ?? msg.text?.message ?? msg.text ?? msg.body ?? '';
   const text = (typeof textRaw === 'string' ? textRaw : JSON.stringify(textRaw)).trim();
 
-  console.log('📌 phone:', phone, '| text:', text, '| fromMe:', fromMe);
   if (!phone || !text) return new Response('ok', { status: 200 });
 
-  // Dedup — evita processar a mesma mensagem duas vezes
   const msgId = (msg.id || msg.messageId) as string;
-  console.log('📌 Criando Supabase client...');
-  const sbUrl = Deno.env.get('SB_URL') || Deno.env.get('SUPABASE_URL') || '';
-  const sbKey = Deno.env.get('SB_SERVICE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-  console.log('📌 sbUrl:', sbUrl ? 'OK' : 'VAZIO', '| sbKey:', sbKey ? 'OK' : 'VAZIO');
-  const sb = createClient(sbUrl, sbKey);
+  const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-  console.log('📌 msgId:', msgId);
+  // Dedup
   if (msgId) {
     const key = `_msg_${msgId}`;
     const { data: existing } = await sb.from('conversation_state').select('id').eq('phone', key).maybeSingle();
-    if (existing) { console.log('⚠️ Dedup — já processado'); return new Response('ok', { status: 200 }); }
+    if (existing) return new Response('ok', { status: 200 });
     await sb.from('conversation_state').insert({ phone: key, state: 'dedup', data: {} });
   }
 
-  console.log('📌 Buscando histórico...');
-  // Busca histórico da conversa
+  // Busca estado atual
   const { data: stateRow } = await sb
     .from('conversation_state')
     .select('*')
@@ -150,68 +222,234 @@ Deno.serve(async (req) => {
     .limit(1)
     .maybeSingle();
 
-  const history: { role: string; content: string }[] = (stateRow?.data?.history as { role: string; content: string }[]) || [];
+  const stateData = (stateRow?.data || {}) as Record<string, unknown>;
+  const currentState = (stateRow?.state as string) || 'inicio';
+  const history = (stateData.history as { role: string; content: string }[]) || [];
+  const clienteStoreId = stateData.store_id as string | undefined;
+  const clienteNome = stateData.company_name as string | undefined;
 
-  console.log('📌 history.length:', history.length);
-  // Mensagem de boas-vindas no primeiro contato
-  if (history.length === 0) {
-    const welcome = `Olá! 👋 Bem-vindo ao *SpeedSeek OS*! 🏍️
+  // ─── PRIMEIRO CONTATO ────────────────────────────────────────────────────────
+  if (currentState === 'inicio' || history.length === 0) {
+    const welcome = `Olá! 👋 Bem-vindo ao *SpeedSeek OS*!
 
-Sou o assistente virtual e estou aqui para te ajudar a conhecer nosso sistema de gestão para oficinas mecânicas.
+Você é novo por aqui ou já é nosso cliente?
 
-Me conta: sua oficina hoje usa papel, planilha ou já tem algum sistema?`;
-    console.log('📌 Enviando boas-vindas para:', phone);
+1️⃣ *Quero conhecer o sistema*
+2️⃣ *Já sou cliente SpeedSeek*`;
+
     await sendWhatsApp(phone, welcome);
     await sb.from('conversation_state').upsert({
       phone,
-      state: 'conversando',
+      state: 'aguardando_tipo',
       data: { history: [{ role: 'assistant', content: welcome }] },
     }, { onConflict: 'phone' });
     return new Response('ok', { status: 200 });
   }
 
-  // Adiciona mensagem do usuário ao histórico
-  history.push({ role: 'user', content: text });
+  // ─── AGUARDANDO TIPO (novo ou existente) ──────────────────────────────────────
+  if (currentState === 'aguardando_tipo') {
+    const lower = text.toLowerCase();
+    const isExistente =
+      text.trim() === '2' ||
+      lower.includes('já sou') || lower.includes('ja sou') ||
+      lower.includes('já cliente') || lower.includes('ja cliente') ||
+      lower.includes('cliente') || lower.includes('já uso') || lower.includes('ja uso') ||
+      lower.includes('pagar') || lower.includes('pagamento') || lower.includes('renovar') ||
+      lower.includes('assinatura') || lower.includes('minha conta');
 
-  // Limita histórico a 20 mensagens
-  const recentHistory = history.slice(-20);
+    if (isExistente) {
+      // Tenta identificar pelo telefone do WhatsApp automaticamente
+      const store = await findStoreByPhone(phone, sb);
+      if (store) {
+        const menu = menuCliente(store.company_name as string || 'sua oficina');
+        await sendWhatsApp(phone, menu);
+        await sb.from('conversation_state').upsert({
+          phone,
+          state: 'cliente_menu',
+          data: {
+            store_id: store.id,
+            company_name: store.company_name,
+            history: [...history, { role: 'user', content: text }, { role: 'assistant', content: menu }],
+          },
+        }, { onConflict: 'phone' });
+        return new Response('ok', { status: 200 });
+      }
 
-  // Chama Claude
-  console.log('📌 Chamando Claude...');
-  let reply: string;
-  try {
-    reply = await callClaude(recentHistory);
-    console.log('📌 Claude respondeu:', reply.slice(0, 100));
-  } catch (err) {
-    console.error('❌ Erro ao chamar Claude:', err);
+      // Não encontrou pelo telefone — pede email
+      const pedirEmail = `Ótimo! Para encontrar sua conta, qual é o *e-mail cadastrado* no SpeedSeek OS?`;
+      await sendWhatsApp(phone, pedirEmail);
+      await sb.from('conversation_state').upsert({
+        phone,
+        state: 'aguardando_email_cliente',
+        data: { history: [...history, { role: 'user', content: text }, { role: 'assistant', content: pedirEmail }] },
+      }, { onConflict: 'phone' });
+      return new Response('ok', { status: 200 });
+    }
+
+    // É novo lead — vai para fluxo de vendas com Claude
+    const newHistory = [...history, { role: 'user', content: text }];
+    const reply = await callClaude(newHistory.slice(-20));
+    newHistory.push({ role: 'assistant', content: reply });
+    await sendWhatsApp(phone, reply);
+    await sb.from('conversation_state').upsert({
+      phone, state: 'conversando', data: { history: newHistory },
+    }, { onConflict: 'phone' });
     return new Response('ok', { status: 200 });
   }
 
-  // Salva histórico atualizado
+  // ─── AGUARDANDO EMAIL DO CLIENTE EXISTENTE ────────────────────────────────────
+  if (currentState === 'aguardando_email_cliente') {
+    const emailInput = text.trim().toLowerCase();
+    const { data: store } = await sb
+      .from('store_settings')
+      .select('id, company_name, plan')
+      .ilike('owner_email', emailInput)
+      .maybeSingle();
+
+    if (!store) {
+      const notFound = `Não encontrei nenhuma conta com o e-mail *${emailInput}*. 😕\n\nVerifica se digitou certo ou fala com nosso suporte!`;
+      await sendWhatsApp(phone, notFound);
+      await sb.from('conversation_state').upsert({
+        phone,
+        state: 'aguardando_email_cliente',
+        data: { history: [...history, { role: 'user', content: text }, { role: 'assistant', content: notFound }] },
+      }, { onConflict: 'phone' });
+      return new Response('ok', { status: 200 });
+    }
+
+    const menu = menuCliente(store.company_name || 'sua oficina');
+    await sendWhatsApp(phone, menu);
+    await sb.from('conversation_state').upsert({
+      phone,
+      state: 'cliente_menu',
+      data: {
+        store_id: store.id,
+        company_name: store.company_name,
+        history: [...history, { role: 'user', content: text }, { role: 'assistant', content: menu }],
+      },
+    }, { onConflict: 'phone' });
+    return new Response('ok', { status: 200 });
+  }
+
+  // ─── MENU DO CLIENTE ──────────────────────────────────────────────────────────
+  if (currentState === 'cliente_menu' && clienteStoreId) {
+    const lower = text.toLowerCase();
+    const opcao1 = text === '1' || lower.includes('pagamento') || lower.includes('pagar') || lower.includes('pix') || lower.includes('renovar');
+    const opcao2 = text === '2' || lower.includes('status') || lower.includes('assinatura') || lower.includes('plano');
+    const opcao3 = text === '3' || lower.includes('upgrade') || lower.includes('mudar plano') || lower.includes('trocar plano');
+    const opcao4 = text === '4' || lower.includes('suporte') || lower.includes('ajuda') || lower.includes('problema') || lower.includes('humano');
+
+    if (opcao1) {
+      const gerando = `⏳ Gerando seu PIX, aguarde um instante...`;
+      await sendWhatsApp(phone, gerando);
+
+      const cobranca = await gerarCobranca(clienteStoreId);
+
+      let reply: string;
+      if (cobranca?.success) {
+        const valor = (cobranca.amount as number).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        reply = `✅ *Cobrança gerada!*\n\nPlano: *${cobranca.plan_label}*\nValor: *${valor}*\nVencimento: *${cobranca.due_date}*`
+
+        if (cobranca.pix_code) {
+          reply += `\n\n📋 *Pix Copia e Cola:*\n${cobranca.pix_code}`
+        }
+        if (cobranca.invoice_url) {
+          reply += `\n\n🔗 *Ver fatura completa:*\n${cobranca.invoice_url}`
+        }
+        reply += `\n\nApós o pagamento sua conta é ativada automaticamente! 🚀`
+      } else {
+        reply = `Não consegui gerar o PIX automaticamente. 😕\n\nEntre em contato com o suporte ou acesse *app.speedseekos.com.br → Minha Conta* para gerar o pagamento.`
+      }
+
+      await sendWhatsApp(phone, reply);
+      // Volta ao menu após enviar
+      const newMenu = `\n\nAlguma outra dúvida?\n\n1️⃣ 💳 Gerar novo pagamento\n2️⃣ 📊 Ver status\n3️⃣ ⬆️ Upgrade\n4️⃣ 🆘 Suporte`;
+      await sendWhatsApp(phone, newMenu);
+      await sb.from('conversation_state').upsert({
+        phone, state: 'cliente_menu',
+        data: { store_id: clienteStoreId, company_name: clienteNome, history: [...history, { role: 'user', content: text }, { role: 'assistant', content: reply }] },
+      }, { onConflict: 'phone' });
+      return new Response('ok', { status: 200 });
+    }
+
+    if (opcao2) {
+      const sub = await getStoreSub(clienteStoreId, sb);
+      let reply: string;
+      if (sub) {
+        const statusEmoji: Record<string, string> = { active: '✅', pending: '⏳', overdue: '⚠️', cancelled: '❌' };
+        const statusLabel: Record<string, string> = { active: 'Ativa', pending: 'Pendente', overdue: 'Vencida', cancelled: 'Cancelada' };
+        const valor = sub.amount ? (sub.amount as number).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—';
+        const venc = sub.due_date ? new Date(sub.due_date as string).toLocaleDateString('pt-BR') : '—';
+        reply = `📊 *Status da sua assinatura:*\n\n🏪 *${clienteNome}*\n💼 Plano: *${PLAN_LABELS[sub.plan as string] || sub.plan}*\n💰 Valor: *${valor}/mês*\n📅 Próximo vencimento: *${venc}*\n${statusEmoji[sub.status as string] || '•'} Status: *${statusLabel[sub.status as string] || sub.status}*`
+        if (sub.status === 'overdue') {
+          reply += `\n\n⚠️ Sua conta está com pagamento vencido. Digite *1* para gerar um PIX e regularizar agora!`
+        }
+      } else {
+        reply = `Não encontrei assinatura ativa. Entre em contato com o suporte!`
+      }
+      await sendWhatsApp(phone, reply);
+      await sb.from('conversation_state').upsert({
+        phone, state: 'cliente_menu',
+        data: { store_id: clienteStoreId, company_name: clienteNome, history: [...history, { role: 'user', content: text }, { role: 'assistant', content: reply }] },
+      }, { onConflict: 'phone' });
+      return new Response('ok', { status: 200 });
+    }
+
+    if (opcao3) {
+      const reply = `⬆️ *Opções de upgrade:*\n\n🔸 *Profissional — R$ 149/mês*\nBalcão/PDV, estoque, relatórios, WhatsApp automático, fiados, boletos\n\n💎 *Premium — R$ 219/mês*\nTudo do Profissional + IA de atendimento 24h, domínio próprio, suporte prioritário\n\nPara fazer o upgrade, acesse o link e escolha seu plano:\n🔗 https://www.asaas.com/c/8swycr4f636vo1za (Profissional)\n🔗 https://www.asaas.com/c/qocck5e1633zxrpl (Premium)\n\nApós o pagamento seu plano é atualizado automaticamente! 🚀`
+      await sendWhatsApp(phone, reply);
+      await sb.from('conversation_state').upsert({
+        phone, state: 'cliente_menu',
+        data: { store_id: clienteStoreId, company_name: clienteNome, history: [...history, { role: 'user', content: text }, { role: 'assistant', content: reply }] },
+      }, { onConflict: 'phone' });
+      return new Response('ok', { status: 200 });
+    }
+
+    if (opcao4) {
+      const reply = `🆘 Vou chamar o suporte agora!\n\nEm instantes alguém vai te atender aqui mesmo. 😊`
+      await sendWhatsApp(phone, reply);
+      if (DONO_PHONE) {
+        await sendWhatsApp(DONO_PHONE, `🆘 *Suporte solicitado por cliente!*\n📱 ${phone}\n🏪 ${clienteNome}\n💬 "${text}"`)
+      }
+      await sb.from('conversation_state').upsert({
+        phone, state: 'cliente_menu',
+        data: { store_id: clienteStoreId, company_name: clienteNome, history: [...history, { role: 'user', content: text }, { role: 'assistant', content: reply }] },
+      }, { onConflict: 'phone' });
+      return new Response('ok', { status: 200 });
+    }
+
+    // Não reconheceu opção
+    const menu2 = menuCliente(clienteNome || 'sua oficina');
+    await sendWhatsApp(phone, menu2);
+    return new Response('ok', { status: 200 });
+  }
+
+  // ─── FLUXO DE VENDAS (Claude) ─────────────────────────────────────────────────
+  history.push({ role: 'user', content: text });
+  const recentHistory = history.slice(-20);
+
+  let reply: string;
+  try {
+    reply = await callClaude(recentHistory);
+  } catch {
+    return new Response('ok', { status: 200 });
+  }
+
   recentHistory.push({ role: 'assistant', content: reply });
   await sb.from('conversation_state').upsert({
-    phone,
-    state: 'conversando',
-    data: { history: recentHistory },
+    phone, state: 'conversando', data: { history: recentHistory },
   }, { onConflict: 'phone' });
-
-  // Envia resposta
-  console.log('📌 Enviando WhatsApp para:', phone);
   await sendWhatsApp(phone, reply);
-  console.log('📌 WhatsApp enviado!');
 
   // Detecta comando de criar conta
   const criarMatch = reply.match(/^CRIAR_CONTA\|([^|]+)\|([^|]+)\|([^|]+)/m);
   if (criarMatch) {
     const [, nomeOficina, emailLead, tipoVeiculo] = criarMatch;
     const senha = Math.random().toString(36).slice(2, 10);
-
     try {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL') || sbUrl;
-      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || sbKey;
-      const res = await fetch(`${supabaseUrl}/functions/v1/provision-client`, {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/provision-client`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
         body: JSON.stringify({
           company_name: nomeOficina.trim(),
           owner_email: emailLead.trim(),
@@ -221,47 +459,28 @@ Me conta: sua oficina hoje usa papel, planilha ou já tem algum sistema?`;
         }),
       });
       const result = await res.json();
-
       if (result.success) {
-        const appUrl = 'https://app.speedseekos.com.br';
-        const msgConfirm =
-          `✅ *Sua conta foi criada!*\n\n` +
-          `🔗 *Acesso:* ${appUrl}\n` +
-          `📧 *E-mail:* ${emailLead.trim()}\n` +
-          `🔑 *Senha:* ${senha}\n\n` +
-          `Você tem *5 dias grátis* para testar tudo! 🚀\n\n` +
-          `Na primeira vez que entrar, vamos te guiar pela configuração da sua oficina. Qualquer dúvida é só chamar aqui! 😊`;
+        const msgConfirm = `✅ *Sua conta foi criada!*\n\n🔗 *Acesso:* https://app.speedseekos.com.br\n📧 *E-mail:* ${emailLead.trim()}\n🔑 *Senha:* ${senha}\n\nVocê tem *5 dias grátis* para testar tudo! 🚀\n\nNa primeira vez que entrar, vamos te guiar pela configuração. Qualquer dúvida é só chamar! 😊`;
         await sendWhatsApp(phone, msgConfirm);
-        if (DONO_PHONE) {
-          await sendWhatsApp(DONO_PHONE,
-            `🎉 *Nova conta criada via WhatsApp!*\n📱 ${phone}\n🏪 ${nomeOficina}\n📧 ${emailLead}\n🚗 ${tipoVeiculo}`
-          );
-        }
-        // Salva histórico sem o comando CRIAR_CONTA
+        if (DONO_PHONE) await sendWhatsApp(DONO_PHONE, `🎉 *Nova conta via WhatsApp!*\n📱 ${phone}\n🏪 ${nomeOficina}\n📧 ${emailLead}\n🚗 ${tipoVeiculo}`);
         recentHistory[recentHistory.length - 1].content = msgConfirm;
-        await sb.from('conversation_state').upsert({
-          phone, state: 'conta_criada', data: { history: recentHistory },
-        }, { onConflict: 'phone' });
+        await sb.from('conversation_state').upsert({ phone, state: 'conta_criada', data: { history: recentHistory } }, { onConflict: 'phone' });
         return new Response('ok', { status: 200 });
       } else {
-        await sendWhatsApp(phone, `Ops, tive um problema ao criar sua conta 😕\nErro: ${result.error}\n\nVou avisar o responsável agora!`);
+        await sendWhatsApp(phone, `Ops, tive um problema ao criar sua conta 😕\nVou avisar o responsável agora!`);
         if (DONO_PHONE) await sendWhatsApp(DONO_PHONE, `❌ Erro ao criar conta para ${phone}: ${result.error}`);
       }
     } catch (err) {
       console.error('Erro provision-client:', err);
-      await sendWhatsApp(phone, `Ops, algo deu errado. O responsável já foi avisado e vai te atender em breve! 😊`);
       if (DONO_PHONE) await sendWhatsApp(DONO_PHONE, `❌ Erro crítico ao criar conta para ${phone}`);
     }
     return new Response('ok', { status: 200 });
   }
 
-  // Avisa dono se lead demonstrou interesse forte
-  const interessePalavras = ['fechar', 'contratar', 'assinar', 'quanto custa', 'como faço', 'quero comprar', 'vou pegar', 'quero assinar', 'quero contratar', 'vou assinar', 'quero fechar', 'vou fechar', 'quero o plano', 'quero começar', 'como contrato', 'como assino', 'iniciar', 'ativar', 'quero testar', 'quero a demo', 'quero demonstração'];
-  const temInteresse = interessePalavras.some(p => text.toLowerCase().includes(p));
-  if (temInteresse && DONO_PHONE) {
-    await sendWhatsApp(DONO_PHONE,
-      `🔥 *Lead quente no SpeedSeekOS!*\n📱 ${phone}\n💬 "${text}"`
-    );
+  // Alerta dono sobre lead quente
+  const interessePalavras = ['fechar', 'contratar', 'assinar', 'quanto custa', 'quero comprar', 'vou pegar', 'quero assinar', 'vou assinar', 'quero fechar', 'quero o plano', 'como contrato', 'como assino'];
+  if (interessePalavras.some(p => text.toLowerCase().includes(p)) && DONO_PHONE) {
+    await sendWhatsApp(DONO_PHONE, `🔥 *Lead quente!*\n📱 ${phone}\n💬 "${text}"`);
   }
 
   return new Response('ok', { status: 200 });

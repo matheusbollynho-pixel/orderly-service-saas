@@ -20,6 +20,7 @@ import ConfigToolsPage from "./pages/ConfigToolsPage";
 import CollaboratorsPage from "./pages/CollaboratorsPage";
 import SuperAdminPage from "./pages/SuperAdminPage";
 import OnboardingPage from "./pages/OnboardingPage";
+import MinhaContaPage from "./pages/MinhaContaPage";
 import { useAuth } from "./hooks/useAuth";
 import { StoreProvider, useStore } from "./contexts/StoreContext";
 import { INITIAL_URL_HASH, INITIAL_URL_SEARCH } from "./integrations/supabase/client";
@@ -126,6 +127,7 @@ function AuthenticatedApp() {
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/config" element={<ConfigToolsPage />} />
+          <Route path="/minha-conta" element={<MinhaContaPage />} />
           <Route path="/colaboradores" element={<CollaboratorsPage />} />
           <Route path="/pos-venda" element={<AfterSalesPage />} />
           <Route path="/fluxo-caixa" element={<CashFlowPage />} />
