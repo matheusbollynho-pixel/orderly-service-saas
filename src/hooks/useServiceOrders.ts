@@ -39,6 +39,7 @@ const SERVICE_ORDERS_BASE_COLUMNS = [
   'mechanic_id',
   'signature_data', // incluído para persistência da assinatura
   'delivery_signature_data', // incluído para persistência da assinatura de entrega
+  'store_id',
 ];
 
 
