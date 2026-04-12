@@ -359,6 +359,14 @@ export default function SuperAdminPage() {
     if (subStatus === 'cancelled') await sb.from('store_settings').update({ active: false }).eq('id', selected.store_id);
     setSaving(false);
     toast.success('Assinatura atualizada!');
+    const updatedSub = {
+      ...(selected.subscription || {}),
+      due_date: subDueDate || null,
+      status: subStatus,
+      amount: subAmount ? parseFloat(subAmount) : null,
+    } as any;
+    setSelected(prev => prev ? { ...prev, subscription: updatedSub } : null);
+    setClients(prev => prev.map(c => c.store_id === selected.store_id ? { ...c, subscription: updatedSub } : c));
     loadClients();
     setEditSub(false);
   };

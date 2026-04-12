@@ -42,9 +42,10 @@ export function PaymentAlertModal() {
   const [pixData, setPixData] = useState<PixData | null>(null);
   const [generating, setGenerating] = useState(false);
 
-  // Não mostrar para planos enterprise/bandara
+  // Não mostrar para planos enterprise/bandara nem demos
   const envPlan = import.meta.env.VITE_PLAN as string | undefined;
-  if (envPlan === 'enterprise') return null;
+  const isDemo = import.meta.env.VITE_DEMO === 'true' || window.location.hostname.includes('demo');
+  if (envPlan === 'enterprise' || isDemo) return null;
 
   useEffect(() => {
     if (!storeId) return;
@@ -121,7 +122,7 @@ export function PaymentAlertModal() {
     : null;
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.75)' }}>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/75">
       <div className="bg-background border border-border rounded-2xl w-full max-w-sm shadow-2xl">
         {/* Header */}
         <div className={`rounded-t-2xl px-5 py-4 flex items-start justify-between ${blocked ? 'bg-red-500/10 border-b border-red-500/20' : 'bg-amber-500/10 border-b border-amber-500/20'}`}>
@@ -147,7 +148,7 @@ export function PaymentAlertModal() {
             </div>
           </div>
           {!blocked && (
-            <button onClick={() => setDismissed(true)} className="text-muted-foreground hover:text-foreground transition-colors">
+            <button type="button" aria-label="Fechar" onClick={() => setDismissed(true)} className="text-muted-foreground hover:text-foreground transition-colors">
               <X className="h-4 w-4" />
             </button>
           )}
@@ -238,6 +239,7 @@ export function PaymentAlertModal() {
         {!blocked && (
           <div className="px-5 pb-4">
             <button
+              type="button"
               onClick={() => setDismissed(true)}
               className="w-full text-xs text-muted-foreground hover:text-foreground text-center transition-colors"
             >
