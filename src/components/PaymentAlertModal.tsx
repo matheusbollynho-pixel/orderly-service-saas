@@ -92,22 +92,29 @@ export function PaymentAlertModal() {
     }
   };
 
-  // Inicia polling quando PIX é exibido — só para contas bloqueadas (overdue/cancelled)
+  // Inicia polling quando PIX é exibido
+  // Bloqueado: aguarda status virar 'active'
+  // Aviso (vence em breve): aguarda due_date mudar para data futura (>5 dias)
   useEffect(() => {
-    if (!pixData || !storeId || !blocked) return;
+    if (!pixData || !storeId) return;
+    const initialDueDate = subInfo?.due_date;
     pollRef.current = setInterval(async () => {
       setChecking(true);
       try {
         const { data } = await (supabase as any)
           .from('saas_subscriptions')
-          .select('status')
+          .select('status, due_date')
           .eq('store_id', storeId)
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
-        if (data?.status === 'active') {
+        if (!data) return;
+        const paid = blocked
+          ? data.status === 'active'
+          : data.due_date !== initialDueDate;
+        if (paid) {
           clearInterval(pollRef.current!);
-          toast.success('Pagamento confirmado! Seu acesso foi liberado. 🎉');
+          toast.success('Pagamento confirmado! 🎉');
           setShow(false);
           setDismissed(true);
         }
