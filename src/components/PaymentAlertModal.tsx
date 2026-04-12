@@ -51,8 +51,7 @@ export function PaymentAlertModal() {
   }, [storeId]);
 
   const checkSubscription = async () => {
-    console.log('[PaymentAlert] storeId:', storeId);
-    const { data, error } = await (supabase as any)
+    const { data } = await (supabase as any)
       .from('saas_subscriptions')
       .select('status, due_date, amount, plan')
       .eq('store_id', storeId)
@@ -60,7 +59,6 @@ export function PaymentAlertModal() {
       .limit(1)
       .maybeSingle();
 
-    console.log('[PaymentAlert] data:', data, 'error:', error);
     if (!data) return;
 
     const status = data.status as string;
