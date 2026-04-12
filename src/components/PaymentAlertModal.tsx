@@ -79,7 +79,7 @@ export function PaymentAlertModal() {
       const due = new Date(dueDate + 'T12:00:00');
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const diff = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      const diff = Math.floor((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
       if (diff <= 5) {
         setSubInfo(data);
@@ -118,7 +118,7 @@ export function PaymentAlertModal() {
   if (!show || dismissed || envPlan === 'enterprise' || isDemo) return null;
 
   const daysLeft = subInfo?.due_date
-    ? Math.ceil((new Date(subInfo.due_date + 'T12:00:00').getTime() - new Date().setHours(0,0,0,0)) / (1000 * 60 * 60 * 24))
+    ? Math.floor((new Date(subInfo.due_date + 'T12:00:00').getTime() - new Date().setHours(0,0,0,0)) / (1000 * 60 * 60 * 24))
     : null;
 
   return (
