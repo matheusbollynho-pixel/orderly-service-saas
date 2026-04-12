@@ -67,6 +67,7 @@ export type SendWhatsAppOptions = {
   message?: string;
   fileUrl?: string;     // URL pública do arquivo (preferível para a Edge Function)
   caption?: string;
+  store_id?: string;    // ID da loja para usar credenciais próprias
 };
 
 /**
@@ -78,7 +79,7 @@ export type SendWhatsAppOptions = {
  * Retorna o JSON de resposta da função ou lança erro.
  */
 export async function sendWhatsApp(opts: SendWhatsAppOptions) {
-  const { to, message, fileUrl, caption } = opts;
+  const { to, message, fileUrl, caption, store_id } = opts;
 
   if (!to) throw new Error('Campo "to" é obrigatório');
   if (!message && !fileUrl) throw new Error('É necessário enviar "message" ou "fileUrl"');
@@ -89,16 +90,17 @@ export async function sendWhatsApp(opts: SendWhatsAppOptions) {
     payload.fileUrl = fileUrl;
     if (caption) payload.caption = caption;
   }
+  if (store_id) payload.store_id = store_id;
 
   return callEdgeFunction(payload);
 }
 
-export async function sendWhatsAppText(params: { phone: string; text: string }): Promise<boolean> {
+export async function sendWhatsAppText(params: { phone: string; text: string; store_id?: string }): Promise<boolean> {
   const phone = formatPhone(params.phone);
   if (!phone) throw new Error('Telefone do cliente inválido.');
   if (!params.text?.trim()) throw new Error('Texto da mensagem é obrigatório.');
 
-  const res = await callEdgeFunction({ to: phone, message: params.text });
+  const res = await callEdgeFunction({ to: phone, message: params.text, ...(params.store_id ? { store_id: params.store_id } : {}) });
   return !!res;
 }
 
@@ -107,17 +109,18 @@ export async function sendWhatsAppDocument(params: {
   base64: string;
   fileName: string;
   caption?: string;
+  store_id?: string;
 }): Promise<boolean> {
   const phone = formatPhone(params.phone);
   if (!phone) throw new Error('Telefone do cliente inválido.');
 
-  const caption = params.caption || 'Ordem de Serviço - Bandara Motos';
+  const caption = params.caption || 'Ordem de Serviço';
   const safeFileName = sanitizeFileName(params.fileName);
 
   // Fazer upload para Storage e enviar URL pública
   try {
     const fileUrl = await uploadBase64PdfToSupabaseStorage(params.base64, safeFileName);
-    const res = await callEdgeFunction({ to: phone, fileUrl, caption, fileName: safeFileName });
+    const res = await callEdgeFunction({ to: phone, fileUrl, caption, fileName: safeFileName, ...(params.store_id ? { store_id: params.store_id } : {}) });
     return !!res;
   } catch (error) {
     console.error('Erro no upload/envio:', error);

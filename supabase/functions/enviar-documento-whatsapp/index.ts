@@ -3,6 +3,8 @@
 // Edge Function para enviar mensagem ou documento PDF via provedor de WhatsApp (Z-API/UazAPI)
 // Atualizado: 23/01/2026 - Suporte a envio de documentos PDF
 
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
 interface RequestBody {
   to: string;           // número destino, ex: "5511999999999"
   message?: string;     // texto da mensagem (opcional se enviar documento)
@@ -10,6 +12,7 @@ interface RequestBody {
   fileBase64?: string;  // PDF em base64 (opcional)
   fileName?: string;    // nome do arquivo (opcional)
   caption?: string;     // legenda para o documento (opcional)
+  store_id?: string;    // ID da loja para usar credenciais próprias
 }
 
 type AttemptResult = {
@@ -54,24 +57,50 @@ Deno.serve(async (req: Request) => {
 
     console.log('✅ Payload válido para:', payload.to);
 
-    // ✅ Provider: UazAPI apenas
-    const INSTANCE_TOKEN = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+    // ── Resolve credenciais WhatsApp ──────────────────────────────────────────
+    let INSTANCE_TOKEN: string | undefined;
+    let baseUrl: string;
 
-    console.log(`📋 Provider: UazAPI, Token: ${INSTANCE_TOKEN?.substring(0, 8)}...`);
+    if (payload.store_id) {
+      // Busca credenciais da loja do cliente
+      const sb = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+        { auth: { autoRefreshToken: false, persistSession: false } }
+      );
+      const { data: store } = await sb
+        .from('store_settings')
+        .select('whatsapp_instance_url, whatsapp_instance_token')
+        .eq('id', payload.store_id)
+        .maybeSingle();
+
+      if (!store?.whatsapp_instance_token) {
+        console.warn('⚠️ Loja sem WhatsApp configurado:', payload.store_id);
+        return new Response(JSON.stringify({ success: false, error: 'WhatsApp não configurado para esta loja' }), {
+          status: 200, // retorna 200 para não quebrar o fluxo
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        });
+      }
+      INSTANCE_TOKEN = store.whatsapp_instance_token;
+      baseUrl = store.whatsapp_instance_url || 'https://bandara.uazapi.com';
+    } else {
+      // Uso interno (funções de sistema) — usa env
+      INSTANCE_TOKEN = Deno.env.get('UAZAPI_INSTANCE_TOKEN');
+      baseUrl = Deno.env.get('UAZAPI_BASE_URL') || 'https://bandara.uazapi.com';
+    }
 
     if (!INSTANCE_TOKEN) {
-      console.error('❌ INSTANCE_TOKEN não configurado no ambiente');
-      return new Response(JSON.stringify({ error: 'Servidor não configurado (INSTANCE_TOKEN ausente)' }), {
+      return new Response(JSON.stringify({ error: 'Token WhatsApp não configurado' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
       });
     }
-    
+
+    console.log(`📋 Provider: UazAPI, baseUrl: ${baseUrl}, Token: ${INSTANCE_TOKEN.substring(0, 8)}...`);
+
     // Determina tipo do envio
     const isTextOnly = !!payload.message && !payload.fileUrl && !payload.fileBase64;
 
-    // ✅ UazAPI: Configuração fixa conforme painel
-    const baseUrl = 'https://bandara.uazapi.com';
     const endpointPath = isTextOnly ? '/send/text' : '/send/media';
     const finalUrl = `${baseUrl}${endpointPath}`;
 

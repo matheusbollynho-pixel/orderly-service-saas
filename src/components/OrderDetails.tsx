@@ -620,7 +620,7 @@ export function OrderDetails({
     if (!asaasResult?.invoice_url || !order.client_phone) return;
     const phone = order.client_phone.replace(/\D/g, '');
     const msg = `Olá${order.client_name ? ', ' + order.client_name.split(' ')[0] : ''}! 👋\n\nSegue o link para pagamento da sua OS:\n\n${asaasResult.invoice_url}\n\n_${storeSettings?.company_name || 'Oficina'}_`;
-    await sendWhatsAppText({ phone, text: msg });
+    await sendWhatsAppText({ phone, text: msg, store_id: order.store_id });
   };
 
   const handleAddPayment = () => {
@@ -715,6 +715,7 @@ export function OrderDetails({
         base64,
         fileName: `ordem_servico_${order.id.slice(0, 8)}.pdf`,
         caption: `Olá, ${order.client_name}! Sua Ordem de Serviço está pronta. Segue em anexo. Obrigado pela preferência!`,
+        store_id: order.store_id,
       });
       alert('✅ PDF enviado para WhatsApp com sucesso!');
     } catch (error: unknown) {
@@ -788,6 +789,7 @@ export function OrderDetails({
       await sendWhatsAppText({
         phone: cleanPhone,
         text: customText,
+        store_id: order.store_id,
       });
       alert('✅ Mensagem de teste enviada com sucesso!');
     } catch (error: unknown) {
