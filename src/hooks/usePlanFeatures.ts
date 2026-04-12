@@ -12,8 +12,8 @@ const PLAN_FEATURES: Record<string, string[]> = {
   trial: ['dashboard', 'new', 'express', 'orders', 'agenda', 'quadro', 'mechanics', 'fluxo-caixa', 'balcao', 'reports', 'boletos', 'fiados', 'estoque', 'pos-venda', 'satisfacao'],
   basic: ['dashboard', 'new', 'express', 'orders', 'agenda', 'quadro', 'mechanics'],
   pro: ['dashboard', 'new', 'express', 'orders', 'agenda', 'quadro', 'mechanics', 'fluxo-caixa', 'balcao', 'reports', 'boletos', 'fiados', 'estoque', 'pos-venda', 'satisfacao'],
-  premium: ['dashboard', 'new', 'express', 'orders', 'agenda', 'quadro', 'mechanics', 'fluxo-caixa', 'balcao', 'reports', 'boletos', 'fiados', 'estoque', 'pos-venda', 'satisfacao'],
-  enterprise: ['dashboard', 'new', 'express', 'orders', 'agenda', 'quadro', 'mechanics', 'fluxo-caixa', 'balcao', 'reports', 'boletos', 'fiados', 'estoque', 'pos-venda', 'satisfacao'],
+  premium: ['dashboard', 'new', 'express', 'orders', 'agenda', 'quadro', 'mechanics', 'fluxo-caixa', 'balcao', 'reports', 'boletos', 'fiados', 'estoque', 'pos-venda', 'satisfacao', 'ia-atendimento'],
+  enterprise: ['dashboard', 'new', 'express', 'orders', 'agenda', 'quadro', 'mechanics', 'fluxo-caixa', 'balcao', 'reports', 'boletos', 'fiados', 'estoque', 'pos-venda', 'satisfacao', 'ia-atendimento'],
 };
 
 // Qual plano é necessário para cada feature
@@ -26,6 +26,7 @@ export const REQUIRED_PLAN: Record<string, 'pro' | 'premium'> = {
   'estoque': 'pro',
   'pos-venda': 'pro',
   'satisfacao': 'pro',
+  'ia-atendimento': 'premium',
 };
 
 export function usePlanFeatures() {

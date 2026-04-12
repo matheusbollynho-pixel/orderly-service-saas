@@ -116,10 +116,35 @@ export function UpgradeModal({ feature, requiredPlan, upgradeLink, onClose }: Up
               <div className="bg-primary/10 p-3 rounded-full mb-3">
                 <Lock className="h-7 w-7 text-primary" />
               </div>
-              <h2 className="text-xl font-bold text-foreground mb-1">Funcionalidade bloqueada</h2>
-              <p className="text-muted-foreground text-sm">
-                <span className="text-foreground font-medium">{feature}</span> requer upgrade de plano
-              </p>
+              {feature === 'IA 24h' ? (
+                <>
+                  <h2 className="text-xl font-bold text-foreground mb-1">IA de Atendimento 24h</h2>
+                  <p className="text-muted-foreground text-sm max-w-xs">
+                    Seus clientes são atendidos no WhatsApp da sua oficina a qualquer hora — sem você precisar fazer nada.
+                  </p>
+                  <ul className="mt-3 space-y-1.5 text-left w-full max-w-xs">
+                    {[
+                      'Status da OS em tempo real',
+                      'Agendamento pelo WhatsApp',
+                      'Ver e pagar débitos via PIX',
+                      'Aprovação de orçamento',
+                      'Localização e horários da loja',
+                      'Baixa automática no caixa',
+                    ].map(item => (
+                      <li key={item} className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span className="text-emerald-400">✓</span> {item}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                <>
+                  <h2 className="text-xl font-bold text-foreground mb-1">Funcionalidade bloqueada</h2>
+                  <p className="text-muted-foreground text-sm">
+                    <span className="text-foreground font-medium">{feature}</span> requer upgrade de plano
+                  </p>
+                </>
+              )}
             </div>
 
             {/* Cards dos planos */}
