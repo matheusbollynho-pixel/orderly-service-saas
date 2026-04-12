@@ -94,7 +94,8 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.
 
 function fmt(dateStr: string | null) {
   if (!dateStr) return '—';
-  return new Date(dateStr).toLocaleDateString('pt-BR');
+  const [year, month, day] = dateStr.split('T')[0].split('-');
+  return `${day}/${month}/${year}`;
 }
 
 function fmtMoney(val: number | null) {
