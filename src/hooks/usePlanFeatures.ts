@@ -9,7 +9,7 @@ export const UPGRADE_LINKS = {
 
 // Funcionalidades por plano
 const PLAN_FEATURES: Record<string, string[]> = {
-  trial: ['dashboard', 'new', 'express', 'orders', 'agenda', 'quadro', 'mechanics'],
+  trial: ['dashboard', 'new', 'express', 'orders', 'agenda', 'quadro', 'mechanics', 'fluxo-caixa', 'balcao', 'reports', 'boletos', 'fiados', 'estoque', 'pos-venda', 'satisfacao'],
   basic: ['dashboard', 'new', 'express', 'orders', 'agenda', 'quadro', 'mechanics'],
   pro: ['dashboard', 'new', 'express', 'orders', 'agenda', 'quadro', 'mechanics', 'fluxo-caixa', 'balcao', 'reports', 'boletos', 'fiados', 'estoque', 'pos-venda', 'satisfacao'],
   premium: ['dashboard', 'new', 'express', 'orders', 'agenda', 'quadro', 'mechanics', 'fluxo-caixa', 'balcao', 'reports', 'boletos', 'fiados', 'estoque', 'pos-venda', 'satisfacao'],
