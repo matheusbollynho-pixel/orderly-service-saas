@@ -189,7 +189,6 @@ export function LoginPage() {
                 <select title="Tipo de veículo" value={cadTipo} onChange={e => setCadTipo(e.target.value)} disabled={cadLoading} className="w-full rounded-md border border-border/50 bg-muted/50 text-foreground text-sm px-3 py-2">
                   <option value="moto">Motos</option>
                   <option value="carro">Carros</option>
-                  <option value="ambos">Motos e Carros</option>
                 </select>
               </div>
               <Button type="submit" className="w-full bg-[#C1272D] hover:bg-red-700 text-white font-semibold" disabled={cadLoading}>

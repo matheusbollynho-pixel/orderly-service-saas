@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-client-info, apikey',
   }
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders })
 
@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
     console.log('provision: usuário criado', userId)
 
     // 2. Cria store_settings
-    const trialEndsAt = is_trial ? new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString() : null
+    const trialEndsAt = is_trial ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : null
     const { data: store, error: storeErr } = await sb
       .from('store_settings')
       .insert({
