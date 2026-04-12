@@ -70,7 +70,7 @@ interface PixData {
 }
 
 export function UpgradeModal({ feature, requiredPlan, upgradeLink, onClose }: UpgradeModalProps) {
-  const { storeId } = useStore();
+  const { storeId, plan: currentPlan } = useStore();
   const [generating, setGenerating] = useState<string | null>(null); // planId being generated
   const [pixData, setPixData] = useState<PixData | null>(null);
 
@@ -128,18 +128,23 @@ export function UpgradeModal({ feature, requiredPlan, upgradeLink, onClose }: Up
                 const plan = PLAN_CONFIG[planKey];
                 const Icon = plan.icon;
                 const isGenerating = generating === planKey;
+                const isCurrentPlan = currentPlan === planKey;
 
                 return (
                   <div
                     key={planKey}
-                    className={cn('rounded-xl border p-4 flex flex-col', plan.color)}
+                    className={cn('rounded-xl border p-4 flex flex-col', plan.color, isCurrentPlan && 'opacity-60')}
                   >
                     {/* Badge popular */}
                     <div className="flex items-center justify-between mb-3">
                       <span className={cn('text-xs font-semibold px-2 py-0.5 rounded-full', plan.badgeColor)}>
                         {plan.label}
                       </span>
-                      {plan.popular && (
+                      {isCurrentPlan ? (
+                        <span className="text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded-full font-medium">
+                          Plano atual
+                        </span>
+                      ) : plan.popular && (
                         <span className="text-xs bg-primary/20 text-primary border border-primary/30 px-1.5 py-0.5 rounded-full font-medium">
                           Popular
                         </span>
@@ -165,13 +170,15 @@ export function UpgradeModal({ feature, requiredPlan, upgradeLink, onClose }: Up
                     {/* Botão */}
                     <Button
                       size="sm"
-                      className={cn('w-full gap-1.5 h-9 text-xs font-semibold', plan.buttonClass)}
-                      onClick={() => gerarPix(planKey)}
-                      disabled={!!generating}
+                      className={cn('w-full gap-1.5 h-9 text-xs font-semibold', isCurrentPlan ? 'bg-emerald-600/40 text-emerald-300 cursor-default' : plan.buttonClass)}
+                      onClick={() => !isCurrentPlan && gerarPix(planKey)}
+                      disabled={!!generating || isCurrentPlan}
                     >
-                      {isGenerating
-                        ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Gerando...</>
-                        : <><CreditCard className="h-3.5 w-3.5" /> Assinar via PIX</>
+                      {isCurrentPlan
+                        ? <><CheckCircle className="h-3.5 w-3.5" /> Plano atual</>
+                        : isGenerating
+                          ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Gerando...</>
+                          : <><CreditCard className="h-3.5 w-3.5" /> Assinar via PIX</>
                       }
                     </Button>
                   </div>
