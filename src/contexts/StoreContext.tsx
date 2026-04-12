@@ -51,6 +51,19 @@ export function StoreProvider({ user, children }: { user: User | null; children:
         setStoreId(envStoreId);
         setRole('owner');
         setPermissions(ALL_PERMISSIONS);
+        // Busca plano e custom_features do banco (ou usa VITE_PLAN como fallback)
+        const envPlan = import.meta.env.VITE_PLAN as string | undefined;
+        supabase
+          .from('store_settings')
+          .select('plan, vehicle_type, custom_features')
+          .eq('id', envStoreId)
+          .maybeSingle()
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .then(({ data }: { data: any }) => {
+            setPlan(data?.plan ?? envPlan ?? 'basic');
+            setVehicleType(data?.vehicle_type ?? 'moto');
+            setCustomFeatures(data?.custom_features ?? null);
+          });
       } else {
         setStoreId(null);
         setRole(null);
