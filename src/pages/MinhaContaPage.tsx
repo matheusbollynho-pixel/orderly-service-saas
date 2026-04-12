@@ -269,7 +269,7 @@ export default function MinhaContaPage() {
               <Button
                 variant="outline"
                 className="w-full gap-2"
-                onClick={() => window.open('https://wa.me/5575823962390?text=Olá,%20preciso%20de%20suporte%20SpeedSeek%20OS', '_blank')}
+                onClick={() => window.open('https://wa.me/5575982396239?text=Olá,%20preciso%20de%20suporte%20SpeedSeek%20OS', '_blank')}
               >
                 Falar com suporte via WhatsApp
               </Button>
