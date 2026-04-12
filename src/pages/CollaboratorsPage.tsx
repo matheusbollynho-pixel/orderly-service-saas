@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useStore } from '@/contexts/StoreContext';
 import { useAuth } from '@/hooks/useAuth';
+import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import type { MemberPermissions } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,9 +45,12 @@ const DEFAULT_PERMISSIONS: MemberPermissions = {
   estoque: false, equipe: false, pos_venda: false, satisfacao: false,
 };
 
+const MAX_MEMBERS: Record<string, number> = { basic: 2, trial: 2 };
+
 export default function CollaboratorsPage() {
   const { storeId, isOwner } = useStore();
   const { user } = useAuth();
+  const { currentPlan, getUpgradeLink } = usePlanFeatures();
   const queryClient = useQueryClient();
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviting, setInviting] = useState(false);
@@ -99,9 +103,16 @@ export default function CollaboratorsPage() {
     onError: (e: Error) => toast.error(`Erro: ${e.message}`),
   });
 
+  const maxMembers = MAX_MEMBERS[currentPlan] ?? Infinity;
+  const atLimit = maxMembers !== Infinity && members.length >= maxMembers;
+
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteEmail.trim()) return;
+    if (atLimit) {
+      toast.error(`Plano ${currentPlan === 'basic' ? 'Básico' : 'Trial'} permite no máximo ${maxMembers} usuários. Faça upgrade para adicionar mais.`);
+      return;
+    }
     setInviting(true);
     try {
       const { error } = await supabase.functions.invoke('invite-collaborator', {
@@ -143,16 +154,22 @@ export default function CollaboratorsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          {atLimit && (
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2 text-xs text-amber-400">
+              Limite de {maxMembers} usuários atingido no plano {currentPlan === 'basic' ? 'Básico' : 'Trial'}.{' '}
+              <a href={getUpgradeLink('estoque')} target="_blank" rel="noreferrer" className="underline font-medium">Fazer upgrade</a> para adicionar mais colaboradores.
+            </div>
+          )}
           <form onSubmit={handleInvite} className="flex gap-2">
             <Input
               type="email"
               placeholder="email@colaborador.com"
               value={inviteEmail}
               onChange={(e) => setInviteEmail(e.target.value)}
-              disabled={inviting}
+              disabled={inviting || atLimit}
               className="flex-1"
             />
-            <Button type="submit" disabled={inviting}>
+            <Button type="submit" disabled={inviting || atLimit}>
               {inviting ? 'Enviando...' : 'Convidar'}
             </Button>
           </form>
