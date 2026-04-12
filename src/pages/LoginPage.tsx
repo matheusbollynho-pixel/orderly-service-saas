@@ -5,12 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { toast } from 'sonner';
+import { Loader2 } from 'lucide-react';
 
 export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  // Usa hash capturado antes do SDK processar
   const [isInvite] = useState(() =>
     INITIAL_URL_HASH.includes('type=invite') || INITIAL_URL_HASH.includes('type=recovery') ||
     INITIAL_URL_SEARCH.includes('type=invite') || INITIAL_URL_SEARCH.includes('type=recovery') ||
@@ -19,6 +19,49 @@ export function LoginPage() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showForgot, setShowForgot] = useState(false);
+
+  // Cadastro
+  const [showCadastro, setShowCadastro] = useState(() => window.location.search.includes('cadastro=1'));
+  const [cadNomeOficina, setCadNomeOficina] = useState('');
+  const [cadNomeDono, setCadNomeDono] = useState('');
+  const [cadEmail, setCadEmail] = useState('');
+  const [cadSenha, setCadSenha] = useState('');
+  const [cadTipo, setCadTipo] = useState('moto');
+  const [cadLoading, setCadLoading] = useState(false);
+
+  const handleCadastro = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (cadSenha.length < 6) { toast.error('Senha deve ter pelo menos 6 caracteres'); return; }
+    setCadLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('provision-client', {
+        body: {
+          company_name: cadNomeOficina.trim(),
+          owner_name: cadNomeDono.trim(),
+          owner_email: cadEmail.trim().toLowerCase(),
+          owner_password: cadSenha,
+          vehicle_type: cadTipo,
+          is_trial: true,
+          plan: 'basic',
+        },
+      });
+      if (error || !data?.success) {
+        const msg = data?.error || error?.message || 'Erro ao criar conta';
+        if (msg.toLowerCase().includes('already') || msg.toLowerCase().includes('exists')) {
+          toast.error('Este e-mail já tem uma conta. Use "Esqueci minha senha" para recuperar o acesso.');
+        } else {
+          toast.error(msg);
+        }
+        return;
+      }
+      toast.success('Conta criada! Entrando...');
+      await supabase.auth.signInWithPassword({ email: cadEmail.trim().toLowerCase(), password: cadSenha });
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setCadLoading(false);
+    }
+  };
 
   const handleSetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,7 +144,63 @@ export function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {isInvite ? (
+          {!isInvite && !showForgot && (
+            <div className="flex rounded-lg overflow-hidden border border-border/50 mb-4">
+              <button
+                type="button"
+                onClick={() => setShowCadastro(false)}
+                className={`flex-1 py-2 text-sm font-semibold transition-colors ${!showCadastro ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                Entrar
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCadastro(true)}
+                className={`flex-1 py-2 text-sm font-semibold transition-colors ${showCadastro ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                Criar conta grátis
+              </button>
+            </div>
+          )}
+
+          {showCadastro && !isInvite ? (
+            <form onSubmit={handleCadastro} className="space-y-3">
+              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-md p-3 text-xs text-emerald-400 text-center">
+                🎉 7 dias grátis · Sem cartão de crédito
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-foreground text-xs">Nome da oficina</Label>
+                <Input placeholder="Ex: Bandara Motos" value={cadNomeOficina} onChange={e => setCadNomeOficina(e.target.value)} required disabled={cadLoading} className="!bg-muted/50 border-border/50 text-foreground placeholder:text-muted-foreground" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-foreground text-xs">Seu nome</Label>
+                <Input placeholder="Ex: João Silva" value={cadNomeDono} onChange={e => setCadNomeDono(e.target.value)} required disabled={cadLoading} className="!bg-muted/50 border-border/50 text-foreground placeholder:text-muted-foreground" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-foreground text-xs">E-mail</Label>
+                <Input type="email" placeholder="seu@email.com" value={cadEmail} onChange={e => setCadEmail(e.target.value)} required disabled={cadLoading} className="!bg-muted/50 border-border/50 text-foreground placeholder:text-muted-foreground" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-foreground text-xs">Senha (mínimo 6 caracteres)</Label>
+                <Input type="password" placeholder="••••••••" value={cadSenha} onChange={e => setCadSenha(e.target.value)} required disabled={cadLoading} className="!bg-muted/50 border-border/50 text-foreground placeholder:text-muted-foreground" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-foreground text-xs">Tipo de veículo</Label>
+                <select title="Tipo de veículo" value={cadTipo} onChange={e => setCadTipo(e.target.value)} disabled={cadLoading} className="w-full rounded-md border border-border/50 bg-muted/50 text-foreground text-sm px-3 py-2">
+                  <option value="moto">Motos</option>
+                  <option value="carro">Carros</option>
+                  <option value="ambos">Motos e Carros</option>
+                </select>
+              </div>
+              <Button type="submit" className="w-full bg-[#C1272D] hover:bg-red-700 text-white font-semibold" disabled={cadLoading}>
+                {cadLoading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Criando conta...</> : 'Criar conta e entrar'}
+              </Button>
+              <p className="text-center text-xs text-muted-foreground">
+                Ao criar, você concorda com os{' '}
+                <a href="https://speedseekos.com.br/termos" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">Termos de Uso</a>
+              </p>
+            </form>
+          ) : isInvite ? (
             <form onSubmit={handleSetPassword} className="space-y-4">
               <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-md p-3 text-xs text-yellow-400 text-center">
                 Caso este email tenha chegado na pasta de spam, marque como <strong>"Não é spam"</strong> para receber próximas notificações normalmente.
