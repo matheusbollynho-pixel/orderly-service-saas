@@ -5,7 +5,7 @@ import { useStore } from '@/contexts/StoreContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, CreditCard, Calendar, CheckCircle, AlertTriangle, XCircle, Copy, ExternalLink, Loader2, RefreshCw, Zap } from 'lucide-react';
+import { ArrowLeft, CreditCard, Calendar, CheckCircle, AlertTriangle, XCircle, Copy, ExternalLink, Loader2, RefreshCw, Zap, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Subscription {
@@ -114,15 +114,20 @@ export default function MinhaContaPage() {
   };
 
   const currentPlan = sub?.plan || plan || 'basic';
+  const isTrial = plan === 'trial';
   const statusCfg = STATUS_CONFIG[sub?.status ?? 'pending'];
   const StatusIcon = statusCfg?.icon ?? AlertTriangle;
 
   const daysUntil = (dateStr: string | null) => {
     if (!dateStr) return null;
-    return Math.ceil((new Date(dateStr).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    const [y, m, d] = dateStr.split('T')[0].split('-');
+    const due = new Date(Number(y), Number(m) - 1, Number(d));
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    return Math.floor((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   };
 
   const days = daysUntil(sub?.due_date ?? null);
+  const trialDaysLeft = isTrial ? daysUntil(sub?.due_date ?? null) : null;
 
   return (
     <div className="min-h-screen bg-background p-4 max-w-lg mx-auto space-y-4 pb-24">
@@ -139,6 +144,40 @@ export default function MinhaContaPage() {
         </div>
       ) : (
         <>
+          {/* Banner trial */}
+          {isTrial && (
+            <div className={`rounded-xl px-4 py-3 flex items-center gap-3 ${
+              trialDaysLeft !== null && trialDaysLeft <= 1
+                ? 'bg-red-500/10 border border-red-500/20'
+                : trialDaysLeft !== null && trialDaysLeft <= 3
+                  ? 'bg-amber-500/10 border border-amber-500/20'
+                  : 'bg-emerald-500/10 border border-emerald-500/20'
+            }`}>
+              <Clock className={`h-5 w-5 shrink-0 ${
+                trialDaysLeft !== null && trialDaysLeft <= 1 ? 'text-red-400'
+                : trialDaysLeft !== null && trialDaysLeft <= 3 ? 'text-amber-400'
+                : 'text-emerald-400'
+              }`} />
+              <div>
+                <p className={`text-sm font-semibold ${
+                  trialDaysLeft !== null && trialDaysLeft <= 1 ? 'text-red-300'
+                  : trialDaysLeft !== null && trialDaysLeft <= 3 ? 'text-amber-300'
+                  : 'text-emerald-300'
+                }`}>
+                  {trialDaysLeft === null ? 'Período de teste'
+                    : trialDaysLeft <= 0 ? 'Seu teste gratuito expirou'
+                    : trialDaysLeft === 1 ? '⚠️ Último dia do teste gratuito!'
+                    : `${trialDaysLeft} dias restantes no teste gratuito`}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {trialDaysLeft !== null && trialDaysLeft <= 3
+                    ? 'Assine agora para não perder o acesso ao sistema.'
+                    : 'Explore tudo à vontade. Assine antes de terminar para continuar.'}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Plano atual */}
           <Card className="glass-card border-border/50">
             <CardHeader className="pb-2">
