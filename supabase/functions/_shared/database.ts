@@ -170,6 +170,7 @@ export interface OSRow {
   aviso_retirada_enviado_em: string | null;
   total_pago: number | null;
   total_pendente: number | null;
+  materiais: { descricao: string; valor: number; quantidade: number }[];
 }
 
 export async function buscarOSAtivaPorTelefone(
@@ -202,7 +203,7 @@ export async function buscarOSAtivaPorTelefone(
       problem_description, satisfaction_survey_sent_at,
       mechanics(name),
       payments(amount, status),
-      materials(valor, quantidade)
+      materials(descricao, valor, quantidade)
     `)
     .or(filtrosOS.join(','))
     .in('status', statusAtivos);
@@ -217,7 +218,7 @@ export async function buscarOSAtivaPorTelefone(
   const mechObj = row.mechanics as { name?: string } | null;
 
   const payments = (row.payments as { amount: number; status: string }[]) || [];
-  const materials = (row.materials as { valor: number; quantidade: string }[]) || [];
+  const materials = (row.materials as { descricao: string; valor: number; quantidade: string }[]) || [];
   const totalOS = materials.reduce((s, m) => s + ((m.valor || 0) * (parseFloat(m.quantidade) || 1)), 0);
   const totalPago = payments.filter(p => p.status === 'paid').reduce((s, p) => s + (p.amount || 0), 0);
   const totalPendente = totalOS > 0 ? Math.max(0, totalOS - totalPago) : 0;
@@ -237,6 +238,7 @@ export async function buscarOSAtivaPorTelefone(
     aviso_retirada_enviado_em: row.aviso_retirada_enviado_em as string | null,
     total_pago: totalPago,
     total_pendente: totalPendente,
+    materiais: materials.map(m => ({ descricao: m.descricao, valor: m.valor, quantidade: parseFloat(m.quantidade) || 1 })),
   };
 }
 
@@ -258,7 +260,7 @@ export async function buscarOSPorNome(
       problem_description, satisfaction_survey_sent_at,
       mechanics(name),
       payments(amount, status),
-      materials(valor, quantidade)
+      materials(descricao, valor, quantidade)
     `)
     .or(filtros);
 
@@ -271,7 +273,7 @@ export async function buscarOSPorNome(
   return (data as Record<string, unknown>[]).map((row) => {
     const mechObj = row.mechanics as { name?: string } | null;
     const payments = (row.payments as { amount: number; status: string }[]) || [];
-    const materials = (row.materials as { valor: number; quantidade: string }[]) || [];
+    const materials = (row.materials as { descricao: string; valor: number; quantidade: string }[]) || [];
     const totalOS = materials.reduce((s, m) => s + ((m.valor || 0) * (parseFloat(m.quantidade) || 1)), 0);
     const totalPago = payments.filter(p => p.status === 'paid').reduce((s, p) => s + (p.amount || 0), 0);
     const totalPendente = totalOS > 0 ? Math.max(0, totalOS - totalPago) : 0;
@@ -290,6 +292,7 @@ export async function buscarOSPorNome(
       aviso_retirada_enviado_em: row.aviso_retirada_enviado_em as string | null,
       total_pago: totalPago,
       total_pendente: totalPendente,
+      materiais: materials.map(m => ({ descricao: m.descricao, valor: m.valor, quantidade: parseFloat(m.quantidade) || 1 })),
     };
   });
 }

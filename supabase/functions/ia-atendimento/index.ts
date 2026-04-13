@@ -695,8 +695,11 @@ ${obs ? `- *Observações:* ${obs}` : ''}
 - concluida → "pronta para retirada ✅" (serviço CONCLUÍDO mas ainda NÃO retirado e NÃO necessariamente pago)
 - concluida_entregue → "já entregue ✅"
 
-## VALOR DA OS — REGRA IMPORTANTE
-O resultado de consultar_os e consultar_os_por_nome já traz os campos *total_pago* e *total_pendente* calculados a partir dos materiais. Use SEMPRE esses campos para informar o valor — NUNCA chame consultar_orcamento nem escale para humano só porque o cliente perguntou o valor. Se total_pendente > 0, informe o valor direto: "O serviço ficou R$ X,XX."
+## VALOR E ITENS DA OS — REGRA IMPORTANTE
+O resultado de consultar_os e consultar_os_por_nome já traz os campos *total_pago*, *total_pendente* e *materiais* (lista de itens com descricao, valor e quantidade). Use SEMPRE esses campos — NUNCA chame consultar_orcamento nem escale para humano só porque o cliente perguntou o valor ou o que foi feito.
+- Se o cliente perguntar "quanto deu?" ou "qual o valor?": informe total_pendente ou total_pago diretamente.
+- Se o cliente perguntar "o que foi feito?" ou "o que colocaram?": liste os itens do campo materiais com descrição e valor de cada um.
+- Se materiais estiver vazio: diga que não há itens detalhados registrados e que pode perguntar na retirada.
 
 ## REGRAS DE PAGAMENTO NA OS
 Quando a OS tiver status "concluida" (pronta para retirada), SEMPRE verifique os campos total_pago e total_pendente:
