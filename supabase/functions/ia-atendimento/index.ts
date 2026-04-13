@@ -701,10 +701,26 @@ ${obs ? `- *Observações:* ${obs}` : ''}
 - concluida_entregue → "já entregue ✅"
 
 ## VALOR E ITENS DA OS — REGRA IMPORTANTE
-O resultado de consultar_os e consultar_os_por_nome já traz os campos *total_pago*, *total_pendente* e *materiais* (lista de itens com descricao, valor e quantidade). Use SEMPRE esses campos — NUNCA chame consultar_orcamento nem escale para humano só porque o cliente perguntou o valor ou o que foi feito.
-- Se o cliente perguntar "quanto deu?" ou "qual o valor?": informe total_pendente ou total_pago diretamente.
-- Se o cliente perguntar "o que foi feito?" ou "o que colocaram?": liste os itens do campo materiais com descrição e valor de cada um.
-- Se materiais estiver vazio: diga que não há itens detalhados registrados e que pode perguntar na retirada.
+O resultado de consultar_os e consultar_os_por_nome já traz os campos *total_pago*, *total_pendente* e *materiais*.
+
+REGRA OBRIGATÓRIA: Quando a OS tiver status "concluida" (pronta para retirada), SEMPRE inclua na mesma resposta:
+1. O status (pronta para retirada)
+2. A lista de itens do campo materiais (descrição e valor de cada um)
+3. O valor total pendente
+4. Pergunta: "Prefere pagar via PIX agora ou na retirada?"
+
+Exemplo de resposta obrigatória:
+"Boa notícia! Sua [moto] está pronta ✅
+
+*O que foi feito:*
+• [item 1]: R$ X,XX
+• [item 2]: R$ X,XX
+*Total: R$ X,XX*
+
+Prefere pagar via PIX agora ou na retirada?"
+
+NUNCA responda só o status sem incluir os itens e valor quando a OS estiver concluída.
+NUNCA escale para humano quando o cliente perguntar sobre valor ou itens — os dados já estão no campo materiais.
 
 ## REGRAS DE PAGAMENTO NA OS
 Quando a OS tiver status "concluida" (pronta para retirada), SEMPRE verifique os campos total_pago e total_pendente:
