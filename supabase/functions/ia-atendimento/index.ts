@@ -904,8 +904,11 @@ Deno.serve(async (req) => {
     const systemPrompt = buildSystemPrompt(store, ctx.client_name);
 
     // Contexto resumido da conversa para o Claude
+    const osResumo = ctx.os_id
+      ? `OS id=${ctx.os_id}, total_pendente=R$${(ctx.os_total_pendente as number || 0).toFixed(2)}, total_pago=R$${(ctx.os_total_pago as number || 0).toFixed(2)}, itens=[${((ctx.os_materiais as {descricao:string;valor:number;quantidade:number}[]) || []).map(m => `${m.descricao} R$${m.valor} x${m.quantidade}`).join(', ')}]`
+      : '';
     const contextSummary = ctx.client_name
-      ? `[Contexto: cliente identificado como "${ctx.client_name}" (${ctx.apelido || ''}), id=${ctx.client_id || 'desconhecido'}, telefone=${phone}, estado=${state}]`
+      ? `[Contexto: cliente identificado como "${ctx.client_name}" (${ctx.apelido || ''}), id=${ctx.client_id || 'desconhecido'}, telefone=${phone}, estado=${state}${osResumo ? `. ${osResumo}` : ''}]`
       : `[Contexto: cliente ainda não identificado, telefone=${phone}, estado=${state}]`;
 
     // Histórico das últimas mensagens (máx 8 turnos = 16 mensagens)
@@ -996,12 +999,20 @@ Deno.serve(async (req) => {
           }
 
           // Verificar se OS está aguardando aprovação de orçamento
-          if (toolName === 'consultar_os' && (result as Record<string, unknown>).encontrado) {
+          if ((toolName === 'consultar_os' || toolName === 'consultar_os_por_nome') && (result as Record<string, unknown>).encontrado !== false) {
             const r = result as Record<string, unknown>;
-            if (r.status === 'aguardando_aprovacao') {
-              ctx.pending_orcamento_order_id = r.id as string;
+            const osData = toolName === 'consultar_os_por_nome'
+              ? ((r.ordens as Record<string, unknown>[])?.[0] || r)
+              : r;
+            if (osData.status === 'aguardando_aprovacao') {
+              ctx.pending_orcamento_order_id = osData.id as string;
               newState = 'aguardando_aprovacao_orcamento';
             }
+            // Salva valor e itens no contexto para usar em próximas mensagens
+            if (osData.total_pendente !== undefined) ctx.os_total_pendente = osData.total_pendente as number;
+            if (osData.total_pago !== undefined) ctx.os_total_pago = osData.total_pago as number;
+            if (osData.materiais) ctx.os_materiais = osData.materiais as unknown[];
+            if (osData.id) ctx.os_id = osData.id as string;
           }
 
           toolResults.push({
