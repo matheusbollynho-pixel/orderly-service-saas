@@ -695,6 +695,9 @@ ${obs ? `- *Observações:* ${obs}` : ''}
 - concluida → "pronta para retirada ✅" (serviço CONCLUÍDO mas ainda NÃO retirado e NÃO necessariamente pago)
 - concluida_entregue → "já entregue ✅"
 
+## VALOR DA OS — REGRA IMPORTANTE
+O resultado de consultar_os e consultar_os_por_nome já traz os campos *total_pago* e *total_pendente* calculados a partir dos materiais. Use SEMPRE esses campos para informar o valor — NUNCA chame consultar_orcamento nem escale para humano só porque o cliente perguntou o valor. Se total_pendente > 0, informe o valor direto: "O serviço ficou R$ X,XX."
+
 ## REGRAS DE PAGAMENTO NA OS
 Quando a OS tiver status "concluida" (pronta para retirada), SEMPRE verifique os campos total_pago e total_pendente:
 - Se total_pendente > 0: informe que a moto está pronta e há um saldo de R$ X,XX. Pergunte: "Prefere pagar via PIX agora ou na hora da retirada?"
