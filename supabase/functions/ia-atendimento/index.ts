@@ -251,6 +251,21 @@ const TOOLS = [
     },
   },
   {
+    name: 'gerar_pix_os',
+    description: 'Gera um link PIX via Asaas para o cliente pagar a OS (ordem de serviço). Chamar SOMENTE quando a OS estiver com status "concluida" (pronta para retirada), houver valor pendente, e o cliente confirmar que quer pagar via PIX.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        os_id: { type: 'string', description: 'ID da OS retornado por consultar_os' },
+        client_name: { type: 'string', description: 'Nome do cliente' },
+        client_phone: { type: 'string', description: 'Telefone do cliente' },
+        valor: { type: 'number', description: 'Valor a cobrar em reais' },
+        descricao: { type: 'string', description: 'Descrição do serviço (ex: Revisão CG 150)' },
+      },
+      required: ['os_id', 'client_name', 'client_phone', 'valor'],
+    },
+  },
+  {
     name: 'gerar_link_pagamento_fiado',
     description: 'Gera um link PIX via Asaas para o cliente pagar o débito/fiado. Chamar SOMENTE após consultar_fiado confirmar que há débito em aberto e o cliente confirmar que quer pagar.',
     input_schema: {
@@ -464,6 +479,70 @@ async function executarFerramenta(
       };
     }
 
+    case 'gerar_pix_os': {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+      try {
+        const store = await buscarStoreSettings(sb, storeId);
+        const asaasApiKey = (store as Record<string, unknown>).asaas_api_key as string || '';
+        if (!asaasApiKey) return { sucesso: false, erro: 'Chave Asaas não configurada' };
+
+        const ASAAS_URL = 'https://api.asaas.com/v3';
+        const phoneClean = (input.client_phone as string || '').replace(/\D/g, '');
+
+        // Busca ou cria customer no Asaas
+        let customerId: string | null = null;
+        const found = await fetch(`${ASAAS_URL}/customers?mobilePhone=${phoneClean}&limit=1`, {
+          headers: { 'access_token': asaasApiKey },
+        }).then(r => r.json()).catch(() => null);
+
+        if (found?.data?.length > 0) {
+          customerId = found.data[0].id;
+        } else {
+          const created = await fetch(`${ASAAS_URL}/customers`, {
+            method: 'POST',
+            headers: { 'access_token': asaasApiKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: input.client_name, mobilePhone: phoneClean, externalReference: input.os_id }),
+          }).then(r => r.json());
+          customerId = created?.id || null;
+        }
+
+        if (!customerId) return { sucesso: false, erro: 'Não foi possível criar cliente no Asaas' };
+
+        const today = new Date();
+        const dueDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+        const charge = await fetch(`${ASAAS_URL}/payments`, {
+          method: 'POST',
+          headers: { 'access_token': asaasApiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customer: customerId,
+            billingType: 'PIX',
+            value: input.valor,
+            dueDate,
+            description: input.descricao || `Serviço OS - ${store.company_name}`,
+            externalReference: input.os_id,
+          }),
+        }).then(r => r.json());
+
+        if (!charge?.id) return { sucesso: false, erro: charge?.errors?.[0]?.description || 'Erro ao gerar PIX' };
+
+        // Busca QR code/link do PIX
+        const pixInfo = await fetch(`${ASAAS_URL}/payments/${charge.id}/pixQrCode`, {
+          headers: { 'access_token': asaasApiKey },
+        }).then(r => r.json()).catch(() => null);
+
+        const link = charge.invoiceUrl || pixInfo?.payload || null;
+
+        // Salva payment_id na OS
+        await sb.from('service_orders').update({ asaas_payment_id: charge.id }).eq('id', input.os_id as string).catch(() => null);
+
+        return { sucesso: true, link, pix_copia_cola: pixInfo?.payload || null, valor: input.valor };
+      } catch (e) {
+        return { sucesso: false, erro: String(e) };
+      }
+    }
+
     case 'gerar_link_pagamento_fiado': {
       const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
       const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
@@ -615,9 +694,12 @@ ${obs ? `- *Observações:* ${obs}` : ''}
 
 ## REGRAS DE PAGAMENTO NA OS
 Quando a OS tiver status "concluida" (pronta para retirada), SEMPRE verifique os campos total_pago e total_pendente:
-- Se total_pendente > 0: informe o valor do serviço e que há um saldo pendente de R$ X,XX a pagar na retirada. NUNCA diga que está pago.
-- Se total_pago > 0 e total_pendente = 0: pode confirmar que está quitado.
-- Se não houver pagamentos registrados (total_pago = 0 e total_pendente = 0): NÃO mencione pagamento, apenas informe que a moto está pronta para retirada e que o pagamento é feito na hora.
+- Se total_pendente > 0: informe que a moto está pronta e há um saldo de R$ X,XX. Pergunte: "Prefere pagar via PIX agora ou na hora da retirada?"
+  - Se o cliente quiser PIX agora: chame gerar_pix_os passando os_id, client_name, client_phone (do contexto), valor (total_pendente) e descricao (equipment da OS)
+  - Ao retornar sucesso: envie o link e o código PIX copia e cola
+- Se total_pago > 0 e total_pendente = 0: confirme que está quitado.
+- Se não houver pagamentos registrados (total_pago = 0 e total_pendente = 0): informe que a moto está pronta e o pagamento é feito na retirada. Pergunte se prefere adiantar via PIX.
+  - Se o cliente quiser PIX: peça o valor e chame gerar_pix_os
 - Para "concluida_entregue": a moto já foi entregue. Não mencione pagamento pendente.
 
 Hoje é ${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}.`;
