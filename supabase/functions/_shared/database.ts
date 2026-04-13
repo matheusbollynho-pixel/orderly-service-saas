@@ -201,7 +201,8 @@ export async function buscarOSAtivaPorTelefone(
       mechanic_id, entry_date, conclusion_date,
       problem_description, satisfaction_survey_sent_at,
       mechanics(name),
-      payments(amount, status)
+      payments(amount, status),
+      materials(valor, quantidade)
     `)
     .or(filtrosOS.join(','))
     .in('status', statusAtivos);
@@ -216,8 +217,10 @@ export async function buscarOSAtivaPorTelefone(
   const mechObj = row.mechanics as { name?: string } | null;
 
   const payments = (row.payments as { amount: number; status: string }[]) || [];
+  const materials = (row.materials as { valor: number; quantidade: string }[]) || [];
+  const totalOS = materials.reduce((s, m) => s + ((m.valor || 0) * (parseFloat(m.quantidade) || 1)), 0);
   const totalPago = payments.filter(p => p.status === 'paid').reduce((s, p) => s + (p.amount || 0), 0);
-  const totalPendente = payments.filter(p => p.status !== 'paid').reduce((s, p) => s + (p.amount || 0), 0);
+  const totalPendente = totalOS > 0 ? Math.max(0, totalOS - totalPago) : 0;
 
   return {
     id: row.id as string,
