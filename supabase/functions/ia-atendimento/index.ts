@@ -285,27 +285,28 @@ async function executarFerramenta(
   tool: string,
   input: Record<string, unknown>,
   phone: string,
-  conversationContext: ConversationContext
+  conversationContext: ConversationContext,
+  storeId?: string
 ): Promise<unknown> {
   console.log(`🔧 Executando ferramenta: ${tool}`, input);
 
   switch (tool) {
     case 'consultar_cliente': {
-      const cliente = await buscarClientePorTelefone(sb, input.phone as string);
+      const cliente = await buscarClientePorTelefone(sb, input.phone as string, storeId);
       if (!cliente) return { encontrado: false };
       const motos = await buscarMotosDoCliente(sb, cliente.id);
       return { encontrado: true, ...cliente, motos };
     }
 
     case 'consultar_os': {
-      const os = await buscarOSAtivaPorTelefone(sb, input.phone as string);
+      const os = await buscarOSAtivaPorTelefone(sb, input.phone as string, storeId);
       if (!os) return { encontrado: false };
       const statusTraduzido = STATUS_TRADUCAO[os.status || ''] || os.status;
       return { ...os, status_traduzido: statusTraduzido };
     }
 
     case 'consultar_os_por_nome': {
-      const ordens = await buscarOSPorNome(sb, input.nome as string);
+      const ordens = await buscarOSPorNome(sb, input.nome as string, storeId);
       if (ordens.length === 0) return { encontrado: false };
       return {
         encontrado: true,
@@ -323,22 +324,22 @@ async function executarFerramenta(
     }
 
     case 'consultar_pecas': {
-      const produtos = await buscarProdutoEstoque(sb, input.descricao as string);
+      const produtos = await buscarProdutoEstoque(sb, input.descricao as string, storeId);
       return { encontrado: produtos.length > 0, produtos };
     }
 
     case 'consultar_historico_balcao': {
-      const historico = await buscarHistoricoBalcao(sb, input.descricao as string);
+      const historico = await buscarHistoricoBalcao(sb, input.descricao as string, storeId);
       return { encontrado: historico.length > 0, historico };
     }
 
     case 'consultar_agendamentos_disponiveis': {
-      const disponiveis = await buscarHorariosDisponiveis(sb);
+      const disponiveis = await buscarHorariosDisponiveis(sb, 7, storeId);
       return { disponiveis };
     }
 
     case 'criar_agendamento': {
-      const storeForAppt = await buscarStoreSettings(sb);
+      const storeForAppt = await buscarStoreSettings(sb, storeId);
       const result = await criarAgendamento(sb, {
         client_name: input.client_name as string,
         client_phone: input.client_phone as string,
@@ -369,7 +370,7 @@ async function executarFerramenta(
     }
 
     case 'consultar_store_settings': {
-      return await buscarStoreSettings(sb);
+      return await buscarStoreSettings(sb, storeId);
     }
 
     case 'enviar_localizacao': {
@@ -441,7 +442,7 @@ async function executarFerramenta(
     }
 
     case 'consultar_fiado': {
-      const resultado = await buscarFiadoPorTelefone(sb, input.phone as string, input.cpf as string | undefined);
+      const resultado = await buscarFiadoPorTelefone(sb, input.phone as string, input.cpf as string | undefined, storeId);
       if (!resultado) return { encontrado: false, sugestao: 'Não encontrei débito pelo telefone. Peça o CPF do cliente e tente novamente passando o campo cpf.' };
       const { fiados, total_aberto } = resultado;
       // Fiado principal: o de menor vencimento com saldo > 0
@@ -609,8 +610,15 @@ ${obs ? `- *Observações:* ${obs}` : ''}
 ## TRADUÇÕES DE STATUS DE OS
 - aberta → "acabou de entrar"
 - em_andamento → "em serviço"
-- concluida → "pronta para retirada ✅"
-- concluida_entregue → "já entregue"
+- concluida → "pronta para retirada ✅" (serviço CONCLUÍDO mas ainda NÃO retirado e NÃO necessariamente pago)
+- concluida_entregue → "já entregue ✅"
+
+## REGRAS DE PAGAMENTO NA OS
+Quando a OS tiver status "concluida" (pronta para retirada), SEMPRE verifique os campos total_pago e total_pendente:
+- Se total_pendente > 0: informe o valor do serviço e que há um saldo pendente de R$ X,XX a pagar na retirada. NUNCA diga que está pago.
+- Se total_pago > 0 e total_pendente = 0: pode confirmar que está quitado.
+- Se não houver pagamentos registrados (total_pago = 0 e total_pendente = 0): NÃO mencione pagamento, apenas informe que a moto está pronta para retirada e que o pagamento é feito na hora.
+- Para "concluida_entregue": a moto já foi entregue. Não mencione pagamento pendente.
 
 Hoje é ${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}.`;
 }
@@ -628,6 +636,10 @@ Deno.serve(async (req) => {
   }
 
   const sb = getSupabaseClient();
+
+  // Extrai store_id da query string (?store_id=xxx) — multi-tenant
+  const url = new URL(req.url);
+  const storeIdParam = url.searchParams.get('store_id') || undefined;
 
   let phone = '';
   let text = '';
@@ -656,7 +668,7 @@ Deno.serve(async (req) => {
 
     senderName = (body.sender_name as string || (chat.name as string) || '');
 
-    console.log(`📌 phone: ${phone} | text: ${text.slice(0, 80)} | fromMe: ${fromMe}`);
+    console.log(`📌 phone: ${phone} | text: ${text.slice(0, 80)} | fromMe: ${fromMe} | store_id: ${storeIdParam || 'auto'}`);
 
     if (!phone || !text) {
       return new Response('ok', { status: 200 });
@@ -667,11 +679,18 @@ Deno.serve(async (req) => {
     // ----------------------------------------------------------
     // 0. Verificar se a IA está ativada
     // ----------------------------------------------------------
-    const { data: settings } = await sb
-      .from('store_settings')
-      .select('ai_enabled')
-      .limit(1)
-      .maybeSingle();
+    let settingsQuery = sb.from('store_settings').select('ai_enabled, id');
+    if (storeIdParam) {
+      settingsQuery = settingsQuery.eq('id', storeIdParam);
+    } else {
+      // Fallback: identifica loja pelo token da instância UazAPI
+      const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN') || '';
+      if (instanceToken) settingsQuery = settingsQuery.eq('whatsapp_instance_token', instanceToken);
+    }
+    const { data: settings } = await settingsQuery.limit(1).maybeSingle();
+    // Usa o store_id resolvido para todas as queries subsequentes
+    const resolvedStoreId: string | undefined = storeIdParam || (settings as Record<string, unknown> | null)?.id as string | undefined;
+
     if (settings && (settings as Record<string, unknown>).ai_enabled === false) {
       console.log('⏸️ IA pausada (ai_enabled=false)');
       return new Response(JSON.stringify({ ok: true, paused: true }), { status: 200 });
@@ -745,7 +764,7 @@ Deno.serve(async (req) => {
           phone,
           motivo: `Cliente recusou orçamento da OS ${ctx.pending_orcamento_order_id}`,
           client_name: ctx.client_name,
-        }, phone, ctx);
+        }, phone, ctx, resolvedStoreId);
       }
 
       if (aprovado || recusado) {
@@ -756,7 +775,7 @@ Deno.serve(async (req) => {
     // ----------------------------------------------------------
     // 6. Buscar info da loja para o system prompt
     // ----------------------------------------------------------
-    const store = await buscarStoreSettings(sb);
+    const store = await buscarStoreSettings(sb, resolvedStoreId);
 
     // ----------------------------------------------------------
     // 6.1 Primeiro contato — enviar menu de boas-vindas
@@ -864,7 +883,7 @@ Deno.serve(async (req) => {
 
           let result: unknown;
           try {
-            result = await executarFerramenta(sb, toolName, toolInput, phone, ctx);
+            result = await executarFerramenta(sb, toolName, toolInput, phone, ctx, resolvedStoreId);
           } catch (e) {
             console.error(`Erro na ferramenta ${toolName}:`, e);
             result = { erro: String(e) };

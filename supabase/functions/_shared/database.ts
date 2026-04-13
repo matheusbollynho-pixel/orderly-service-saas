@@ -102,7 +102,8 @@ export interface ClienteRow {
 
 export async function buscarClientePorTelefone(
   sb: SupabaseClient,
-  phone: string
+  phone: string,
+  storeId?: string
 ): Promise<ClienteRow | null> {
   const clean = phone.replace(/\D/g, '');
   const sem55 = clean.startsWith('55') ? clean.slice(2) : clean;
@@ -124,12 +125,14 @@ export async function buscarClientePorTelefone(
 
   console.log(`🔍 buscarCliente: sem55=${sem55} sem9=${sem9} ultimos8=${ultimos8}`);
 
-  const { data, error } = await sb
+  let query = sb
     .from('clients')
     .select('id, name, apelido, phone, cpf, autoriza_lembretes')
-    .or(filtros.join(','))
-    .limit(1)
-    .maybeSingle();
+    .or(filtros.join(','));
+
+  if (storeId) query = query.eq('store_id', storeId);
+
+  const { data, error } = await query.limit(1).maybeSingle();
 
   console.log(`🔍 buscarCliente resultado: name=${(data as ClienteRow | null)?.name} phone=${(data as ClienteRow | null)?.phone} error=${error?.message}`);
   return data as ClienteRow | null;
@@ -165,11 +168,14 @@ export interface OSRow {
   problem_description: string | null;
   satisfaction_survey_sent_at: string | null;
   aviso_retirada_enviado_em: string | null;
+  total_pago: number | null;
+  total_pendente: number | null;
 }
 
 export async function buscarOSAtivaPorTelefone(
   sb: SupabaseClient,
-  phone: string
+  phone: string,
+  storeId?: string
 ): Promise<OSRow | null> {
   const clean = phone.replace(/\D/g, '');
   const sem55 = clean.startsWith('55') ? clean.slice(2) : clean;
@@ -188,24 +194,30 @@ export async function buscarOSAtivaPorTelefone(
     `client_phone.ilike.%${ultimos8os}%`,
   ];
 
-  const { data } = await sb
+  let osQuery = sb
     .from('service_orders')
     .select(`
       id, client_name, equipment, status, status_oficina,
       mechanic_id, entry_date, conclusion_date,
       problem_description, satisfaction_survey_sent_at,
-      mechanics(name)
+      mechanics(name),
+      payments(amount, status)
     `)
     .or(filtrosOS.join(','))
-    .in('status', statusAtivos)
-    .order('entry_date', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .in('status', statusAtivos);
+
+  if (storeId) osQuery = osQuery.eq('store_id', storeId);
+
+  const { data } = await osQuery.order('entry_date', { ascending: false }).limit(1).maybeSingle();
 
   if (!data) return null;
 
   const row = data as Record<string, unknown>;
   const mechObj = row.mechanics as { name?: string } | null;
+
+  const payments = (row.payments as { amount: number; status: string }[]) || [];
+  const totalPago = payments.filter(p => p.status === 'paid').reduce((s, p) => s + (p.amount || 0), 0);
+  const totalPendente = payments.filter(p => p.status !== 'paid').reduce((s, p) => s + (p.amount || 0), 0);
 
   return {
     id: row.id as string,
@@ -219,19 +231,23 @@ export async function buscarOSAtivaPorTelefone(
     conclusion_date: row.conclusion_date as string | null,
     problem_description: row.problem_description as string | null,
     satisfaction_survey_sent_at: row.satisfaction_survey_sent_at as string | null,
+    aviso_retirada_enviado_em: row.aviso_retirada_enviado_em as string | null,
+    total_pago: totalPago,
+    total_pendente: totalPendente,
   };
 }
 
 export async function buscarOSPorNome(
   sb: SupabaseClient,
-  nome: string
+  nome: string,
+  storeId?: string
 ): Promise<OSRow[]> {
   const palavras = nome.trim().split(/\s+/).filter((w) => w.length >= 3);
   if (palavras.length === 0) return [];
 
   const filtros = palavras.map((p) => `client_name.ilike.%${p}%`).join(',');
 
-  const { data } = await sb
+  let query = sb
     .from('service_orders')
     .select(`
       id, client_name, equipment, status, status_oficina,
@@ -239,9 +255,11 @@ export async function buscarOSPorNome(
       problem_description, satisfaction_survey_sent_at,
       mechanics(name)
     `)
-    .or(filtros)
-    .order('entry_date', { ascending: false })
-    .limit(3);
+    .or(filtros);
+
+  if (storeId) query = query.eq('store_id', storeId);
+
+  const { data } = await query.order('entry_date', { ascending: false }).limit(3);
 
   if (!data) return [];
 
@@ -259,6 +277,7 @@ export async function buscarOSPorNome(
       conclusion_date: row.conclusion_date as string | null,
       problem_description: row.problem_description as string | null,
       satisfaction_survey_sent_at: row.satisfaction_survey_sent_at as string | null,
+      aviso_retirada_enviado_em: row.aviso_retirada_enviado_em as string | null,
     };
   });
 }
@@ -322,39 +341,44 @@ export interface ProdutoEstoque {
 
 export async function buscarProdutoEstoque(
   sb: SupabaseClient,
-  descricao: string
+  descricao: string,
+  storeId?: string
 ): Promise<ProdutoEstoque[]> {
   const palavras = descricao.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
   if (palavras.length === 0) return [];
 
-  // Busca por cada palavra relevante
   const filtros = palavras.map((p) => `name.ilike.%${p}%`).join(',');
 
-  const { data } = await sb
+  let query = sb
     .from('inventory_products')
     .select('id, name, stock_current, sale_price, category')
     .or(filtros)
-    .gt('stock_current', 0)
-    .limit(5);
+    .gt('stock_current', 0);
 
+  if (storeId) query = query.eq('store_id', storeId);
+
+  const { data } = await query.limit(5);
   return (data as ProdutoEstoque[]) || [];
 }
 
 export async function buscarHistoricoBalcao(
   sb: SupabaseClient,
-  descricao: string
+  descricao: string,
+  storeId?: string
 ): Promise<{ descricao: string; preco_min: number; preco_max: number; ultima_venda: string | null }[]> {
   const palavras = descricao.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
   if (palavras.length === 0) return [];
 
   const filtros = palavras.map((p) => `descricao.ilike.%${p}%`).join(',');
 
-  const { data } = await sb
+  let query = sb
     .from('balcao_items')
     .select('descricao, preco_unit, created_at')
-    .or(filtros)
-    .order('created_at', { ascending: false })
-    .limit(50);
+    .or(filtros);
+
+  if (storeId) query = (query as any).eq('store_id', storeId);
+
+  const { data } = await query.order('created_at', { ascending: false }).limit(50);
 
   if (!data || data.length === 0) return [];
 
@@ -385,14 +409,13 @@ export async function buscarHistoricoBalcao(
 
 export async function buscarHorariosDisponiveis(
   sb: SupabaseClient,
-  diasAdiante = 7
+  diasAdiante = 7,
+  storeId?: string
 ): Promise<{ date: string; turnos_livres: string[] }[]> {
   // Buscar capacidade máxima configurada
-  const { data: storeData } = await sb
-    .from('store_settings')
-    .select('max_agendamentos_dia')
-    .limit(1)
-    .maybeSingle();
+  let storeQuery = sb.from('store_settings').select('max_agendamentos_dia');
+  if (storeId) storeQuery = storeQuery.eq('id', storeId);
+  const { data: storeData } = await storeQuery.limit(1).maybeSingle();
   const maxDia: number = (storeData as { max_agendamentos_dia?: number } | null)?.max_agendamentos_dia ?? 10;
   const maxPorTurno = Math.ceil(maxDia / 2);
 
@@ -407,11 +430,13 @@ export async function buscarHorariosDisponiveis(
 
     const dateStr = d.toISOString().split('T')[0];
 
-    const { data: agendados } = await sb
+    let apptQuery = sb
       .from('appointments')
       .select('shift')
       .eq('appointment_date', dateStr)
       .neq('status', 'cancelado');
+    if (storeId) apptQuery = apptQuery.eq('store_id', storeId);
+    const { data: agendados } = await apptQuery;
 
     const lista = (agendados as { shift: string }[] | null) || [];
     const countManha = lista.filter((a) => a.shift === 'manha').length;
@@ -590,7 +615,8 @@ export async function buscarLinkSatisfacao(
 export async function buscarFiadoPorTelefone(
   sb: SupabaseClient,
   phone: string,
-  cpf?: string
+  cpf?: string,
+  storeId?: string
 ): Promise<{ fiados: { id: string; client_name: string; original_amount: number; amount_paid: number; interest_accrued: number; due_date: string; status: string; asaas_payment_url: string | null }[]; total_aberto: number } | null> {
   type FiadoRow = { id: string; client_name: string; original_amount: number; amount_paid: number; interest_accrued: number; due_date: string; status: string; asaas_payment_url: string | null }
 
@@ -611,12 +637,15 @@ export async function buscarFiadoPorTelefone(
       `client_phone.ilike.%${ultimos8}%`,
     ]
 
-    const { data } = await sb
+    let fiadoQuery = sb
       .from('fiados')
       .select('id, client_name, original_amount, amount_paid, interest_accrued, due_date, status, asaas_payment_url')
       .neq('status', 'pago')
-      .or(filtros.join(','))
-      .order('due_date', { ascending: true })
+      .or(filtros.join(','));
+
+    if (storeId) fiadoQuery = fiadoQuery.eq('store_id', storeId);
+
+    const { data } = await fiadoQuery.order('due_date', { ascending: true })
 
     if (data && data.length > 0) rows = data as FiadoRow[]
   }
@@ -625,12 +654,15 @@ export async function buscarFiadoPorTelefone(
   if (rows.length === 0 && cpf) {
     const cpfClean = cpf.replace(/\D/g, '')
     if (cpfClean.length >= 11) {
-      const { data } = await sb
+      let cpfQuery = sb
         .from('fiados')
         .select('id, client_name, original_amount, amount_paid, interest_accrued, due_date, status, asaas_payment_url')
         .neq('status', 'pago')
-        .eq('client_cpf', cpfClean)
-        .order('due_date', { ascending: true })
+        .eq('client_cpf', cpfClean);
+
+      if (storeId) cpfQuery = cpfQuery.eq('store_id', storeId);
+
+      const { data } = await cpfQuery.order('due_date', { ascending: true })
 
       if (data && data.length > 0) rows = data as FiadoRow[]
     }
