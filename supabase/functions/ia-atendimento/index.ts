@@ -206,7 +206,7 @@ const TOOLS = [
   },
   {
     name: 'consultar_orcamento',
-    description: 'Busca os materiais/serviços de uma OS para enviar orçamento ao cliente.',
+    description: 'ATENÇÃO: NÃO USE ESTA FERRAMENTA para responder sobre valor ou itens da OS — essas informações já vêm nos campos "materiais" e "total_pendente" do resultado de consultar_os e consultar_os_por_nome. Use consultar_orcamento APENAS para buscar orçamentos de OS que ainda estão em aberto aguardando aprovação do cliente.',
     input_schema: {
       type: 'object',
       properties: {
