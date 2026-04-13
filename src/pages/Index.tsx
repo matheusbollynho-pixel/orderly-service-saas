@@ -546,7 +546,7 @@ Retirada: ${retiradaInfo}`;
             conclusion_date, previsao_entrega, status_oficina, created_at, updated_at,
             mechanic_id, checklist_items(*), materials(*), payments(*)
           `)
-          .ilike('client_name', `%${q}%`)
+          .or(`client_name.ilike.%${q}%,equipment.ilike.%${q}%,client_phone.ilike.%${q}%`)
           .order('created_at', { ascending: false })
           .limit(100);
 
