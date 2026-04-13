@@ -483,6 +483,9 @@ async function executarFerramenta(
       const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
       const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
       try {
+        if ((input.valor as number) < 5) {
+          return { sucesso: false, erro: 'valor_minimo', mensagem: 'O valor mínimo para PIX é R$ 5,00. Para valores menores, o pagamento deve ser feito presencialmente.' };
+        }
         const store = await buscarStoreSettings(sb, storeId);
         const asaasApiKey = (store as Record<string, unknown>).asaas_api_key as string || '';
         if (!asaasApiKey) return { sucesso: false, erro: 'Chave Asaas não configurada' };
@@ -695,7 +698,8 @@ ${obs ? `- *Observações:* ${obs}` : ''}
 ## REGRAS DE PAGAMENTO NA OS
 Quando a OS tiver status "concluida" (pronta para retirada), SEMPRE verifique os campos total_pago e total_pendente:
 - Se total_pendente > 0: informe que a moto está pronta e há um saldo de R$ X,XX. Pergunte: "Prefere pagar via PIX agora ou na hora da retirada?"
-  - Se o cliente quiser PIX agora: chame gerar_pix_os passando os_id, client_name, client_phone (do contexto), valor (total_pendente) e descricao (equipment da OS)
+  - Se o cliente quiser PIX agora e o valor for >= R$ 5,00: chame gerar_pix_os passando os_id, client_name, client_phone (do contexto), valor (total_pendente) e descricao (equipment da OS)
+  - Se o valor for menor que R$ 5,00: informe que para valores abaixo de R$ 5,00 o pagamento deve ser feito presencialmente
   - Ao retornar sucesso: envie o link e o código PIX copia e cola
 - Se total_pago > 0 e total_pendente = 0: confirme que está quitado.
 - Se não houver pagamentos registrados (total_pago = 0 e total_pendente = 0): informe que a moto está pronta e o pagamento é feito na retirada. Pergunte se prefere adiantar via PIX.
