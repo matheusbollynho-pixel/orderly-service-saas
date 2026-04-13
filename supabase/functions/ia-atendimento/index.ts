@@ -870,6 +870,36 @@ Deno.serve(async (req) => {
     }
 
     // ----------------------------------------------------------
+    // 5.5 Resposta direta se cliente perguntar valor/itens da OS já conhecida
+    // ----------------------------------------------------------
+    const perguntaValor = /quanto|valor|deu|colocou|colocaram|foi feito|fizeram|servi[çc]o|pe[çc]a|item|itens|detalhes|descri/i.test(text);
+    const totalPendente = ctx.os_total_pendente as number | undefined;
+    const totalPago = ctx.os_total_pago as number | undefined;
+    const materiaisCtx = ctx.os_materiais as { descricao: string; valor: number; quantidade: number }[] | undefined;
+
+    if (perguntaValor && (totalPendente !== undefined || totalPago !== undefined) && materiaisCtx) {
+      const store2 = await buscarStoreSettings(sb, resolvedStoreId);
+      let resposta = '';
+      if (materiaisCtx.length > 0) {
+        const listaItens = materiaisCtx.map(m => `• ${m.descricao}: R$ ${(m.valor * m.quantidade).toFixed(2)}`).join('\n');
+        resposta = `O serviço ficou assim, Matheus:\n\n${listaItens}\n\n*Total: R$ ${((totalPendente || 0) + (totalPago || 0)).toFixed(2)}*`;
+        if ((totalPendente || 0) > 0) {
+          resposta += `\n\nAinda há *R$ ${(totalPendente as number).toFixed(2)}* pendente. Prefere pagar via PIX agora ou na retirada?`;
+        } else {
+          resposta += `\n\n✅ Já está quitado!`;
+        }
+      } else {
+        resposta = `O valor do serviço é *R$ ${((totalPendente || 0) + (totalPago || 0)).toFixed(2)}*.`;
+        if ((totalPendente || 0) > 0) resposta += ` Prefere pagar via PIX agora ou na retirada?`;
+      }
+      await enviarMensagem(normalizeBrPhone(phone), resposta);
+      const updHistory = [...((ctx.history as {role:string;text:string}[]) || []), { role: 'user', text }, { role: 'assistant', text: resposta }];
+      ctx.history = updHistory.slice(-16);
+      await saveConversationState(sb, phone, state, ctx, resolvedStoreId);
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }
+
+    // ----------------------------------------------------------
     // 6. Buscar info da loja para o system prompt
     // ----------------------------------------------------------
     const store = await buscarStoreSettings(sb, resolvedStoreId);
