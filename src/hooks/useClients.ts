@@ -115,6 +115,28 @@ export function useClients() {
     }
   };
 
+  // Buscar cliente por modelo, marca, cor ou placa da moto
+  const searchClientByVehicle = async (term: string): Promise<{ client: Client; motorcycle: Motorcycle } | null> => {
+    try {
+      const clean = term.toUpperCase().replace(/[^A-Z0-9 ]/g, '').trim();
+      const { data, error } = await supabase
+        .from('motorcycles')
+        .select('*, clients(*)')
+        .or(`modelo.ilike.%${term}%,marca.ilike.%${term}%,cor.ilike.%${term}%,placa.ilike.%${clean}%`)
+        .eq('active', true)
+        .limit(10);
+
+      if (error || !data || data.length === 0) return null;
+
+      const row = data[0] as any;
+      if (!row.clients) return null;
+      return { client: row.clients as Client, motorcycle: row as Motorcycle };
+    } catch (err) {
+      console.error('Erro ao buscar por veículo:', err);
+      return null;
+    }
+  };
+
   // Buscar moto por placa
   const searchMotorcycleByPlate = async (placa: string): Promise<Motorcycle | null> => {
     try {
@@ -286,6 +308,7 @@ export function useClients() {
     searchClientByCPF,
     searchClientByName,
     searchClientByPhone,
+    searchClientByVehicle,
     searchMotorcycleByPlate,
     getClientMotorcycles,
     getClientById,

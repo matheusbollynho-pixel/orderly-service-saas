@@ -12,11 +12,11 @@ interface ClientSearchProps {
 
 export function ClientSearch({ onClientFound }: ClientSearchProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchType, setSearchType] = useState<'cpf' | 'phone' | 'name'>('cpf');
+  const [searchType, setSearchType] = useState<'cpf' | 'phone' | 'name' | 'vehicle'>('cpf');
   const [searching, setSearching] = useState(false);
   const [found, setFound] = useState<boolean | null>(null);
   
-  const { searchClientByCPF, searchClientByPhone, searchClientByName, getClientMotorcycles } = useClients();
+  const { searchClientByCPF, searchClientByPhone, searchClientByName, searchClientByVehicle, getClientMotorcycles } = useClients();
   const { toast } = useToast();
 
   const handleSearch = async () => {
@@ -42,7 +42,7 @@ export function ClientSearch({ onClientFound }: ClientSearchProps) {
       } else if (searchType === 'name') {
         const clients = await searchClientByName(searchTerm);
         if (clients.length > 0) {
-          client = clients[0]; // Pega o primeiro resultado
+          client = clients[0];
           if (clients.length > 1) {
             toast({
               title: "Múltiplos resultados",
@@ -50,18 +50,28 @@ export function ClientSearch({ onClientFound }: ClientSearchProps) {
             });
           }
         }
+      } else if (searchType === 'vehicle') {
+        const result = await searchClientByVehicle(searchTerm);
+        if (result) {
+          setFound(true);
+          toast({
+            title: "✅ Cliente encontrado!",
+            description: `${result.client.name} — ${result.motorcycle.marca} ${result.motorcycle.modelo}`,
+          });
+          onClientFound(result.client, [result.motorcycle]);
+          return;
+        }
       }
 
       if (client) {
-        // Buscar motos do cliente
         const motorcycles = await getClientMotorcycles(client.id);
-        
+
         setFound(true);
         toast({
           title: "✅ Cliente encontrado!",
           description: `${client.name} - ${motorcycles.length} moto(s) cadastrada(s)`,
         });
-        
+
         onClientFound(client, motorcycles);
       } else {
         setFound(false);
@@ -125,6 +135,15 @@ export function ClientSearch({ onClientFound }: ClientSearchProps) {
         >
           Nome
         </Button>
+        <Button
+          type="button"
+          variant={searchType === 'vehicle' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setSearchType('vehicle')}
+          className="flex-1 bg-[#C1272D] hover:bg-red-700 text-white"
+        >
+          Moto/Placa
+        </Button>
       </div>
 
       <div className="flex gap-2">
@@ -133,7 +152,8 @@ export function ClientSearch({ onClientFound }: ClientSearchProps) {
             placeholder={
               searchType === 'cpf' ? 'Digite o CPF...' :
               searchType === 'phone' ? 'Digite o telefone...' :
-              'Digite o nome...'
+              searchType === 'vehicle' ? 'Modelo, marca, cor ou placa...' :
+              'Digite o nome do cliente...'
             }
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
