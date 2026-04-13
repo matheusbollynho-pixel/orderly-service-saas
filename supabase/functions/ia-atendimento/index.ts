@@ -317,19 +317,24 @@ async function executarFerramenta(
       const os = await buscarOSAtivaPorTelefone(sb, input.phone as string, storeId);
       if (!os) return { encontrado: false };
       const statusTraduzido = STATUS_TRADUCAO[os.status || ''] || os.status;
-      return { ...os, status_traduzido: statusTraduzido };
+      const itens = await buscarMateriaisOS(sb, os.id);
+      const totalOS = itens.reduce((s, m) => s + ((m.valor || 0) * (m.quantidade || 1)), 0);
+      const totalPago = os.total_pago || 0;
+      const totalPendente = totalOS > 0 ? Math.max(0, totalOS - totalPago) : (os.total_pendente || 0);
+      return { ...os, status_traduzido: statusTraduzido, total_pendente: totalPendente, total_pago: totalPago, materiais: itens };
     }
 
     case 'consultar_os_por_nome': {
       const ordens = await buscarOSPorNome(sb, input.nome as string, storeId);
       if (ordens.length === 0) return { encontrado: false };
-      return {
-        encontrado: true,
-        ordens: ordens.map((os) => ({
-          ...os,
-          status_traduzido: STATUS_TRADUCAO[os.status || ''] || os.status,
-        })),
-      };
+      const ordensComItens = await Promise.all(ordens.map(async (os) => {
+        const itens = await buscarMateriaisOS(sb, os.id);
+        const totalOS = itens.reduce((s, m) => s + ((m.valor || 0) * (m.quantidade || 1)), 0);
+        const totalPago = os.total_pago || 0;
+        const totalPendente = totalOS > 0 ? Math.max(0, totalOS - totalPago) : (os.total_pendente || 0);
+        return { ...os, status_traduzido: STATUS_TRADUCAO[os.status || ''] || os.status, total_pendente: totalPendente, total_pago: totalPago, materiais: itens };
+      }));
+      return { encontrado: true, ordens: ordensComItens };
     }
 
     case 'consultar_historico_cliente': {
