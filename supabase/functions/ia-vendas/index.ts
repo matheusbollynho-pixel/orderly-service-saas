@@ -84,11 +84,12 @@ Se *carros*:
 
 CRIAÇÃO DE CONTA (teste grátis de 5 dias):
 Quando o lead quiser começar o teste gratuito real (não só a demo):
-1. Pergunte o *nome da oficina*
-2. Pergunte o *e-mail* para acesso
-3. Quando tiver nome da oficina + e-mail + tipo de veículo, responda EXATAMENTE neste formato (sem mais nada antes ou depois na linha):
+1. Pergunte o *nome da oficina* (se ainda não souber)
+2. Pergunte o *e-mail* para acesso — sempre um e-mail novo e único, nunca sugira reutilizar um e-mail já usado
+3. Assim que tiver nome da oficina + e-mail + tipo de veículo, gere o comando ABAIXO IMEDIATAMENTE — sem pedir confirmação, sem dizer "vou criar agora", sem mais nenhuma mensagem. Apenas o comando:
 CRIAR_CONTA|nome_oficina|email|tipo_veiculo|plano_recomendado
 - plano_recomendado deve ser: basic, pro ou premium (baseado no perfil da oficina)
+- IMPORTANTE: o comando deve estar sozinho na resposta, sem nenhum texto antes ou depois
 Exemplo: CRIAR_CONTA|Bandara Motos|dono@email.com|moto|pro
 
 ATENDIMENTO HUMANO:
@@ -274,6 +275,7 @@ Deno.serve(async (req) => {
   const history = (stateData.history as { role: string; content: string }[]) || [];
   const clienteStoreId = stateData.store_id as string | undefined;
   const clienteNome = stateData.company_name as string | undefined;
+  const leadAlertSent = stateData.lead_alert_sent as boolean | undefined;
 
   // ─── PRIMEIRO CONTATO ────────────────────────────────────────────────────────
   if (currentState === 'inicio' || history.length === 0) {
@@ -574,14 +576,17 @@ Você é novo por aqui ou já é nosso cliente?
   // Sem CRIAR_CONTA — envia reply normalmente
   recentHistory.push({ role: 'assistant', content: reply });
   await sb.from('conversation_state').upsert({
-    phone, state: 'conversando', data: { history: recentHistory },
+    phone, state: 'conversando', data: { ...stateData, history: recentHistory },
   }, { onConflict: 'phone' });
   await sendWhatsApp(phone, reply);
 
-  // Alerta dono sobre lead quente
+  // Alerta dono sobre lead quente (apenas uma vez por conversa)
   const interessePalavras = ['fechar', 'contratar', 'assinar', 'quanto custa', 'quero comprar', 'vou pegar', 'quero assinar', 'vou assinar', 'quero fechar', 'quero o plano', 'como contrato', 'como assino'];
-  if (interessePalavras.some(p => text.toLowerCase().includes(p)) && DONO_PHONE) {
+  if (!leadAlertSent && interessePalavras.some(p => text.toLowerCase().includes(p)) && DONO_PHONE) {
     await sendWhatsApp(DONO_PHONE, `🔥 *Lead quente!*\n📱 ${phone}\n💬 "${text}"`);
+    await sb.from('conversation_state').upsert({
+      phone, state: 'conversando', data: { ...stateData, history: recentHistory, lead_alert_sent: true },
+    }, { onConflict: 'phone' });
   }
 
   return new Response('ok', { status: 200 });

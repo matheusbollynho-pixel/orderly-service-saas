@@ -30,16 +30,41 @@ export interface ConversationContext {
   pending_orcamento_order_id?: string;
   escalada_motivo?: string;
   lembrete_agendamento_id?: string;
+  os_id?: string;
+  os_total_pendente?: number;
+  os_total_pago?: number;
+  os_materiais?: { descricao: string; valor: number; quantidade: number }[];
+  cpf_pix_temp?: string;
+  humano_assumiu_em?: string;
 }
 
 export async function getConversationState(
   sb: SupabaseClient,
   phone: string
 ): Promise<{ state: string; context: ConversationContext }> {
+  const clean = phone.replace(/\D/g, '');
+  // Gera variantes com/sem 55 e com/sem o 9 extra
+  const variants = new Set<string>([clean]);
+  const sem55 = clean.startsWith('55') ? clean.slice(2) : clean;
+  variants.add(sem55);
+  variants.add(`55${sem55}`);
+  // Com e sem o 9 (após DDD de 2 dígitos)
+  if (sem55.length === 11 && sem55[2] === '9') {
+    const sem9 = sem55.slice(0, 2) + sem55.slice(3);
+    variants.add(sem9);
+    variants.add(`55${sem9}`);
+  } else if (sem55.length === 10) {
+    const com9 = sem55.slice(0, 2) + '9' + sem55.slice(2);
+    variants.add(com9);
+    variants.add(`55${com9}`);
+  }
+
   const { data } = await sb
     .from('conversation_state')
     .select('state, context')
-    .eq('phone', phone)
+    .in('phone', [...variants])
+    .order('updated_at', { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (!data) return { state: 'novo', context: {} };
@@ -181,64 +206,83 @@ export async function buscarOSAtivaPorTelefone(
   const clean = phone.replace(/\D/g, '');
   const sem55 = clean.startsWith('55') ? clean.slice(2) : clean;
 
-  // Tenta também sem o dígito 9 (formato antigo)
-  const sem9 = (sem55.length === 11 && sem55[2] === '9')
-    ? sem55.slice(0, 2) + sem55.slice(3)
-    : sem55;
-
   const statusAtivos = ['aberta', 'em_andamento', 'concluida', 'concluida_entregue'];
 
+  // Gera variantes com/sem o 9 após o DDD
+  const extra9variants: string[] = [];
+  if (sem55.length === 11 && sem55[2] === '9') {
+    // Remove o 9: 11 → 10 dígitos
+    extra9variants.push(sem55.slice(0, 2) + sem55.slice(3));
+  } else if (sem55.length === 10) {
+    // Adiciona o 9: 10 → 11 dígitos
+    extra9variants.push(sem55.slice(0, 2) + '9' + sem55.slice(2));
+  }
+
   const ultimos8os = sem55.slice(-8);
-  const filtrosOS = [
-    `client_phone.ilike.%${sem55}%`,
-    ...(sem9 !== sem55 ? [`client_phone.ilike.%${sem9}%`] : []),
-    `client_phone.ilike.%${ultimos8os}%`,
+
+  const phoneVariants = [
+    sem55,
+    ...extra9variants,
+    ultimos8os,
   ];
 
-  let osQuery = sb
+  let osId: string | null = null;
+
+  for (const variant of phoneVariants) {
+    let idQuery = sb
+      .from('service_orders')
+      .select('id, status')
+      .eq('client_phone', variant);
+    if (storeId) idQuery = idQuery.eq('store_id', storeId);
+    const { data: idRows, error: idErr } = await idQuery.order('entry_date', { ascending: false }).limit(5);
+    console.log(`🔍 buscarOS variant="${variant}" storeId="${storeId}" → rows=${JSON.stringify(idRows)} err=${JSON.stringify(idErr)}`);
+    const activeRow = (idRows || []).find(r => statusAtivos.includes((r as Record<string,unknown>).status as string));
+    if (activeRow) {
+      osId = (activeRow as Record<string, unknown>).id as string;
+      break;
+    }
+  }
+
+  if (!osId) return null;
+
+  // Busca dados completos da OS pelo ID
+  const { data, error: osErr } = await sb
     .from('service_orders')
-    .select(`
-      id, client_name, equipment, status, status_oficina,
-      mechanic_id, entry_date, conclusion_date,
-      problem_description, satisfaction_survey_sent_at,
-      mechanics(name),
-      payments(amount, status),
-      materials(descricao, valor, quantidade)
-    `)
-    .or(filtrosOS.join(','))
-    .in('status', statusAtivos);
+    .select('id, client_name, client_id, equipment, status, entry_date')
+    .eq('id', osId)
+    .maybeSingle();
 
-  if (storeId) osQuery = osQuery.eq('store_id', storeId);
-
-  const { data } = await osQuery.order('entry_date', { ascending: false }).limit(1).maybeSingle();
+  console.log(`🔍 buscarOS full data osId="${osId}" → data=${JSON.stringify(data)} err=${JSON.stringify(osErr)}`);
 
   if (!data) return null;
 
   const row = data as Record<string, unknown>;
-  const mechObj = row.mechanics as { name?: string } | null;
+  const osId2 = row.id as string;
 
-  const payments = (row.payments as { amount: number; status: string }[]) || [];
-  const materials = (row.materials as { descricao: string; valor: number; quantidade: string }[]) || [];
-  const totalOS = materials.reduce((s, m) => s + ((m.valor || 0) * (parseFloat(m.quantidade) || 1)), 0);
-  const totalPago = payments.filter(p => p.status === 'paid').reduce((s, p) => s + (p.amount || 0), 0);
-  const totalPendente = totalOS > 0 ? Math.max(0, totalOS - totalPago) : 0;
+  // Busca total pago na tabela payments
+  const { data: paymentsData } = await sb
+    .from('payments')
+    .select('amount')
+    .eq('order_id', osId2);
+  const totalPago = ((paymentsData as { amount: number }[]) || [])
+    .reduce((s, p) => s + (p.amount || 0), 0);
 
   return {
-    id: row.id as string,
+    id: osId2,
     client_name: row.client_name as string,
     equipment: row.equipment as string | null,
     status: row.status as string | null,
-    status_oficina: row.status_oficina as string | null,
-    mechanic_id: row.mechanic_id as string | null,
-    mechanic_name: mechObj?.name || null,
+    status_oficina: null,
+    mechanic_id: row.client_id as string | null,
+    mechanic_name: null,
     entry_date: row.entry_date as string | null,
-    conclusion_date: row.conclusion_date as string | null,
-    problem_description: row.problem_description as string | null,
-    satisfaction_survey_sent_at: row.satisfaction_survey_sent_at as string | null,
-    aviso_retirada_enviado_em: row.aviso_retirada_enviado_em as string | null,
+    conclusion_date: null,
+    problem_description: null,
+    satisfaction_survey_sent_at: null,
+    aviso_retirada_enviado_em: null,
     total_pago: totalPago,
-    total_pendente: totalPendente,
-    materiais: materials.map(m => ({ descricao: m.descricao, valor: m.valor, quantidade: parseFloat(m.quantidade) || 1 })),
+    total_pendente: 0,
+    materiais: [],
   };
 }
 
@@ -247,54 +291,38 @@ export async function buscarOSPorNome(
   nome: string,
   storeId?: string
 ): Promise<OSRow[]> {
-  const palavras = nome.trim().split(/\s+/).filter((w) => w.length >= 3);
-  if (palavras.length === 0) return [];
-
-  const filtros = palavras.map((p) => `client_name.ilike.%${p}%`).join(',');
+  const nomeLimpo = nome.trim();
+  if (!nomeLimpo) return [];
 
   let query = sb
     .from('service_orders')
-    .select(`
-      id, client_name, equipment, status, status_oficina,
-      mechanic_id, entry_date, conclusion_date,
-      problem_description, satisfaction_survey_sent_at,
-      mechanics(name),
-      payments(amount, status),
-      materials(descricao, valor, quantidade)
-    `)
-    .or(filtros);
+    .select(`id, client_name, equipment, status, status_oficina, mechanic_id, entry_date, conclusion_date, problem_description, satisfaction_survey_sent_at`)
+    .ilike('client_name', `%${nomeLimpo}%`);
 
   if (storeId) query = query.eq('store_id', storeId);
 
-  const { data } = await query.order('entry_date', { ascending: false }).limit(3);
+  const { data, error: nomeErr } = await query.order('entry_date', { ascending: false }).limit(3);
+  console.log(`🔍 buscarOSPorNome nome="${nomeLimpo}" → data=${JSON.stringify(data)} err=${JSON.stringify(nomeErr)}`);
 
   if (!data) return [];
 
-  return (data as Record<string, unknown>[]).map((row) => {
-    const mechObj = row.mechanics as { name?: string } | null;
-    const payments = (row.payments as { amount: number; status: string }[]) || [];
-    const materials = (row.materials as { descricao: string; valor: number; quantidade: string }[]) || [];
-    const totalOS = materials.reduce((s, m) => s + ((m.valor || 0) * (parseFloat(m.quantidade) || 1)), 0);
-    const totalPago = payments.filter(p => p.status === 'paid').reduce((s, p) => s + (p.amount || 0), 0);
-    const totalPendente = totalOS > 0 ? Math.max(0, totalOS - totalPago) : 0;
-    return {
-      id: row.id as string,
-      client_name: row.client_name as string,
-      equipment: row.equipment as string | null,
-      status: row.status as string | null,
-      status_oficina: row.status_oficina as string | null,
-      mechanic_id: row.mechanic_id as string | null,
-      mechanic_name: mechObj?.name || null,
-      entry_date: row.entry_date as string | null,
-      conclusion_date: row.conclusion_date as string | null,
-      problem_description: row.problem_description as string | null,
-      satisfaction_survey_sent_at: row.satisfaction_survey_sent_at as string | null,
-      aviso_retirada_enviado_em: row.aviso_retirada_enviado_em as string | null,
-      total_pago: totalPago,
-      total_pendente: totalPendente,
-      materiais: materials.map(m => ({ descricao: m.descricao, valor: m.valor, quantidade: parseFloat(m.quantidade) || 1 })),
-    };
-  });
+  return (data as Record<string, unknown>[]).map((row) => ({
+    id: row.id as string,
+    client_name: row.client_name as string,
+    equipment: row.equipment as string | null,
+    status: row.status as string | null,
+    status_oficina: row.status_oficina as string | null,
+    mechanic_id: row.mechanic_id as string | null,
+    mechanic_name: null,
+    entry_date: row.entry_date as string | null,
+    conclusion_date: row.conclusion_date as string | null,
+    problem_description: row.problem_description as string | null,
+    satisfaction_survey_sent_at: row.satisfaction_survey_sent_at as string | null,
+    aviso_retirada_enviado_em: null,
+    total_pago: 0,
+    total_pendente: 0,
+    materiais: [],
+  }));
 }
 
 export async function buscarHistoricoOS(
@@ -529,24 +557,25 @@ export interface StoreInfo {
   ai_notes: string | null;
   ai_enabled: boolean | null;
   max_agendamentos_dia: number;
+  asaas_api_key: string | null;
+  boleto_notify_phone_1: string | null;
+  boleto_notify_phone_2: string | null;
 }
 
 export async function buscarStoreSettings(sb: SupabaseClient, storeId?: string): Promise<StoreInfo> {
-  const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN') || Deno.env.get('UAZAPI_TOKEN') || '';
-
   let query = sb
     .from('store_settings')
-    .select('id, company_name, store_address, store_phone, opening_hours, payment_methods, ai_notes, max_agendamentos_dia, google_maps_url');
+    .select('id, company_name, store_address, store_phone, opening_hours, payment_methods, ai_notes, max_agendamentos_dia, google_maps_url, asaas_api_key, boleto_notify_phone_1, boleto_notify_phone_2');
 
   if (storeId) {
     query = query.eq('id', storeId);
-  } else if (instanceToken) {
-    query = query.eq('whatsapp_instance_token', instanceToken);
   }
 
-  const { data } = await query.limit(1).maybeSingle();
+  const { data, error: storeErr } = await query.limit(1).maybeSingle();
 
-  const d = data as (StoreInfo & { max_agendamentos_dia?: number }) | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const d = data as Record<string, any> | null;
+  console.log(`🏪 buscarStoreSettings storeId=${storeId} → id=${d?.id} asaas_api_key=${d?.asaas_api_key ? 'OK' : 'NULL'} err=${storeErr?.message}`);
   return {
     id: d?.id || null,
     company_name: d?.company_name || 'Bandara Motos',
@@ -560,6 +589,9 @@ export async function buscarStoreSettings(sb: SupabaseClient, storeId?: string):
     ai_notes: d?.ai_notes || null,
     ai_enabled: null,
     max_agendamentos_dia: d?.max_agendamentos_dia ?? 10,
+    asaas_api_key: d?.asaas_api_key || null,
+    boleto_notify_phone_1: d?.boleto_notify_phone_1 || null,
+    boleto_notify_phone_2: d?.boleto_notify_phone_2 || null,
   };
 }
 

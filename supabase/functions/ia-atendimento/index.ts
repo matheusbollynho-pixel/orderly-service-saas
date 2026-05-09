@@ -314,7 +314,15 @@ async function executarFerramenta(
     }
 
     case 'consultar_os': {
-      const os = await buscarOSAtivaPorTelefone(sb, input.phone as string, storeId);
+      let os = await buscarOSAtivaPorTelefone(sb, input.phone as string, storeId);
+
+      // Fallback: se não achou pelo telefone mas temos o nome do cliente, busca pelo nome
+      if (!os && conversationContext.client_name) {
+        console.log(`📋 Fallback: buscando OS pelo nome "${conversationContext.client_name}"`);
+        const porNome = await buscarOSPorNome(sb, conversationContext.client_name, storeId);
+        if (porNome.length > 0) os = porNome[0] as unknown as typeof os;
+      }
+
       if (!os) return { encontrado: false };
       const statusTraduzido = STATUS_TRADUCAO[os.status || ''] || os.status;
       const itens = await buscarMateriaisOS(sb, os.id);
@@ -492,11 +500,13 @@ async function executarFerramenta(
           return { sucesso: false, erro: 'valor_minimo', mensagem: 'O valor mínimo para PIX é R$ 5,00. Para valores menores, o pagamento deve ser feito presencialmente.' };
         }
         const store = await buscarStoreSettings(sb, storeId);
-        const asaasApiKey = (store as Record<string, unknown>).asaas_api_key as string || '';
+        const asaasApiKey = store.asaas_api_key || '';
         if (!asaasApiKey) return { sucesso: false, erro: 'Chave Asaas não configurada' };
 
         const ASAAS_URL = 'https://api.asaas.com/v3';
-        const phoneClean = (input.client_phone as string || '').replace(/\D/g, '');
+        const phoneRaw = (input.client_phone as string || '').replace(/\D/g, '');
+        // Asaas espera DDD + número (sem 55): ex: 75988388629
+        const phoneClean = phoneRaw.startsWith('55') ? phoneRaw.slice(2) : phoneRaw;
 
         // Busca ou cria customer no Asaas
         let customerId: string | null = null;
@@ -543,7 +553,7 @@ async function executarFerramenta(
         const link = charge.invoiceUrl || pixInfo?.payload || null;
 
         // Salva payment_id na OS
-        await sb.from('service_orders').update({ asaas_payment_id: charge.id }).eq('id', input.os_id as string).catch(() => null);
+        try { await sb.from('service_orders').update({ asaas_payment_id: charge.id }).eq('id', input.os_id as string); } catch { /* ignora */ }
 
         return { sucesso: true, link, pix_copia_cola: pixInfo?.payload || null, valor: input.valor };
       } catch (e) {
@@ -581,28 +591,41 @@ async function chamarClaude(
   systemPrompt: string,
   messages: { role: 'user' | 'assistant'; content: string | unknown[] }[]
 ): Promise<{ content: unknown[]; stop_reason: string }> {
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: CLAUDE_MODEL,
-      max_tokens: 1024,
-      system: systemPrompt,
-      tools: TOOLS,
-      messages,
-    }),
-  });
+  const MAX_RETRIES = 3;
+  const RETRY_DELAYS = [3000, 8000, 15000]; // 3s, 8s, 15s
 
-  if (!response.ok) {
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: CLAUDE_MODEL,
+        max_tokens: 1024,
+        system: systemPrompt,
+        tools: TOOLS,
+        messages,
+      }),
+    });
+
+    if (response.ok) return response.json();
+
     const err = await response.text();
+
+    // 529 = overloaded, 529 e 503 podem ser retentados
+    if ((response.status === 529 || response.status === 503) && attempt < MAX_RETRIES) {
+      console.warn(`⚠️ Claude API ${response.status} (tentativa ${attempt + 1}/${MAX_RETRIES}), aguardando ${RETRY_DELAYS[attempt]}ms...`);
+      await new Promise(r => setTimeout(r, RETRY_DELAYS[attempt]));
+      continue;
+    }
+
     throw new Error(`Claude API error ${response.status}: ${err}`);
   }
 
-  return response.json();
+  throw new Error('Claude API: máximo de tentativas atingido');
 }
 
 // ============================================================
@@ -694,6 +717,9 @@ ${obs ? `- *Observações:* ${obs}` : ''}
 - Não tente resolver nada no estado "aguardando_humano"
 - Se o estado for "menu_apresentado", o cliente acabou de ver o menu de opções (1-Loja/Peças, 2-Oficina, 3-Agendamento, 4-Localização). Interprete a resposta dele e direcione para o módulo correto sem repetir o menu
 
+## CONSULTA AUTOMÁTICA DE OS
+Quando o cliente perguntar sobre valor, quanto ficou, o que foi feito, status da moto, se ficou pronta, ou qualquer variação disso — chame IMEDIATAMENTE consultar_os com o telefone do contexto. NÃO peça confirmação, NÃO pergunte se é isso, apenas chame a ferramenta diretamente.
+
 ## TRADUÇÕES DE STATUS DE OS
 - aberta → "acabou de entrar"
 - em_andamento → "em serviço"
@@ -768,7 +794,35 @@ Deno.serve(async (req) => {
     // UazAPI: mensagem em body.message, contato em body.chat
     const msg = (body.message || body.data || body) as Record<string, unknown>;
     const fromMe = (msg.fromMe ?? msg.from_me) as boolean;
-    if (fromMe) return new Response('ok', { status: 200 });
+
+    if (fromMe) {
+      // Mensagem enviada pelo dono manualmente → pausa a IA para essa conversa
+      const chat2 = (body.chat || {}) as Record<string, unknown>;
+      const rawPhone2 = ((chat2.wa_chatid || msg.chatid || msg.phone || msg.from || body.phone) as string || '');
+      const fromMePhone = rawPhone2.replace(/@.*$/, '').replace(/[^0-9]/g, '');
+      const textRaw2 = msg.content ?? (msg.text as Record<string,unknown>)?.message ?? msg.text ?? msg.body ?? body.text ?? '';
+      const fromMeText = (typeof textRaw2 === 'string' ? textRaw2 : '').trim();
+
+      if (fromMePhone) {
+        const sb2 = getSupabaseClient();
+        const { state: stateAtual, context: ctxAtual } = await getConversationState(sb2, fromMePhone);
+
+        // Verifica se é echo de mensagem da própria IA (última resposta no histórico)
+        const history2 = (ctxAtual.history as { role: string; text: string }[]) || [];
+        const ultimaIA = [...history2].reverse().find(h => h.role === 'assistant');
+        const ehEchoIA = ultimaIA && fromMeText && ultimaIA.text.slice(0, 60) === fromMeText.slice(0, 60);
+
+        if (!ehEchoIA && stateAtual !== 'aguardando_humano') {
+          console.log(`👤 Dono assumiu conversa com ${fromMePhone} — pausando IA por 2h`);
+          await saveConversationState(sb2, fromMePhone, 'aguardando_humano', {
+            ...ctxAtual,
+            escalada_motivo: 'Dono assumiu a conversa',
+            humano_assumiu_em: new Date().toISOString(),
+          });
+        }
+      }
+      return new Response('ok', { status: 200 });
+    }
 
     // Phone vem de body.chat.wa_chatid ou body.message.chatid ou body.phone
     const chat = (body.chat || {}) as Record<string, unknown>;
@@ -795,10 +849,6 @@ Deno.serve(async (req) => {
     let settingsQuery = sb.from('store_settings').select('ai_enabled, id');
     if (storeIdParam) {
       settingsQuery = settingsQuery.eq('id', storeIdParam);
-    } else {
-      // Fallback: identifica loja pelo token da instância UazAPI
-      const instanceToken = Deno.env.get('UAZAPI_INSTANCE_TOKEN') || '';
-      if (instanceToken) settingsQuery = settingsQuery.eq('whatsapp_instance_token', instanceToken);
     }
     const { data: settings } = await settingsQuery.limit(1).maybeSingle();
     // Usa o store_id resolvido para todas as queries subsequentes
@@ -812,18 +862,38 @@ Deno.serve(async (req) => {
     // ----------------------------------------------------------
     // 1. Carregar estado da conversa
     // ----------------------------------------------------------
-    const { state, context: convCtx } = await getConversationState(sb, phone);
+    const { state: stateRaw, context: convCtx } = await getConversationState(sb, phone);
+    let state = stateRaw;
     const ctx: ConversationContext = convCtx;
 
     // ----------------------------------------------------------
-    // 2. Se aguardando humano, não processar pela IA
+    // 2. Se aguardando humano, verificar se já passaram 2h (reativa IA se sim)
     // ----------------------------------------------------------
     if (state === 'aguardando_humano') {
-      await enviarMensagem(
-        normalizeBrPhone(phone),
-        '⏳ Seu atendimento está com nossa equipe. Em breve um atendente vai responder!'
-      );
-      return new Response(JSON.stringify({ ok: true, state: 'aguardando_humano' }), { status: 200 });
+      const assumiuEm = ctx.humano_assumiu_em;
+      if (assumiuEm) {
+        const diffHoras = (Date.now() - new Date(assumiuEm).getTime()) / (1000 * 60 * 60);
+        if (diffHoras >= 2) {
+          console.log(`🔄 IA reativada para ${phone} — ${diffHoras.toFixed(1)}h desde que dono assumiu`);
+          ctx.humano_assumiu_em = undefined;
+          ctx.escalada_motivo = undefined;
+          state = 'identificado';
+          await saveConversationState(sb, phone, 'identificado', ctx, resolvedStoreId);
+          // Não retorna — continua o fluxo normal abaixo
+        } else {
+          await enviarMensagem(
+            normalizeBrPhone(phone),
+            '⏳ Seu atendimento está com nossa equipe. Em breve um atendente vai responder!'
+          );
+          return new Response(JSON.stringify({ ok: true, state: 'aguardando_humano' }), { status: 200 });
+        }
+      } else {
+        await enviarMensagem(
+          normalizeBrPhone(phone),
+          '⏳ Seu atendimento está com nossa equipe. Em breve um atendente vai responder!'
+        );
+        return new Response(JSON.stringify({ ok: true, state: 'aguardando_humano' }), { status: 200 });
+      }
     }
 
     // (step 3 removido — agendamento criado diretamente pelo tool após confirmação via histórico)
@@ -881,6 +951,170 @@ Deno.serve(async (req) => {
       }
 
       if (aprovado || recusado) {
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
+    }
+
+    // ----------------------------------------------------------
+    // 5.3 Aguardando CPF para gerar PIX
+    // ----------------------------------------------------------
+    if (state === 'aguardando_cpf_pix') {
+      const cpfRaw = text.replace(/\D/g, '');
+      if (cpfRaw.length === 11) {
+        // Salva CPF no cliente — tenta pelo client_id do contexto ou pelo client_id da OS
+        let clientIdParaCpf = ctx.client_id || null;
+        if (!clientIdParaCpf && ctx.os_id) {
+          const { data: osRow } = await sb.from('service_orders').select('client_id').eq('id', ctx.os_id).maybeSingle();
+          clientIdParaCpf = (osRow as Record<string, unknown> | null)?.client_id as string | null;
+        }
+        if (clientIdParaCpf) {
+          await sb.from('clients').update({ cpf: cpfRaw }).eq('id', clientIdParaCpf).then(() => null).catch(() => null);
+          console.log(`💾 CPF salvo no cliente ${clientIdParaCpf}`);
+        }
+        // Retoma geração do PIX com CPF em mãos — injeta no contexto e força o texto como "via pix"
+        ctx.cpf_pix_temp = cpfRaw;
+        await saveConversationState(sb, phone, 'identificado', ctx, resolvedStoreId);
+        // Vai cair no intercept 5.4 com o CPF no contexto
+      } else {
+        const msgInvalido = `CPF inválido. Por favor, informe os 11 dígitos do CPF (só números).`;
+        await enviarMensagem(normalizeBrPhone(phone), msgInvalido);
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
+    }
+
+    // ----------------------------------------------------------
+    // 5.4 Intercept direto: cliente quer pagar via PIX e já temos OS em contexto
+    // ----------------------------------------------------------
+    const querPix = /\bpix\b|quero pagar|pagar agora|via pix|gerar pix|link.*pag|pag.*link/i.test(text) || state === 'aguardando_cpf_pix';
+    const osIdCtx = ctx.os_id;
+    const osValorPendente = ctx.os_total_pendente;
+
+    console.log(`💳 PIX check: querPix=${querPix} osIdCtx=${osIdCtx} osValorPendente=${osValorPendente}`);
+
+    if (querPix && osIdCtx && osValorPendente !== undefined && osValorPendente >= 5) {
+      // Interceptamos: NUNCA cair no Claude para PIX — respondemos diretamente com sucesso ou erro
+      const store2 = await buscarStoreSettings(sb, resolvedStoreId);
+      const clientName = ctx.client_name || 'Cliente';
+      const asaasApiKey = store2.asaas_api_key || Deno.env.get('ASAAS_API_KEY') || '';
+      console.log(`💳 asaasApiKey DB=${store2.asaas_api_key ? 'OK' : 'VAZIO'} ENV=${Deno.env.get('ASAAS_API_KEY') ? 'OK' : 'VAZIO'} resolvedStoreId=${resolvedStoreId}`);
+
+      if (!asaasApiKey) {
+        const msgErro = 'Não consegui gerar o PIX agora. Por favor, pague na retirada ou tente mais tarde 🙏';
+        await enviarMensagem(normalizeBrPhone(phone), msgErro);
+        ctx.history = [...(ctx.history || []), { role: 'user' as const, text }, { role: 'assistant' as const, text: msgErro }].slice(-16);
+        await saveConversationState(sb, phone, state, ctx, resolvedStoreId);
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      }
+
+      try {
+        const ASAAS_URL = 'https://api.asaas.com/v3';
+        const phoneRaw2 = phone.replace(/\D/g, '');
+        const phoneClean = phoneRaw2.startsWith('55') ? phoneRaw2.slice(2) : phoneRaw2;
+
+        // Busca CPF do cliente no banco (por id, telefone ou nome da OS)
+        let cpfCliente: string | null = ctx.cpf_pix_temp || null;
+        if (!cpfCliente && ctx.client_id) {
+          const { data: clientRow } = await sb.from('clients').select('cpf').eq('id', ctx.client_id).maybeSingle();
+          cpfCliente = (clientRow as Record<string, unknown> | null)?.cpf as string | null || null;
+        }
+        if (!cpfCliente) {
+          // Tenta pelo telefone
+          const clientByPhone = await buscarClientePorTelefone(sb, phone, resolvedStoreId);
+          cpfCliente = clientByPhone?.cpf || null;
+        }
+        if (!cpfCliente && osIdCtx) {
+          // Tenta pelo client_id da OS
+          const { data: osRow } = await sb.from('service_orders').select('client_id').eq('id', osIdCtx).maybeSingle();
+          const osClientId = (osRow as Record<string, unknown> | null)?.client_id as string | null;
+          if (osClientId) {
+            const { data: clientRow2 } = await sb.from('clients').select('cpf').eq('id', osClientId).maybeSingle();
+            cpfCliente = (clientRow2 as Record<string, unknown> | null)?.cpf as string | null || null;
+          }
+        }
+        console.log(`💳 CPF cliente: ${cpfCliente ? 'OK ('+cpfCliente.slice(0,3)+'...)' : 'não encontrado'} client_id=${ctx.client_id}`);
+
+        // Se não tem CPF, pede ao cliente e aguarda
+        if (!cpfCliente) {
+          const msgCpf = `Para gerar o PIX preciso do seu CPF. Pode me informar? 😊`;
+          await enviarMensagem(normalizeBrPhone(phone), msgCpf);
+          ctx.history = [...(ctx.history || []), { role: 'user' as const, text }, { role: 'assistant' as const, text: msgCpf }].slice(-16);
+          await saveConversationState(sb, phone, 'aguardando_cpf_pix', ctx, resolvedStoreId);
+          return new Response(JSON.stringify({ ok: true }), { status: 200 });
+        }
+
+        let customerId: string | null = null;
+        const foundResp = await fetch(`${ASAAS_URL}/customers?mobilePhone=${phoneClean}&limit=1`, {
+          headers: { 'access_token': asaasApiKey },
+        });
+        const found = await foundResp.json().catch(() => null);
+        console.log(`💳 Asaas busca cliente: ${foundResp.status} → ${JSON.stringify(found).slice(0, 150)}`);
+
+        if (found?.data?.length > 0) {
+          customerId = found.data[0].id;
+          // Atualiza CPF se não estava cadastrado no Asaas
+          if (cpfCliente && !found.data[0].cpfCnpj) {
+            await fetch(`${ASAAS_URL}/customers/${customerId}`, {
+              method: 'PUT',
+              headers: { 'access_token': asaasApiKey, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ cpfCnpj: cpfCliente }),
+            }).catch(() => null);
+          }
+        } else {
+          const customerPayload: Record<string, unknown> = { name: clientName, mobilePhone: phoneClean, externalReference: osIdCtx };
+          if (cpfCliente) customerPayload.cpfCnpj = cpfCliente;
+          const createdResp = await fetch(`${ASAAS_URL}/customers`, {
+            method: 'POST',
+            headers: { 'access_token': asaasApiKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify(customerPayload),
+          });
+          const created = await createdResp.json();
+          console.log(`💳 Asaas cria cliente: ${createdResp.status} → ${JSON.stringify(created).slice(0, 150)}`);
+          customerId = created?.id || null;
+        }
+
+        if (!customerId) throw new Error('Não foi possível criar/encontrar cliente no Asaas');
+
+        const today = new Date();
+        const dueDate = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+        const chargeResp = await fetch(`${ASAAS_URL}/payments`, {
+          method: 'POST',
+          headers: { 'access_token': asaasApiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customer: customerId, billingType: 'PIX', value: osValorPendente, dueDate, externalReference: osIdCtx }),
+        });
+        const charge = await chargeResp.json();
+        console.log(`💳 Asaas cria cobrança: ${chargeResp.status} → ${JSON.stringify(charge).slice(0, 200)}`);
+
+        if (!charge?.id) throw new Error(charge?.errors?.[0]?.description || 'Erro ao criar cobrança PIX');
+
+        const pixInfo = await fetch(`${ASAAS_URL}/payments/${charge.id}/pixQrCode`, {
+          headers: { 'access_token': asaasApiKey },
+        }).then(r => r.json()).catch(() => null);
+        console.log(`💳 Asaas PIX QR: ${JSON.stringify(pixInfo).slice(0, 150)}`);
+
+        try { await sb.from('service_orders').update({ asaas_payment_id: charge.id }).eq('id', osIdCtx); } catch { /* ignora */ }
+
+        const link = charge.invoiceUrl || null;
+        const pixCopiaECola = pixInfo?.payload || null;
+        let msg = `✅ PIX gerado!\n\n*Valor:* R$ ${osValorPendente.toFixed(2)}\n`;
+        if (link) msg += `*Link de pagamento:* ${link}\n`;
+        if (pixCopiaECola) msg += `\n_PIX Copia e Cola na próxima mensagem_ 👇`;
+        msg += `\n\nApós o pagamento sua OS será atualizada automaticamente 😊`;
+
+        await enviarMensagem(normalizeBrPhone(phone), msg);
+        if (pixCopiaECola) {
+          await enviarMensagem(normalizeBrPhone(phone), pixCopiaECola);
+        }
+        ctx.cpf_pix_temp = undefined; // limpa CPF temporário
+        ctx.history = [...(ctx.history || []), { role: 'user' as const, text }, { role: 'assistant' as const, text: msg }].slice(-16);
+        await saveConversationState(sb, phone, 'identificado', ctx, resolvedStoreId);
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+
+      } catch (pixErr) {
+        console.error('❌ Erro no intercept PIX:', pixErr);
+        const msgErro = `Tive um problema ao gerar o PIX agora 😕 Pode pagar na retirada ou tentar novamente em instantes.`;
+        await enviarMensagem(normalizeBrPhone(phone), msgErro);
+        ctx.history = [...(ctx.history || []), { role: 'user' as const, text }, { role: 'assistant' as const, text: msgErro }].slice(-16);
+        await saveConversationState(sb, phone, state, ctx, resolvedStoreId);
         return new Response(JSON.stringify({ ok: true }), { status: 200 });
       }
     }
@@ -984,6 +1218,16 @@ Deno.serve(async (req) => {
     let loopCount = 0;
     const MAX_LOOPS = 5;
 
+    // Dados de OS concluída para geração direta da resposta
+    let osConcluidaData: {
+      clientName: string;
+      equipment: string;
+      materiais: { descricao: string; valor: number; quantidade: number }[];
+      totalPendente: number;
+      totalPago: number;
+      osId: string;
+    } | null = null;
+
     while (loopCount < MAX_LOOPS) {
       loopCount++;
 
@@ -1059,6 +1303,19 @@ Deno.serve(async (req) => {
             if (osData.total_pago !== undefined) ctx.os_total_pago = osData.total_pago as number;
             if (osData.materiais) ctx.os_materiais = osData.materiais as unknown[];
             if (osData.id) ctx.os_id = osData.id as string;
+
+            // Capturar dados de OS concluída para geração direta da resposta
+            if (osData.status === 'concluida') {
+              const mats = (osData.materiais as { descricao: string; valor: number; quantidade: number }[]) || [];
+              osConcluidaData = {
+                clientName: (osData.client_name as string) || ctx.client_name || '',
+                equipment: (osData.equipment as string) || '',
+                materiais: mats,
+                totalPendente: (osData.total_pendente as number) || 0,
+                totalPago: (osData.total_pago as number) || 0,
+                osId: osData.id as string,
+              };
+            }
           }
 
           toolResults.push({
@@ -1075,6 +1332,39 @@ Deno.serve(async (req) => {
 
       // Outro stop_reason inesperado
       break;
+    }
+
+    // ----------------------------------------------------------
+    // 8.5 Override: OS concluída — gerar resposta diretamente sem depender do Claude
+    // ----------------------------------------------------------
+    if (osConcluidaData) {
+      const { clientName, equipment, materiais, totalPendente, totalPago } = osConcluidaData;
+      const apelido = ctx.apelido as string || clientName.split(' ')[0] || 'cliente';
+      let resposta = `Boa notícia, ${apelido}! A *${equipment || 'sua moto'}* está *pronta para retirada* ✅\n\n`;
+
+      if (materiais.length > 0) {
+        resposta += `*O que foi feito:*\n`;
+        for (const m of materiais) {
+          const subtotal = (m.valor || 0) * (m.quantidade || 1);
+          resposta += `• ${m.descricao}: R$ ${subtotal.toFixed(2)}\n`;
+        }
+        const totalGeral = totalPago + totalPendente;
+        resposta += `\n*Total: R$ ${totalGeral.toFixed(2)}*`;
+      }
+
+      if (totalPago > 0) {
+        resposta += `\n_Já recebido: R$ ${totalPago.toFixed(2)}_`;
+      }
+
+      if (totalPendente > 0) {
+        resposta += `\n\nAinda há *R$ ${totalPendente.toFixed(2)}* pendente.\nPrefere pagar via PIX agora ou na retirada?`;
+      } else if (totalPago > 0) {
+        resposta += `\n\n✅ Já está quitado! É só vir buscar 😊`;
+      } else {
+        resposta += `\n\nO pagamento é feito na retirada. Prefere adiantar via PIX?`;
+      }
+
+      finalResponse = resposta;
     }
 
     // ----------------------------------------------------------
