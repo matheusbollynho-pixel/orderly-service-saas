@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import {
   Loader2, Users, CheckCircle, XCircle, ChevronRight, ArrowLeft, Plus,
   Wifi, WifiOff, Pencil, Save, Calendar, DollarSign, AlertTriangle,
-  Ban, RefreshCw, Phone, Building2, CreditCard, FlaskConical, Bolt
+  Ban, RefreshCw, Phone, Building2, CreditCard, FlaskConical, Bolt, LogIn
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -136,6 +136,7 @@ export default function SuperAdminPage() {
   const [subStatus, setSubStatus] = useState('active');
   const [subAmount, setSubAmount] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [impersonating, setImpersonating] = useState(false);
 
   const [newClient, setNewClient] = useState({
     company_name: '',
@@ -223,6 +224,36 @@ export default function SuperAdminPage() {
 
     setClients(result);
     setLoading(false);
+  };
+
+  const entrarComoCliente = async () => {
+    if (!selected?.subscription?.owner_email) {
+      toast.error('Email do cliente não encontrado');
+      return;
+    }
+    setImpersonating(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-impersonate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ email: selected.subscription.owner_email }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.link) {
+        toast.error(data.error || 'Erro ao gerar link');
+        return;
+      }
+      window.open(data.link, '_blank');
+      toast.success('Link gerado — abra em aba anônima se precisar manter sua sessão');
+    } catch (e) {
+      toast.error('Erro: ' + String(e));
+    } finally {
+      setImpersonating(false);
+    }
   };
 
   const toggleActive = async (storeId: string, current: boolean | null) => {
@@ -474,6 +505,10 @@ export default function SuperAdminPage() {
                 <Badge className={selected.active !== false ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-red-500/20 text-red-300 border-red-500/30'}>
                   {selected.active !== false ? 'App ativo' : 'App inativo'}
                 </Badge>
+                <Button size="sm" variant="outline" onClick={entrarComoCliente} disabled={impersonating} className="gap-1 h-7 text-xs border-blue-500/50 text-blue-400 hover:bg-blue-500/10 mt-1">
+                  {impersonating ? <Loader2 className="h-3 w-3 animate-spin" /> : <LogIn className="h-3 w-3" />}
+                  Entrar como cliente
+                </Button>
               </div>
             </div>
           </CardHeader>
