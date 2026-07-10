@@ -161,6 +161,7 @@ export function OrderDetails({
     setDeliverySignatureData(order.delivery_signature_data ?? null);
     setTermsAccepted(order.terms_accepted ?? false);
     setEditedServicesTodo(order.problem_description || '');
+    setEditedPhone(order.client_phone || '');
     // Persistir a primeira assinatura se não existir
     if (!order.first_signature_data && order.signature_data) {
       setFirstSignatureData(order.signature_data);
@@ -173,7 +174,7 @@ export function OrderDetails({
       setFirstDeliverySignatureData(order.first_delivery_signature_data);
     }
     // Removido: não puxar aba 'materiais' automaticamente
-  }, [order.id, order.terms_accepted, order.signature_data, order.first_signature_data, order.delivery_signature_data, order.first_delivery_signature_data, order.problem_description]);
+  }, [order.id, order.terms_accepted, order.signature_data, order.first_signature_data, order.delivery_signature_data, order.first_delivery_signature_data, order.problem_description, order.client_phone]);
 
   // Função para atualizar termsAccepted e salvar no Supabase
   const handleTermsChange = (checked: boolean) => {
@@ -289,6 +290,26 @@ export function OrderDetails({
     setEditedServicesTodo(order.problem_description || '');
     setIsEditingServicesTodo(false);
   };
+
+  // Função para salvar o telefone corrigido do cliente
+  const handleSavePhone = () => {
+    const cleanPhone = editedPhone.replace(/\D/g, '');
+    if (order.client_id) {
+      updateClientById(order.client_id, { phone: cleanPhone });
+    }
+    if (onUpdateOrder && order.id) {
+      onUpdateOrder({ id: order.id, client_phone: cleanPhone });
+    }
+    setEditedPhone(cleanPhone);
+    setIsEditingPhone(false);
+    alert('✅ Telefone atualizado com sucesso!');
+  };
+
+  // Função para cancelar a edição do telefone
+  const handleCancelEditPhone = () => {
+    setEditedPhone(order.client_phone || '');
+    setIsEditingPhone(false);
+  };
   const [paymentForm, setPaymentForm] = useState<{ amount: string; discount_amount: string; method: PaymentMethod; notes: string; finalized_by_staff_id: string }>(() => ({
     amount: '',
     discount_amount: '',
@@ -316,6 +337,8 @@ export function OrderDetails({
   const [showFullClient, setShowFullClient] = useState(false);
   const [autorizaInstagram, setAutorizaInstagram] = useState(!!order.autoriza_instagram);
   const [autorizaLembretes, setAutorizaLembretes] = useState(order.autoriza_lembretes !== false ? true : false);
+  const [isEditingPhone, setIsEditingPhone] = useState(false);
+  const [editedPhone, setEditedPhone] = useState(order.client_phone || '');
   const stripExpressMarker = (text?: string | null) =>
     (text || '').replace(/serviço rápido \(cadastro express\)/i, '').replace(/cadastro express/gi, '').trim();
   const parseRetirada = (text?: string | null) => {
@@ -1686,14 +1709,54 @@ const renderDeliverySection = () => {
           
           <div className="flex items-start gap-3">
             <Phone className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-            <a 
-              href={`tel:${order.client_phone}`}
-              className="text-sm text-primary hover:underline"
-            >
-              {order.client_phone}
-            </a>
+            <div className="flex-1">
+              {!isEditingPhone ? (
+                <div className="flex items-center gap-2">
+                  <a
+                    href={`tel:${order.client_phone}`}
+                    className="text-sm text-primary hover:underline"
+                  >
+                    {order.client_phone}
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingPhone(true)}
+                    className="text-xs text-muted-foreground underline"
+                  >
+                    editar
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={editedPhone}
+                    onChange={(e) => setEditedPhone(e.target.value)}
+                    placeholder="(xx) xxxxx-xxxx"
+                    className="h-8 text-sm"
+                    autoFocus
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-green-600 hover:text-green-700"
+                    onClick={handleSavePhone}
+                    disabled={isUpdating}
+                  >
+                    <Save className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2"
+                    onClick={handleCancelEditPhone}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
-          
+
           {showFullClient && (
             <div className="flex items-start gap-3">
               <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
