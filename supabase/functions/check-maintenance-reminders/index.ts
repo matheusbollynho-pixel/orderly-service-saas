@@ -6,7 +6,14 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 );
 
+// Loja "dona" da instância global compartilhada (legado, pré multi-tenant).
+const LEGACY_DEFAULT_STORE_ID = '9fd27114-97d1-48cd-ad09-1b057fa9c185';
+
 async function processarLoja(storeId: string, companyName: string, wppConfig: StoreWhatsAppConfig) {
+  if (!wppConfig.instance_url && storeId !== LEGACY_DEFAULT_STORE_ID) {
+    console.log(`⏭️ Loja ${companyName} sem WhatsApp configurado — pulando lembretes de manutenção`);
+    return { store_id: storeId, enviados: 0, erros: 0 };
+  }
   const { data: dueReminders, error } = await supabase
     .from("maintenance_reminders")
     .select(`

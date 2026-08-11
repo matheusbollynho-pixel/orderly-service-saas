@@ -91,10 +91,14 @@ Deno.serve(async (req) => {
 
       // Modo: Carregar lista de atendentes para o QR da loja
       if (mode === 'store-metadata') {
-        console.log('🔍 Buscando staff members...')
+        const storeId = url.searchParams.get('store_id')
+        if (!storeId) return json({ success: false, message: 'store_id ausente' }, 400)
+
+        console.log('🔍 Buscando staff members da loja', storeId)
         const { data: staff_members, error: staffError } = await supabase
           .from('staff_members')
           .select('id, name, photo_url')
+          .eq('store_id', storeId)
           .order('name')
 
         console.log('📦 Staff members encontrados:', staff_members?.length || 0, 'Erro:', staffError)
@@ -102,6 +106,7 @@ Deno.serve(async (req) => {
         const { data: mechanics, error: mechanicsError } = await supabase
           .from('mechanics')
           .select('id, name')
+          .eq('store_id', storeId)
           .order('name')
 
         console.log('🔧 Mechanics encontrados:', mechanics?.length || 0, 'Erro:', mechanicsError)
@@ -118,7 +123,7 @@ Deno.serve(async (req) => {
 
       const { data: rating, error: ratingError } = await supabase
         .from('satisfaction_ratings')
-        .select('id, order_id, client_id, atendimento_id, mechanic_id, responded_at, atendimento_rating, servico_rating, comment, tags, recommends')
+        .select('id, store_id, order_id, client_id, atendimento_id, mechanic_id, responded_at, atendimento_rating, servico_rating, comment, tags, recommends')
         .eq('public_token', token)
         .limit(1)
 
@@ -127,6 +132,14 @@ Deno.serve(async (req) => {
       }
 
       const row = rating[0]
+
+      const { data: storeSettings } = row.store_id
+        ? await supabase
+            .from('store_settings')
+            .select('id, company_name, store_address, store_phone, store_instagram, instagram_url, google_maps_url, logo_url')
+            .eq('id', row.store_id)
+            .maybeSingle()
+        : { data: null }
 
       const { data: order } = row.order_id
         ? await supabase
@@ -194,12 +207,14 @@ Deno.serve(async (req) => {
         },
         order: {
           id: order?.id,
+          store_id: row.store_id,
           client_name: isWalkIn ? (client?.name || order?.client_name) : order?.client_name,
           equipment: isWalkIn ? 'Avaliação de balcão' : order?.equipment,
           problem_description: order?.problem_description,
           entry_date: order?.entry_date,
           client_phone: isWalkIn ? (client?.phone || order?.client_phone) : order?.client_phone,
         },
+        store: storeSettings || null,
         mechanic: mechanic || null,
         atendimento: atendimento || null,
       })

@@ -6,8 +6,17 @@ import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Moon, Star, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useStoreSettings } from '@/hooks/useStoreSettings';
 import { VEHICLE_CAP } from '@/lib/vehicleLabel';
+
+type PublicStoreInfo = {
+  company_name: string | null;
+  store_address: string | null;
+  store_phone: string | null;
+  store_instagram: string | null;
+  instagram_url: string | null;
+  google_maps_url: string | null;
+  logo_url: string | null;
+} | null;
 
 const BALCAO_POSITIVE_TAGS = ['Educação', 'Rapidez', 'Transparência', 'Simpatia', 'Agilidade'];
 const BALCAO_IMPROVEMENT_TAGS = ['Demora no balcão', 'Falta de Atenção', 'Falta de Informação', 'Não Entendia'];
@@ -90,7 +99,7 @@ function Stars({ value, onChange }: { value: number; onChange: (n: number) => vo
 
 export default function PublicSatisfactionPage() {
   const { token } = useParams();
-  const { settings: storeSettings } = useStoreSettings();
+  const [storeSettings, setStoreSettings] = useState<PublicStoreInfo>(null);
   const companyName = storeSettings?.company_name || import.meta.env.VITE_COMPANY_NAME || 'Minha Oficina';
   const logoUrl = import.meta.env.VITE_LOGO_PATH || '/bandara-logo.png';
   const [loading, setLoading] = useState(true);
@@ -183,6 +192,7 @@ export default function PublicSatisfactionPage() {
 
         console.log('✅ Dados carregados com sucesso');
         setOrder(data.order || null);
+        setStoreSettings(data.store || null);
         setMechanic(data.mechanic || null);
         setAtendimento(data.atendimento || null);
         setIsWalkIn(!!data.is_walk_in);
@@ -191,7 +201,7 @@ export default function PublicSatisfactionPage() {
         // Se é walk-in SEM atendente, carregar lista
         if (data.is_walk_in && !data.mechanic && !data.atendimento) {
           console.log('📋 Walk-in sem atendente, carregando lista...');
-          const metaRes = await fetch(`${supabaseUrl}/functions/v1/satisfaction-public?mode=store-metadata`);
+          const metaRes = await fetch(`${supabaseUrl}/functions/v1/satisfaction-public?mode=store-metadata&store_id=${encodeURIComponent(data.order?.store_id || '')}`);
           const metaData = await metaRes.json();
           console.log('📦 Metadata:', metaData);
           if (metaData?.success) {
