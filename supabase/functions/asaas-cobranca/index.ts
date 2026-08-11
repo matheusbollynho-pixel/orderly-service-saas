@@ -84,10 +84,18 @@ Deno.serve(async (req) => {
 
     if (!order_id) return json({ error: 'order_id obrigatorio' }, 400)
 
+    const { data: orderStoreRow } = await supabase
+      .from('service_orders')
+      .select('store_id')
+      .eq('id', order_id)
+      .maybeSingle()
+
+    if (!orderStoreRow?.store_id) return json({ error: 'OS nao encontrada' }, 404)
+
     const { data: settings } = await supabase
       .from('store_settings')
       .select('asaas_api_key, company_name')
-      .limit(1)
+      .eq('id', orderStoreRow.store_id)
       .maybeSingle()
 
     const apiKey: string = settings?.asaas_api_key ?? ''

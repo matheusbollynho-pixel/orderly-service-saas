@@ -71,15 +71,6 @@ Deno.serve(async (req) => {
 
     if (!fiado_id) return json({ error: 'fiado_id obrigatório' }, 400)
 
-    const { data: settings } = await sb
-      .from('store_settings')
-      .select('asaas_api_key, company_name')
-      .limit(1)
-      .maybeSingle()
-
-    const apiKey = settings?.asaas_api_key ?? ''
-    if (!apiKey) return json({ error: 'API Key do Asaas não configurada. Vá em Configurações → Loja.' }, 400)
-
     const { data: fiado, error } = await sb
       .from('fiados')
       .select('*')
@@ -87,6 +78,15 @@ Deno.serve(async (req) => {
       .single()
 
     if (error || !fiado) return json({ error: 'Fiado não encontrado' }, 404)
+
+    const { data: settings } = await sb
+      .from('store_settings')
+      .select('asaas_api_key, company_name')
+      .eq('id', fiado.store_id)
+      .maybeSingle()
+
+    const apiKey = settings?.asaas_api_key ?? ''
+    if (!apiKey) return json({ error: 'API Key do Asaas não configurada. Vá em Configurações → Loja.' }, 400)
 
     const balance = Math.max(
       (fiado.original_amount || 0) + (fiado.interest_accrued || 0) - (fiado.amount_paid || 0),
