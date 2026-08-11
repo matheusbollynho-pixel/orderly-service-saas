@@ -1,5 +1,9 @@
-import { sendWhatsAppText, normalizeBrPhone } from '../_shared/whatsapp.ts'
+import { sendWhatsAppText, normalizeBrPhone, type StoreWhatsAppConfig } from '../_shared/whatsapp.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+// Loja "dona" da instância global compartilhada (legado, pré multi-tenant).
+// Só ela pode enviar sem instância própria configurada.
+const LEGACY_DEFAULT_STORE_ID = '9fd27114-97d1-48cd-ad09-1b057fa9c185'
 
 const SHIFT_LABELS: Record<string, string> = {
   manha: 'Manhã',
@@ -26,16 +30,34 @@ Qualquer dúvida, é só chamar. Te esperamos! 😊
 
 *{{empresa}}* 🏍️🔧`
 
-async function loadSettings(): Promise<{ company_name: string; template: string }> {
+async function loadSettings(storeId?: string): Promise<{
+  company_name: string
+  template: string
+  hasOwnInstance: boolean
+  wppConfig: StoreWhatsAppConfig
+}> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL') || ''
   const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
-  if (!supabaseUrl || !supabaseKey) return { company_name: 'Minha Oficina', template: DEFAULT_TEMPLATE }
+  if (!supabaseUrl || !supabaseKey) {
+    return { company_name: 'Minha Oficina', template: DEFAULT_TEMPLATE, hasOwnInstance: false, wppConfig: {} }
+  }
 
   const client = createClient(supabaseUrl, supabaseKey)
-  const { data } = await client.from('store_settings').select('company_name, whatsapp_confirmation_template').limit(1).maybeSingle()
+  let query = client
+    .from('store_settings')
+    .select('id, company_name, whatsapp_confirmation_template, whatsapp_provider, whatsapp_instance_url, whatsapp_instance_token')
+  if (storeId) query = query.eq('id', storeId)
+  const { data } = await query.limit(1).maybeSingle()
+
   return {
     company_name: data?.company_name || 'Minha Oficina',
     template: data?.whatsapp_confirmation_template || DEFAULT_TEMPLATE,
+    hasOwnInstance: !!data?.whatsapp_instance_url || data?.id === LEGACY_DEFAULT_STORE_ID,
+    wppConfig: {
+      provider: data?.whatsapp_provider || undefined,
+      instance_url: data?.whatsapp_instance_url || undefined,
+      instance_token: data?.whatsapp_instance_token || undefined,
+    },
   }
 }
 
@@ -72,7 +94,7 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json()
-    const { client_name, client_phone, appointment_date, shift, equipment, service_description } = body
+    const { client_name, client_phone, appointment_date, shift, equipment, service_description, store_id } = body
 
     if (!client_phone) {
       return new Response(
@@ -82,10 +104,19 @@ Deno.serve(async (req) => {
     }
 
     const phone = normalizeBrPhone(client_phone)
-    const { company_name, template } = await loadSettings()
+    const { company_name, template, hasOwnInstance, wppConfig } = await loadSettings(store_id)
+
+    if (!hasOwnInstance) {
+      console.log(`⏭️ Loja ${store_id || '(sem id)'} sem WhatsApp configurado — confirmação não enviada`)
+      return new Response(
+        JSON.stringify({ success: false, error: 'WhatsApp não configurado para esta loja' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     const message = buildMessage({ client_name, appointment_date, shift, equipment, service_description, company_name, template })
 
-    await sendWhatsAppText(phone, message)
+    await sendWhatsAppText(phone, message, wppConfig)
 
     console.log(`✅ Confirmação enviada para ${phone}`)
 

@@ -26,6 +26,37 @@ function sanitizeFileName(fileName: string): string {
     .replace(/[^a-zA-Z0-9_.-]/g, '');
   return safe || 'documento.pdf';
 }
+
+let cachedStoreId: string | null | undefined;
+
+// Resolve a loja do usuário logado quando quem chamou não informou store_id
+// explicitamente — garante que TODO envio (mesmo pontos antigos que não
+// passavam store_id) seja checado contra a config da própria loja, em vez
+// de cair silenciosamente na instância global (Bandara Motos).
+async function resolveCurrentStoreId(): Promise<string | undefined> {
+  if (cachedStoreId !== undefined) return cachedStoreId ?? undefined;
+  try {
+    const supabase = getSupabase();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { cachedStoreId = null; return undefined; }
+    const { data } = await supabase
+      .from('store_members')
+      .select('store_id')
+      .eq('user_id', user.id)
+      .eq('active', true)
+      .maybeSingle();
+    cachedStoreId = data?.store_id ?? null;
+    return cachedStoreId ?? undefined;
+  } catch {
+    cachedStoreId = null;
+    return undefined;
+  }
+}
+
+function openWaMeFallback(phone: string, text: string) {
+  const waPhone = phone.startsWith('55') ? phone : `55${phone}`;
+  window.open(`https://wa.me/${waPhone}?text=${encodeURIComponent(text)}`, '_blank');
+}
 async function callEdgeFunction(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
   const supabase = getSupabase();
   const {
@@ -88,13 +119,15 @@ export async function sendWhatsApp(opts: SendWhatsAppOptions) {
   if (!to) throw new Error('Campo "to" é obrigatório');
   if (!message && !fileUrl) throw new Error('É necessário enviar "message" ou "fileUrl"');
 
+  const resolvedStoreId = store_id ?? await resolveCurrentStoreId();
+
   const payload: Record<string, unknown> = { to };
   if (message) payload.message = message;
   if (fileUrl) {
     payload.fileUrl = fileUrl;
     if (caption) payload.caption = caption;
   }
-  if (store_id) payload.store_id = store_id;
+  if (resolvedStoreId) payload.store_id = resolvedStoreId;
 
   return callEdgeFunction(payload);
 }
@@ -104,8 +137,20 @@ export async function sendWhatsAppText(params: { phone: string; text: string; st
   if (!phone) throw new Error('Telefone do cliente inválido.');
   if (!params.text?.trim()) throw new Error('Texto da mensagem é obrigatório.');
 
-  const res = await callEdgeFunction({ to: phone, message: params.text, ...(params.store_id ? { store_id: params.store_id } : {}) });
-  return !!res;
+  const storeId = params.store_id ?? await resolveCurrentStoreId();
+
+  try {
+    const res = await callEdgeFunction({ to: phone, message: params.text, ...(storeId ? { store_id: storeId } : {}) });
+    // Loja sem instância própria configurada — abre WhatsApp Web pro usuário mandar na mão
+    if ((res as { success?: boolean }).success === false) {
+      openWaMeFallback(phone, params.text);
+      return true;
+    }
+    return !!res;
+  } catch {
+    openWaMeFallback(phone, params.text);
+    return true;
+  }
 }
 
 export async function sendWhatsAppDocument(params: {
@@ -120,26 +165,23 @@ export async function sendWhatsAppDocument(params: {
 
   const caption = params.caption || 'Ordem de Serviço';
   const safeFileName = sanitizeFileName(params.fileName);
+  const storeId = params.store_id ?? await resolveCurrentStoreId();
 
   // Fazer upload para Storage primeiro (necessário para ambos os caminhos)
   const fileUrl = await uploadBase64PdfToSupabaseStorage(params.base64, safeFileName);
 
   // Tenta enviar via API da loja
   try {
-    const res = await callEdgeFunction({ to: phone, fileUrl, caption, fileName: safeFileName, ...(params.store_id ? { store_id: params.store_id } : {}) });
+    const res = await callEdgeFunction({ to: phone, fileUrl, caption, fileName: safeFileName, ...(storeId ? { store_id: storeId } : {}) });
     // Se API retornou sucesso=false (sem WhatsApp configurado), abre wa.me
     if ((res as { success?: boolean }).success === false) {
-      const msg = encodeURIComponent(`${caption}\n\n📄 PDF: ${fileUrl}`);
-      const waPhone = phone.startsWith('55') ? phone : `55${phone}`;
-      window.open(`https://wa.me/${waPhone}?text=${msg}`, '_blank');
+      openWaMeFallback(phone, `${caption}\n\n📄 PDF: ${fileUrl}`);
       return true;
     }
     return !!res;
   } catch {
     // Fallback: abre WhatsApp Web com link do PDF
-    const msg = encodeURIComponent(`${caption}\n\n📄 PDF: ${fileUrl}`);
-    const waPhone = phone.startsWith('55') ? phone : `55${phone}`;
-    window.open(`https://wa.me/${waPhone}?text=${msg}`, '_blank');
+    openWaMeFallback(phone, `${caption}\n\n📄 PDF: ${fileUrl}`);
     return true;
   }
 }

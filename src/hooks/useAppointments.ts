@@ -90,6 +90,7 @@ export function useAppointments(startDate?: string, endDate?: string) {
             shift: appt.shift,
             equipment: appt.equipment,
             service_description: appt.service_description,
+            store_id: appt.store_id,
           },
         }).then(({ error }) => {
           if (error) console.error('Erro ao enviar confirmação WhatsApp:', error);

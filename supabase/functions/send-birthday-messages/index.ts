@@ -73,7 +73,15 @@ REGRAS:
   }
 }
 
+// Loja "dona" da instância global compartilhada (legado, pré multi-tenant).
+const LEGACY_DEFAULT_STORE_ID = '9fd27114-97d1-48cd-ad09-1b057fa9c185'
+
 async function processarLoja(store: { id: string; company_name: string; whatsapp_birthday_template: string | null; whatsapp_provider: string | null; whatsapp_instance_url: string | null; whatsapp_instance_token: string | null }) {
+  if (!store.whatsapp_instance_url && store.id !== LEGACY_DEFAULT_STORE_ID) {
+    console.log(`⏭️ Loja ${store.company_name} sem WhatsApp configurado — pulando aniversários`)
+    return { store_id: store.id, enviados: 0 }
+  }
+
   const wppConfig: StoreWhatsAppConfig = {
     provider: store.whatsapp_provider || undefined,
     instance_url: store.whatsapp_instance_url || undefined,

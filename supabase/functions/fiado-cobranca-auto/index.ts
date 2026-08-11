@@ -15,6 +15,9 @@ const sb = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 )
 
+// Loja "dona" da instância global compartilhada (legado, pré multi-tenant).
+const LEGACY_DEFAULT_STORE_ID = '9fd27114-97d1-48cd-ad09-1b057fa9c185'
+
 function calcDaysOverdue(dueDateStr: string): number {
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const [y, m, d] = dueDateStr.split('-').map(Number)
@@ -176,7 +179,12 @@ async function processarFiados(): Promise<void> {
       await sb.from('fiado_messages').insert([{ store_id: fiado.store_id, fiado_id: fiado.id, level, message, status: 'sent' }])
       await sb.from('fiados').update({ last_reminder_level: level, last_reminder_at: now }).eq('id', fiado.id)
 
-      if (fiado.client_phone) {
+      const semInstanciaPropria = !store?.whatsapp_instance_url && fiado.store_id !== LEGACY_DEFAULT_STORE_ID
+      if (semInstanciaPropria) {
+        console.log(`⏭️ Loja ${storeName} sem WhatsApp configurado — cobrança de ${fiado.client_name} não enviada`)
+      }
+
+      if (fiado.client_phone && !semInstanciaPropria) {
         const phone = (fiado.client_phone as string).replace(/\D/g, '')
         if (phone.length >= 10) {
           try {
