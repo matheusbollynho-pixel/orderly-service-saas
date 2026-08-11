@@ -12,6 +12,34 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, X-Requested-With, Authorization',
 };
 
+const supabaseAdmin = createClient(
+  Deno.env.get('SUPABASE_URL') || '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+);
+
+// Loja "dona" da instância global (compartilhada, sem whatsapp_instance_url
+// próprio) — só existe pra manter compatibilidade com a Bandara Motos, que
+// foi criada antes do sistema virar multi-tenant. Toda loja nova deve ter
+// whatsapp_instance_url próprio configurado no SuperAdmin.
+const LEGACY_DEFAULT_STORE_ID = '9fd27114-97d1-48cd-ad09-1b057fa9c185';
+
+// Resolve qual loja é dona da instância UazAPI que mandou esse webhook,
+// usando o BaseUrl (único por instância) — evita depender de configurar
+// uma URL de webhook diferente por cliente na UazAPI.
+async function resolveStoreIdFromBaseUrl(baseUrl: string | undefined): Promise<string> {
+  if (baseUrl) {
+    const clean = baseUrl.replace(/\/$/, '');
+    const { data } = await supabaseAdmin
+      .from('store_settings')
+      .select('id')
+      .eq('whatsapp_instance_url', clean)
+      .maybeSingle();
+    if (data?.id) return data.id as string;
+    console.warn(`⚠️ Nenhuma loja com whatsapp_instance_url="${clean}" — usando fallback legado`);
+  }
+  return LEGACY_DEFAULT_STORE_ID;
+}
+
 // Extrai o número de telefone limpo (apenas dígitos) do remoteJid
 function extractPhone(remoteJid: string): string | null {
   if (!remoteJid) return null;
@@ -176,10 +204,30 @@ Deno.serve(async (req) => {
       messageId = (body.id as string) || null;
     }
 
-    // Ignorar mensagens enviadas pelo próprio sistema
+    // Resolve a loja dona dessa instância UazAPI ANTES de qualquer encaminhamento
+    const resolvedStoreId = await resolveStoreIdFromBaseUrl(body.BaseUrl as string | undefined);
+
+    // Mensagem enviada pelo atendente → encaminhar para ia-atendimento pausar o bot
     if (fromMe) {
-      console.log('⏭️ Mensagem própria ignorada (fromMe=true)');
-      return new Response(JSON.stringify({ received: true, ignored: 'fromMe' }), {
+      const supabaseUrlFm = Deno.env.get('SUPABASE_URL') || '';
+      const serviceKeyFm = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+      if (phone && phone.length >= 10 && supabaseUrlFm) {
+        fetch(`${supabaseUrlFm}/functions/v1/ia-atendimento?store_id=${resolvedStoreId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${serviceKeyFm}`,
+          },
+          body: JSON.stringify({
+            phone,
+            text: text?.trim() || '',
+            sender_name: senderName,
+            fromMe: true,
+          }),
+        }).catch((err) => console.error('❌ Erro ao chamar ia-atendimento (fromMe):', err));
+        console.log(`⏸️ Atendente assumiu conversa com ${phone} — IA será pausada`);
+      }
+      return new Response(JSON.stringify({ received: true, handled: 'fromMe_forwarded' }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -234,7 +282,7 @@ Deno.serve(async (req) => {
     console.log(`📱 Mensagem de ${phone} (${senderName}): "${text.slice(0, 100)}"`);
 
     // Chamar ia-atendimento em background (fire-and-forget) para retornar 200 imediatamente
-    fetch(`${supabaseUrl}/functions/v1/ia-atendimento`, {
+    fetch(`${supabaseUrl}/functions/v1/ia-atendimento?store_id=${resolvedStoreId}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

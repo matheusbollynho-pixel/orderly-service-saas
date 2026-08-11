@@ -5,6 +5,7 @@
  * quando enviar a próxima mensagem (next_reminder_at).
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { logAiUsage } from '../_shared/aiUsage.ts'
 
 const sb = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -110,6 +111,7 @@ Responda APENAS com JSON válido, sem texto extra:
 
     try {
       const raw = await askClaude(prompt)
+      await logAiUsage(sb, fiado.store_id as string | undefined, 'fiado-ia-agenda')
       const match = raw.match(/\{[\s\S]*?\}/)
       if (match) {
         const parsed = JSON.parse(match[0])

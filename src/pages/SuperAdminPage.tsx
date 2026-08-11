@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import {
   Loader2, Users, CheckCircle, XCircle, ChevronRight, ArrowLeft, Plus,
   Wifi, WifiOff, Pencil, Save, Calendar, DollarSign, AlertTriangle,
-  Ban, RefreshCw, Phone, Building2, CreditCard, FlaskConical, Bolt, LogIn
+  Ban, RefreshCw, Phone, Building2, CreditCard, FlaskConical, Bolt, LogIn, Cpu
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -43,6 +43,7 @@ interface StoreClient {
   whatsapp_provider: string | null;
   subscription: Subscription | null;
   custom_features: string[] | null;
+  ai_usage_month: number;
 }
 
 const ALL_FEATURES = [
@@ -77,6 +78,15 @@ const PLAN_LABELS: Record<string, string> = {
   basic: 'Básico',
   pro: 'Profissional',
   premium: 'Premium',
+};
+
+// Chamadas de IA incluídas por mês, por plano — ajustar conforme o custo real for conhecido
+const AI_PLAN_LIMITS: Record<string, number> = {
+  trial: 50,
+  basic: 100,
+  pro: 500,
+  premium: 2000,
+  enterprise: Infinity,
 };
 
 const PLAN_COLORS: Record<string, string> = {
@@ -208,6 +218,18 @@ export default function SuperAdminPage() {
       if (s.store_id && !subsByStore[s.store_id]) subsByStore[s.store_id] = s;
     });
 
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    const { data: aiUsage } = await sb
+      .from('ai_usage_log')
+      .select('store_id')
+      .gte('created_at', startOfMonth.toISOString());
+    const aiUsageByStore: Record<string, number> = {};
+    (aiUsage || []).forEach((r: any) => {
+      aiUsageByStore[r.store_id] = (aiUsageByStore[r.store_id] || 0) + 1;
+    });
+
     const result: StoreClient[] = stores.map((s: any) => ({
       store_id: s.id,
       company_name: s.company_name,
@@ -220,6 +242,7 @@ export default function SuperAdminPage() {
       whatsapp_provider: s.whatsapp_provider,
       custom_features: s.custom_features ?? null,
       subscription: subsByStore[s.id] ?? null,
+      ai_usage_month: aiUsageByStore[s.id] || 0,
     }));
 
     setClients(result);
@@ -646,6 +669,41 @@ export default function SuperAdminPage() {
                 {PLAN_LABELS[selected.plan ?? 'basic'] ?? selected.plan}
               </Badge>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Uso de IA */}
+        <Card className="glass-card border-border/50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Cpu className="h-4 w-4" /> Uso de IA (este mês)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {(() => {
+              const limit = AI_PLAN_LIMITS[selected.plan ?? 'basic'] ?? AI_PLAN_LIMITS.basic;
+              const used = selected.ai_usage_month;
+              const pct = limit === Infinity ? 0 : Math.min(100, Math.round((used / limit) * 100));
+              const over = limit !== Infinity && used > limit;
+              return (
+                <div className="space-y-1.5">
+                  <div className="flex items-baseline justify-between">
+                    <span className={`text-lg font-semibold ${over ? 'text-red-400' : 'text-foreground'}`}>
+                      {used} {limit !== Infinity && <span className="text-sm text-muted-foreground font-normal">/ {limit} chamadas incluídas</span>}
+                    </span>
+                    {limit === Infinity && <span className="text-xs text-muted-foreground">sem limite (enterprise)</span>}
+                  </div>
+                  {limit !== Infinity && (
+                    <div className="h-1.5 rounded-full bg-muted/40 overflow-hidden">
+                      <div className={`h-full ${over ? 'bg-red-500' : 'bg-primary'}`} style={{ width: `${pct}%` }} />
+                    </div>
+                  )}
+                  {over && (
+                    <p className="text-xs text-red-400">Passou do incluído no plano — considere cobrar excedente ou sugerir upgrade.</p>
+                  )}
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
 

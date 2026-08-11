@@ -1,3 +1,6 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { logAiUsage } from '../_shared/aiUsage.ts'
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -9,12 +12,34 @@ function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: CORS_HEADERS })
 }
 
+const supabaseAdmin = createClient(
+  Deno.env.get('SUPABASE_URL')!,
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+)
+
+async function resolveStoreId(req: Request): Promise<string | null> {
+  const authHeader = req.headers.get('Authorization')
+  if (!authHeader) return null
+  const token = authHeader.replace('Bearer ', '')
+  const { data: userData } = await supabaseAdmin.auth.getUser(token)
+  if (!userData?.user) return null
+  const { data: member } = await supabaseAdmin
+    .from('store_members')
+    .select('store_id')
+    .eq('user_id', userData.user.id)
+    .eq('active', true)
+    .maybeSingle()
+  return member?.store_id ?? null
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS_HEADERS })
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
 
   const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY')
   if (!ANTHROPIC_API_KEY) return json({ error: 'ANTHROPIC_API_KEY não configurada' }, 500)
+
+  const storeId = await resolveStoreId(req)
 
   let description: string
   try {
@@ -84,6 +109,8 @@ Regras:
       console.error('Anthropic error:', err)
       return json({ error: 'Erro ao chamar Claude API' }, 502)
     }
+
+    await logAiUsage(supabaseAdmin, storeId, 'ai-fill-product')
 
     const result = await response.json()
     const text = result.content?.[0]?.text ?? ''

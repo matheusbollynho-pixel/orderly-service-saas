@@ -104,8 +104,7 @@ export async function saveConversationState(
     { phone, state, context, store_id: resolvedStoreId, updated_at: new Date().toISOString() },
     { onConflict: 'phone' }
   );
-  if (error) console.error(`❌ saveConversationState error (phone=${phone}, state=${state}, store_id=${resolvedStoreId}):`, error.message, error.details, error.hint);
-  else console.log(`✅ saveConversationState OK (phone=${phone}, state=${state})`);
+  if (error) console.error(`❌ saveConversationState error (state=${state}):`, error.message, error.hint);
 }
 
 export async function clearConversationState(sb: SupabaseClient, phone: string): Promise<void> {
@@ -148,8 +147,6 @@ export async function buscarClientePorTelefone(
     `phone.ilike.%${ultimos8}%`,
   ];
 
-  console.log(`🔍 buscarCliente: sem55=${sem55} sem9=${sem9} ultimos8=${ultimos8}`);
-
   let query = sb
     .from('clients')
     .select('id, name, apelido, phone, cpf, autoriza_lembretes')
@@ -159,7 +156,7 @@ export async function buscarClientePorTelefone(
 
   const { data, error } = await query.limit(1).maybeSingle();
 
-  console.log(`🔍 buscarCliente resultado: name=${(data as ClienteRow | null)?.name} phone=${(data as ClienteRow | null)?.phone} error=${error?.message}`);
+  if (error) console.error('❌ buscarCliente error:', error.message);
   return data as ClienteRow | null;
 }
 
@@ -235,7 +232,7 @@ export async function buscarOSAtivaPorTelefone(
       .eq('client_phone', variant);
     if (storeId) idQuery = idQuery.eq('store_id', storeId);
     const { data: idRows, error: idErr } = await idQuery.order('entry_date', { ascending: false }).limit(5);
-    console.log(`🔍 buscarOS variant="${variant}" storeId="${storeId}" → rows=${JSON.stringify(idRows)} err=${JSON.stringify(idErr)}`);
+    if (idErr) console.error('❌ buscarOS query error:', idErr.message);
     const activeRow = (idRows || []).find(r => statusAtivos.includes((r as Record<string,unknown>).status as string));
     if (activeRow) {
       osId = (activeRow as Record<string, unknown>).id as string;
@@ -252,8 +249,7 @@ export async function buscarOSAtivaPorTelefone(
     .eq('id', osId)
     .maybeSingle();
 
-  console.log(`🔍 buscarOS full data osId="${osId}" → data=${JSON.stringify(data)} err=${JSON.stringify(osErr)}`);
-
+  if (osErr) console.error('❌ buscarOS full data error:', osErr.message);
   if (!data) return null;
 
   const row = data as Record<string, unknown>;
@@ -302,7 +298,7 @@ export async function buscarOSPorNome(
   if (storeId) query = query.eq('store_id', storeId);
 
   const { data, error: nomeErr } = await query.order('entry_date', { ascending: false }).limit(3);
-  console.log(`🔍 buscarOSPorNome nome="${nomeLimpo}" → data=${JSON.stringify(data)} err=${JSON.stringify(nomeErr)}`);
+  if (nomeErr) console.error('❌ buscarOSPorNome error:', nomeErr.message);
 
   if (!data) return [];
 
@@ -575,7 +571,7 @@ export async function buscarStoreSettings(sb: SupabaseClient, storeId?: string):
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const d = data as Record<string, any> | null;
-  console.log(`🏪 buscarStoreSettings storeId=${storeId} → id=${d?.id} asaas_api_key=${d?.asaas_api_key ? 'OK' : 'NULL'} err=${storeErr?.message}`);
+  if (storeErr) console.error('❌ buscarStoreSettings error:', storeErr.message);
   return {
     id: d?.id || null,
     company_name: d?.company_name || 'Bandara Motos',

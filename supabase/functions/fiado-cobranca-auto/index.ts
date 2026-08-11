@@ -8,6 +8,7 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { sendWhatsAppText, normalizeBrPhone } from '../_shared/whatsapp.ts'
+import { logAiUsage } from '../_shared/aiUsage.ts'
 
 const sb = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -71,6 +72,8 @@ Responda APENAS JSON: {"next_date":"YYYY-MM-DD","next_level":1,"reason":"frase c
     headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 200, messages: [{ role: 'user', content: prompt }] }),
   })
+  await logAiUsage(sb, fiado.store_id as string | undefined, 'fiado-cobranca-auto')
+
   const data = await res.json()
   const text = data.content?.[0]?.text || ''
   const match = text.match(/\{[\s\S]*?\}/)
@@ -88,8 +91,10 @@ async function processarFiados(): Promise<void> {
 
   console.log(`📅 fiado-cobranca-auto: ${today}`)
 
-  const { data: settings } = await sb.from('store_settings').select('company_name').limit(1).maybeSingle()
-  const storeName = settings?.company_name || 'Bandara Motos'
+  const { data: allStores } = await sb
+    .from('store_settings')
+    .select('id, company_name, whatsapp_provider, whatsapp_instance_url, whatsapp_instance_token')
+  const storesById = new Map((allStores || []).map(s => [s.id, s]))
 
   // Fiados que a IA agendou para agora
   const { data: agendados } = await sb
@@ -118,6 +123,9 @@ async function processarFiados(): Promise<void> {
 
   for (const fiado of fiados) {
     try {
+      const store = storesById.get(fiado.store_id as string)
+      const storeName = store?.company_name || 'Sua Oficina'
+
       const daysOverdue = calcDaysOverdue(fiado.due_date)
       if (daysOverdue <= 0) {
         // Ainda não venceu — limpar next_reminder_at se veio errado
@@ -165,14 +173,18 @@ async function processarFiados(): Promise<void> {
 
       const message = (messages[level] || messages[1]) + linkSuffix
 
-      await sb.from('fiado_messages').insert([{ fiado_id: fiado.id, level, message, status: 'sent' }])
+      await sb.from('fiado_messages').insert([{ store_id: fiado.store_id, fiado_id: fiado.id, level, message, status: 'sent' }])
       await sb.from('fiados').update({ last_reminder_level: level, last_reminder_at: now }).eq('id', fiado.id)
 
       if (fiado.client_phone) {
         const phone = (fiado.client_phone as string).replace(/\D/g, '')
         if (phone.length >= 10) {
           try {
-            await sendWhatsAppText(normalizeBrPhone(phone), message)
+            await sendWhatsAppText(normalizeBrPhone(phone), message, {
+              provider: store?.whatsapp_provider,
+              instance_url: store?.whatsapp_instance_url,
+              instance_token: store?.whatsapp_instance_token,
+            })
             console.log(`✅ Nível ${level} enviado para ${fiado.client_name}`)
             enviados++
           } catch (wErr) {

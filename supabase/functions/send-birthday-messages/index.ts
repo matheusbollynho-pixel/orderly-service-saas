@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { sendWhatsAppText, normalizeBrPhone, type StoreWhatsAppConfig } from '../_shared/whatsapp.ts'
+import { logAiUsage } from '../_shared/aiUsage.ts'
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -8,6 +9,7 @@ const supabase = createClient(
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') || ''
 
 async function personalizarMensagem(
+  storeId: string,
   template: string,
   companyName: string,
   clientName: string,
@@ -58,6 +60,7 @@ REGRAS:
       }),
     })
     if (!res.ok) throw new Error(`Claude API error: ${res.status}`)
+    await logAiUsage(supabase, storeId, 'send-birthday-messages')
     const data = await res.json()
     return data.content?.[0]?.text || template
       .replace(/\{\{nome\}\}/g, `, ${apelido}`)
@@ -128,7 +131,7 @@ async function processarLoja(store: { id: string; company_name: string; whatsapp
       }
 
       const apelido = cliente?.apelido || person.client_name.split(' ')[0]
-      const message = await personalizarMensagem(template, company_name, person.client_name, apelido, motos, null)
+      const message = await personalizarMensagem(store.id, template, company_name, person.client_name, apelido, motos, null)
 
       await sendWhatsAppText(normalizeBrPhone(person.client_phone), message, wppConfig)
 

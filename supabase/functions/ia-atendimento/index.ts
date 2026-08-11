@@ -40,6 +40,7 @@ import {
   type StoreInfo,
 } from '../_shared/database.ts';
 import { sendWhatsAppText, sendWhatsAppLocation, normalizeBrPhone } from '../_shared/whatsapp.ts';
+import { logAiUsage } from '../_shared/aiUsage.ts';
 
 // ============================================================
 // CONFIGURAÇÕES
@@ -303,7 +304,7 @@ async function executarFerramenta(
   conversationContext: ConversationContext,
   storeId?: string
 ): Promise<unknown> {
-  console.log(`🔧 Executando ferramenta: ${tool}`, input);
+  console.log(`🔧 Executando ferramenta: ${tool}`);
 
   switch (tool) {
     case 'consultar_cliente': {
@@ -459,7 +460,7 @@ async function executarFerramenta(
       await saveConversationState(sb, input.phone as string, 'aguardando_humano', {
         ...conversationContext,
         escalada_motivo: motivo,
-      });
+      }, storeId);
 
       // Alertar dono
       await enviarAlertaDono(
@@ -640,7 +641,7 @@ function buildSystemPrompt(store: StoreInfo, clienteNome?: string): string {
   const telefone = store.store_phone || '';
   const obs = store.ai_notes || '';
   return `Você é o atendente virtual da ${store.company_name}, uma oficina de motos.
-Seu nome é "Assistente ${store.company_name}".
+Seu nome é "Max".
 
 ${nome}
 
@@ -654,6 +655,7 @@ ${obs ? `- *Observações:* ${obs}` : ''}
 - *Serviços:* Realizamos TODOS os serviços para motos, exceto remendo de pneu. Se o cliente perguntar sobre qualquer serviço (desempanar chassis, freios, motor, elétrica, funilaria, etc.), confirme que sim, fazemos!
 
 ## REGRAS DE COMPORTAMENTO
+- Você é uma IA (inteligência artificial). Se o cliente perguntar se é robô, IA, bot ou humano, responda honestamente: "Sou o Max, um assistente virtual (IA) 🤖 Mas posso te ajudar com a maioria das coisas! Se precisar falar com um humano, é só pedir."
 - Linguagem informal, amigável e direta — como um atendente real de oficina nordestina
 - FORMATAÇÃO: use APENAS formatação WhatsApp: *negrito* (asterisco simples), _itálico_ (underscore). NUNCA use **duplo asterisco**, nunca use markdown como ##, >, -, *, backtick, etc.
 - Sempre que apresentar mais de uma opção ao cliente, use numeração: *1 -* opção, *2 -* opção, etc. Nunca use lista com traço ou ponto.
@@ -813,12 +815,12 @@ Deno.serve(async (req) => {
         const ehEchoIA = ultimaIA && fromMeText && ultimaIA.text.slice(0, 60) === fromMeText.slice(0, 60);
 
         if (!ehEchoIA && stateAtual !== 'aguardando_humano') {
-          console.log(`👤 Dono assumiu conversa com ${fromMePhone} — pausando IA por 2h`);
+          console.log('👤 Dono assumiu conversa — pausando IA por 2h');
           await saveConversationState(sb2, fromMePhone, 'aguardando_humano', {
             ...ctxAtual,
             escalada_motivo: 'Dono assumiu a conversa',
             humano_assumiu_em: new Date().toISOString(),
-          });
+          }, storeIdParam);
         }
       }
       return new Response('ok', { status: 200 });
@@ -835,13 +837,9 @@ Deno.serve(async (req) => {
 
     senderName = (body.sender_name as string || (chat.name as string) || '');
 
-    console.log(`📌 phone: ${phone} | text: ${text.slice(0, 80)} | fromMe: ${fromMe} | store_id: ${storeIdParam || 'auto'}`);
-
     if (!phone || !text) {
       return new Response('ok', { status: 200 });
     }
-
-    console.log(`🤖 IA processando mensagem de ${phone}: "${text.slice(0, 80)}"`);
 
     // ----------------------------------------------------------
     // 0. Verificar se a IA está ativada
@@ -874,24 +872,18 @@ Deno.serve(async (req) => {
       if (assumiuEm) {
         const diffHoras = (Date.now() - new Date(assumiuEm).getTime()) / (1000 * 60 * 60);
         if (diffHoras >= 2) {
-          console.log(`🔄 IA reativada para ${phone} — ${diffHoras.toFixed(1)}h desde que dono assumiu`);
+          console.log('🔄 IA reativada — continuando fluxo normal');
           ctx.humano_assumiu_em = undefined;
           ctx.escalada_motivo = undefined;
           state = 'identificado';
           await saveConversationState(sb, phone, 'identificado', ctx, resolvedStoreId);
           // Não retorna — continua o fluxo normal abaixo
         } else {
-          await enviarMensagem(
-            normalizeBrPhone(phone),
-            '⏳ Seu atendimento está com nossa equipe. Em breve um atendente vai responder!'
-          );
+          // Atendente assumiu — IA fica em silêncio total
           return new Response(JSON.stringify({ ok: true, state: 'aguardando_humano' }), { status: 200 });
         }
       } else {
-        await enviarMensagem(
-          normalizeBrPhone(phone),
-          '⏳ Seu atendimento está com nossa equipe. Em breve um atendente vai responder!'
-        );
+        // Atendente assumiu — IA fica em silêncio total
         return new Response(JSON.stringify({ ok: true, state: 'aguardando_humano' }), { status: 200 });
       }
     }
@@ -907,17 +899,17 @@ Deno.serve(async (req) => {
         await sb.from('appointments')
           .update({ status: 'confirmado', confirmado_pelo_cliente: true, confirmacao_respondida_em: new Date().toISOString() })
           .eq('id', ctx.lembrete_agendamento_id);
-        await saveConversationState(sb, phone, 'identificado', { ...ctx, lembrete_agendamento_id: undefined });
+        await saveConversationState(sb, phone, 'identificado', { ...ctx, lembrete_agendamento_id: undefined }, resolvedStoreId);
         await enviarMensagem(normalizeBrPhone(phone), '✅ Confirmado! Te esperamos amanhã 🏍️');
       } else if (resp === 'nao' || resp === 'não' || resp === 'n') {
         await sb.from('appointments')
           .update({ status: 'cancelado', confirmado_pelo_cliente: false, confirmacao_respondida_em: new Date().toISOString() })
           .eq('id', ctx.lembrete_agendamento_id);
-        await saveConversationState(sb, phone, 'identificado', { ...ctx, lembrete_agendamento_id: undefined });
+        await saveConversationState(sb, phone, 'identificado', { ...ctx, lembrete_agendamento_id: undefined }, resolvedStoreId);
         await enviarMensagem(normalizeBrPhone(phone), 'Entendido! Agendamento cancelado. Quando quiser remarcar é só chamar 😊');
         await enviarAlertaDono(`❌ Agendamento cancelado pelo cliente\n📱 ${phone}\nID: ${ctx.lembrete_agendamento_id}`);
       } else {
-        await saveConversationState(sb, phone, 'identificado', { ...ctx, lembrete_agendamento_id: undefined });
+        await saveConversationState(sb, phone, 'identificado', { ...ctx, lembrete_agendamento_id: undefined }, resolvedStoreId);
         // Deixar Claude processar
       }
       return new Response(JSON.stringify({ ok: true }), { status: 200 });
@@ -932,13 +924,13 @@ Deno.serve(async (req) => {
       const recusado = resp === 'nao' || resp === 'não' || resp === 'n' || resp === '2' || resp.includes('recus') || resp.includes('cancel');
 
       if (aprovado) {
-        await saveConversationState(sb, phone, 'identificado', { ...ctx, pending_orcamento_order_id: undefined });
+        await saveConversationState(sb, phone, 'identificado', { ...ctx, pending_orcamento_order_id: undefined }, resolvedStoreId);
         await enviarMensagem(normalizeBrPhone(phone), '✅ Orçamento aprovado! Vou passar para nossa equipe agora.');
         await enviarAlertaDono(
           `✅ *Orçamento APROVADO*\n📱 ${ctx.client_name || phone}\nOS: ${ctx.pending_orcamento_order_id}`
         );
       } else if (recusado) {
-        await saveConversationState(sb, phone, 'identificado', { ...ctx, pending_orcamento_order_id: undefined });
+        await saveConversationState(sb, phone, 'identificado', { ...ctx, pending_orcamento_order_id: undefined }, resolvedStoreId);
         await enviarMensagem(normalizeBrPhone(phone), 'Entendido. Vou avisar nossa equipe sobre a recusa do orçamento.');
         await enviarAlertaDono(
           `❌ *Orçamento RECUSADO*\n📱 ${ctx.client_name || phone}\nOS: ${ctx.pending_orcamento_order_id}`
@@ -969,7 +961,6 @@ Deno.serve(async (req) => {
         }
         if (clientIdParaCpf) {
           await sb.from('clients').update({ cpf: cpfRaw }).eq('id', clientIdParaCpf).then(() => null).catch(() => null);
-          console.log(`💾 CPF salvo no cliente ${clientIdParaCpf}`);
         }
         // Retoma geração do PIX com CPF em mãos — injeta no contexto e força o texto como "via pix"
         ctx.cpf_pix_temp = cpfRaw;
@@ -989,14 +980,11 @@ Deno.serve(async (req) => {
     const osIdCtx = ctx.os_id;
     const osValorPendente = ctx.os_total_pendente;
 
-    console.log(`💳 PIX check: querPix=${querPix} osIdCtx=${osIdCtx} osValorPendente=${osValorPendente}`);
-
     if (querPix && osIdCtx && osValorPendente !== undefined && osValorPendente >= 5) {
       // Interceptamos: NUNCA cair no Claude para PIX — respondemos diretamente com sucesso ou erro
       const store2 = await buscarStoreSettings(sb, resolvedStoreId);
       const clientName = ctx.client_name || 'Cliente';
       const asaasApiKey = store2.asaas_api_key || Deno.env.get('ASAAS_API_KEY') || '';
-      console.log(`💳 asaasApiKey DB=${store2.asaas_api_key ? 'OK' : 'VAZIO'} ENV=${Deno.env.get('ASAAS_API_KEY') ? 'OK' : 'VAZIO'} resolvedStoreId=${resolvedStoreId}`);
 
       if (!asaasApiKey) {
         const msgErro = 'Não consegui gerar o PIX agora. Por favor, pague na retirada ou tente mais tarde 🙏';
@@ -1031,7 +1019,6 @@ Deno.serve(async (req) => {
             cpfCliente = (clientRow2 as Record<string, unknown> | null)?.cpf as string | null || null;
           }
         }
-        console.log(`💳 CPF cliente: ${cpfCliente ? 'OK ('+cpfCliente.slice(0,3)+'...)' : 'não encontrado'} client_id=${ctx.client_id}`);
 
         // Se não tem CPF, pede ao cliente e aguarda
         if (!cpfCliente) {
@@ -1047,7 +1034,7 @@ Deno.serve(async (req) => {
           headers: { 'access_token': asaasApiKey },
         });
         const found = await foundResp.json().catch(() => null);
-        console.log(`💳 Asaas busca cliente: ${foundResp.status} → ${JSON.stringify(found).slice(0, 150)}`);
+        if (!foundResp.ok) console.error('❌ Asaas busca cliente:', foundResp.status);
 
         if (found?.data?.length > 0) {
           customerId = found.data[0].id;
@@ -1068,7 +1055,7 @@ Deno.serve(async (req) => {
             body: JSON.stringify(customerPayload),
           });
           const created = await createdResp.json();
-          console.log(`💳 Asaas cria cliente: ${createdResp.status} → ${JSON.stringify(created).slice(0, 150)}`);
+          if (!createdResp.ok) console.error('❌ Asaas cria cliente:', createdResp.status, created?.errors?.[0]?.description);
           customerId = created?.id || null;
         }
 
@@ -1082,14 +1069,13 @@ Deno.serve(async (req) => {
           body: JSON.stringify({ customer: customerId, billingType: 'PIX', value: osValorPendente, dueDate, externalReference: osIdCtx }),
         });
         const charge = await chargeResp.json();
-        console.log(`💳 Asaas cria cobrança: ${chargeResp.status} → ${JSON.stringify(charge).slice(0, 200)}`);
+        if (!chargeResp.ok) console.error('❌ Asaas cria cobrança:', chargeResp.status, charge?.errors?.[0]?.description);
 
         if (!charge?.id) throw new Error(charge?.errors?.[0]?.description || 'Erro ao criar cobrança PIX');
 
         const pixInfo = await fetch(`${ASAAS_URL}/payments/${charge.id}/pixQrCode`, {
           headers: { 'access_token': asaasApiKey },
         }).then(r => r.json()).catch(() => null);
-        console.log(`💳 Asaas PIX QR: ${JSON.stringify(pixInfo).slice(0, 150)}`);
 
         try { await sb.from('service_orders').update({ asaas_payment_id: charge.id }).eq('id', osIdCtx); } catch { /* ignora */ }
 
@@ -1160,7 +1146,7 @@ Deno.serve(async (req) => {
     if (state === 'novo') {
       const menuBoasVindas =
         `Olá! 👋 Bem-vindo à *${store.company_name}*!\n\n` +
-        `Sou o Assistente virtual e estou aqui pra te ajudar 😊\n\n` +
+        `Sou o *Max*, assistente virtual e estou aqui pra te ajudar 😊\n\n` +
         `O que você precisa hoje?\n\n` +
         `🛒 *1 - Loja / Peças*\n` +
         `_Consultar peças e produtos_\n\n` +
@@ -1174,7 +1160,7 @@ Deno.serve(async (req) => {
         `É só responder com o número ou me contar o que precisa! 🏍️`;
 
       await enviarMensagem(normalizeBrPhone(phone), menuBoasVindas);
-      await saveConversationState(sb, phone, 'menu_apresentado', ctx);
+      await saveConversationState(sb, phone, 'menu_apresentado', ctx, resolvedStoreId);
       return new Response(JSON.stringify({ ok: true }), { status: 200 });
     }
 
@@ -1234,6 +1220,7 @@ Deno.serve(async (req) => {
       let claudeResult: { content: unknown[]; stop_reason: string };
       try {
         claudeResult = await chamarClaude(systemPrompt, messages);
+        await logAiUsage(sb, resolvedStoreId, 'ia-atendimento');
       } catch (e) {
         console.error('Erro ao chamar Claude:', e);
         throw e;
@@ -1393,16 +1380,14 @@ Deno.serve(async (req) => {
       ];
       // Manter apenas os últimos 8 turnos (16 mensagens) para não inflar o contexto
       ctx.history = updatedHistory.slice(-16);
-      await saveConversationState(sb, phone, newState, ctx);
+      await saveConversationState(sb, phone, newState, ctx, resolvedStoreId);
     }
 
     // ----------------------------------------------------------
     // 11. Enviar resposta ao cliente
     // ----------------------------------------------------------
     if (finalResponse) {
-      console.log(`📤 Enviando para ${normalizeBrPhone(phone)}: "${finalResponse.slice(0, 100)}"`);
-      await enviarMensagem(normalizeBrPhone(phone), finalResponse);
-      console.log('✅ Mensagem enviada ao cliente');
+      await enviarMensagem(normalizeBrPhone(phone), '_🤖 Max (IA):_\n\n' + finalResponse);
     } else {
       // Fallback — nunca deixar o cliente sem resposta
       await enviarMensagem(
