@@ -232,6 +232,8 @@ export default function FiadosPage() {
 
   const handleCreateFiado = async () => {
     if (!newForm.client_name.trim()) { toast.error('Nome do cliente é obrigatório'); return; }
+    if (!newForm.client_phone.trim()) { toast.error('Telefone do cliente é obrigatório'); return; }
+    if (!newForm.client_cpf.trim()) { toast.error('CPF do cliente é obrigatório'); return; }
     if (!newForm.due_date) { toast.error('Data de vencimento é obrigatória'); return; }
     if (newItemsTotal <= 0) { toast.error('Adicione pelo menos um item com valor'); return; }
 
@@ -248,8 +250,8 @@ export default function FiadosPage() {
     const input: CreateFiadoInput = {
       origin_type: 'manual',
       client_name: newForm.client_name.trim(),
-      client_phone: newForm.client_phone.trim() || undefined,
-      client_cpf: newForm.client_cpf.trim() || undefined,
+      client_phone: newForm.client_phone.trim(),
+      client_cpf: newForm.client_cpf.trim(),
       due_date: newForm.due_date,
       notes: newForm.notes.trim() || undefined,
       interest_rate_monthly: parseFloat(newForm.interest_rate_monthly) || 2,
@@ -598,7 +600,7 @@ export default function FiadosPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Telefone</Label>
+                  <Label>Telefone *</Label>
                   <Input
                     placeholder="(11) 99999-9999"
                     value={newForm.client_phone}
@@ -607,7 +609,7 @@ export default function FiadosPage() {
                   />
                 </div>
                 <div>
-                  <Label>CPF</Label>
+                  <Label>CPF *</Label>
                   <Input
                     placeholder="000.000.000-00"
                     value={newForm.client_cpf}

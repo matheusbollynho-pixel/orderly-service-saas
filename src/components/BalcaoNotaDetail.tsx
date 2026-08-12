@@ -241,6 +241,8 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   // ── Fiado ──────────────────────────────────────────────────────
   const handleRegistrarFiado = async () => {
     if (!fiadoDueDate) { toast.error('Informe a data de vencimento'); return; }
+    if (!editClientPhone.trim()) { toast.error('Telefone do cliente é obrigatório pra registrar fiado'); return; }
+    if (!editClientCpf.trim()) { toast.error('CPF do cliente é obrigatório pra registrar fiado'); return; }
     setFiadoLoading(true);
     // Check for duplicate
     const { data: existing } = await supabase
