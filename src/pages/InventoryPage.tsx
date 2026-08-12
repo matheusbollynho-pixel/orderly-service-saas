@@ -407,6 +407,10 @@ function ProductFormDialog({ open, product, isEditing, isSaving, onChange, onBul
                 <Input type="number" min="0" step="0.01" value={product.profit_margin ?? ''} onChange={(e) => onChange('profit_margin', e.target.value ? parseFloat(e.target.value) : null)} placeholder="Opcional" />
               </div>
               <div>
+                <Label>Lucro (R$)</Label>
+                <Input readOnly disabled value={fmtCurrency((Number(product.sale_price) || 0) - (Number(product.cost_price) || 0))} className="text-muted-foreground" />
+              </div>
+              <div>
                 <Label>Preço promocional (R$)</Label>
                 <Input type="number" min="0" step="0.01" value={product.promotional_price ?? ''} onChange={(e) => onChange('promotional_price', e.target.value ? parseFloat(e.target.value) : null)} placeholder="Opcional" />
               </div>
