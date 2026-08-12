@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useServiceOrders } from '@/hooks/useServiceOrders';
 import { useMechanics } from '@/hooks/useMechanics';
+import { useInventory } from '@/hooks/useInventory';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -19,12 +20,15 @@ interface ReportsPageProps {
 export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder }: ReportsPageProps = {}) {
   const { orders, isLoading, createPayment, deletePayment, updatePayment } = useServiceOrders();
   const { mechanics } = useMechanics();
+  const { products: inventoryProducts, isLoadingProducts } = useInventory();
   console.log('Mecânicos carregados:', mechanics);
   console.log('Ordens carregadas:', orders);
   const [period, setPeriod] = useState<Period>('month');
-  const [activeTab, setActiveTab] = useState<'resumo' | 'detalhado' | 'itens' | 'pagamentos' | 'balcao'>('resumo');
+  const [activeTab, setActiveTab] = useState<'resumo' | 'detalhado' | 'itens' | 'pagamentos' | 'balcao' | 'estoque'>('resumo');
   const [itemsQuery, setItemsQuery] = useState('');
   const [selectedMechanicFilter, setSelectedMechanicFilter] = useState<string>('todos');
+  const [estoqueQuery, setEstoqueQuery] = useState('');
+  const [estoqueCategoria, setEstoqueCategoria] = useState<string>('todas');
 
   const startOfWeek = () => {
     const d = new Date();
@@ -159,6 +163,29 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder }: ReportsPageProps
     return filtered;
   }, [itemsQuery, pecasPorOS, selectedMechanicFilter]);
 
+  const categoriasEstoque = useMemo(() => {
+    const set = new Set(inventoryProducts.map(p => p.category).filter((c): c is string => !!c));
+    return Array.from(set).sort();
+  }, [inventoryProducts]);
+
+  const filteredEstoqueProducts = useMemo(() => {
+    const q = estoqueQuery.trim().toLowerCase();
+    return inventoryProducts.filter(p => {
+      if (estoqueCategoria !== 'todas' && p.category !== estoqueCategoria) return false;
+      if (q && !(p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q))) return false;
+      return true;
+    });
+  }, [inventoryProducts, estoqueQuery, estoqueCategoria]);
+
+  const estoqueTotais = useMemo(() => {
+    return filteredEstoqueProducts.reduce((acc, p) => {
+      const qtd = Number(p.stock_current) || 0;
+      acc.valorCompra += qtd * (Number(p.cost_price) || 0);
+      acc.valorVenda += qtd * (Number(p.sale_price) || 0);
+      return acc;
+    }, { valorCompra: 0, valorVenda: 0 });
+  }, [filteredEstoqueProducts]);
+
   useEffect(() => {
     const handler = () => setActiveTab('detalhado');
     window.addEventListener('reports:openDetailed', handler as EventListener);
@@ -171,13 +198,14 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder }: ReportsPageProps
         <h2 className="text-lg font-semibold">Relatórios</h2>
       </div>
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'resumo' | 'detalhado' | 'itens' | 'pagamentos' | 'balcao')} className="w-full">
-        <TabsList className="grid grid-cols-5 w-full">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'resumo' | 'detalhado' | 'itens' | 'pagamentos' | 'balcao' | 'estoque')} className="w-full">
+        <TabsList className="grid grid-cols-6 w-full">
           <TabsTrigger value="resumo">Resumo</TabsTrigger>
           <TabsTrigger value="detalhado">Mecânicos</TabsTrigger>
           <TabsTrigger value="itens">Peças</TabsTrigger>
           <TabsTrigger value="balcao">Balcão</TabsTrigger>
           <TabsTrigger value="pagamentos">Pagtos</TabsTrigger>
+          <TabsTrigger value="estoque">Estoque</TabsTrigger>
         </TabsList>
 
         <TabsContent value="resumo" className="space-y-5">
@@ -348,6 +376,59 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder }: ReportsPageProps
                 updatePayment(payload);
               }}
             />
+        </TabsContent>
+
+        <TabsContent value="estoque" className="space-y-5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Input
+              placeholder="Buscar produto ou código..."
+              value={estoqueQuery}
+              onChange={(e) => setEstoqueQuery(e.target.value)}
+              className="h-10 sm:col-span-2"
+            />
+            <Select value={estoqueCategoria} onValueChange={setEstoqueCategoria}>
+              <SelectTrigger className="w-full h-10">
+                <SelectValue placeholder="Todas categorias" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Todas categorias</SelectItem>
+                {categoriasEstoque.map(c => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {isLoadingProducts ? (
+            <p>Carregando...</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Card>
+                <CardContent className="p-4">
+                  <p className="text-sm text-muted-foreground">Valor de compra (custo)</p>
+                  <p className="text-2xl font-bold">{formatCurrency(estoqueTotais.valorCompra)}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <p className="text-sm text-muted-foreground">Valor de venda</p>
+                  <p className="text-2xl font-bold">{formatCurrency(estoqueTotais.valorVenda)}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <p className="text-sm text-muted-foreground">Lucro potencial</p>
+                  <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                    {formatCurrency(estoqueTotais.valorVenda - estoqueTotais.valorCompra)}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          <p className="text-xs text-muted-foreground">
+            {filteredEstoqueProducts.length} produto(s) considerado(s), somando estoque atual × preço de cada um.
+          </p>
         </TabsContent>
 
       </Tabs>
