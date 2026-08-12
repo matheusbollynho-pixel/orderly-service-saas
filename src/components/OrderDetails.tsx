@@ -555,6 +555,8 @@ export function OrderDetails({
   const handleRegistrarFiado = async () => {
     if (!order.mechanic_id) { toast.error('Atribua um mecânico à OS antes de registrar como fiado.'); return; }
     if (!fiadoDueDate) { toast.error('Informe a data de vencimento'); return; }
+    if (!order.client_phone) { toast.error('Telefone do cliente é obrigatório pra registrar fiado'); return; }
+    if ((order.client_cpf || '').replace(/\D/g, '').length !== 11) { toast.error('CPF do cliente é obrigatório pra registrar fiado'); return; }
     setFiadoLoading(true);
 
     const alertas: string[] = [];
