@@ -604,7 +604,15 @@ export default function InventoryPage() {
   };
 
   const handleFormChange = (field: string, value: unknown) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => {
+      const next = { ...prev, [field]: value };
+      if (field === 'cost_price' || field === 'sale_price') {
+        const cost = Number(next.cost_price) || 0;
+        const sale = Number(next.sale_price) || 0;
+        next.profit_margin = cost > 0 ? Math.round(((sale - cost) / cost) * 10000) / 100 : null;
+      }
+      return next;
+    });
   };
 
   const handleBulkChange = (fields: Record<string, unknown>) => {
