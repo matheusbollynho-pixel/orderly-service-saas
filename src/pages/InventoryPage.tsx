@@ -599,7 +599,9 @@ export default function InventoryPage() {
 
   const handleOpenEdit = (p: InventoryProduct) => {
     setEditingProduct(p);
-    setFormData({ ...p });
+    const cost = Number(p.cost_price) || 0;
+    const sale = Number(p.sale_price) || 0;
+    setFormData({ ...p, profit_margin: cost > 0 ? Math.round(((sale - cost) / cost) * 10000) / 100 : p.profit_margin });
     setFormOpen(true);
   };
 
