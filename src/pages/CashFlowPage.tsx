@@ -160,6 +160,9 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder }: CashFlowPag
         quantity: qty,
         unit_price: unitPrice,
         notes: formData.notes || undefined,
+        // Essa tela já cria a entrada de caixa vinculada logo abaixo — evita
+        // que a trigger fn_register_sale_in_cash_flow duplique o lançamento.
+        skip_cash_flow_trigger: true,
       });
       // Registra no caixa linkado ao movimento (permite restaurar estoque ao deletar)
       createEntry({

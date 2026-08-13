@@ -201,6 +201,7 @@ export type Database = {
           notes: string | null
           created_by: string | null
           created_at: string
+          skip_cash_flow_trigger: boolean
         }
         Insert: {
           id?: string
@@ -214,6 +215,7 @@ export type Database = {
           notes?: string | null
           created_by?: string | null
           created_at?: string
+          skip_cash_flow_trigger?: boolean
         }
         Update: {
           id?: string
@@ -227,6 +229,7 @@ export type Database = {
           notes?: string | null
           created_by?: string | null
           created_at?: string
+          skip_cash_flow_trigger?: boolean
         }
         Relationships: [
           {
