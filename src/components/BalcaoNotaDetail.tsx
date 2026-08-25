@@ -31,6 +31,7 @@ const PAYMENT_LABELS: Record<string, string> = {
   cartao_credito: 'Cartão Crédito',
   cartao_debito: 'Cartão Débito',
   transferencia: 'Transferência',
+  fiado: 'Fiado',
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -94,6 +95,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   const [paymentEntries, setPaymentEntries] = useState<PaymentEntry[]>(initPayments);
   const [isSendingWpp, setIsSendingWpp] = useState(false);
   const [isSendingOrc, setIsSendingOrc] = useState(false);
+  const [docType, setDocType] = useState<'nota' | 'orcamento'>('nota');
 
   // ── Asaas ──────────────────────────────────────────────────────
   const [asaasOpen, setAsaasOpen] = useState(false);
@@ -102,6 +104,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   const [asaasCopied, setAsaasCopied] = useState(false);
   const [asaasInstallments, setAsaasInstallments] = useState(1);
   const [asaasAmount, setAsaasAmount] = useState<string>('');
+  const [asaasShowInstallments, setAsaasShowInstallments] = useState(false);
 
   // ── Fiado ──────────────────────────────────────────────────────
   const [showFiadoDialog, setShowFiadoDialog] = useState(false);
@@ -185,6 +188,16 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   };
 
   const handlePaymentMethodChange = (idx: number, method: string) => {
+    if (method === 'fiado') {
+      if (!canAct) return;
+      setShowFiadoDialog(true);
+      return;
+    }
+    if (method === 'asaas') {
+      if (!canAct) return;
+      setAsaasOpen(true);
+      return;
+    }
     const updated = paymentEntries.map((e, i) => i === idx ? { ...e, method } : e);
     savePayments(updated);
   };
@@ -746,23 +759,6 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
             {new Date(order.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {(editClientPhone || order.client_phone) && (
-            <button
-              type="button"
-              onClick={handleSendWhatsApp}
-              disabled={isSendingWpp}
-              className="flex items-center gap-1.5 text-sm text-green-600 hover:text-green-700 dark:text-green-500 dark:hover:text-green-400 transition-colors px-2 py-1 rounded border border-green-300 dark:border-green-700 disabled:opacity-50"
-            >
-              <Send className="h-4 w-4" />
-              {isSendingWpp ? 'Enviando...' : 'WhatsApp'}
-            </button>
-          )}
-          <button type="button" onClick={handlePrint} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded border">
-            <Printer className="h-4 w-4" />
-            Imprimir
-          </button>
-        </div>
       </div>
 
       <div className="border-2 border-border rounded-xl overflow-hidden shadow-sm bg-card">
@@ -828,17 +824,17 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
                 className="mt-1 h-8 text-sm bg-background"
               />
             </div>
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Endereço</label>
-              <Input
-                placeholder="Endereço (opcional)"
-                value={editClientAddress}
-                onChange={e => setEditClientAddress(e.target.value)}
-                onBlur={handleBlurClient}
-                disabled={!isEditable}
-                className="mt-1 h-8 text-sm bg-background"
-              />
-            </div>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Endereço</label>
+            <Input
+              placeholder="Endereço completo (opcional)"
+              value={editClientAddress}
+              onChange={e => setEditClientAddress(e.target.value)}
+              onBlur={handleBlurClient}
+              disabled={!isEditable}
+              className="mt-1 h-9 text-sm bg-background w-full"
+            />
           </div>
         </div>
 
@@ -1049,15 +1045,14 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
                 Formas de Pagamento
               </label>
               {canAct && (
-                <Button
+                <button
                   type="button"
-                  variant="outline"
-                  size="sm"
+                  title="Dividir o pagamento em mais de uma forma"
                   onClick={handleAddPayment}
-                  className="h-7 px-2 text-xs gap-1"
+                  className="flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80 border border-dashed border-primary/40 hover:border-primary/60 rounded-md px-2 py-1 transition-colors"
                 >
-                  <Plus className="h-3 w-3" /> Adicionar forma
-                </Button>
+                  <Plus className="h-3 w-3" /> Outra forma de pagamento
+                </button>
               )}
             </div>
             <div className="space-y-2">
@@ -1077,6 +1072,20 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
                       <SelectItem value="cartao_credito">Cartão Crédito</SelectItem>
                       <SelectItem value="cartao_debito">Cartão Débito</SelectItem>
                       <SelectItem value="transferencia">Transferência</SelectItem>
+                      {order.status !== 'cancelada' && total > 0 && (
+                        <SelectItem value="asaas" className="text-sky-600 dark:text-sky-500 font-medium">
+                          <span className="inline-flex items-center gap-1.5">
+                            <Link className="h-3.5 w-3.5" /> Cobrar Online
+                          </span>
+                        </SelectItem>
+                      )}
+                      {order.status !== 'cancelada' && total > 0 && (
+                        <SelectItem value="fiado" className="text-amber-600 dark:text-amber-500 font-medium">
+                          <span className="inline-flex items-center gap-1.5">
+                            <HandCoins className="h-3.5 w-3.5" /> Fiado
+                          </span>
+                        </SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
                   {paymentEntries.length > 1 && (
@@ -1116,184 +1125,157 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
                 </p>
               );
             })()}
-          </div>
 
-          {/* ── Asaas ── */}
-          {order.status !== 'cancelada' && total > 0 && (
-            <div>
-              <button
-                type="button"
-                onClick={() => setAsaasOpen(o => !o)}
-                className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 w-full text-left"
-              >
-                <span>Cobrar via Asaas</span>
-                <span className="ml-1 text-xs">{asaasOpen ? '▲' : '▼'}</span>
-              </button>
-              {asaasOpen && (
-              <div>
-              {!editClientCpf && (
-                <p className="text-xs text-amber-600 mb-2">⚠ CPF do cliente necessário para PIX/Boleto. Preencha o campo CPF acima.</p>
-              )}
-              {!asaasResult ? (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs text-muted-foreground whitespace-nowrap">Valor (R$)</label>
-                    <input
-                      type="number"
-                      min="0.01"
-                      step="0.01"
-                      placeholder={total.toFixed(2)}
-                      value={asaasAmount}
-                      onChange={e => setAsaasAmount(e.target.value)}
-                      className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
-                    />
-                  </div>
-                  <div className="flex gap-2 flex-wrap">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={asaasLoading || !canAct}
-                      onClick={() => handleCobrarAsaas('PIX')}
-                      className="flex-1 h-9 text-sm gap-1.5"
-                    >
-                      {asaasLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link className="h-4 w-4" />}
-                      PIX
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={asaasLoading || !canAct}
-                      onClick={() => handleCobrarAsaas('BOLETO')}
-                      className="flex-1 h-9 text-sm gap-1.5"
-                    >
-                      {asaasLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link className="h-4 w-4" />}
-                      Boleto
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={asaasLoading || !canAct}
-                      onClick={() => handleCobrarAsaas('UNDEFINED')}
-                      className="flex-1 h-9 text-sm gap-1.5"
-                    >
-                      {asaasLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link className="h-4 w-4" />}
-                      PIX+Boleto
-                    </Button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <select
-                      title="Parcelas do cartão de crédito"
-                      value={asaasInstallments}
-                      onChange={e => setAsaasInstallments(Number(e.target.value))}
-                      className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
-                    >
-                      <option value={1}>Crédito à vista</option>
-                      {[2,3,4,5,6,7,8,9,10,11,12].filter(n => (total / n) >= 5).map(n => (
-                        <option key={n} value={n}>{n}x de R$ {(total / n).toFixed(2)}</option>
-                      ))}
-                    </select>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={asaasLoading || !canAct}
-                      onClick={() => handleCobrarAsaas('CREDIT_CARD')}
-                      className="h-9 text-sm gap-1.5"
-                    >
-                      {asaasLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link className="h-4 w-4" />}
-                      Cartão
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-sm text-green-600 font-medium">
-                    ✓ Cobrança gerada — R$ {asaasResult.value?.toFixed(2)}
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={handleCobrarAsaasCopy}
-                      className="flex-1 h-9 text-sm gap-1.5"
-                    >
-                      {asaasCopied ? <CheckCheck className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                      {asaasCopied ? 'Copiado!' : 'Copiar link'}
-                    </Button>
-                    {editClientPhone && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={handleCobrarAsaasWhatsApp}
-                        className="flex-1 h-9 text-sm gap-1.5 bg-green-600 hover:bg-green-700 text-white"
-                      >
-                        <Send className="h-4 w-4" />
-                        WhatsApp
-                      </Button>
-                    )}
-                  </div>
+            {/* ── Cobrar Online (Asaas, abre ao escolher a opção acima) ── */}
+            {asaasOpen && order.status !== 'cancelada' && total > 0 && (
+              <div className="mt-2 rounded-lg border border-sky-200 dark:border-sky-800/60 bg-sky-50/60 dark:bg-sky-950/20 px-3 py-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 text-sm font-semibold text-sky-700 dark:text-sky-400">
+                    <Link className="h-4 w-4" />
+                    Cobrar Online
+                  </span>
                   <button
                     type="button"
-                    onClick={() => setAsaasResult(null)}
-                    className="text-xs text-muted-foreground hover:underline"
+                    onClick={() => { setAsaasOpen(false); setAsaasShowInstallments(false); }}
+                    className="text-xs text-sky-600/70 dark:text-sky-400/70 hover:underline"
                   >
-                    Nova cobrança
+                    Fechar
                   </button>
                 </div>
-              )}
+                {(() => {
+                  const cpfValid = editClientCpf.replace(/\D/g, '').length === 11;
+                  return !cpfValid && (
+                    <p className="text-xs text-amber-600 font-medium">⚠ Informe o CPF do cliente pra liberar PIX e Boleto. Preencha o campo CPF acima.</p>
+                  );
+                })()}
+                {!asaasResult ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs text-muted-foreground whitespace-nowrap">Valor (R$)</label>
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        placeholder={total.toFixed(2)}
+                        value={asaasAmount}
+                        onChange={e => setAsaasAmount(e.target.value)}
+                        className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={asaasLoading || !canAct || editClientCpf.replace(/\D/g, '').length !== 11}
+                        title={editClientCpf.replace(/\D/g, '').length !== 11 ? 'Informe o CPF do cliente para cobrar via PIX' : undefined}
+                        onClick={() => handleCobrarAsaas('PIX')}
+                        className="h-9 text-sm gap-1.5"
+                      >
+                        {asaasLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link className="h-4 w-4" />}
+                        PIX
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={asaasLoading || !canAct || editClientCpf.replace(/\D/g, '').length !== 11}
+                        title={editClientCpf.replace(/\D/g, '').length !== 11 ? 'Informe o CPF do cliente para cobrar via Boleto' : undefined}
+                        onClick={() => handleCobrarAsaas('BOLETO')}
+                        className="h-9 text-sm gap-1.5"
+                      >
+                        {asaasLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link className="h-4 w-4" />}
+                        Boleto
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={asaasLoading || !canAct || editClientCpf.replace(/\D/g, '').length !== 11}
+                        title={editClientCpf.replace(/\D/g, '').length !== 11 ? 'Informe o CPF do cliente para cobrar via PIX/Boleto' : undefined}
+                        onClick={() => handleCobrarAsaas('UNDEFINED')}
+                        className="h-9 text-sm gap-1.5"
+                      >
+                        {asaasLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link className="h-4 w-4" />}
+                        PIX + Boleto
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={asaasShowInstallments ? 'default' : 'outline'}
+                        size="sm"
+                        disabled={!canAct}
+                        onClick={() => setAsaasShowInstallments(s => !s)}
+                        className="h-9 text-sm gap-1.5"
+                      >
+                        <Link className="h-4 w-4" />
+                        Cartão
+                      </Button>
+                    </div>
+                    {asaasShowInstallments && (
+                      <div className="flex items-center gap-2 pt-2 border-t border-sky-200/70 dark:border-sky-800/50">
+                        <select
+                          title="Parcelas do cartão de crédito"
+                          value={asaasInstallments}
+                          onChange={e => setAsaasInstallments(Number(e.target.value))}
+                          className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
+                        >
+                          <option value={1}>Crédito à vista</option>
+                          {[2,3,4,5,6,7,8,9,10,11,12].filter(n => (total / n) >= 5).map(n => (
+                            <option key={n} value={n}>{n}x de R$ {(total / n).toFixed(2)}</option>
+                          ))}
+                        </select>
+                        <Button
+                          type="button"
+                          disabled={asaasLoading || !canAct}
+                          onClick={() => handleCobrarAsaas('CREDIT_CARD')}
+                          className="h-9 text-sm gap-1.5"
+                        >
+                          {asaasLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link className="h-4 w-4" />}
+                          Cobrar
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-sm text-green-600 font-medium">
+                      ✓ Cobrança gerada — R$ {asaasResult.value?.toFixed(2)}
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCobrarAsaasCopy}
+                        className="flex-1 h-9 text-sm gap-1.5"
+                      >
+                        {asaasCopied ? <CheckCheck className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                        {asaasCopied ? 'Copiado!' : 'Copiar link'}
+                      </Button>
+                      {editClientPhone && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={handleCobrarAsaasWhatsApp}
+                          className="flex-1 h-9 text-sm gap-1.5 bg-green-600 hover:bg-green-700 text-white"
+                        >
+                          <Send className="h-4 w-4" />
+                          WhatsApp
+                        </Button>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setAsaasResult(null); setAsaasShowInstallments(false); }}
+                      className="text-xs text-muted-foreground hover:underline"
+                    >
+                      Nova cobrança
+                    </button>
+                  </div>
+                )}
               </div>
-              )}
-            </div>
-          )}
-
-          {/* ── Registrar como Fiado ── */}
-          {order.status !== 'cancelada' && total > 0 && (
-            <div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="w-full h-9 gap-1.5 text-sm border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/30"
-                disabled={!canAct}
-                onClick={() => setShowFiadoDialog(true)}
-              >
-                <HandCoins className="h-4 w-4" />
-                Registrar como Fiado
-              </Button>
-            </div>
-          )}
-
-          {/* ── Orçamento ── */}
-          {items.length > 0 && order.status !== 'cancelada' && (
-            <div>
-              <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Orçamento</p>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleOrcamentoPdf}
-                  className="flex-1 h-9 gap-1.5 text-sm"
-                >
-                  <FileText className="h-4 w-4" />
-                  Baixar PDF
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleOrcamentoWhatsApp}
-                  disabled={isSendingOrc}
-                  className="flex-1 h-9 gap-1.5 text-sm text-green-600 border-green-300 hover:bg-green-50 dark:text-green-400 dark:border-green-700 dark:hover:bg-green-950/30"
-                >
-                  <Send className="h-4 w-4" />
-                  {isSendingOrc ? 'Enviando...' : 'WhatsApp'}
-                </Button>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {isAdmin && order.status !== 'cancelada' && (
             <div className="flex gap-2">
@@ -1314,6 +1296,94 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
               </Button>
             </div>
           )}
+
+          {/* ── Documentos (seletor Nota / Orçamento) — no final, depois de finalizar ── */}
+          {items.length > 0 && (() => {
+            const activeDoc: 'nota' | 'orcamento' = order.status === 'cancelada' ? 'nota' : docType;
+            return (
+              <div className="rounded-lg border border-border bg-muted/20 px-3 py-2.5 space-y-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Documentos</p>
+                  {order.status !== 'cancelada' && (
+                    <div className="inline-flex rounded-md border border-border bg-background p-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setDocType('nota')}
+                        className={`px-3 py-1 text-xs font-semibold rounded-[5px] transition-colors ${
+                          activeDoc === 'nota' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        Nota
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDocType('orcamento')}
+                        className={`px-3 py-1 text-xs font-semibold rounded-[5px] transition-colors ${
+                          activeDoc === 'orcamento' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        Orçamento
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {activeDoc === 'nota' ? (
+                  <div>
+                    <p className="text-[11px] text-muted-foreground mb-1.5">Documento final da venda, com forma de pagamento.</p>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handlePrint}
+                        className="flex-1 h-9 gap-1.5 text-sm"
+                      >
+                        <Printer className="h-4 w-4" />
+                        Imprimir
+                      </Button>
+                      {(editClientPhone || order.client_phone) && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleSendWhatsApp}
+                          disabled={isSendingWpp}
+                          className="flex-1 h-9 gap-1.5 text-sm text-green-600 border-green-300 hover:bg-green-50 dark:text-green-400 dark:border-green-700 dark:hover:bg-green-950/30"
+                        >
+                          <Send className="h-4 w-4" />
+                          {isSendingWpp ? 'Enviando...' : 'Enviar Nota'}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-[11px] text-muted-foreground mb-1.5">Prévia sem valor fiscal, pro cliente aprovar antes de finalizar.</p>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleOrcamentoPdf}
+                        className="flex-1 h-9 gap-1.5 text-sm"
+                      >
+                        <FileText className="h-4 w-4" />
+                        Baixar PDF
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleOrcamentoWhatsApp}
+                        disabled={isSendingOrc}
+                        className="flex-1 h-9 gap-1.5 text-sm text-green-600 border-green-300 hover:bg-green-50 dark:text-green-400 dark:border-green-700 dark:hover:bg-green-950/30"
+                      >
+                        <Send className="h-4 w-4" />
+                        {isSendingOrc ? 'Enviando...' : 'Enviar Orçamento'}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </div>
 

@@ -581,10 +581,11 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder }: CashFlowPag
           </p>
         </div>
         <div className="flex gap-2">
-          <Button 
-            onClick={() => setHideValues(!hideValues)} 
+          <Button
+            onClick={() => setHideValues(!hideValues)}
             size="sm"
             variant="outline"
+            title={hideValues ? 'Mostrar valores' : 'Ocultar valores'}
           >
             {hideValues ? (
               <EyeOff className="h-4 w-4" />

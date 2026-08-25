@@ -255,7 +255,7 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
 
                 <Separator />
 
-                <div className="space-y-2">
+                <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
                   <p className="text-sm font-medium">Pagamentos</p>
                   {(o.payments || []).length === 0 ? (
                     <p className="text-sm text-muted-foreground">Nenhum pagamento registrado.</p>
@@ -295,7 +295,7 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-7 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-7 gap-2" onClick={(e) => e.stopPropagation()}>
                   <Input
                     placeholder="Valor"
                     value={adding[o.id]?.amount || ''}

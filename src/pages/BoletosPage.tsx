@@ -10,9 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Plus, Trash2, CheckCircle2, RotateCcw, X, AlertTriangle, Clock, Calendar, Pencil } from 'lucide-react';
+import { Plus, Trash2, CheckCircle2, RotateCcw, X, AlertTriangle, Clock, Calendar, Pencil, Copy } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { toast } from 'sonner';
 
 const CATEGORIAS: { value: BoletoCategoria; label: string }[] = [
   { value: 'fornecedor', label: 'Fornecedor' },
@@ -547,9 +548,14 @@ export function BoletosPage() {
                           <p className="text-xs font-mono text-blue-400 truncate max-w-xs">{boleto.pix_copia_cola.substring(0, 40)}...</p>
                           <button
                             type="button"
-                            className="text-xs text-blue-500 hover:text-blue-400 flex-shrink-0"
-                            onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(boleto.pix_copia_cola!); }}
+                            className="inline-flex items-center gap-1 text-xs font-medium text-blue-500 hover:text-blue-400 flex-shrink-0"
+                            onClick={e => {
+                              e.stopPropagation();
+                              navigator.clipboard.writeText(boleto.pix_copia_cola!);
+                              toast.success('Código Pix copiado!');
+                            }}
                           >
+                            <Copy className="h-3 w-3" />
                             Copiar Pix
                           </button>
                         </div>

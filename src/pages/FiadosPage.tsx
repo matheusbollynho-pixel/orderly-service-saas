@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import {
   Plus,
@@ -30,6 +31,7 @@ import {
   Zap,
   Link,
   CalendarClock,
+  MoreVertical,
 } from 'lucide-react';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -492,11 +494,10 @@ export default function FiadosPage() {
                   )}
 
                   {/* Actions */}
-                  <div className="flex flex-wrap gap-2 pt-1 border-t border-border/30">
+                  <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-border/30">
                     {fiado.status !== 'pago' && (
                       <Button
                         size="sm"
-                        variant="outline"
                         className="gap-1.5 h-8 text-xs"
                         onClick={() => handleOpenPayment(fiado)}
                       >
@@ -518,61 +519,59 @@ export default function FiadosPage() {
                     )}
 
                     {fiado.status !== 'pago' && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1.5 h-8 text-xs text-blue-600 border-blue-300 hover:bg-blue-50 dark:border-blue-700 dark:hover:bg-blue-950/30"
-                        disabled={asaasLoadingId === fiado.id}
-                        onClick={() => handleAsaasCharge(fiado, 'PIX')}
-                      >
-                        <Zap className="h-3.5 w-3.5" />
-                        {asaasLoadingId === fiado.id ? '...' : 'PIX Asaas'}
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5 h-8 text-xs text-sky-600 border-sky-300 hover:bg-sky-50 dark:border-sky-700 dark:hover:bg-sky-950/30"
+                            disabled={asaasLoadingId === fiado.id}
+                          >
+                            <Zap className="h-3.5 w-3.5" />
+                            {asaasLoadingId === fiado.id ? '...' : 'Cobrar Online'}
+                            <ChevronDown className="h-3 w-3" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start">
+                          {(fiado.client_cpf || '').replace(/\D/g, '').length !== 11 && (
+                            <p className="px-2 py-1.5 text-xs text-amber-600">⚠ CPF do cliente ausente — necessário para cobrar online.</p>
+                          )}
+                          <DropdownMenuItem
+                            disabled={(fiado.client_cpf || '').replace(/\D/g, '').length !== 11}
+                            onClick={() => handleAsaasCharge(fiado, 'PIX')}
+                          >
+                            <Zap className="h-3.5 w-3.5 mr-2" /> PIX
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            disabled={(fiado.client_cpf || '').replace(/\D/g, '').length !== 11}
+                            onClick={() => handleAsaasCharge(fiado, 'BOLETO')}
+                          >
+                            <DollarSign className="h-3.5 w-3.5 mr-2" /> Boleto
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     )}
 
-                    {fiado.status !== 'pago' && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1.5 h-8 text-xs text-orange-600 border-orange-300 hover:bg-orange-50 dark:border-orange-700 dark:hover:bg-orange-950/30"
-                        disabled={asaasLoadingId === fiado.id}
-                        onClick={() => handleAsaasCharge(fiado, 'BOLETO')}
-                      >
-                        <DollarSign className="h-3.5 w-3.5" />
-                        {asaasLoadingId === fiado.id ? '...' : 'Boleto'}
-                      </Button>
-                    )}
-
-                    {fiado.status !== 'pago' && fiado.status !== 'juridico' && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1.5 h-8 text-xs text-red-600 border-red-300 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950/30"
-                        onClick={() => handleMarkJuridico(fiado)}
-                      >
-                        <Scale className="h-3.5 w-3.5" />
-                        Jurídico
-                      </Button>
-                    )}
-
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="gap-1.5 h-8 text-xs"
-                      onClick={() => setHistoryFiado(fiado)}
-                    >
-                      <History className="h-3.5 w-3.5" />
-                      Histórico
-                    </Button>
-
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="gap-1.5 h-8 text-xs text-destructive hover:text-destructive"
-                      onClick={() => setDeleteConfirmId(fiado.id)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 ml-auto" title="Mais ações">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {fiado.status !== 'pago' && fiado.status !== 'juridico' && (
+                          <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => handleMarkJuridico(fiado)}>
+                            <Scale className="h-3.5 w-3.5 mr-2" /> Marcar como Jurídico
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem onClick={() => setHistoryFiado(fiado)}>
+                          <History className="h-3.5 w-3.5 mr-2" /> Histórico
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteConfirmId(fiado.id)}>
+                          <Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </CardContent>
               </Card>

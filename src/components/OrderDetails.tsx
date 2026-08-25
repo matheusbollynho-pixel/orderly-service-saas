@@ -43,7 +43,6 @@ import {
   Link,
   Copy,
   CheckCheck,
-  ChevronDown,
 } from 'lucide-react';
 import { useMechanics } from '@/hooks/useMechanics';
 import { useClients } from '@/hooks/useClients';
@@ -328,6 +327,7 @@ export function OrderDetails({
   });
   const [showFiadoDialog, setShowFiadoDialog] = useState(false);
   const [showAsaasSection, setShowAsaasSection] = useState(false);
+  const [showAsaasInstallments, setShowAsaasInstallments] = useState(false);
   const [fiadoDueDate, setFiadoDueDate] = useState('');
   const [fiadoNotes, setFiadoNotes] = useState('');
   const [fiadoInterestRate, setFiadoInterestRate] = useState('2');
@@ -1137,7 +1137,7 @@ const renderDeliverySection = () => {
               size="icon" 
               onClick={handleDownloadPDF}
               className="h-9 w-9 text-primary hover:text-primary"
-              title="Baixar PDF da ordem de serviço"
+              title="Baixar PDF da Ordem de Serviço completa"
             >
               <Download className="h-5 w-5" />
             </Button>
@@ -1838,6 +1838,7 @@ const renderDeliverySection = () => {
             <Button
               variant="outline"
               size="sm"
+              title="Imprime só o equipamento e o serviço a fazer — não é a Ordem de Serviço completa"
               onClick={() => {
                 if (!order.signature_data) {
                   alert('É necessário coletar a assinatura do cliente antes de imprimir.');
@@ -1882,7 +1883,7 @@ const renderDeliverySection = () => {
               }}
             >
               <Printer className="h-4 w-4 mr-2" />
-              Imprimir
+              Imprimir Ficha de Serviço
             </Button>
           </div>
           
@@ -2067,97 +2068,6 @@ const renderDeliverySection = () => {
             )}
           </div>
 
-          {/* Cobrar via Asaas */}
-          {pending > 0 && (
-            <div className="pt-2 border-t border-border/30 space-y-2">
-              <button
-                type="button"
-                className="flex items-center gap-1 text-xs text-muted-foreground font-medium w-full text-left"
-                onClick={() => setShowAsaasSection(v => !v)}
-              >
-                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showAsaasSection ? 'rotate-180' : ''}`} />
-                Cobrar cliente via link
-              </button>
-          {showAsaasSection && (<>
-              {isExpress && !showCompleteForm && asaasCpf.replace(/\D/g, '').length !== 11 && (
-                <input
-                  type="text"
-                  placeholder="CPF do cliente (obrigatório para PIX/Boleto)"
-                  value={asaasCpf}
-                  onChange={e => setAsaasCpf(e.target.value)}
-                  className="w-full h-8 text-xs rounded border border-amber-500/50 bg-background px-2 placeholder:text-muted-foreground/60"
-                  maxLength={14}
-                />
-              )}
-              {!isExpress && !order.client_cpf && (
-                <p className="text-xs text-amber-600">⚠ CPF do cliente necessário para PIX/Boleto. Cadastre o CPF no Express.</p>
-              )}
-              <div className="flex items-center gap-2 mb-1">
-                <label className="text-xs text-muted-foreground whitespace-nowrap">Valor (R$)</label>
-                <input
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  placeholder={pending.toFixed(2)}
-                  value={asaasAmount}
-                  onChange={e => setAsaasAmount(e.target.value)}
-                  className="flex-1 h-8 text-xs rounded border border-border/50 bg-background px-2"
-                />
-              </div>
-              <div className="flex gap-2 flex-wrap">
-                <Button size="sm" variant="outline" className="gap-1" disabled={asaasLoading || !paymentForm.finalized_by_staff_id} onClick={() => handleCobrarAsaas('PIX')}>
-                  <Link className="h-3.5 w-3.5" /> PIX
-                </Button>
-                <Button size="sm" variant="outline" className="gap-1" disabled={asaasLoading || !paymentForm.finalized_by_staff_id} onClick={() => handleCobrarAsaas('BOLETO')}>
-                  <Link className="h-3.5 w-3.5" /> Boleto
-                </Button>
-                <Button size="sm" variant="outline" className="gap-1" disabled={asaasLoading || !paymentForm.finalized_by_staff_id} onClick={() => handleCobrarAsaas('UNDEFINED')}>
-                  <Link className="h-3.5 w-3.5" /> PIX + Boleto
-                </Button>
-                {asaasLoading && <Loader2 className="h-4 w-4 animate-spin self-center" />}
-              </div>
-              {/* Crédito parcelado */}
-              <div className="flex gap-2 items-center flex-wrap">
-                <select
-                  title="Parcelas do cartão de crédito"
-                  value={asaasInstallments}
-                  onChange={e => setAsaasInstallments(Number(e.target.value))}
-                  className="h-8 text-xs rounded border border-border/50 bg-background px-2"
-                  disabled={asaasLoading}
-                >
-                  <option value={1}>Crédito à vista</option>
-                  {[2,3,4,5,6,7,8,9,10,11,12].filter(n => (pending / n) >= 5).map(n => (
-                    <option key={n} value={n}>{n}x de R$ {(pending / n).toFixed(2)}</option>
-                  ))}
-                </select>
-                <Button size="sm" variant="outline" className="gap-1" disabled={asaasLoading || !paymentForm.finalized_by_staff_id} onClick={() => handleCobrarAsaas('CREDIT_CARD', asaasInstallments)}>
-                  <Link className="h-3.5 w-3.5" /> Gerar link crédito
-                </Button>
-              </div>
-              {asaasResult?.error && (
-                <p className="text-xs text-destructive">{asaasResult.error}</p>
-              )}
-              {asaasResult?.invoice_url && (
-                <div className="p-2 bg-muted/30 rounded-lg space-y-2">
-                  <p className="text-xs text-muted-foreground break-all">{asaasResult.invoice_url}</p>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={handleCobrarAsaasCopy}>
-                      {asaasCopied ? <CheckCheck className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
-                      {asaasCopied ? 'Copiado!' : 'Copiar'}
-                    </Button>
-                    {order.client_phone && (
-                      <Button size="sm" variant="outline" className="gap-1 text-xs h-7 text-emerald-500 border-emerald-500/30" onClick={handleCobrarAsaasWhatsApp}>
-                        <MessageCircle className="h-3 w-3" /> WhatsApp
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              )}
-            </>)}
-            </div>
-          )}
-
-
           {onAddPayment && (
             <div className="space-y-3 pt-2 border-t border-border/30">
               {/* Quem vai finalizar o pagamento */}
@@ -2197,9 +2107,25 @@ const renderDeliverySection = () => {
                   return (<>
                   <Input placeholder="Valor" value={paymentForm.amount} onChange={(e) => setPaymentForm((prev) => ({ ...prev, amount: e.target.value }))} className="h-9 sm:col-span-2" type="number" min="0" step="0.01" disabled={pb} />
                   <Input placeholder="Desconto (R$)" value={paymentForm.discount_amount} onChange={(e) => setPaymentForm((prev) => ({ ...prev, discount_amount: e.target.value }))} className="h-9" type="number" min="0" step="0.01" disabled={pb} />
-                  <Select value={paymentForm.method} onValueChange={(v) => setPaymentForm((prev) => ({ ...prev, method: v as PaymentMethod }))} disabled={pb}>
+                  <Select
+                    value={paymentForm.method}
+                    onValueChange={(v) => {
+                      if (v === 'asaas') { setShowAsaasSection(true); return; }
+                      setPaymentForm((prev) => ({ ...prev, method: v as PaymentMethod }));
+                    }}
+                    disabled={pb}
+                  >
                     <SelectTrigger className="h-9 sm:col-span-2" disabled={pb}><SelectValue placeholder="Forma" /></SelectTrigger>
-                    <SelectContent>{methodOptions.map((opt) => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}</SelectContent>
+                    <SelectContent>
+                      {methodOptions.map((opt) => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}
+                      {pending > 0 && (
+                        <SelectItem value="asaas" className="text-sky-600 dark:text-sky-500 font-medium">
+                          <span className="inline-flex items-center gap-1.5">
+                            <Link className="h-3.5 w-3.5" /> Cobrar Online
+                          </span>
+                        </SelectItem>
+                      )}
+                    </SelectContent>
                   </Select>
                   <Input placeholder="Obs." value={paymentForm.notes} onChange={(e) => setPaymentForm((prev) => ({ ...prev, notes: e.target.value }))} className="h-9" disabled={pb} />
                   <Button className="h-9" onClick={paymentForm.method === 'fiado' ? () => setShowFiadoDialog(true) : handleAddPayment} disabled={pb || (paymentForm.method !== 'fiado' && (isCreatingPayment || !paymentForm.amount))}>
@@ -2208,6 +2134,130 @@ const renderDeliverySection = () => {
                   </>);
                 })()}
               </div>
+
+              {/* ── Cobrar Online (Asaas, abre ao escolher a opção acima) ── */}
+              {showAsaasSection && pending > 0 && (
+                <div className="rounded-lg border border-sky-200 dark:border-sky-800/60 bg-sky-50/60 dark:bg-sky-950/20 px-3 py-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-1.5 text-sm font-semibold text-sky-700 dark:text-sky-400">
+                      <Link className="h-4 w-4" />
+                      Cobrar Online
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowAsaasSection(false)}
+                      className="text-xs text-sky-600/70 dark:text-sky-400/70 hover:underline"
+                    >
+                      Fechar
+                    </button>
+                  </div>
+                  {(() => {
+                    const cpfValid = asaasCpf.replace(/\D/g, '').length === 11;
+                    if (cpfValid) return null;
+                    return (
+                      <p className="text-xs text-amber-600 font-medium">
+                        ⚠ Informe o CPF do cliente pra liberar PIX e Boleto.
+                        {isExpress && !showCompleteForm ? ' Preencha no card do cliente acima.' : ' Cadastre o CPF no Express.'}
+                      </p>
+                    );
+                  })()}
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-muted-foreground whitespace-nowrap">Valor (R$)</label>
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      placeholder={pending.toFixed(2)}
+                      value={asaasAmount}
+                      onChange={e => setAsaasAmount(e.target.value)}
+                      className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-9 gap-1.5"
+                      disabled={asaasLoading || !paymentForm.finalized_by_staff_id || asaasCpf.replace(/\D/g, '').length !== 11}
+                      title={asaasCpf.replace(/\D/g, '').length !== 11 ? 'Informe o CPF do cliente para cobrar via PIX' : undefined}
+                      onClick={() => handleCobrarAsaas('PIX')}
+                    >
+                      {asaasLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link className="h-4 w-4" />} PIX
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-9 gap-1.5"
+                      disabled={asaasLoading || !paymentForm.finalized_by_staff_id || asaasCpf.replace(/\D/g, '').length !== 11}
+                      title={asaasCpf.replace(/\D/g, '').length !== 11 ? 'Informe o CPF do cliente para cobrar via Boleto' : undefined}
+                      onClick={() => handleCobrarAsaas('BOLETO')}
+                    >
+                      {asaasLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link className="h-4 w-4" />} Boleto
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-9 gap-1.5"
+                      disabled={asaasLoading || !paymentForm.finalized_by_staff_id || asaasCpf.replace(/\D/g, '').length !== 11}
+                      title={asaasCpf.replace(/\D/g, '').length !== 11 ? 'Informe o CPF do cliente para cobrar via PIX/Boleto' : undefined}
+                      onClick={() => handleCobrarAsaas('UNDEFINED')}
+                    >
+                      {asaasLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link className="h-4 w-4" />} PIX + Boleto
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={showAsaasInstallments ? 'default' : 'outline'}
+                      size="sm"
+                      className="h-9 gap-1.5"
+                      disabled={!paymentForm.finalized_by_staff_id}
+                      onClick={() => setShowAsaasInstallments(s => !s)}
+                    >
+                      <Link className="h-4 w-4" /> Cartão
+                    </Button>
+                  </div>
+                  {showAsaasInstallments && (
+                    <div className="flex items-center gap-2 pt-2 border-t border-sky-200/70 dark:border-sky-800/50">
+                      <select
+                        title="Parcelas do cartão de crédito"
+                        value={asaasInstallments}
+                        onChange={e => setAsaasInstallments(Number(e.target.value))}
+                        className="flex-1 h-9 rounded-md border border-input bg-background px-3 text-sm"
+                        disabled={asaasLoading}
+                      >
+                        <option value={1}>Crédito à vista</option>
+                        {[2,3,4,5,6,7,8,9,10,11,12].filter(n => (pending / n) >= 5).map(n => (
+                          <option key={n} value={n}>{n}x de R$ {(pending / n).toFixed(2)}</option>
+                        ))}
+                      </select>
+                      <Button type="button" className="h-9 gap-1.5" disabled={asaasLoading || !paymentForm.finalized_by_staff_id} onClick={() => handleCobrarAsaas('CREDIT_CARD', asaasInstallments)}>
+                        {asaasLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link className="h-4 w-4" />} Cobrar
+                      </Button>
+                    </div>
+                  )}
+                  {asaasResult?.error && (
+                    <p className="text-xs text-destructive">{asaasResult.error}</p>
+                  )}
+                  {asaasResult?.invoice_url && (
+                    <div className="p-2 bg-muted/30 rounded-lg space-y-2">
+                      <p className="text-xs text-muted-foreground break-all">{asaasResult.invoice_url}</p>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={handleCobrarAsaasCopy}>
+                          {asaasCopied ? <CheckCheck className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                          {asaasCopied ? 'Copiado!' : 'Copiar'}
+                        </Button>
+                        {order.client_phone && (
+                          <Button size="sm" variant="outline" className="gap-1 text-xs h-7 text-emerald-500 border-emerald-500/30" onClick={handleCobrarAsaasWhatsApp}>
+                            <MessageCircle className="h-3 w-3" /> WhatsApp
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </CardContent>
@@ -2332,7 +2382,7 @@ const renderDeliverySection = () => {
             ) : (
               <FileText className="h-5 w-5 mr-2" />
             )}
-            Enviar PDF via WhatsApp
+            Enviar OS Completa pelo WhatsApp
           </Button>
         </div>
       </div>
