@@ -1,6 +1,7 @@
 // src/services/whatsappService.ts
 
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 // Lazy init para evitar quebrar o app se variáveis faltarem em produção
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
@@ -56,6 +57,7 @@ async function resolveCurrentStoreId(): Promise<string | undefined> {
 function openWaMeFallback(phone: string, text: string) {
   const waPhone = phone.startsWith('55') ? phone : `55${phone}`;
   window.open(`https://wa.me/${waPhone}?text=${encodeURIComponent(text)}`, '_blank');
+  toast.warning('Não consegui enviar direto pelo WhatsApp da loja — abri o WhatsApp Web com a mensagem pronta. Confirme o envio na aba que abriu.');
 }
 async function callEdgeFunction(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
   const supabase = getSupabase();
@@ -141,15 +143,15 @@ export async function sendWhatsAppText(params: { phone: string; text: string; st
 
   try {
     const res = await callEdgeFunction({ to: phone, message: params.text, ...(storeId ? { store_id: storeId } : {}) });
-    // Loja sem instância própria configurada — abre WhatsApp Web pro usuário mandar na mão
+    // Loja sem instância própria configurada (ou envio real falhou) — abre WhatsApp Web pro usuário mandar na mão
     if ((res as { success?: boolean }).success === false) {
       openWaMeFallback(phone, params.text);
-      return true;
+      return false;
     }
     return !!res;
   } catch {
     openWaMeFallback(phone, params.text);
-    return true;
+    return false;
   }
 }
 
@@ -173,16 +175,16 @@ export async function sendWhatsAppDocument(params: {
   // Tenta enviar via API da loja
   try {
     const res = await callEdgeFunction({ to: phone, fileUrl, caption, fileName: safeFileName, ...(storeId ? { store_id: storeId } : {}) });
-    // Se API retornou sucesso=false (sem WhatsApp configurado), abre wa.me
+    // Se API retornou sucesso=false (sem WhatsApp configurado ou envio real falhou), abre wa.me
     if ((res as { success?: boolean }).success === false) {
       openWaMeFallback(phone, `${caption}\n\n📄 PDF: ${fileUrl}`);
-      return true;
+      return false;
     }
     return !!res;
   } catch {
     // Fallback: abre WhatsApp Web com link do PDF
     openWaMeFallback(phone, `${caption}\n\n📄 PDF: ${fileUrl}`);
-    return true;
+    return false;
   }
 }
 

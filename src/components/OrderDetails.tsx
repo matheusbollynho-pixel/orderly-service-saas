@@ -735,14 +735,16 @@ export function OrderDetails({
         alert('Telefone do cliente inválido para WhatsApp.');
         return;
       }
-      await sendWhatsAppDocument({
+      const enviouDireto = await sendWhatsAppDocument({
         phone: cleanPhone,
         base64,
         fileName: `ordem_servico_${order.id.slice(0, 8)}.pdf`,
         caption: `Olá, ${order.client_name}! Sua Ordem de Serviço está pronta. Segue em anexo. Obrigado pela preferência!`,
         store_id: order.store_id,
       });
-      alert('✅ PDF enviado para WhatsApp com sucesso!');
+      if (enviouDireto) {
+        alert('✅ PDF enviado para WhatsApp com sucesso!');
+      }
     } catch (error: unknown) {
       console.error('Erro ao enviar WhatsApp:', error);
       alert(error instanceof Error ? error.message : 'Erro ao enviar PDF. Tente novamente.');
@@ -811,12 +813,14 @@ export function OrderDetails({
 
     try {
       setIsSendingText(true);
-      await sendWhatsAppText({
+      const enviouDireto = await sendWhatsAppText({
         phone: cleanPhone,
         text: customText,
         store_id: order.store_id,
       });
-      alert('✅ Mensagem de teste enviada com sucesso!');
+      if (enviouDireto) {
+        alert('✅ Mensagem de teste enviada com sucesso!');
+      }
     } catch (error: unknown) {
       console.error('Erro ao enviar mensagem:', error);
       if (error instanceof Error) {

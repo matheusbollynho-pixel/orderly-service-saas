@@ -696,8 +696,8 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
       const caption = nomeCliente
         ? `Olá, *${nomeCliente}*! Segue sua Nota de Venda #${numeroNota} 🏍️`
         : `Nota de Venda #${numeroNota} — ${storeSettings?.company_name || 'Minha Oficina'} 🏍️`;
-      await sendWhatsAppDocument({ phone, base64, fileName: `nota-balcao-${numeroNota}.pdf`, caption });
-      toast.success('Nota enviada no WhatsApp!');
+      const enviouDireto = await sendWhatsAppDocument({ phone, base64, fileName: `nota-balcao-${numeroNota}.pdf`, caption });
+      if (enviouDireto) toast.success('Nota enviada no WhatsApp!');
     } catch (e: unknown) {
       toast.error(`Erro ao enviar: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
@@ -732,8 +732,8 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
       const caption = nomeCliente
         ? `Olá, *${nomeCliente}*! Segue seu Orçamento #${numeroNota} — válido por 7 dias 🏍️`
         : `Orçamento #${numeroNota} — ${storeSettings?.company_name || 'Minha Oficina'} 🏍️`;
-      await sendWhatsAppDocument({ phone, base64, fileName: `orcamento-${numeroNota}.pdf`, caption });
-      toast.success('Orçamento enviado no WhatsApp!');
+      const enviouDireto = await sendWhatsAppDocument({ phone, base64, fileName: `orcamento-${numeroNota}.pdf`, caption });
+      if (enviouDireto) toast.success('Orçamento enviado no WhatsApp!');
     } catch (e: unknown) {
       toast.error(`Erro ao enviar: ${e instanceof Error ? e.message : String(e)}`);
     } finally {

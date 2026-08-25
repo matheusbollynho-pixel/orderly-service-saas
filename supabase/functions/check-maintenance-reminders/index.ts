@@ -9,6 +9,15 @@ const supabase = createClient(
 // Loja "dona" da instância global compartilhada (legado, pré multi-tenant).
 const LEGACY_DEFAULT_STORE_ID = '9fd27114-97d1-48cd-ad09-1b057fa9c185';
 
+const MAX_POR_EXECUCAO = 15; // nunca mandar rajada grande de uma vez
+const DELAY_ENTRE_ENVIOS_MS = 1500;
+const MAX_TENTATIVAS = 3;
+const ERROS_SEM_RETRY = /not on whatsapp|invalid.*number|número.*inválido/i;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function processarLoja(storeId: string, companyName: string, wppConfig: StoreWhatsAppConfig) {
   if (!wppConfig.instance_url && storeId !== LEGACY_DEFAULT_STORE_ID) {
     console.log(`⏭️ Loja ${companyName} sem WhatsApp configurado — pulando lembretes de manutenção`);
@@ -17,13 +26,15 @@ async function processarLoja(storeId: string, companyName: string, wppConfig: St
   const { data: dueReminders, error } = await supabase
     .from("maintenance_reminders")
     .select(`
-      id, keyword_id, client_phone, client_id, service_date, reminder_due_date,
+      id, keyword_id, client_phone, client_id, service_date, reminder_due_date, reminder_attempts,
       keyword:maintenance_keywords(keyword, reminder_message)
     `)
     .eq("store_id", storeId)
     .is("reminder_sent_at", null)
+    .lt("reminder_attempts", MAX_TENTATIVAS)
     .lte("reminder_due_date", new Date().toISOString())
-    .limit(100);
+    .order("reminder_due_date", { ascending: true })
+    .limit(MAX_POR_EXECUCAO);
 
   if (error || !dueReminders?.length) return { store_id: storeId, enviados: 0, erros: 0 };
 
@@ -34,7 +45,13 @@ async function processarLoja(storeId: string, companyName: string, wppConfig: St
   for (const reminder of dueReminders) {
     try {
       const phone = reminder.client_phone?.replace(/\D/g, "");
-      if (!phone || phone.length < 10) { erros++; continue; }
+      if (!phone || phone.length < 10 || phone.length > 13) {
+        await supabase.from("maintenance_reminders")
+          .update({ reminder_sent_at: new Date().toISOString(), reminder_last_error: "Telefone inválido/ausente" })
+          .eq("id", reminder.id);
+        erros++;
+        continue;
+      }
 
       const fullPhone = phone.startsWith("55") ? phone : `55${phone}`;
       const dedupeKey = `${fullPhone}|${reminder.keyword_id || 'unknown'}`;
@@ -65,8 +82,19 @@ async function processarLoja(storeId: string, companyName: string, wppConfig: St
 
       enviados++;
       console.log(`✅ [${companyName}] Lembrete enviado: ${reminder.id}`);
+      await sleep(DELAY_ENTRE_ENVIOS_MS);
     } catch (e) {
-      console.error(`❌ [${companyName}] Erro no lembrete ${reminder.id}:`, e);
+      const errorMsg = String(e);
+      const tentativas = (reminder.reminder_attempts || 0) + 1;
+      const desistir = ERROS_SEM_RETRY.test(errorMsg) || tentativas >= MAX_TENTATIVAS;
+      console.error(`❌ [${companyName}] Erro no lembrete ${reminder.id} (tentativa ${tentativas}):`, e);
+      await supabase.from("maintenance_reminders")
+        .update({
+          reminder_attempts: tentativas,
+          reminder_last_error: errorMsg.slice(0, 500),
+          ...(desistir ? { reminder_sent_at: new Date().toISOString() } : {}),
+        })
+        .eq("id", reminder.id);
       erros++;
     }
   }

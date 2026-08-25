@@ -88,6 +88,12 @@ REGRAS:
 // Loja "dona" da instância global compartilhada (legado, pré multi-tenant).
 const LEGACY_DEFAULT_STORE_ID = '9fd27114-97d1-48cd-ad09-1b057fa9c185'
 
+const DELAY_ENTRE_ENVIOS_MS = 1500
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 async function processarLoja(store: { id: string; company_name: string; whatsapp_birthday_template: string | null; whatsapp_provider: string | null; whatsapp_instance_url: string | null; whatsapp_instance_token: string | null }) {
   if (!store.whatsapp_instance_url && store.id !== LEGACY_DEFAULT_STORE_ID) {
     console.log(`⏭️ Loja ${store.company_name} sem WhatsApp configurado — pulando aniversários`)
@@ -168,6 +174,7 @@ async function processarLoja(store: { id: string; company_name: string; whatsapp
 
       enviados++
       console.log(`✅ [${company_name}] Aniversário enviado para ${person.client_name}`)
+      await sleep(DELAY_ENTRE_ENVIOS_MS)
     } catch (e) {
       console.error(`❌ [${company_name}] Erro para ${person.client_name}:`, e)
     }

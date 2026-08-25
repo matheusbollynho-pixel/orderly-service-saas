@@ -4,6 +4,7 @@
 // Atualizado: 23/01/2026 - Suporte a envio de documentos PDF
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { logWhatsAppSend } from '../_shared/whatsapp.ts';
 
 interface RequestBody {
   to: string;           // número destino, ex: "5511999999999"
@@ -184,6 +185,8 @@ Deno.serve(async (req: Request) => {
           ? 'Rota inválida para sua instância. Verifique WHATSAPP_TEXT_PATH e base URL.'
           : 'Erro da API WhatsApp';
 
+      await logWhatsAppSend({ storeId: payload.store_id, feature: 'documento_pdf' }, false, `${resp.status}: ${JSON.stringify(parsed)}`);
+
       return new Response(JSON.stringify({
         success: false,
         error: hint,
@@ -197,6 +200,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Se chegou aqui, sucesso
+    await logWhatsAppSend({ storeId: payload.store_id, feature: 'documento_pdf' }, true);
     return new Response(JSON.stringify({ success: true, zapi: parsed, used: { url: finalUrl, authHeader: 'token' } }), {
       status: 200,
       headers: { 'Content-Type': 'application/json', ...corsHeaders },

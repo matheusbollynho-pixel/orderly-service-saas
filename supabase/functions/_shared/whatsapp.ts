@@ -18,7 +18,7 @@ export interface SendContext {
   feature: string  // ex: 'satisfacao' | 'aniversario' | 'agendamento_confirmacao' | 'fiado_cobranca' | 'balcao_followup' | 'lembrete_manutencao' | 'boleto_alerta' | 'max_atendimento' | 'documento_pdf' | 'teste_manual'
 }
 
-async function logWhatsAppSend(ctx: SendContext | undefined, success: boolean, errorMessage?: string) {
+export async function logWhatsAppSend(ctx: SendContext | undefined, success: boolean, errorMessage?: string) {
   if (!ctx?.storeId) return
   try {
     await supabaseAdmin.from('whatsapp_send_log').insert({

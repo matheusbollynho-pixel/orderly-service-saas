@@ -18,6 +18,13 @@ const sb = createClient(
 // Loja "dona" da instância global compartilhada (legado, pré multi-tenant).
 const LEGACY_DEFAULT_STORE_ID = '9fd27114-97d1-48cd-ad09-1b057fa9c185'
 
+const MAX_POR_EXECUCAO = 20 // nunca mandar rajada grande de uma vez, mesmo com backlog acumulado
+const DELAY_ENTRE_ENVIOS_MS = 1500
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 function calcDaysOverdue(dueDateStr: string): number {
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const [y, m, d] = dueDateStr.split('-').map(Number)
@@ -130,10 +137,17 @@ async function processarFiados(): Promise<void> {
     .lte('due_date', today)
     .limit(100)
 
-  const fiados = [...(agendados || []), ...(novos || [])]
-  if (fiados.length === 0) { console.log('✅ Nenhum fiado para processar'); return }
+  const todosFiados = [...(agendados || []), ...(novos || [])]
+  if (todosFiados.length === 0) { console.log('✅ Nenhum fiado para processar'); return }
 
-  console.log(`📬 ${fiados.length} fiado(s) para processar`)
+  // Prioriza os mais atrasados primeiro; corta em MAX_POR_EXECUCAO pra nunca
+  // disparar rajada grande de uma vez, mesmo se houver backlog acumulado
+  // (ex: cron ficou quebrado por um tempo e voltou a rodar)
+  const fiados = todosFiados
+    .sort((a, b) => calcDaysOverdue(b.due_date) - calcDaysOverdue(a.due_date))
+    .slice(0, MAX_POR_EXECUCAO)
+
+  console.log(`📬 ${todosFiados.length} fiado(s) pendente(s), processando ${fiados.length} nesta execução`)
 
   let enviados = 0, erros = 0
 
@@ -189,30 +203,39 @@ async function processarFiados(): Promise<void> {
 
       const message = (messages[level] || messages[1]) + linkSuffix
 
-      await sb.from('fiado_messages').insert([{ store_id: fiado.store_id, fiado_id: fiado.id, level, message, status: 'sent' }])
-      await sb.from('fiados').update({ last_reminder_level: level, last_reminder_at: now }).eq('id', fiado.id)
-
       const semInstanciaPropria = !store?.whatsapp_instance_url && fiado.store_id !== LEGACY_DEFAULT_STORE_ID
       if (semInstanciaPropria) {
         console.log(`⏭️ Loja ${storeName} sem WhatsApp configurado — cobrança de ${fiado.client_name} não enviada`)
       }
 
-      if (fiado.client_phone && !semInstanciaPropria) {
-        const phone = (fiado.client_phone as string).replace(/\D/g, '')
-        if (phone.length >= 10) {
-          try {
-            await sendWhatsAppText(normalizeBrPhone(phone), message, {
-              provider: store?.whatsapp_provider,
-              instance_url: store?.whatsapp_instance_url,
-              instance_token: store?.whatsapp_instance_token,
-            }, { storeId: fiado.store_id as string | undefined, feature: 'fiado_cobranca' })
-            console.log(`✅ Nível ${level} enviado para ${fiado.client_name}`)
-            enviados++
-          } catch (wErr) {
-            console.error(`❌ WhatsApp para ${fiado.client_name}:`, wErr)
-            erros++
-          }
+      const phone = fiado.client_phone ? (fiado.client_phone as string).replace(/\D/g, '') : ''
+      let statusEnvio: 'sent' | 'failed' | 'skipped' = 'skipped'
+      let erroEnvio: string | null = null
+
+      if (phone && phone.length >= 10 && phone.length <= 13 && !semInstanciaPropria) {
+        try {
+          await sendWhatsAppText(normalizeBrPhone(phone), message, {
+            provider: store?.whatsapp_provider,
+            instance_url: store?.whatsapp_instance_url,
+            instance_token: store?.whatsapp_instance_token,
+          }, { storeId: fiado.store_id as string | undefined, feature: 'fiado_cobranca' })
+          console.log(`✅ Nível ${level} enviado para ${fiado.client_name}`)
+          statusEnvio = 'sent'
+          enviados++
+          await sleep(DELAY_ENTRE_ENVIOS_MS)
+        } catch (wErr) {
+          console.error(`❌ WhatsApp para ${fiado.client_name}:`, wErr)
+          statusEnvio = 'failed'
+          erroEnvio = String(wErr).slice(0, 500)
+          erros++
         }
+      }
+
+      await sb.from('fiado_messages').insert([{ store_id: fiado.store_id, fiado_id: fiado.id, level, message, status: statusEnvio, error_message: erroEnvio }])
+      // Só avança o nível de cobrança se a mensagem realmente saiu — senão o
+      // cliente nunca recebeu o aviso mas o sistema achava que já tinha enviado
+      if (statusEnvio === 'sent') {
+        await sb.from('fiados').update({ last_reminder_level: level, last_reminder_at: now }).eq('id', fiado.id)
       }
 
       // IA decide próxima data

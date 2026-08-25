@@ -31,14 +31,19 @@ function buildMessage(clientName: string, link: string, company: string, templat
 
 function phoneValido(phone: string): boolean {
   const digits = phone.replace(/\D/g, '')
-  if (digits.length < 10) return false
+  if (digits.length < 10 || digits.length > 13) return false
   if (/^(\d)\1+$/.test(digits)) return false
-  const ddd = parseInt(digits.slice(0, 2))
+  const semDDI = digits.startsWith('55') && digits.length > 11 ? digits.slice(2) : digits
+  const ddd = parseInt(semDDI.slice(0, 2))
   return ddd >= 11 && ddd <= 99
 }
 
 // Loja "dona" da instância global compartilhada (legado, pré multi-tenant).
 const LEGACY_DEFAULT_STORE_ID = '9fd27114-97d1-48cd-ad09-1b057fa9c185'
+
+// Nunca mandar rajada grande de uma vez, mesmo com backlog acumulado
+// (ex: cron ficou quebrado por um tempo e voltou a rodar)
+const MAX_POR_EXECUCAO = 20
 
 async function processarLoja(
   store: { id: string; company_name: string; whatsapp_satisfaction_template: string | null; whatsapp_provider: string | null; whatsapp_instance_url: string | null; whatsapp_instance_token: string | null },
