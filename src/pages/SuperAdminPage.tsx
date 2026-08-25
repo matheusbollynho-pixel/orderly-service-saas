@@ -181,6 +181,9 @@ export default function SuperAdminPage() {
   const [editAiBudget, setEditAiBudget] = useState(false);
   const [aiBudgetInput, setAiBudgetInput] = useState('');
   const [savingAiBudget, setSavingAiBudget] = useState(false);
+  const [globalErrorsByStore, setGlobalErrorsByStore] = useState<{ storeId: string; nome: string; recursos: { feature: string; count: number; last: string }[] }[]>([]);
+  const [failedCronsGlobal, setFailedCronsGlobal] = useState<{ jobname: string; count: number; last: string }[]>([]);
+  const [loadingGlobalErrors, setLoadingGlobalErrors] = useState(false);
   const [wppProvider, setWppProvider] = useState('uazapi');
   const [newPlan, setNewPlan] = useState('basic');
   const [subDueDate, setSubDueDate] = useState('');
@@ -209,6 +212,7 @@ export default function SuperAdminPage() {
   useEffect(() => {
     if (!isSuperAdmin) return;
     loadClients();
+    loadGlobalErrors();
   }, [isSuperAdmin]);
 
   useEffect(() => {
@@ -293,6 +297,45 @@ export default function SuperAdminPage() {
 
     setClients(result);
     setLoading(false);
+  };
+
+  const loadGlobalErrors = async () => {
+    setLoadingGlobalErrors(true);
+    const sb = supabase as any;
+    const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+
+    const { data: sends } = await sb
+      .from('whatsapp_send_log')
+      .select('store_id, feature, created_at, store_settings(company_name)')
+      .eq('success', false)
+      .gte('created_at', since)
+      .order('created_at', { ascending: false });
+
+    const byStore = new Map<string, { nome: string; recursos: Map<string, { count: number; last: string }> }>();
+    (sends || []).forEach((row: any) => {
+      const nome = row.store_settings?.company_name || 'Loja desconhecida';
+      if (!byStore.has(row.store_id)) byStore.set(row.store_id, { nome, recursos: new Map() });
+      const entry = byStore.get(row.store_id)!;
+      const existing = entry.recursos.get(row.feature);
+      if (existing) existing.count += 1;
+      else entry.recursos.set(row.feature, { count: 1, last: row.created_at });
+    });
+    setGlobalErrorsByStore(Array.from(byStore.entries()).map(([storeId, v]) => ({
+      storeId,
+      nome: v.nome,
+      recursos: Array.from(v.recursos.entries()).map(([feature, d]) => ({ feature, count: d.count, last: d.last })),
+    })));
+
+    const { data: crons } = await sb.rpc('get_failed_cron_runs', { since });
+    const cronMap = new Map<string, { count: number; last: string }>();
+    (crons || []).forEach((c: any) => {
+      const existing = cronMap.get(c.jobname);
+      if (existing) existing.count += 1;
+      else cronMap.set(c.jobname, { count: 1, last: c.start_time });
+    });
+    setFailedCronsGlobal(Array.from(cronMap.entries()).map(([jobname, d]) => ({ jobname, count: d.count, last: d.last })));
+
+    setLoadingGlobalErrors(false);
   };
 
   const entrarComoCliente = async () => {
@@ -1101,6 +1144,50 @@ export default function SuperAdminPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Central de Erros */}
+      <Card className={`glass-card ${(globalErrorsByStore.length > 0 || failedCronsGlobal.length > 0) ? 'border-red-500/40' : 'border-emerald-500/30'}`}>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <ListChecks className="h-4 w-4" /> Central de Erros (últimas 48h)
+            </CardTitle>
+            <Button size="sm" variant="ghost" onClick={loadGlobalErrors} disabled={loadingGlobalErrors} className="gap-1 h-7 text-xs">
+              {loadingGlobalErrors ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />} Atualizar
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {globalErrorsByStore.length === 0 && failedCronsGlobal.length === 0 ? (
+            <p className="text-sm text-emerald-400 flex items-center gap-1.5">
+              <CheckCircle className="h-4 w-4" /> Tudo funcionando normal — nenhum erro nas últimas 48h.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {failedCronsGlobal.length > 0 && (
+                <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-2.5">
+                  <p className="text-xs font-semibold text-red-400 mb-1">🔧 Tarefas automáticas quebradas</p>
+                  {failedCronsGlobal.map(c => (
+                    <p key={c.jobname} className="text-xs text-foreground">
+                      {c.jobname} — <span className="text-red-400">falhou {c.count}x</span>, última {tempoRelativo(c.last)}
+                    </p>
+                  ))}
+                </div>
+              )}
+              {globalErrorsByStore.map(loja => (
+                <div key={loja.storeId} className="rounded-lg border border-red-500/30 bg-red-500/5 p-2.5">
+                  <p className="text-xs font-semibold text-foreground mb-1">🔴 {loja.nome}</p>
+                  {loja.recursos.map(r => (
+                    <p key={r.feature} className="text-xs text-muted-foreground">
+                      {WHATSAPP_FEATURES.find(f => f.id === r.feature)?.label || r.feature} — <span className="text-red-400">{r.count}x</span>, última {tempoRelativo(r.last)}
+                    </p>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Lista */}
       <Card className="glass-card border-border/50">
