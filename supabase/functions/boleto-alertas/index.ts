@@ -78,7 +78,7 @@ async function processarLoja(store: {
       `📋 *Categoria:* ${boleto.categoria}`
 
     await Promise.allSettled(
-      phones.map(phone => sendWhatsAppText(normalizeBrPhone(phone), msg, wppConfig))
+      phones.map(phone => sendWhatsAppText(normalizeBrPhone(phone), msg, wppConfig, { storeId: store.id, feature: 'boleto_alerta' }))
     )
     sent++
   }

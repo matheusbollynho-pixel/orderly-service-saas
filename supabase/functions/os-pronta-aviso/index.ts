@@ -47,7 +47,7 @@ async function processarLoja(store: { id: string; company_name: string; whatsapp
     const msg = `Olá ${nome}! 🏍️\n\nPassando pra avisar que *${moto}* está prontinha aqui na *${company_name}* esperando por você!\n\nPode passar quando puder, estaremos te esperando 😊`;
 
     try {
-      await sendWhatsAppText(normalizeBrPhone(phone), msg, wppConfig);
+      await sendWhatsAppText(normalizeBrPhone(phone), msg, wppConfig, { storeId: store.id, feature: 'os_pronta' });
       await sb.from('service_orders')
         .update({ aviso_retirada_enviado_em: agora.toISOString() })
         .eq('id', os.id);

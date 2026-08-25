@@ -57,7 +57,7 @@ async function processarLoja(storeId: string, companyName: string, wppConfig: St
         .replace("{days}", String(daysAgo))
         .replace("{keyword}", reminder.keyword?.keyword || "serviço");
 
-      await sendWhatsAppText(fullPhone, message, wppConfig);
+      await sendWhatsAppText(fullPhone, message, wppConfig, { storeId, feature: 'lembrete_manutencao' });
 
       await supabase.from("maintenance_reminders")
         .update({ reminder_sent_at: new Date().toISOString() })

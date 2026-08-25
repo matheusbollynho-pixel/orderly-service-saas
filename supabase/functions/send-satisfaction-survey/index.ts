@@ -92,7 +92,7 @@ Deno.serve(async (req) => {
         const ratingRow = await ensureSatisfactionRow(order)
         const link = `${APP_BASE_URL}/avaliar/${ratingRow.public_token}`
         const message = buildSatisfactionMessage(order.client_name, link, company_name, template)
-        await sendWhatsAppText(normalizeBrPhone(order.client_phone), message, wppConfig)
+        await sendWhatsAppText(normalizeBrPhone(order.client_phone), message, wppConfig, { storeId: order.store_id, feature: 'satisfacao' })
         await supabase.from('service_orders').update({ satisfaction_survey_sent_at: new Date().toISOString() }).eq('id', order.id)
       }
     }

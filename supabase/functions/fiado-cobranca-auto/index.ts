@@ -205,7 +205,7 @@ async function processarFiados(): Promise<void> {
               provider: store?.whatsapp_provider,
               instance_url: store?.whatsapp_instance_url,
               instance_token: store?.whatsapp_instance_token,
-            })
+            }, { storeId: fiado.store_id as string | undefined, feature: 'fiado_cobranca' })
             console.log(`✅ Nível ${level} enviado para ${fiado.client_name}`)
             enviados++
           } catch (wErr) {

@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import {
   Loader2, Users, CheckCircle, XCircle, ChevronRight, ArrowLeft, Plus,
   Wifi, WifiOff, Pencil, Save, Calendar, DollarSign, AlertTriangle,
-  Ban, RefreshCw, Phone, Building2, CreditCard, FlaskConical, Bolt, LogIn, Cpu
+  Ban, RefreshCw, Phone, Building2, CreditCard, FlaskConical, Bolt, LogIn, Cpu, Send, ListChecks
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -103,6 +103,32 @@ const PLAN_COLORS: Record<string, string> = {
   premium: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
 };
 
+// Recursos que enviam WhatsApp de verdade — usado pro painel "última vez que funcionou"
+const WHATSAPP_FEATURES: { id: string; label: string }[] = [
+  { id: 'max_atendimento', label: 'Max (IA 24h)' },
+  { id: 'satisfacao', label: 'Pesquisa de Satisfação' },
+  { id: 'agendamento_confirmacao', label: 'Confirmação de Agendamento' },
+  { id: 'aniversario', label: 'Aniversário' },
+  { id: 'fiado_cobranca', label: 'Cobrança de Fiado' },
+  { id: 'balcao_followup', label: 'Follow-up Balcão' },
+  { id: 'lembrete_manutencao', label: 'Lembrete de Manutenção' },
+  { id: 'boleto_alerta', label: 'Alerta de Boleto' },
+  { id: 'os_pronta', label: 'OS Pronta pra Retirada' },
+];
+
+function tempoRelativo(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diffMs / 60000);
+  if (min < 1) return 'agora mesmo';
+  if (min < 60) return `há ${min} min`;
+  const horas = Math.floor(min / 60);
+  if (horas < 24) return `há ${horas}h`;
+  const dias = Math.floor(horas / 24);
+  if (dias < 30) return `há ${dias} dia${dias > 1 ? 's' : ''}`;
+  const meses = Math.floor(dias / 30);
+  return `há ${meses} mês${meses > 1 ? 'es' : ''}`;
+}
+
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   active:    { label: 'Ativo',      color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', icon: CheckCircle },
   pending:   { label: 'Pendente',   color: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',   icon: AlertTriangle },
@@ -148,6 +174,10 @@ export default function SuperAdminPage() {
   const [customFeatures, setCustomFeatures] = useState<string[] | null>(null);
   const [wppUrl, setWppUrl] = useState('');
   const [wppToken, setWppToken] = useState('');
+  const [testPhone, setTestPhone] = useState('');
+  const [sendingTest, setSendingTest] = useState(false);
+  const [sendLog, setSendLog] = useState<Record<string, { created_at: string; success: boolean }>>({});
+  const [loadingSendLog, setLoadingSendLog] = useState(false);
   const [wppProvider, setWppProvider] = useState('uazapi');
   const [newPlan, setNewPlan] = useState('basic');
   const [subDueDate, setSubDueDate] = useState('');
@@ -183,6 +213,8 @@ export default function SuperAdminPage() {
       setWppUrl(selected.whatsapp_instance_url || '');
       setWppToken(selected.whatsapp_instance_token || '');
       setWppProvider(selected.whatsapp_provider || 'uazapi');
+      setTestPhone('');
+      loadSendLog(selected.store_id);
       setNewPlan(selected.plan || 'basic');
       setSubStatus(selected.subscription?.status || 'active');
       setSubAmount(selected.subscription?.amount?.toString() || '');
@@ -349,6 +381,48 @@ export default function SuperAdminPage() {
     } finally {
       setTestingWpp(false);
     }
+  };
+
+  const sendRealTestMessage = async () => {
+    if (!wppUrl || !wppToken || !testPhone.trim()) return;
+    setSendingTest(true);
+    try {
+      const base = wppUrl.replace(/\/$/, '');
+      const digits = testPhone.replace(/\D/g, '');
+      const number = digits.startsWith('55') ? digits : `55${digits}`;
+      const res = await fetch(`${base}/send/text`, {
+        method: 'POST',
+        headers: { token: wppToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ number, text: `✅ Teste do SpeedSeek OS — ${selected?.company_name || 'loja'}. Se você recebeu essa mensagem, o WhatsApp está funcionando de ponta a ponta.` }),
+      });
+      if (res.ok) {
+        toast.success('Mensagem de teste enviada! Confere no número informado.');
+      } else {
+        const raw = await res.text().catch(() => '');
+        toast.error(`Falha ao enviar (${res.status}): ${raw.slice(0, 150)}`);
+      }
+    } catch {
+      toast.error('Erro ao enviar mensagem de teste');
+    } finally {
+      setSendingTest(false);
+    }
+  };
+
+  const loadSendLog = async (storeId: string) => {
+    setLoadingSendLog(true);
+    const sb = supabase as any;
+    const { data } = await sb
+      .from('whatsapp_send_log')
+      .select('feature, created_at, success')
+      .eq('store_id', storeId)
+      .order('created_at', { ascending: false })
+      .limit(200);
+    const latest: Record<string, { created_at: string; success: boolean }> = {};
+    (data || []).forEach((row: any) => {
+      if (!latest[row.feature]) latest[row.feature] = { created_at: row.created_at, success: row.success };
+    });
+    setSendLog(latest);
+    setLoadingSendLog(false);
   };
 
   const saveWpp = async () => {
@@ -841,6 +915,15 @@ export default function SuperAdminPage() {
                     Status: {wppStatus}
                   </p>
                 )}
+                <div className="pt-2 border-t border-border/40 space-y-1.5">
+                  <label className="text-xs text-muted-foreground">Mandar mensagem de teste real pra confirmar ponta a ponta</label>
+                  <div className="flex gap-2">
+                    <Input value={testPhone} onChange={e => setTestPhone(e.target.value)} placeholder="Seu número (DDD + número)" className="h-8 text-sm flex-1" />
+                    <Button size="sm" variant="outline" onClick={sendRealTestMessage} disabled={sendingTest || !wppUrl || !wppToken || !testPhone.trim()} className="gap-1 h-8">
+                      {sendingTest ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />} Enviar teste
+                    </Button>
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="space-y-1 text-sm">
@@ -859,6 +942,40 @@ export default function SuperAdminPage() {
                 )}
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Status por tipo de mensagem */}
+        <Card className="glass-card border-border/50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <ListChecks className="h-4 w-4" /> Status dos recursos de WhatsApp
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {loadingSendLog ? (
+              <p className="text-xs text-muted-foreground">Carregando...</p>
+            ) : (
+              <div className="space-y-1.5">
+                {WHATSAPP_FEATURES.map(f => {
+                  const log = sendLog[f.id];
+                  return (
+                    <div key={f.id} className="flex items-center justify-between text-xs py-1 border-b border-border/20 last:border-0">
+                      <span className="text-foreground">{f.label}</span>
+                      {log ? (
+                        <span className={`flex items-center gap-1 ${log.success ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {log.success ? <CheckCircle className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                          {tempoRelativo(log.created_at)}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">nunca enviado</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <p className="text-[11px] text-muted-foreground mt-2">Mostra a última vez que cada recurso tentou enviar algo pra essa loja — verde é sucesso, vermelho é falha.</p>
           </CardContent>
         </Card>
 

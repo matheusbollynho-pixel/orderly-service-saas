@@ -58,7 +58,7 @@ async function processarLoja(store: { id: string; company_name: string; whatsapp
       const atendenteName = (order.staff_members as { name?: string } | null)?.name ?? null
       const message = buildFollowUpMessage(order.client_name, order.numero, avaliacaoUrl, atendenteName, company_name, template)
 
-      await sendWhatsAppText(phone, message, wppConfig)
+      await sendWhatsAppText(phone, message, wppConfig, { storeId: store.id, feature: 'balcao_followup' })
       await supabase.from('balcao_orders')
         .update({ follow_up_sent_at: new Date().toISOString() })
         .eq('id', order.id)

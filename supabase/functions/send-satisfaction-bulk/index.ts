@@ -115,7 +115,7 @@ async function processarLoja(
       const message = buildMessage(order.client_name, link, company, template)
       const phone = normalizeBrPhone(order.client_phone.replace(/\D/g, ''))
 
-      await sendWhatsAppText(phone, message, wppConfig)
+      await sendWhatsAppText(phone, message, wppConfig, { storeId: store.id, feature: 'satisfacao' })
 
       await supabase.from('service_orders')
         .update({ satisfaction_survey_sent_at: new Date().toISOString() })

@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
 
     const message = buildMessage({ client_name, appointment_date, shift, equipment, service_description, company_name, template })
 
-    await sendWhatsAppText(phone, message, wppConfig)
+    await sendWhatsAppText(phone, message, wppConfig, { storeId: store_id, feature: 'agendamento_confirmacao' })
 
     console.log(`✅ Confirmação enviada para ${phone}`)
 

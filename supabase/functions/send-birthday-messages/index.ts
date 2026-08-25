@@ -153,7 +153,7 @@ async function processarLoja(store: { id: string; company_name: string; whatsapp
       const apelido = cliente?.apelido || person.client_name.split(' ')[0]
       const message = await personalizarMensagem(store.id, template, company_name, person.client_name, apelido, motos, null)
 
-      await sendWhatsAppText(normalizeBrPhone(person.client_phone), message, wppConfig)
+      await sendWhatsAppText(normalizeBrPhone(person.client_phone), message, wppConfig, { storeId: store.id, feature: 'aniversario' })
 
       const now = new Date()
       await supabase.from('birthday_discounts').insert({
