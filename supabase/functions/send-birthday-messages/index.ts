@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { sendWhatsAppText, normalizeBrPhone, type StoreWhatsAppConfig } from '../_shared/whatsapp.ts'
-import { logAiUsage } from '../_shared/aiUsage.ts'
+import { logAiUsage, checkAiBudget } from '../_shared/aiUsage.ts'
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -18,6 +18,14 @@ async function personalizarMensagem(
   ultimoServico: string | null
 ): Promise<string> {
   if (!ANTHROPIC_API_KEY) {
+    return template
+      .replace(/\{\{nome\}\}/g, apelido ? `, ${apelido}` : '')
+      .replace(/\{\{empresa\}\}/g, companyName)
+  }
+
+  const budget = await checkAiBudget(supabase, storeId)
+  if (!budget.allowed) {
+    console.log(`⏭️ Loja ${storeId} sem orçamento de IA — usando template padrão pro aniversário`)
     return template
       .replace(/\{\{nome\}\}/g, apelido ? `, ${apelido}` : '')
       .replace(/\{\{empresa\}\}/g, companyName)
@@ -60,8 +68,12 @@ REGRAS:
       }),
     })
     if (!res.ok) throw new Error(`Claude API error: ${res.status}`)
-    await logAiUsage(supabase, storeId, 'send-birthday-messages')
     const data = await res.json()
+    await logAiUsage(supabase, storeId, 'send-birthday-messages', {
+      model: 'claude-haiku-4-5-20251001',
+      inputTokens: data.usage?.input_tokens ?? 0,
+      outputTokens: data.usage?.output_tokens ?? 0,
+    })
     return data.content?.[0]?.text || template
       .replace(/\{\{nome\}\}/g, `, ${apelido}`)
       .replace(/\{\{empresa\}\}/g, companyName)

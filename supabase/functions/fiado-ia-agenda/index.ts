@@ -5,7 +5,7 @@
  * quando enviar a próxima mensagem (next_reminder_at).
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { logAiUsage } from '../_shared/aiUsage.ts'
+import { logAiUsage, checkAiBudget } from '../_shared/aiUsage.ts'
 
 const sb = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -17,7 +17,9 @@ const CORS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-async function askClaude(prompt: string): Promise<string> {
+const AI_MODEL = 'claude-haiku-4-5-20251001'
+
+async function askClaude(prompt: string): Promise<{ text: string; inputTokens: number; outputTokens: number }> {
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY') || ''
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY não configurada')
 
@@ -29,14 +31,18 @@ async function askClaude(prompt: string): Promise<string> {
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
+      model: AI_MODEL,
       max_tokens: 256,
       messages: [{ role: 'user', content: prompt }],
     }),
   })
   const data = await res.json()
   if (!res.ok) throw new Error(JSON.stringify(data))
-  return data.content?.[0]?.text || ''
+  return {
+    text: data.content?.[0]?.text || '',
+    inputTokens: data.usage?.input_tokens ?? 0,
+    outputTokens: data.usage?.output_tokens ?? 0,
+  }
 }
 
 function daysFromNow(n: number): string {
@@ -110,8 +116,11 @@ Responda APENAS com JSON válido, sem texto extra:
     let reason = 'agendamento padrão'
 
     try {
-      const raw = await askClaude(prompt)
-      await logAiUsage(sb, fiado.store_id as string | undefined, 'fiado-ia-agenda')
+      const budget = await checkAiBudget(sb, fiado.store_id as string | undefined)
+      if (!budget.allowed) throw new Error('Orçamento de IA do mês esgotado — usando regra padrão')
+
+      const { text: raw, inputTokens, outputTokens } = await askClaude(prompt)
+      await logAiUsage(sb, fiado.store_id as string | undefined, 'fiado-ia-agenda', { model: AI_MODEL, inputTokens, outputTokens })
       const match = raw.match(/\{[\s\S]*?\}/)
       if (match) {
         const parsed = JSON.parse(match[0])

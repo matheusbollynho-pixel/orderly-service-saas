@@ -8,7 +8,7 @@
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { sendWhatsAppText, normalizeBrPhone } from '../_shared/whatsapp.ts'
-import { logAiUsage } from '../_shared/aiUsage.ts'
+import { logAiUsage, checkAiBudget } from '../_shared/aiUsage.ts'
 
 const sb = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -70,14 +70,27 @@ REGRAS:
 
 Responda APENAS JSON: {"next_date":"YYYY-MM-DD","next_level":1,"reason":"frase curta"}`
 
+  const storeId = fiado.store_id as string | undefined
+  const budget = await checkAiBudget(sb, storeId)
+  if (!budget.allowed) {
+    console.log(`⏭️ Loja ${storeId} sem orçamento de IA este mês — usando regra padrão pra próxima cobrança`)
+    return { nextDate: daysFromNow(3), nextLevel: Math.min(lastLevel + 1, 4), reason: 'Orçamento de IA do mês esgotado — regra padrão aplicada' }
+  }
+
+  const model = 'claude-haiku-4-5-20251001'
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 200, messages: [{ role: 'user', content: prompt }] }),
+    body: JSON.stringify({ model, max_tokens: 200, messages: [{ role: 'user', content: prompt }] }),
   })
-  await logAiUsage(sb, fiado.store_id as string | undefined, 'fiado-cobranca-auto')
 
   const data = await res.json()
+
+  await logAiUsage(sb, storeId, 'fiado-cobranca-auto', {
+    model,
+    inputTokens: data.usage?.input_tokens ?? 0,
+    outputTokens: data.usage?.output_tokens ?? 0,
+  })
   const text = data.content?.[0]?.text || ''
   const match = text.match(/\{[\s\S]*?\}/)
   if (!match) throw new Error('Claude retornou formato inválido')

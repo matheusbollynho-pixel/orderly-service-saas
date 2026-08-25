@@ -43,7 +43,8 @@ interface StoreClient {
   whatsapp_provider: string | null;
   subscription: Subscription | null;
   custom_features: string[] | null;
-  ai_usage_month: number;
+  ai_spend_month_brl: number;
+  ai_monthly_budget_brl: number | null;
 }
 
 const ALL_FEATURES = [
@@ -62,14 +63,17 @@ const ALL_FEATURES = [
   { id: 'mechanics', label: 'Equipe' },
   { id: 'pos-venda', label: 'Pós-Venda' },
   { id: 'satisfacao', label: 'Satisfação' },
+  { id: 'ia-atendimento', label: 'IA (Max 24h + Estoque)' },
 ];
 
 const BASIC_FEATURES = ['dashboard', 'new', 'express', 'orders', 'agenda', 'quadro', 'mechanics'];
 const ALL_FEATURE_IDS = ALL_FEATURES.map(f => f.id);
+// Pro tem tudo, exceto IA — IA é exclusiva do Premium (e liberável manualmente aqui embaixo)
+const PRO_FEATURES = ALL_FEATURE_IDS.filter(id => id !== 'ia-atendimento');
 const PLAN_FEATURES_BY_PLAN: Record<string, string[]> = {
   trial: ALL_FEATURE_IDS,
   basic: BASIC_FEATURES,
-  pro: ALL_FEATURE_IDS,
+  pro: PRO_FEATURES,
   premium: ALL_FEATURE_IDS,
   enterprise: ALL_FEATURE_IDS,
 };
@@ -80,12 +84,16 @@ const PLAN_LABELS: Record<string, string> = {
   premium: 'Premium',
 };
 
-// Chamadas de IA incluídas por mês, por plano — ajustar conforme o custo real for conhecido
-const AI_PLAN_LIMITS: Record<string, number> = {
-  trial: 50,
-  basic: 100,
-  pro: 500,
-  premium: 2000,
+// Cotação aproximada USD -> BRL, só pra exibir o gasto — manter igual à de supabase/functions/_shared/aiUsage.ts
+const USD_TO_BRL = 5.3;
+
+// Orçamento de IA incluído por mês, em R$, por plano — manter igual ao PLAN_BUDGET_BRL de supabase/functions/_shared/aiUsage.ts
+// Básico e Pro não vendem IA (só Premium) — R$0 bloqueia de verdade no backend.
+const AI_PLAN_BUDGET_BRL: Record<string, number> = {
+  trial: 2,
+  basic: 0,
+  pro: 0,
+  premium: 20,
   enterprise: Infinity,
 };
 
@@ -203,7 +211,7 @@ export default function SuperAdminPage() {
 
     const { data: stores } = await sb
       .from('store_settings')
-      .select('id, company_name, store_phone, plan, active, created_at, whatsapp_instance_url, whatsapp_instance_token, whatsapp_provider, custom_features')
+      .select('id, company_name, store_phone, plan, active, created_at, whatsapp_instance_url, whatsapp_instance_token, whatsapp_provider, custom_features, ai_monthly_budget_brl')
       .order('created_at', { ascending: false });
 
     if (!stores) { setLoading(false); return; }
@@ -223,11 +231,11 @@ export default function SuperAdminPage() {
     startOfMonth.setHours(0, 0, 0, 0);
     const { data: aiUsage } = await sb
       .from('ai_usage_log')
-      .select('store_id')
+      .select('store_id, cost_usd')
       .gte('created_at', startOfMonth.toISOString());
-    const aiUsageByStore: Record<string, number> = {};
+    const aiSpendUsdByStore: Record<string, number> = {};
     (aiUsage || []).forEach((r: any) => {
-      aiUsageByStore[r.store_id] = (aiUsageByStore[r.store_id] || 0) + 1;
+      aiSpendUsdByStore[r.store_id] = (aiSpendUsdByStore[r.store_id] || 0) + (r.cost_usd || 0);
     });
 
     const result: StoreClient[] = stores.map((s: any) => ({
@@ -242,7 +250,8 @@ export default function SuperAdminPage() {
       whatsapp_provider: s.whatsapp_provider,
       custom_features: s.custom_features ?? null,
       subscription: subsByStore[s.id] ?? null,
-      ai_usage_month: aiUsageByStore[s.id] || 0,
+      ai_spend_month_brl: (aiSpendUsdByStore[s.id] || 0) * USD_TO_BRL,
+      ai_monthly_budget_brl: s.ai_monthly_budget_brl ?? null,
     }));
 
     setClients(result);
@@ -681,25 +690,25 @@ export default function SuperAdminPage() {
           </CardHeader>
           <CardContent>
             {(() => {
-              const limit = AI_PLAN_LIMITS[selected.plan ?? 'basic'] ?? AI_PLAN_LIMITS.basic;
-              const used = selected.ai_usage_month;
-              const pct = limit === Infinity ? 0 : Math.min(100, Math.round((used / limit) * 100));
-              const over = limit !== Infinity && used > limit;
+              const budget = selected.ai_monthly_budget_brl ?? AI_PLAN_BUDGET_BRL[selected.plan ?? 'basic'] ?? AI_PLAN_BUDGET_BRL.basic;
+              const spent = selected.ai_spend_month_brl;
+              const pct = budget === Infinity ? 0 : Math.min(100, Math.round((spent / budget) * 100));
+              const over = budget !== Infinity && spent > budget;
               return (
                 <div className="space-y-1.5">
                   <div className="flex items-baseline justify-between">
                     <span className={`text-lg font-semibold ${over ? 'text-red-400' : 'text-foreground'}`}>
-                      {used} {limit !== Infinity && <span className="text-sm text-muted-foreground font-normal">/ {limit} chamadas incluídas</span>}
+                      R$ {spent.toFixed(2)} {budget !== Infinity && <span className="text-sm text-muted-foreground font-normal">/ R$ {budget.toFixed(2)} incluídos{selected.ai_monthly_budget_brl != null ? ' (override)' : ''}</span>}
                     </span>
-                    {limit === Infinity && <span className="text-xs text-muted-foreground">sem limite (enterprise)</span>}
+                    {budget === Infinity && <span className="text-xs text-muted-foreground">sem limite (enterprise)</span>}
                   </div>
-                  {limit !== Infinity && (
+                  {budget !== Infinity && (
                     <div className="h-1.5 rounded-full bg-muted/40 overflow-hidden">
                       <div className={`h-full ${over ? 'bg-red-500' : 'bg-primary'}`} style={{ width: `${pct}%` }} />
                     </div>
                   )}
                   {over && (
-                    <p className="text-xs text-red-400">Passou do incluído no plano — considere cobrar excedente ou sugerir upgrade.</p>
+                    <p className="text-xs text-red-400">Passou do orçamento do plano — a IA dessa loja já está bloqueada até o próximo mês (ou até liberar mais acima).</p>
                   )}
                 </div>
               );

@@ -591,7 +591,7 @@ async function executarFerramenta(
 async function chamarClaude(
   systemPrompt: string,
   messages: { role: 'user' | 'assistant'; content: string | unknown[] }[]
-): Promise<{ content: unknown[]; stop_reason: string }> {
+): Promise<{ content: unknown[]; stop_reason: string; usage?: { input_tokens: number; output_tokens: number } }> {
   const MAX_RETRIES = 3;
   const RETRY_DELAYS = [3000, 8000, 15000]; // 3s, 8s, 15s
 
@@ -1217,10 +1217,14 @@ Deno.serve(async (req) => {
     while (loopCount < MAX_LOOPS) {
       loopCount++;
 
-      let claudeResult: { content: unknown[]; stop_reason: string };
+      let claudeResult: { content: unknown[]; stop_reason: string; usage?: { input_tokens: number; output_tokens: number } };
       try {
         claudeResult = await chamarClaude(systemPrompt, messages);
-        await logAiUsage(sb, resolvedStoreId, 'ia-atendimento');
+        await logAiUsage(sb, resolvedStoreId, 'ia-atendimento', {
+          model: CLAUDE_MODEL,
+          inputTokens: claudeResult.usage?.input_tokens ?? 0,
+          outputTokens: claudeResult.usage?.output_tokens ?? 0,
+        });
       } catch (e) {
         console.error('Erro ao chamar Claude:', e);
         throw e;

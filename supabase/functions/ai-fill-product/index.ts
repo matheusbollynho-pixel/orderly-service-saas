@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { logAiUsage } from '../_shared/aiUsage.ts'
+import { logAiUsage, checkAiBudget } from '../_shared/aiUsage.ts'
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -48,6 +48,11 @@ Deno.serve(async (req) => {
     if (!description) return json({ error: 'description é obrigatório' }, 400)
   } catch {
     return json({ error: 'JSON inválido' }, 400)
+  }
+
+  const budget = await checkAiBudget(supabaseAdmin, storeId)
+  if (!budget.allowed) {
+    return json({ error: `Limite de IA do plano atingido este mês (R$ ${budget.spentBrl.toFixed(2)} de R$ ${budget.budgetBrl.toFixed(2)}).` }, 402)
   }
 
   const prompt = `Você é um assistente especializado em peças de moto para oficinas brasileiras. Com base na descrição abaixo, preencha os campos do produto em JSON.
@@ -110,9 +115,14 @@ Regras:
       return json({ error: 'Erro ao chamar Claude API' }, 502)
     }
 
-    await logAiUsage(supabaseAdmin, storeId, 'ai-fill-product')
-
     const result = await response.json()
+
+    await logAiUsage(supabaseAdmin, storeId, 'ai-fill-product', {
+      model: 'claude-haiku-4-5-20251001',
+      inputTokens: result.usage?.input_tokens ?? 0,
+      outputTokens: result.usage?.output_tokens ?? 0,
+    })
+
     const text = result.content?.[0]?.text ?? ''
 
     let fields: Record<string, unknown>

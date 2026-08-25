@@ -33,11 +33,14 @@ import {
   Trash2,
   Sparkles,
   Loader2,
+  Lock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useVehicleLabel } from '@/hooks/useVehicleLabel';
+import { usePlanFeatures } from '@/hooks/usePlanFeatures';
+import { UpgradeModal } from '@/components/UpgradeModal';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -134,6 +137,9 @@ interface ProductFormProps {
 
 function ProductFormDialog({ open, product, isEditing, isSaving, onChange, onBulkChange, onSave, onClose }: ProductFormProps) {
   const { VEHICLE_CAP } = useVehicleLabel();
+  const { canAccess, getUpgradeLink, getRequiredPlan } = usePlanFeatures();
+  const iaLocked = !canAccess('ia-atendimento');
+  const [showIaUpgrade, setShowIaUpgrade] = useState(false);
   const [aiDescription, setAiDescription] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
 
@@ -172,35 +178,57 @@ function ProductFormDialog({ open, product, isEditing, isSaving, onChange, onBul
         </DialogHeader>
 
         <div className="space-y-5 py-2">
+          {showIaUpgrade && (
+            <UpgradeModal
+              feature="IA de estoque"
+              requiredPlan={getRequiredPlan('ia-atendimento')}
+              upgradeLink={getUpgradeLink('ia-atendimento')}
+              onClose={() => setShowIaUpgrade(false)}
+            />
+          )}
           {/* IA */}
-          <section className="rounded-xl border border-primary/30 bg-primary/5 p-3 space-y-2">
-            <div className="flex items-center gap-2 text-sm font-semibold text-primary">
-              <Sparkles className="h-4 w-4" />
-              Preencher com IA
-            </div>
-            <p className="text-xs text-muted-foreground">Descreva a peça e a IA preenche os campos automaticamente. Revise antes de salvar.</p>
-            <div className="flex gap-2">
-              <Input
-                placeholder='Ex: pastilha de freio dianteira Honda CG 160 2020'
-                value={aiDescription}
-                onChange={(e) => setAiDescription(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAiFill()}
-                disabled={isAiLoading}
-                className="flex-1"
-              />
-              <Button
-                type="button"
-                variant="default"
-                size="sm"
-                onClick={handleAiFill}
-                disabled={isAiLoading || !aiDescription.trim()}
-                className="flex-shrink-0"
-              >
-                {isAiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                {isAiLoading ? 'Preenchendo...' : 'Preencher'}
-              </Button>
-            </div>
-          </section>
+          {iaLocked ? (
+            <section
+              role="button"
+              onClick={() => setShowIaUpgrade(true)}
+              className="rounded-xl border border-dashed border-muted-foreground/30 bg-muted/20 p-3 space-y-1 cursor-pointer hover:bg-muted/30 transition-colors"
+            >
+              <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+                <Lock className="h-4 w-4" />
+                Preencher com IA — exclusivo do Premium
+              </div>
+              <p className="text-xs text-muted-foreground">Descreva a peça e a IA preenche os campos automaticamente. Assine o Premium pra liberar.</p>
+            </section>
+          ) : (
+            <section className="rounded-xl border border-primary/30 bg-primary/5 p-3 space-y-2">
+              <div className="flex items-center gap-2 text-sm font-semibold text-primary">
+                <Sparkles className="h-4 w-4" />
+                Preencher com IA
+              </div>
+              <p className="text-xs text-muted-foreground">Descreva a peça e a IA preenche os campos automaticamente. Revise antes de salvar.</p>
+              <div className="flex gap-2">
+                <Input
+                  placeholder='Ex: pastilha de freio dianteira Honda CG 160 2020'
+                  value={aiDescription}
+                  onChange={(e) => setAiDescription(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleAiFill()}
+                  disabled={isAiLoading}
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="default"
+                  size="sm"
+                  onClick={handleAiFill}
+                  disabled={isAiLoading || !aiDescription.trim()}
+                  className="flex-shrink-0"
+                >
+                  {isAiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  {isAiLoading ? 'Preenchendo...' : 'Preencher'}
+                </Button>
+              </div>
+            </section>
+          )}
 
           {/* Identificação */}
           <section>

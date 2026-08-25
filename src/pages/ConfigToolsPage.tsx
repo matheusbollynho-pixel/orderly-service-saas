@@ -6,10 +6,14 @@ import { useAuth } from '@/hooks/useAuth';
 import { useStore } from '@/contexts/StoreContext';
 import { MaintenanceKeywordsManager } from '@/components/MaintenanceKeywordsManager';
 import { useStoreSettings, StoreSettings } from '@/hooks/useStoreSettings';
+import { usePlanFeatures } from '@/hooks/usePlanFeatures';
+import { UpgradeModal } from '@/components/UpgradeModal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Settings, Zap, MessageSquare, CalendarCheck, Star, Cake, ShoppingCart, Store, Bot, Users, CreditCard } from 'lucide-react';
+import { Settings, Zap, MessageSquare, CalendarCheck, Star, Cake, ShoppingCart, Store, Bot, Users, CreditCard, Send, Loader2, Lock, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 type MessageKey = 'whatsapp_confirmation_template' | 'whatsapp_satisfaction_template' | 'whatsapp_birthday_template' | 'whatsapp_balcao_followup_template';
 
@@ -73,6 +77,9 @@ export default function ConfigToolsPage() {
   const { isOwner, role, loading: storeLoading } = useStore();
   const isRestrictedUser = !!user && role !== null && role !== 'owner';
   const { VEHICLE_CAP, VEHICLES_CAP } = useVehicleLabel();
+  const { canAccess, getUpgradeLink, getRequiredPlan } = usePlanFeatures();
+  const iaLocked = !canAccess('ia-atendimento');
+  const [showIaUpgrade, setShowIaUpgrade] = useState(false);
   const navigate = useNavigate();
   const [showKeywords, setShowKeywords] = useState(false);
   const [removeOsId, setRemoveOsId] = useState('');
@@ -101,6 +108,10 @@ export default function ConfigToolsPage() {
   });
   const [selectedMessage, setSelectedMessage] = useState<MessageKey>('whatsapp_confirmation_template');
   const [initialized, setInitialized] = useState(false);
+  const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string; suggestion?: string | null; applied?: boolean }[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [showRawNotes, setShowRawNotes] = useState(false);
 
   const { updateOrder, isUpdating } = useServiceOrders();
 
@@ -160,6 +171,34 @@ export default function ConfigToolsPage() {
     } as Partial<StoreSettings>);
   }
 
+  async function handleChatSend() {
+    const msg = chatInput.trim();
+    if (!msg || chatLoading) return;
+    const priorHistory = chatMessages;
+    setChatInput('');
+    setChatMessages(h => [...h, { role: 'user', content: msg }]);
+    setChatLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('ai-notes-assistant', {
+        body: { message: msg, history: priorHistory, vehicle_label: VEHICLE_CAP },
+      });
+      if (error) throw error;
+      setChatMessages(h => [...h, { role: 'assistant', content: data?.reply || 'Sem resposta.', suggestion: data?.suggestion || null }]);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Erro ao falar com a IA');
+      setChatMessages(h => h.slice(0, -1));
+      setChatInput(msg);
+    } finally {
+      setChatLoading(false);
+    }
+  }
+
+  function handleApplySuggestion(index: number, suggestion: string) {
+    setAiNotes(prev => (prev.trim() ? prev.trim() + '\n' + suggestion : suggestion));
+    setChatMessages(h => h.map((m, i) => i === index ? { ...m, applied: true } : m));
+    toast.success('Adicionado às notas! Clique em "Salvar" no fim da página pra confirmar.');
+  }
+
   if (!user || (role !== null && isRestrictedUser)) {
     return <div className="p-8 text-center text-red-500">Acesso restrito.</div>;
   }
@@ -173,9 +212,19 @@ export default function ConfigToolsPage() {
 
   return (
     <div className="max-w-2xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-6 flex items-center gap-2">
-        <Settings size={24} /> Configurações
-      </h1>
+      <div className="flex items-center gap-3 mb-6">
+        <button
+          type="button"
+          title="Voltar"
+          onClick={() => navigate('/')}
+          className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </button>
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <Settings size={24} /> Configurações
+        </h1>
+      </div>
 
       <Tabs defaultValue="loja">
         <TabsList className="w-full mb-6">
@@ -322,7 +371,28 @@ export default function ConfigToolsPage() {
 
         {/* ABA IA */}
         <TabsContent value="ia" className="space-y-4">
-          {loadingSettings ? (
+          {showIaUpgrade && (
+            <UpgradeModal
+              feature="IA 24h"
+              requiredPlan={getRequiredPlan('ia-atendimento')}
+              upgradeLink={getUpgradeLink('ia-atendimento')}
+              onClose={() => setShowIaUpgrade(false)}
+            />
+          )}
+          {iaLocked ? (
+            <div className="border border-white/10 rounded-lg p-6 bg-black/20 flex flex-col items-center text-center gap-3">
+              <div className="bg-primary/10 p-3 rounded-full">
+                <Lock className="h-6 w-6 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-neutral-200">IA de atendimento é exclusiva do plano Premium</p>
+                <p className="text-xs text-neutral-500 mt-1 max-w-sm">Assistente virtual 24h no WhatsApp (Max) e preenchimento de produtos por IA no estoque. Assine o Premium pra liberar.</p>
+              </div>
+              <Button onClick={() => setShowIaUpgrade(true)} className="gap-1.5">
+                <Star className="h-4 w-4" /> Ver plano Premium
+              </Button>
+            </div>
+          ) : loadingSettings ? (
             <p className="text-sm text-neutral-400">Carregando...</p>
           ) : (
             <>
@@ -347,30 +417,88 @@ export default function ConfigToolsPage() {
                 </button>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-xs text-neutral-400 font-medium">Instruções personalizadas para a IA</label>
-
-                <div className="border border-white/10 rounded-lg p-3 bg-black/20 space-y-2">
-                  <p className="text-xs font-medium text-neutral-300">💡 O que escrever aqui?</p>
-                  <p className="text-xs text-neutral-500">Tudo que é único da sua oficina e a IA precisa saber para atender bem seus clientes:</p>
-                  <ul className="text-xs text-neutral-400 space-y-1">
-                    <li>🔧 <span className="text-neutral-300">Serviços especiais:</span> "Fazemos funilaria, pintura e customização"</li>
-                    <li>💰 <span className="text-neutral-300">Preços fixos:</span> "Troca de óleo a partir de R$ 45, revisão completa R$ 120"</li>
-                    <li>🚫 <span className="text-neutral-300">Restrições:</span> "Não atendemos {VEHICLE_CAP.toLowerCase()}s acima de 2.0" ou "Só trabalhamos com Honda e Toyota"</li>
-                    <li>⏰ <span className="text-neutral-300">Regras de agendamento:</span> "Cliente deve chegar 10 min antes" ou {`"Deixar o ${VEHICLE_CAP.toLowerCase()} o dia todo"`}</li>
-                    <li>🎯 <span className="text-neutral-300">Promoções ativas:</span> "Todo mês de abril, troca de óleo com 20% de desconto"</li>
-                    <li>💬 <span className="text-neutral-300">Tom de atendimento:</span> "Seja mais formal" ou "Use linguagem bem descontraída"</li>
-                  </ul>
+              <div className="border border-white/10 rounded-lg bg-black/20 overflow-hidden">
+                <div className="px-3 pt-3 pb-2 flex items-start gap-2">
+                  <Bot className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-neutral-200">Ensine a IA sobre sua oficina</p>
+                    <p className="text-xs text-neutral-500">Conte preços, restrições, horários, promoções e tom de atendimento — ela guarda como regra e usa pra atender seus clientes no WhatsApp.</p>
+                  </div>
                 </div>
 
-                <textarea
-                  rows={7}
-                  value={aiNotes}
-                  onChange={e => setAiNotes(e.target.value)}
-                  placeholder={`Ex: Fazemos revisão completa por R$ 350. Não atendemos ${VEHICLE_CAP.toLowerCase()}s acima de 2.0 turbo. Cliente deve deixar o ${VEHICLE_CAP.toLowerCase()} o dia todo para serviços grandes...`}
-                  className="w-full p-2 border border-white/20 rounded text-sm bg-black/30 text-neutral-200"
-                />
-                <p className="text-xs text-neutral-500">Essas instruções são adicionadas ao conhecimento da IA sobre sua oficina. Quanto mais detalhado, melhor o atendimento.</p>
+                {chatMessages.length === 0 && (
+                  <div className="mx-3 mb-2 border border-white/10 rounded-lg p-2.5 bg-black/20 space-y-1">
+                    <p className="text-xs text-neutral-500">Exemplos do que contar:</p>
+                    <ul className="text-xs text-neutral-500 space-y-0.5">
+                      <li>🔧 "Fazemos funilaria, pintura e customização"</li>
+                      <li>💰 "Troca de óleo a partir de R$ 45, revisão completa R$ 120"</li>
+                      <li>🚫 {VEHICLE_CAP === 'Carro' ? '"Não atendemos carros acima de 2.0"' : '"Não atendemos motos acima de 600cc"'}</li>
+                      <li>⏰ {`"Deixar ${VEHICLE_CAP === 'Moto' ? 'a moto' : 'o ' + VEHICLE_CAP.toLowerCase()} o dia todo pra serviços grandes"`}</li>
+                    </ul>
+                  </div>
+                )}
+
+                {chatMessages.length > 0 && (
+                  <div className="max-h-72 overflow-y-auto px-3 space-y-2 pb-2">
+                    {chatMessages.map((m, i) => (
+                      <div key={i} className={cn('flex flex-col gap-1.5', m.role === 'user' ? 'items-end' : 'items-start')}>
+                        <div className={cn('text-xs rounded-lg px-3 py-2 max-w-[85%] whitespace-pre-wrap', m.role === 'user' ? 'bg-primary/20 text-neutral-100' : 'bg-white/5 text-neutral-300')}>
+                          {m.content}
+                        </div>
+                        {m.suggestion && (
+                          <div className="max-w-[85%] border border-primary/40 rounded-lg p-2 bg-primary/10 space-y-1.5">
+                            <p className="text-[11px] text-neutral-400">Regra sugerida:</p>
+                            <p className="text-xs text-neutral-200">"{m.suggestion}"</p>
+                            <Button
+                              size="sm"
+                              variant={m.applied ? 'outline' : 'default'}
+                              disabled={m.applied}
+                              onClick={() => handleApplySuggestion(i, m.suggestion!)}
+                              className="h-7 text-xs w-full"
+                            >
+                              {m.applied ? '✓ Adicionado' : '+ Adicionar às notas'}
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {chatLoading && (
+                      <div className="text-xs text-neutral-500 flex items-center gap-1.5">
+                        <Loader2 className="h-3 w-3 animate-spin" /> pensando...
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 p-3 border-t border-white/10">
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={e => setChatInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleChatSend()}
+                    placeholder={VEHICLE_CAP === 'Carro' ? 'Ex: não atendemos carro acima de 2.0 turbo' : 'Ex: não atendemos moto acima de 600cc'}
+                    disabled={chatLoading}
+                    className="flex-1 h-9 px-3 rounded-md border border-white/20 bg-black/30 text-sm text-neutral-200 placeholder:text-neutral-600"
+                  />
+                  <Button size="icon" className="h-9 w-9 flex-shrink-0" disabled={chatLoading || !chatInput.trim()} onClick={handleChatSend}>
+                    {chatLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  </Button>
+                </div>
+
+                <div className="border-t border-white/10 px-3 py-2">
+                  <button type="button" onClick={() => setShowRawNotes(v => !v)} className="text-xs text-neutral-500 hover:text-neutral-300">
+                    {showRawNotes ? '▲ Ocultar' : '▼ Ver/editar'} notas salvas {aiNotes.trim() ? '' : '(vazio)'}
+                  </button>
+                  {showRawNotes && (
+                    <textarea
+                      rows={6}
+                      value={aiNotes}
+                      onChange={e => setAiNotes(e.target.value)}
+                      placeholder="Nenhuma nota ainda — converse com a IA acima pra começar a adicionar."
+                      className="w-full mt-2 p-2 border border-white/20 rounded text-sm bg-black/30 text-neutral-200"
+                    />
+                  )}
+                </div>
               </div>
 
               <Button className="w-full" disabled={saving} onClick={handleSave}>
