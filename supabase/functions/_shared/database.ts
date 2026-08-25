@@ -556,6 +556,7 @@ export interface StoreInfo {
   asaas_api_key: string | null;
   boleto_notify_phone_1: string | null;
   boleto_notify_phone_2: string | null;
+  tem_estoque: boolean;
 }
 
 export async function buscarStoreSettings(sb: SupabaseClient, storeId?: string): Promise<StoreInfo> {
@@ -572,6 +573,20 @@ export async function buscarStoreSettings(sb: SupabaseClient, storeId?: string):
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const d = data as Record<string, any> | null;
   if (storeErr) console.error('❌ buscarStoreSettings error:', storeErr.message);
+
+  // Só ativa a busca real de estoque pro Max se a loja de fato cadastra
+  // produtos — senão ele fica prometendo/negando peças com base numa
+  // tabela vazia (caso da Bandara Motos, que não usa esse módulo).
+  let temEstoque = false;
+  const resolvedId = d?.id as string | undefined;
+  if (resolvedId) {
+    const { count } = await sb
+      .from('inventory_products')
+      .select('id', { count: 'exact', head: true })
+      .eq('store_id', resolvedId);
+    temEstoque = !!count && count > 0;
+  }
+
   return {
     id: d?.id || null,
     company_name: d?.company_name || 'Bandara Motos',
@@ -588,6 +603,7 @@ export async function buscarStoreSettings(sb: SupabaseClient, storeId?: string):
     asaas_api_key: d?.asaas_api_key || null,
     boleto_notify_phone_1: d?.boleto_notify_phone_1 || null,
     boleto_notify_phone_2: d?.boleto_notify_phone_2 || null,
+    tem_estoque: temEstoque,
   };
 }
 

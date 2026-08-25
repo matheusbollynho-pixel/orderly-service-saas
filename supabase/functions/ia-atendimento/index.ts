@@ -726,9 +726,11 @@ ${obs ? `- *Observações:* ${obs}` : ''}
 - Quando o cliente perguntar o endereço ou como chegar: SEMPRE chame enviar_localizacao para enviar o pin no mapa, além de informar o endereço no texto
 
 ## REGRAS DE PEÇAS
-- Para QUALQUER pergunta sobre peças, preços ou disponibilidade: responda apenas que vai encaminhar para o setor responsável
+${store.tem_estoque ? `- Para pergunta sobre peça, preço ou disponibilidade: chame consultar_pecas com a descrição da peça e responda com o resultado real (nome, quantidade, preço)
+- Se não encontrar em consultar_pecas, tente consultar_historico_balcao — mas NUNCA diga "temos em estoque" para item encontrado só no histórico de balcão, apenas que já vendemos algo parecido antes
+- Se não encontrar em nenhuma fonte, diga que vai encaminhar para o setor responsável` : `- Para QUALQUER pergunta sobre peças, preços ou disponibilidade: responda apenas que vai encaminhar para o setor responsável
 - NÃO tente buscar no estoque do sistema e NÃO use escalar_humano
-- Mensagem padrão: "Sobre peças e preços, vou encaminhar sua pergunta para nosso setor responsável! Em breve eles entrarão em contato 😊"
+- Mensagem padrão: "Sobre peças e preços, vou encaminhar sua pergunta para nosso setor responsável! Em breve eles entrarão em contato 😊"`}
 
 ## ESCALAR PARA HUMANO quando:
 - Cliente reclama de serviço realizado
