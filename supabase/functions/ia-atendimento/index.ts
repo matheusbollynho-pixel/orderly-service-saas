@@ -891,6 +891,51 @@ Deno.serve(async (req) => {
     const ctx: ConversationContext = convCtx;
 
     // ----------------------------------------------------------
+    // 1.1 Ignorar mensagem automática de outro sistema/robô (away
+    // message, aviso de "não monitorado", etc.) — nunca responder,
+    // pra não emplacar conversa com quem não vai ler de verdade
+    // ----------------------------------------------------------
+    const PADRAO_MSG_AUTOMATICA = /mensagem\s+autom[aá]tica|resposta\s+autom[aá]tica|n[aã]o\s+responda\s+(a\s+)?(esta|essa)\s+mensagem|n[uú]mero\s+n[aã]o\s+monitorado|fora\s+do\s+hor[aá]rio\s+de\s+atendimento|this\s+is\s+an\s+automated\s+(message|reply)|automated\s+reply|away\s+message/i;
+    if (PADRAO_MSG_AUTOMATICA.test(text)) {
+      console.log('🤖 Mensagem automática de outro sistema detectada — ignorando:', text.slice(0, 80));
+      return new Response(JSON.stringify({ ok: true, ignored: 'auto_message_pattern' }), { status: 200 });
+    }
+
+    // ----------------------------------------------------------
+    // 1.2 Detectar loop bot-a-bot: respostas indo e voltando rápido
+    // demais pra ser humano lendo e digitando — pausa a conversa
+    // ----------------------------------------------------------
+    if (state === 'pausado_loop_bot') {
+      const pausadoEmMs = ctx.loop_pausado_em ? new Date(ctx.loop_pausado_em).getTime() : 0;
+      const diffHoras = (Date.now() - pausadoEmMs) / (1000 * 60 * 60);
+      if (diffHoras < 4) {
+        return new Response(JSON.stringify({ ok: true, state: 'pausado_loop_bot' }), { status: 200 });
+      }
+      // Passaram 4h — reativa e dá o benefício da dúvida
+      state = 'identificado';
+      ctx.loop_respostas_rapidas_seguidas = 0;
+      ctx.loop_pausado_em = undefined;
+    }
+
+    const ultimaRespostaMs = ctx.loop_ultima_resposta_em ? new Date(ctx.loop_ultima_resposta_em).getTime() : null;
+    if (ultimaRespostaMs !== null && (Date.now() - ultimaRespostaMs) / 1000 < 6) {
+      ctx.loop_respostas_rapidas_seguidas = (ctx.loop_respostas_rapidas_seguidas || 0) + 1;
+    } else {
+      ctx.loop_respostas_rapidas_seguidas = 0;
+    }
+
+    if ((ctx.loop_respostas_rapidas_seguidas || 0) >= 5) {
+      console.log('🔁 Possível loop com outro bot/automação — pausando conversa:', phone);
+      await saveConversationState(sb, phone, 'pausado_loop_bot', {
+        ...ctx,
+        loop_pausado_em: new Date().toISOString(),
+        loop_respostas_rapidas_seguidas: 0,
+        escalada_motivo: 'Respostas rápidas demais seguidas — possível loop com outro bot/automação',
+      }, resolvedStoreId);
+      return new Response(JSON.stringify({ ok: true, paused: 'loop_suspeito' }), { status: 200 });
+    }
+
+    // ----------------------------------------------------------
     // 2. Se aguardando humano, verificar se já passaram 2h (reativa IA se sim)
     // ----------------------------------------------------------
     if (state === 'aguardando_humano') {
@@ -1412,6 +1457,7 @@ Deno.serve(async (req) => {
       ];
       // Manter apenas os últimos 8 turnos (16 mensagens) para não inflar o contexto
       ctx.history = updatedHistory.slice(-16);
+      ctx.loop_ultima_resposta_em = new Date().toISOString();
       await saveConversationState(sb, phone, newState, ctx, resolvedStoreId);
     }
 

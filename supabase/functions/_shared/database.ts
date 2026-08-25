@@ -36,6 +36,9 @@ export interface ConversationContext {
   os_materiais?: { descricao: string; valor: number; quantidade: number }[];
   cpf_pix_temp?: string;
   humano_assumiu_em?: string;
+  loop_ultima_resposta_em?: string;
+  loop_respostas_rapidas_seguidas?: number;
+  loop_pausado_em?: string;
 }
 
 export async function getConversationState(
