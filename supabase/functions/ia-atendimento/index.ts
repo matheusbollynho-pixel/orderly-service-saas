@@ -39,7 +39,7 @@ import {
   type ConversationContext,
   type StoreInfo,
 } from '../_shared/database.ts';
-import { sendWhatsAppText, sendWhatsAppLocation, normalizeBrPhone } from '../_shared/whatsapp.ts';
+import { sendWhatsAppText, sendWhatsAppLocation, normalizeBrPhone, type StoreWhatsAppConfig } from '../_shared/whatsapp.ts';
 import { logAiUsage } from '../_shared/aiUsage.ts';
 
 // ============================================================
@@ -71,22 +71,41 @@ const TURNO_LABEL: Record<string, string> = {
 // ENVIO DE MENSAGEM E ALERTAS
 // ============================================================
 
-async function enviarMensagem(phone: string, texto: string): Promise<void> {
-  await sendWhatsAppText(phone, texto);
+async function getWppConfigForStore(sb: ReturnType<typeof getSupabaseClient>, storeId?: string): Promise<StoreWhatsAppConfig | undefined> {
+  if (!storeId) return undefined;
+  const { data } = await sb
+    .from('store_settings')
+    .select('whatsapp_provider, whatsapp_instance_url, whatsapp_instance_token')
+    .eq('id', storeId)
+    .maybeSingle();
+  return {
+    provider: data?.whatsapp_provider || undefined,
+    instance_url: data?.whatsapp_instance_url || undefined,
+    instance_token: data?.whatsapp_instance_token || undefined,
+  };
 }
 
-async function enviarAlertaDono(resumo: string): Promise<void> {
+async function enviarMensagem(phone: string, texto: string, storeId?: string): Promise<void> {
+  const sb = getSupabaseClient();
+  const wppConfig = await getWppConfigForStore(sb, storeId);
+  await sendWhatsAppText(phone, texto, wppConfig, { storeId, feature: 'max_atendimento' });
+}
+
+async function enviarAlertaDono(resumo: string, storeId?: string): Promise<void> {
   const supabase = getSupabaseClient();
-  const { data: settings } = await supabase
-    .from('store_settings')
-    .select('boleto_notify_phone_1, boleto_notify_phone_2')
-    .limit(1)
-    .maybeSingle();
+  let query = supabase.from('store_settings').select('boleto_notify_phone_1, boleto_notify_phone_2, whatsapp_provider, whatsapp_instance_url, whatsapp_instance_token');
+  if (storeId) query = query.eq('id', storeId);
+  const { data: settings } = await query.limit(1).maybeSingle();
   const phones = [settings?.boleto_notify_phone_1, settings?.boleto_notify_phone_2].filter(Boolean) as string[];
   if (phones.length === 0) return;
+  const wppConfig: StoreWhatsAppConfig | undefined = storeId ? {
+    provider: settings?.whatsapp_provider || undefined,
+    instance_url: settings?.whatsapp_instance_url || undefined,
+    instance_token: settings?.whatsapp_instance_token || undefined,
+  } : undefined;
   const msg = `🔔 *Alerta IA Atendimento*\n\n${resumo}`;
   await Promise.allSettled(
-    phones.map(p => sendWhatsAppText(normalizeBrPhone(p), msg).catch(e => console.error('Erro alerta dono:', e)))
+    phones.map(p => sendWhatsAppText(normalizeBrPhone(p), msg, wppConfig, { storeId, feature: 'max_atendimento' }).catch(e => console.error('Erro alerta dono:', e)))
   );
 }
 
@@ -403,24 +422,28 @@ async function executarFerramenta(
     }
 
     case 'enviar_localizacao': {
-      const storeInfo = await buscarStoreSettings(sb);
+      const storeInfo = await buscarStoreSettings(sb, storeId);
       const endereco = storeInfo.store_address || '';
       const nome = storeInfo.company_name || 'Nossa loja';
+      const wppConfig = await getWppConfigForStore(sb, storeId);
+      const locContext = { storeId, feature: 'max_atendimento' };
 
       // Tenta extrair coordenadas do google_maps_url (formato: @lat,lng)
-      const { data: storeRow } = await sb.from('store_settings').select('google_maps_url').limit(1).maybeSingle();
+      let mapsQuery = sb.from('store_settings').select('google_maps_url');
+      if (storeId) mapsQuery = mapsQuery.eq('id', storeId);
+      const { data: storeRow } = await mapsQuery.limit(1).maybeSingle();
       const mapsUrl = (storeRow as Record<string, unknown> | null)?.google_maps_url as string | null;
       const coordMatch = mapsUrl?.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
 
       if (coordMatch) {
         const lat = parseFloat(coordMatch[1]);
         const lng = parseFloat(coordMatch[2]);
-        await sendWhatsAppLocation(normalizeBrPhone(phone), lat, lng, nome, endereco);
+        await sendWhatsAppLocation(normalizeBrPhone(phone), lat, lng, nome, endereco, wppConfig, locContext);
       } else if (mapsUrl) {
         // Envia o link do Google Maps direto
-        await sendWhatsAppText(normalizeBrPhone(phone), `📍 *${nome}*\n${endereco}\n\n${mapsUrl}`);
+        await sendWhatsAppText(normalizeBrPhone(phone), `📍 *${nome}*\n${endereco}\n\n${mapsUrl}`, wppConfig, locContext);
       } else {
-        await sendWhatsAppText(normalizeBrPhone(phone), `📍 *${nome}*\n${endereco || 'Consulte o endereço com nossa equipe.'}`);
+        await sendWhatsAppText(normalizeBrPhone(phone), `📍 *${nome}*\n${endereco || 'Consulte o endereço com nossa equipe.'}`, wppConfig, locContext);
       }
       return { enviado: true };
     }
@@ -464,7 +487,8 @@ async function executarFerramenta(
 
       // Alertar dono
       await enviarAlertaDono(
-        `👤 *${nome}* (${input.phone}) precisa de atendimento humano.\n\n📋 *Motivo:* ${motivo}`
+        `👤 *${nome}* (${input.phone}) precisa de atendimento humano.\n\n📋 *Motivo:* ${motivo}`,
+        storeId
       );
 
       return { escalado: true };
@@ -900,14 +924,14 @@ Deno.serve(async (req) => {
           .update({ status: 'confirmado', confirmado_pelo_cliente: true, confirmacao_respondida_em: new Date().toISOString() })
           .eq('id', ctx.lembrete_agendamento_id);
         await saveConversationState(sb, phone, 'identificado', { ...ctx, lembrete_agendamento_id: undefined }, resolvedStoreId);
-        await enviarMensagem(normalizeBrPhone(phone), '✅ Confirmado! Te esperamos amanhã 🏍️');
+        await enviarMensagem(normalizeBrPhone(phone), '✅ Confirmado! Te esperamos amanhã 🏍️', resolvedStoreId);
       } else if (resp === 'nao' || resp === 'não' || resp === 'n') {
         await sb.from('appointments')
           .update({ status: 'cancelado', confirmado_pelo_cliente: false, confirmacao_respondida_em: new Date().toISOString() })
           .eq('id', ctx.lembrete_agendamento_id);
         await saveConversationState(sb, phone, 'identificado', { ...ctx, lembrete_agendamento_id: undefined }, resolvedStoreId);
-        await enviarMensagem(normalizeBrPhone(phone), 'Entendido! Agendamento cancelado. Quando quiser remarcar é só chamar 😊');
-        await enviarAlertaDono(`❌ Agendamento cancelado pelo cliente\n📱 ${phone}\nID: ${ctx.lembrete_agendamento_id}`);
+        await enviarMensagem(normalizeBrPhone(phone), 'Entendido! Agendamento cancelado. Quando quiser remarcar é só chamar 😊', resolvedStoreId);
+        await enviarAlertaDono(`❌ Agendamento cancelado pelo cliente\n📱 ${phone}\nID: ${ctx.lembrete_agendamento_id}`, resolvedStoreId);
       } else {
         await saveConversationState(sb, phone, 'identificado', { ...ctx, lembrete_agendamento_id: undefined }, resolvedStoreId);
         // Deixar Claude processar
@@ -925,15 +949,17 @@ Deno.serve(async (req) => {
 
       if (aprovado) {
         await saveConversationState(sb, phone, 'identificado', { ...ctx, pending_orcamento_order_id: undefined }, resolvedStoreId);
-        await enviarMensagem(normalizeBrPhone(phone), '✅ Orçamento aprovado! Vou passar para nossa equipe agora.');
+        await enviarMensagem(normalizeBrPhone(phone), '✅ Orçamento aprovado! Vou passar para nossa equipe agora.', resolvedStoreId);
         await enviarAlertaDono(
-          `✅ *Orçamento APROVADO*\n📱 ${ctx.client_name || phone}\nOS: ${ctx.pending_orcamento_order_id}`
+          `✅ *Orçamento APROVADO*\n📱 ${ctx.client_name || phone}\nOS: ${ctx.pending_orcamento_order_id}`,
+          resolvedStoreId
         );
       } else if (recusado) {
         await saveConversationState(sb, phone, 'identificado', { ...ctx, pending_orcamento_order_id: undefined }, resolvedStoreId);
-        await enviarMensagem(normalizeBrPhone(phone), 'Entendido. Vou avisar nossa equipe sobre a recusa do orçamento.');
+        await enviarMensagem(normalizeBrPhone(phone), 'Entendido. Vou avisar nossa equipe sobre a recusa do orçamento.', resolvedStoreId);
         await enviarAlertaDono(
-          `❌ *Orçamento RECUSADO*\n📱 ${ctx.client_name || phone}\nOS: ${ctx.pending_orcamento_order_id}`
+          `❌ *Orçamento RECUSADO*\n📱 ${ctx.client_name || phone}\nOS: ${ctx.pending_orcamento_order_id}`,
+          resolvedStoreId
         );
         await executarFerramenta(sb, 'escalar_humano', {
           phone,
@@ -968,7 +994,7 @@ Deno.serve(async (req) => {
         // Vai cair no intercept 5.4 com o CPF no contexto
       } else {
         const msgInvalido = `CPF inválido. Por favor, informe os 11 dígitos do CPF (só números).`;
-        await enviarMensagem(normalizeBrPhone(phone), msgInvalido);
+        await enviarMensagem(normalizeBrPhone(phone), msgInvalido, resolvedStoreId);
         return new Response(JSON.stringify({ ok: true }), { status: 200 });
       }
     }
@@ -988,7 +1014,7 @@ Deno.serve(async (req) => {
 
       if (!asaasApiKey) {
         const msgErro = 'Não consegui gerar o PIX agora. Por favor, pague na retirada ou tente mais tarde 🙏';
-        await enviarMensagem(normalizeBrPhone(phone), msgErro);
+        await enviarMensagem(normalizeBrPhone(phone), msgErro, resolvedStoreId);
         ctx.history = [...(ctx.history || []), { role: 'user' as const, text }, { role: 'assistant' as const, text: msgErro }].slice(-16);
         await saveConversationState(sb, phone, state, ctx, resolvedStoreId);
         return new Response(JSON.stringify({ ok: true }), { status: 200 });
@@ -1023,7 +1049,7 @@ Deno.serve(async (req) => {
         // Se não tem CPF, pede ao cliente e aguarda
         if (!cpfCliente) {
           const msgCpf = `Para gerar o PIX preciso do seu CPF. Pode me informar? 😊`;
-          await enviarMensagem(normalizeBrPhone(phone), msgCpf);
+          await enviarMensagem(normalizeBrPhone(phone), msgCpf, resolvedStoreId);
           ctx.history = [...(ctx.history || []), { role: 'user' as const, text }, { role: 'assistant' as const, text: msgCpf }].slice(-16);
           await saveConversationState(sb, phone, 'aguardando_cpf_pix', ctx, resolvedStoreId);
           return new Response(JSON.stringify({ ok: true }), { status: 200 });
@@ -1086,9 +1112,9 @@ Deno.serve(async (req) => {
         if (pixCopiaECola) msg += `\n_PIX Copia e Cola na próxima mensagem_ 👇`;
         msg += `\n\nApós o pagamento sua OS será atualizada automaticamente 😊`;
 
-        await enviarMensagem(normalizeBrPhone(phone), msg);
+        await enviarMensagem(normalizeBrPhone(phone), msg, resolvedStoreId);
         if (pixCopiaECola) {
-          await enviarMensagem(normalizeBrPhone(phone), pixCopiaECola);
+          await enviarMensagem(normalizeBrPhone(phone), pixCopiaECola, resolvedStoreId);
         }
         ctx.cpf_pix_temp = undefined; // limpa CPF temporário
         ctx.history = [...(ctx.history || []), { role: 'user' as const, text }, { role: 'assistant' as const, text: msg }].slice(-16);
@@ -1098,7 +1124,7 @@ Deno.serve(async (req) => {
       } catch (pixErr) {
         console.error('❌ Erro no intercept PIX:', pixErr);
         const msgErro = `Tive um problema ao gerar o PIX agora 😕 Pode pagar na retirada ou tentar novamente em instantes.`;
-        await enviarMensagem(normalizeBrPhone(phone), msgErro);
+        await enviarMensagem(normalizeBrPhone(phone), msgErro, resolvedStoreId);
         ctx.history = [...(ctx.history || []), { role: 'user' as const, text }, { role: 'assistant' as const, text: msgErro }].slice(-16);
         await saveConversationState(sb, phone, state, ctx, resolvedStoreId);
         return new Response(JSON.stringify({ ok: true }), { status: 200 });
@@ -1128,7 +1154,7 @@ Deno.serve(async (req) => {
         resposta = `O valor do serviço é *R$ ${((totalPendente || 0) + (totalPago || 0)).toFixed(2)}*.`;
         if ((totalPendente || 0) > 0) resposta += ` Prefere pagar via PIX agora ou na retirada?`;
       }
-      await enviarMensagem(normalizeBrPhone(phone), resposta);
+      await enviarMensagem(normalizeBrPhone(phone), resposta, resolvedStoreId);
       const updHistory = [...((ctx.history as {role:string;text:string}[]) || []), { role: 'user', text }, { role: 'assistant', text: resposta }];
       ctx.history = updHistory.slice(-16);
       await saveConversationState(sb, phone, state, ctx, resolvedStoreId);
@@ -1159,7 +1185,7 @@ Deno.serve(async (req) => {
         `📍 *5 - Localização e horários*\n\n` +
         `É só responder com o número ou me contar o que precisa! 🏍️`;
 
-      await enviarMensagem(normalizeBrPhone(phone), menuBoasVindas);
+      await enviarMensagem(normalizeBrPhone(phone), menuBoasVindas, resolvedStoreId);
       await saveConversationState(sb, phone, 'menu_apresentado', ctx, resolvedStoreId);
       return new Response(JSON.stringify({ ok: true }), { status: 200 });
     }
@@ -1391,14 +1417,15 @@ Deno.serve(async (req) => {
     // 11. Enviar resposta ao cliente
     // ----------------------------------------------------------
     if (finalResponse) {
-      await enviarMensagem(normalizeBrPhone(phone), '_🤖 Max (IA):_\n\n' + finalResponse);
+      await enviarMensagem(normalizeBrPhone(phone), '_🤖 Max (IA):_\n\n' + finalResponse, resolvedStoreId);
     } else {
       // Fallback — nunca deixar o cliente sem resposta
       await enviarMensagem(
         normalizeBrPhone(phone),
-        'Deixa eu chamar nossa equipe! Um momento 😊'
+        'Deixa eu chamar nossa equipe! Um momento 😊',
+        resolvedStoreId
       );
-      await enviarAlertaDono(`⚠️ IA sem resposta para ${phone}: "${text.slice(0, 100)}"`);
+      await enviarAlertaDono(`⚠️ IA sem resposta para ${phone}: "${text.slice(0, 100)}"`, resolvedStoreId);
     }
 
     return new Response(JSON.stringify({ ok: true, state: newState }), { status: 200 });
@@ -1411,9 +1438,10 @@ Deno.serve(async (req) => {
       if (phone) {
         await enviarMensagem(
           normalizeBrPhone(phone),
-          'Deixa eu chamar nossa equipe! Um momento 😊'
+          'Deixa eu chamar nossa equipe! Um momento 😊',
+          storeIdParam
         );
-        await enviarAlertaDono(`❌ Erro na IA de atendimento\n📱 ${phone}\n💬 "${text?.slice(0, 100)}"\n\nErro: ${String(error)}`);
+        await enviarAlertaDono(`❌ Erro na IA de atendimento\n📱 ${phone}\n💬 "${text?.slice(0, 100)}"\n\nErro: ${String(error)}`, storeIdParam);
         // Marcar como aguardando humano
         const sb2 = getSupabaseClient();
         await saveConversationState(sb2, phone, 'aguardando_humano', { escalada_motivo: 'Erro interno da IA' });

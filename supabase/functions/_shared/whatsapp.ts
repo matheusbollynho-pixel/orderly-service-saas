@@ -1,7 +1,35 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+const supabaseAdmin = createClient(
+  Deno.env.get('SUPABASE_URL')!,
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+)
+
 export interface StoreWhatsAppConfig {
   provider?: string        // 'uazapi' | 'zapi'
   instance_url?: string    // ex: https://minhaloja.uazapi.com
   instance_token?: string  // token da instância
+}
+
+// Rótulo de qual recurso do app disparou o envio, pra dar visibilidade de
+// "isso aqui tá funcionando de verdade" por tipo de mensagem (painel no SuperAdmin).
+export interface SendContext {
+  storeId?: string | null
+  feature: string  // ex: 'satisfacao' | 'aniversario' | 'agendamento_confirmacao' | 'fiado_cobranca' | 'balcao_followup' | 'lembrete_manutencao' | 'boleto_alerta' | 'max_atendimento' | 'documento_pdf' | 'teste_manual'
+}
+
+async function logWhatsAppSend(ctx: SendContext | undefined, success: boolean, errorMessage?: string) {
+  if (!ctx?.storeId) return
+  try {
+    await supabaseAdmin.from('whatsapp_send_log').insert({
+      store_id: ctx.storeId,
+      feature: ctx.feature,
+      success,
+      error_message: errorMessage ? errorMessage.slice(0, 500) : null,
+    })
+  } catch (e) {
+    console.error('logWhatsAppSend falhou:', e)
+  }
 }
 
 export function normalizeBrPhone(phone: string): string {
@@ -39,7 +67,7 @@ function resolveConfig(storeConfig?: StoreWhatsAppConfig) {
   return { provider: 'zapi', instanceId, token, clientToken };
 }
 
-export async function sendWhatsAppText(phone: string, message: string, storeConfig?: StoreWhatsAppConfig) {
+export async function sendWhatsAppText(phone: string, message: string, storeConfig?: StoreWhatsAppConfig, context?: SendContext) {
   const cfg = resolveConfig(storeConfig);
   const formattedPhone = normalizeBrPhone(phone);
 
@@ -64,6 +92,8 @@ export async function sendWhatsAppText(phone: string, message: string, storeConf
 
   console.log(`📡 WhatsApp [${cfg.provider}] → ${formattedPhone} | status: ${response.status} | ${raw.slice(0, 200)}`);
 
+  await logWhatsAppSend(context, response.ok, response.ok ? undefined : `${response.status}: ${raw}`);
+
   if (!response.ok) {
     throw new Error(`WhatsApp API error (${response.status}): ${raw.slice(0, 200)}`);
   }
@@ -76,7 +106,8 @@ export async function sendWhatsAppDocument(
   documentUrl: string,
   filename: string,
   caption?: string,
-  storeConfig?: StoreWhatsAppConfig
+  storeConfig?: StoreWhatsAppConfig,
+  context?: SendContext
 ) {
   const cfg = resolveConfig(storeConfig);
   const formattedPhone = normalizeBrPhone(phone);
@@ -101,6 +132,8 @@ export async function sendWhatsAppDocument(
 
   console.log(`📎 WhatsApp doc [${cfg.provider}] → ${formattedPhone} | status: ${response.status}`);
 
+  await logWhatsAppSend(context, response.ok, response.ok ? undefined : `${response.status}: ${raw}`);
+
   if (!response.ok) throw new Error(`WhatsApp doc error (${response.status}): ${raw.slice(0, 200)}`);
   try { return JSON.parse(raw); } catch { return raw; }
 }
@@ -111,7 +144,8 @@ export async function sendWhatsAppLocation(
   lng: number,
   name: string,
   address: string,
-  storeConfig?: StoreWhatsAppConfig
+  storeConfig?: StoreWhatsAppConfig,
+  context?: SendContext
 ) {
   const cfg = resolveConfig(storeConfig);
   const formattedPhone = normalizeBrPhone(phone);
@@ -124,6 +158,7 @@ export async function sendWhatsAppLocation(
     const response = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
     const raw = await response.text().catch(() => '');
     console.log(`📍 WhatsApp location → ${formattedPhone} | status: ${response.status}`);
+    await logWhatsAppSend(context, response.ok, response.ok ? undefined : `${response.status}: ${raw}`);
     return raw;
   }
 }
