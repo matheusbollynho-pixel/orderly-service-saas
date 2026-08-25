@@ -23,19 +23,27 @@ const supabaseAdmin = createClient(
 // whatsapp_instance_url próprio configurado no SuperAdmin.
 const LEGACY_DEFAULT_STORE_ID = '9fd27114-97d1-48cd-ad09-1b057fa9c185';
 
-// Resolve qual loja é dona da instância UazAPI que mandou esse webhook,
-// usando o BaseUrl (único por instância) — evita depender de configurar
-// uma URL de webhook diferente por cliente na UazAPI.
+// Resolve qual loja é dona da instância UazAPI que mandou esse webhook.
+// BaseUrl NÃO é confiável sozinho — várias lojas podem compartilhar o mesmo
+// servidor UazAPI (mesmo BaseUrl, tokens/instâncias diferentes), então essa
+// busca por whatsapp_instance_url pode achar mais de uma loja e não serve
+// pra desambiguar. Por isso todo store novo precisa ter o webhook configurado
+// na UazAPI com "?store_id=<id>" na URL — isso é lido antes de qualquer
+// heurística. O fallback por BaseUrl só cobre a Bandara Motos (legado, de
+// quando o sistema era single-tenant e não tinha esse parâmetro).
 async function resolveStoreIdFromBaseUrl(baseUrl: string | undefined): Promise<string> {
   if (baseUrl) {
     const clean = baseUrl.replace(/\/$/, '');
-    const { data } = await supabaseAdmin
+    const { data, error } = await supabaseAdmin
       .from('store_settings')
       .select('id')
-      .eq('whatsapp_instance_url', clean)
-      .maybeSingle();
-    if (data?.id) return data.id as string;
-    console.warn(`⚠️ Nenhuma loja com whatsapp_instance_url="${clean}" — usando fallback legado`);
+      .eq('whatsapp_instance_url', clean);
+    if (!error && data && data.length === 1) return data[0].id as string;
+    if (data && data.length > 1) {
+      console.warn(`⚠️ ${data.length} lojas compartilham whatsapp_instance_url="${clean}" — BaseUrl não desambigua, configure ?store_id= no webhook dessa instância`);
+    } else {
+      console.warn(`⚠️ Nenhuma loja com whatsapp_instance_url="${clean}" — usando fallback legado`);
+    }
   }
   return LEGACY_DEFAULT_STORE_ID;
 }
@@ -204,8 +212,11 @@ Deno.serve(async (req) => {
       messageId = (body.id as string) || null;
     }
 
-    // Resolve a loja dona dessa instância UazAPI ANTES de qualquer encaminhamento
-    const resolvedStoreId = await resolveStoreIdFromBaseUrl(body.BaseUrl as string | undefined);
+    // Resolve a loja dona dessa instância UazAPI ANTES de qualquer encaminhamento.
+    // Prioridade 1: ?store_id= na própria URL do webhook (configurado por loja
+    // na UazAPI) — nunca é ambíguo. Prioridade 2: heurística por BaseUrl (legado).
+    const storeIdFromQuery = new URL(req.url).searchParams.get('store_id') || undefined;
+    const resolvedStoreId = storeIdFromQuery || await resolveStoreIdFromBaseUrl(body.BaseUrl as string | undefined);
 
     // Mensagem enviada pelo atendente → encaminhar para ia-atendimento pausar o bot
     if (fromMe) {
