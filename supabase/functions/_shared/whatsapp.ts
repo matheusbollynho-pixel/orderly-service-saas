@@ -11,18 +11,31 @@ export function normalizeBrPhone(phone: string): string {
 }
 
 function resolveConfig(storeConfig?: StoreWhatsAppConfig) {
-  const provider = (storeConfig?.provider || Deno.env.get('WHATSAPP_PROVIDER') || 'uazapi').toLowerCase();
+  // Quando o chamador passa um storeConfig (mesmo que incompleto), a intenção é
+  // usar o WhatsApp DESSA loja especificamente — nunca cair de volta pra uma
+  // instância global/compartilhada (isso já vazou o número real da Bandara Motos
+  // pra mensagens de outras lojas sem WhatsApp configurado). O fallback pra
+  // variáveis de ambiente só vale quando NENHUM storeConfig é passado, ou seja,
+  // quando o próprio chamador optou por um envio global/não-multi-tenant.
+  const isStoreScoped = storeConfig !== undefined;
+  const provider = (storeConfig?.provider || (!isStoreScoped ? Deno.env.get('WHATSAPP_PROVIDER') : undefined) || 'uazapi').toLowerCase();
 
   if (provider === 'uazapi') {
-    const base = (storeConfig?.instance_url || Deno.env.get('UAZAPI_BASE_URL') || Deno.env.get('UAZAPI_SERVER_URL') || '').replace(/\/$/, '');
-    const token = storeConfig?.instance_token || Deno.env.get('UAZAPI_INSTANCE_TOKEN') || Deno.env.get('UAZAPI_TOKEN') || '';
+    const base = (storeConfig?.instance_url || (!isStoreScoped ? (Deno.env.get('UAZAPI_BASE_URL') || Deno.env.get('UAZAPI_SERVER_URL')) : undefined) || '').replace(/\/$/, '');
+    const token = storeConfig?.instance_token || (!isStoreScoped ? (Deno.env.get('UAZAPI_INSTANCE_TOKEN') || Deno.env.get('UAZAPI_TOKEN')) : undefined) || '';
+    if (isStoreScoped && !base) {
+      throw new Error('Esta loja não tem WhatsApp configurado (Configurações → Ferramentas). Envio cancelado.');
+    }
     return { provider: 'uazapi', base, token };
   }
 
   // zapi
-  const instanceId = Deno.env.get('ZAPI_INSTANCE_ID') || '';
-  const token = storeConfig?.instance_token || Deno.env.get('ZAPI_TOKEN') || '';
-  const clientToken = Deno.env.get('ZAPI_CLIENT_TOKEN') || '';
+  const instanceId = (!isStoreScoped ? Deno.env.get('ZAPI_INSTANCE_ID') : undefined) || '';
+  const token = storeConfig?.instance_token || (!isStoreScoped ? Deno.env.get('ZAPI_TOKEN') : undefined) || '';
+  const clientToken = (!isStoreScoped ? Deno.env.get('ZAPI_CLIENT_TOKEN') : undefined) || '';
+  if (isStoreScoped && !instanceId) {
+    throw new Error('Esta loja não tem WhatsApp configurado (Configurações → Ferramentas). Envio cancelado.');
+  }
   return { provider: 'zapi', instanceId, token, clientToken };
 }
 
