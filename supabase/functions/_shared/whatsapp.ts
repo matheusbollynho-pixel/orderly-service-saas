@@ -51,8 +51,8 @@ function resolveConfig(storeConfig?: StoreWhatsAppConfig) {
   if (provider === 'uazapi') {
     const base = (storeConfig?.instance_url || (!isStoreScoped ? (Deno.env.get('UAZAPI_BASE_URL') || Deno.env.get('UAZAPI_SERVER_URL')) : undefined) || '').replace(/\/$/, '');
     const token = storeConfig?.instance_token || (!isStoreScoped ? (Deno.env.get('UAZAPI_INSTANCE_TOKEN') || Deno.env.get('UAZAPI_TOKEN')) : undefined) || '';
-    if (isStoreScoped && !base) {
-      throw new Error('Esta loja não tem WhatsApp configurado (Configurações → Ferramentas). Envio cancelado.');
+    if (isStoreScoped && (!base || !token)) {
+      throw new Error('Esta loja não tem WhatsApp configurado corretamente — falta URL ou token da instância (Configurações → Ferramentas). Envio cancelado.');
     }
     return { provider: 'uazapi', base, token };
   }
@@ -61,8 +61,8 @@ function resolveConfig(storeConfig?: StoreWhatsAppConfig) {
   const instanceId = (!isStoreScoped ? Deno.env.get('ZAPI_INSTANCE_ID') : undefined) || '';
   const token = storeConfig?.instance_token || (!isStoreScoped ? Deno.env.get('ZAPI_TOKEN') : undefined) || '';
   const clientToken = (!isStoreScoped ? Deno.env.get('ZAPI_CLIENT_TOKEN') : undefined) || '';
-  if (isStoreScoped && !instanceId) {
-    throw new Error('Esta loja não tem WhatsApp configurado (Configurações → Ferramentas). Envio cancelado.');
+  if (isStoreScoped && (!instanceId || !token)) {
+    throw new Error('Esta loja não tem WhatsApp configurado corretamente — falta ID da instância ou token (Configurações → Ferramentas). Envio cancelado.');
   }
   return { provider: 'zapi', instanceId, token, clientToken };
 }

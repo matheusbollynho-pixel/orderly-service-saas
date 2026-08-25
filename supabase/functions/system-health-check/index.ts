@@ -13,6 +13,23 @@ const sb = createClient(
 
 const DONO_PHONE = Deno.env.get('DONO_PHONE') || ''
 
+const FEATURE_LABELS: Record<string, string> = {
+  max_atendimento: 'Max (IA 24h)',
+  satisfacao: 'Pesquisa de Satisfação',
+  agendamento_confirmacao: 'Confirmação de Agendamento',
+  aniversario: 'Aniversário',
+  fiado_cobranca: 'Cobrança de Fiado',
+  balcao_followup: 'Follow-up Balcão',
+  lembrete_manutencao: 'Lembrete de Manutenção',
+  boleto_alerta: 'Alerta de Boleto',
+  os_pronta: 'OS Pronta pra Retirada',
+}
+
+function truncar(msg: string | null | undefined, max = 100): string {
+  const s = (msg || '').replace(/\s+/g, ' ').trim()
+  return s.length > max ? s.slice(0, max) + '…' : s
+}
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -28,23 +45,27 @@ Deno.serve(async (req) => {
 
     const { data: failedSends } = await sb
       .from('whatsapp_send_log')
-      .select('store_id, feature, created_at, store_settings(company_name)')
+      .select('store_id, feature, created_at, error_message, store_settings(company_name)')
       .eq('success', false)
       .gte('created_at', since)
       .order('created_at', { ascending: false })
 
-    const cronsFalhando = new Map<string, number>()
+    const cronsFalhando = new Map<string, { count: number; lastError: string }>()
     for (const c of failedCrons || []) {
-      cronsFalhando.set(c.jobname, (cronsFalhando.get(c.jobname) || 0) + 1)
+      const existing = cronsFalhando.get(c.jobname)
+      if (existing) existing.count++
+      else cronsFalhando.set(c.jobname, { count: 1, lastError: c.return_message || '' })
     }
 
-    const porLoja = new Map<string, { nome: string; recursos: Map<string, number> }>()
+    const porLoja = new Map<string, { nome: string; recursos: Map<string, { count: number; lastError: string }> }>()
     for (const s of failedSends || []) {
       const storeId = s.store_id as string
       const nome = (s.store_settings as { company_name?: string } | null)?.company_name || 'Loja desconhecida'
       if (!porLoja.has(storeId)) porLoja.set(storeId, { nome, recursos: new Map() })
       const entry = porLoja.get(storeId)!
-      entry.recursos.set(s.feature, (entry.recursos.get(s.feature) || 0) + 1)
+      const existing = entry.recursos.get(s.feature)
+      if (existing) existing.count++
+      else entry.recursos.set(s.feature, { count: 1, lastError: (s as { error_message?: string }).error_message || '' })
     }
 
     if (cronsFalhando.size === 0 && porLoja.size === 0) {
@@ -58,8 +79,9 @@ Deno.serve(async (req) => {
 
     if (cronsFalhando.size > 0) {
       msg += '*🔧 Tarefas automáticas quebradas:*\n'
-      for (const [job, count] of cronsFalhando) {
-        msg += `• ${job} — falhou ${count}x\n`
+      for (const [job, d] of cronsFalhando) {
+        msg += `• ${job} — falhou ${d.count}x\n`
+        if (d.lastError) msg += `  _${truncar(d.lastError)}_\n`
       }
       msg += '\n'
     }
@@ -68,8 +90,9 @@ Deno.serve(async (req) => {
       msg += '*📱 Falhas de WhatsApp por loja:*\n'
       for (const [, { nome, recursos }] of porLoja) {
         msg += `\n*${nome}*\n`
-        for (const [feature, count] of recursos) {
-          msg += `  • ${feature} — ${count}x\n`
+        for (const [feature, d] of recursos) {
+          msg += `  • ${FEATURE_LABELS[feature] || feature} — ${d.count}x\n`
+          if (d.lastError) msg += `    _${truncar(d.lastError)}_\n`
         }
       }
     }

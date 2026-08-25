@@ -181,8 +181,8 @@ export default function SuperAdminPage() {
   const [editAiBudget, setEditAiBudget] = useState(false);
   const [aiBudgetInput, setAiBudgetInput] = useState('');
   const [savingAiBudget, setSavingAiBudget] = useState(false);
-  const [globalErrorsByStore, setGlobalErrorsByStore] = useState<{ storeId: string; nome: string; recursos: { feature: string; count: number; last: string }[] }[]>([]);
-  const [failedCronsGlobal, setFailedCronsGlobal] = useState<{ jobname: string; count: number; last: string }[]>([]);
+  const [globalErrorsByStore, setGlobalErrorsByStore] = useState<{ storeId: string; nome: string; recursos: { feature: string; count: number; last: string; lastError: string }[] }[]>([]);
+  const [failedCronsGlobal, setFailedCronsGlobal] = useState<{ jobname: string; count: number; last: string; lastError: string }[]>([]);
   const [loadingGlobalErrors, setLoadingGlobalErrors] = useState(false);
   const [wppProvider, setWppProvider] = useState('uazapi');
   const [newPlan, setNewPlan] = useState('basic');
@@ -306,34 +306,34 @@ export default function SuperAdminPage() {
 
     const { data: sends } = await sb
       .from('whatsapp_send_log')
-      .select('store_id, feature, created_at, store_settings(company_name)')
+      .select('store_id, feature, created_at, error_message, store_settings(company_name)')
       .eq('success', false)
       .gte('created_at', since)
       .order('created_at', { ascending: false });
 
-    const byStore = new Map<string, { nome: string; recursos: Map<string, { count: number; last: string }> }>();
+    const byStore = new Map<string, { nome: string; recursos: Map<string, { count: number; last: string; lastError: string }> }>();
     (sends || []).forEach((row: any) => {
       const nome = row.store_settings?.company_name || 'Loja desconhecida';
       if (!byStore.has(row.store_id)) byStore.set(row.store_id, { nome, recursos: new Map() });
       const entry = byStore.get(row.store_id)!;
       const existing = entry.recursos.get(row.feature);
       if (existing) existing.count += 1;
-      else entry.recursos.set(row.feature, { count: 1, last: row.created_at });
+      else entry.recursos.set(row.feature, { count: 1, last: row.created_at, lastError: row.error_message || '' });
     });
     setGlobalErrorsByStore(Array.from(byStore.entries()).map(([storeId, v]) => ({
       storeId,
       nome: v.nome,
-      recursos: Array.from(v.recursos.entries()).map(([feature, d]) => ({ feature, count: d.count, last: d.last })),
+      recursos: Array.from(v.recursos.entries()).map(([feature, d]) => ({ feature, count: d.count, last: d.last, lastError: d.lastError })),
     })));
 
     const { data: crons } = await sb.rpc('get_failed_cron_runs', { since });
-    const cronMap = new Map<string, { count: number; last: string }>();
+    const cronMap = new Map<string, { count: number; last: string; lastError: string }>();
     (crons || []).forEach((c: any) => {
       const existing = cronMap.get(c.jobname);
       if (existing) existing.count += 1;
-      else cronMap.set(c.jobname, { count: 1, last: c.start_time });
+      else cronMap.set(c.jobname, { count: 1, last: c.start_time, lastError: c.return_message || '' });
     });
-    setFailedCronsGlobal(Array.from(cronMap.entries()).map(([jobname, d]) => ({ jobname, count: d.count, last: d.last })));
+    setFailedCronsGlobal(Array.from(cronMap.entries()).map(([jobname, d]) => ({ jobname, count: d.count, last: d.last, lastError: d.lastError })));
 
     setLoadingGlobalErrors(false);
   };
@@ -1168,9 +1168,14 @@ export default function SuperAdminPage() {
                 <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-2.5">
                   <p className="text-xs font-semibold text-red-400 mb-1">🔧 Tarefas automáticas quebradas</p>
                   {failedCronsGlobal.map(c => (
-                    <p key={c.jobname} className="text-xs text-foreground">
-                      {c.jobname} — <span className="text-red-400">falhou {c.count}x</span>, última {tempoRelativo(c.last)}
-                    </p>
+                    <div key={c.jobname} className="mb-1.5 last:mb-0">
+                      <p className="text-xs text-foreground">
+                        {c.jobname} — <span className="text-red-400">falhou {c.count}x</span>, última {tempoRelativo(c.last)}
+                      </p>
+                      {c.lastError && (
+                        <p className="text-[11px] text-muted-foreground font-mono break-all pl-2 border-l-2 border-red-500/30 mt-0.5">{c.lastError.slice(0, 300)}</p>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}
@@ -1178,9 +1183,14 @@ export default function SuperAdminPage() {
                 <div key={loja.storeId} className="rounded-lg border border-red-500/30 bg-red-500/5 p-2.5">
                   <p className="text-xs font-semibold text-foreground mb-1">🔴 {loja.nome}</p>
                   {loja.recursos.map(r => (
-                    <p key={r.feature} className="text-xs text-muted-foreground">
-                      {WHATSAPP_FEATURES.find(f => f.id === r.feature)?.label || r.feature} — <span className="text-red-400">{r.count}x</span>, última {tempoRelativo(r.last)}
-                    </p>
+                    <div key={r.feature} className="mb-1.5 last:mb-0">
+                      <p className="text-xs text-muted-foreground">
+                        {WHATSAPP_FEATURES.find(f => f.id === r.feature)?.label || r.feature} — <span className="text-red-400">{r.count}x</span>, última {tempoRelativo(r.last)}
+                      </p>
+                      {r.lastError && (
+                        <p className="text-[11px] text-muted-foreground font-mono break-all pl-2 border-l-2 border-red-500/30 mt-0.5">{r.lastError.slice(0, 300)}</p>
+                      )}
+                    </div>
                   ))}
                 </div>
               ))}
