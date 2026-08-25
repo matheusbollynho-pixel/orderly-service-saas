@@ -178,6 +178,9 @@ export default function SuperAdminPage() {
   const [sendingTest, setSendingTest] = useState(false);
   const [sendLog, setSendLog] = useState<Record<string, { created_at: string; success: boolean }>>({});
   const [loadingSendLog, setLoadingSendLog] = useState(false);
+  const [editAiBudget, setEditAiBudget] = useState(false);
+  const [aiBudgetInput, setAiBudgetInput] = useState('');
+  const [savingAiBudget, setSavingAiBudget] = useState(false);
   const [wppProvider, setWppProvider] = useState('uazapi');
   const [newPlan, setNewPlan] = useState('basic');
   const [subDueDate, setSubDueDate] = useState('');
@@ -214,6 +217,8 @@ export default function SuperAdminPage() {
       setWppToken(selected.whatsapp_instance_token || '');
       setWppProvider(selected.whatsapp_provider || 'uazapi');
       setTestPhone('');
+      setEditAiBudget(false);
+      setAiBudgetInput(selected.ai_monthly_budget_brl != null ? String(selected.ai_monthly_budget_brl) : '');
       loadSendLog(selected.store_id);
       setNewPlan(selected.plan || 'basic');
       setSubStatus(selected.subscription?.status || 'active');
@@ -423,6 +428,24 @@ export default function SuperAdminPage() {
     });
     setSendLog(latest);
     setLoadingSendLog(false);
+  };
+
+  const saveAiBudget = async () => {
+    if (!selected) return;
+    setSavingAiBudget(true);
+    const trimmed = aiBudgetInput.trim();
+    const value = trimmed === '' ? null : Number(trimmed.replace(',', '.'));
+    const sb = supabase as any;
+    const { error } = await sb.from('store_settings').update({ ai_monthly_budget_brl: value }).eq('id', selected.store_id);
+    setSavingAiBudget(false);
+    if (error) {
+      toast.error('Erro ao salvar orçamento de IA');
+      return;
+    }
+    toast.success(value == null ? 'Override removido — volta a usar o padrão do plano' : `Orçamento de IA definido em R$ ${value.toFixed(2)}/mês`);
+    setSelected(prev => prev ? { ...prev, ai_monthly_budget_brl: value } : null);
+    setClients(prev => prev.map(c => c.store_id === selected.store_id ? { ...c, ai_monthly_budget_brl: value } : c));
+    setEditAiBudget(false);
   };
 
   const saveWpp = async () => {
@@ -758,11 +781,27 @@ export default function SuperAdminPage() {
         {/* Uso de IA */}
         <Card className="glass-card border-border/50">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Cpu className="h-4 w-4" /> Uso de IA (este mês)
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Cpu className="h-4 w-4" /> Uso de IA (este mês)
+              </CardTitle>
+              <Button size="sm" variant="ghost" onClick={() => setEditAiBudget(v => !v)} className="gap-1 h-7 text-xs">
+                <Pencil className="h-3 w-3" /> {editAiBudget ? 'Cancelar' : 'Editar'}
+              </Button>
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
+            {editAiBudget && (
+              <div className="space-y-2 pb-2 border-b border-border/40">
+                <label className="text-xs text-muted-foreground">Orçamento de IA pra esta loja (R$/mês) — deixe vazio pra usar o padrão do plano ({selected.plan ? PLAN_LABELS[selected.plan] ?? selected.plan : '—'})</label>
+                <div className="flex gap-2">
+                  <Input value={aiBudgetInput} onChange={e => setAiBudgetInput(e.target.value)} placeholder={`padrão: R$ ${(AI_PLAN_BUDGET_BRL[selected.plan ?? 'basic'] ?? AI_PLAN_BUDGET_BRL.basic) === Infinity ? '∞' : (AI_PLAN_BUDGET_BRL[selected.plan ?? 'basic'] ?? AI_PLAN_BUDGET_BRL.basic).toFixed(2)}`} className="h-8 text-sm flex-1" type="number" step="0.01" min="0" />
+                  <Button size="sm" onClick={saveAiBudget} disabled={savingAiBudget} className="gap-1 h-8">
+                    {savingAiBudget ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />} Salvar
+                  </Button>
+                </div>
+              </div>
+            )}
             {(() => {
               const budget = selected.ai_monthly_budget_brl ?? AI_PLAN_BUDGET_BRL[selected.plan ?? 'basic'] ?? AI_PLAN_BUDGET_BRL.basic;
               const spent = selected.ai_spend_month_brl;
