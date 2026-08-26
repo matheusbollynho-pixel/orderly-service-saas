@@ -108,13 +108,18 @@ Deno.serve(async (req) => {
   try {
     const { data: stores, error } = await supabase
       .from("store_settings")
-      .select("id, company_name, whatsapp_provider, whatsapp_instance_url, whatsapp_instance_token")
+      .select("id, company_name, whatsapp_provider, whatsapp_instance_url, whatsapp_instance_token, whatsapp_bulk_paused")
       .eq("active", true);
 
     if (error) throw error;
 
     const results = [];
     for (const store of stores || []) {
+      if (store.whatsapp_bulk_paused) {
+        console.log(`⏸️ Loja ${store.company_name} com envios em massa pausados manualmente — pulando`);
+        results.push({ store_id: store.id, enviados: 0, erros: 0 });
+        continue;
+      }
       const wppConfig: StoreWhatsAppConfig = {
         provider: store.whatsapp_provider || undefined,
         instance_url: store.whatsapp_instance_url || undefined,

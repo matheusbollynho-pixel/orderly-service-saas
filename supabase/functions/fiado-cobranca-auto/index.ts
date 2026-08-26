@@ -116,7 +116,7 @@ async function processarFiados(): Promise<void> {
 
   const { data: allStores } = await sb
     .from('store_settings')
-    .select('id, company_name, whatsapp_provider, whatsapp_instance_url, whatsapp_instance_token')
+    .select('id, company_name, whatsapp_provider, whatsapp_instance_url, whatsapp_instance_token, whatsapp_bulk_paused')
   const storesById = new Map((allStores || []).map(s => [s.id, s]))
 
   // Fiados que a IA agendou para agora
@@ -155,6 +155,11 @@ async function processarFiados(): Promise<void> {
     try {
       const store = storesById.get(fiado.store_id as string)
       const storeName = store?.company_name || 'Sua Oficina'
+
+      if (store?.whatsapp_bulk_paused) {
+        console.log(`⏸️ Loja ${storeName} com envios em massa pausados manualmente — pulando fiado ${fiado.id}`)
+        continue
+      }
 
       const daysOverdue = calcDaysOverdue(fiado.due_date)
       if (daysOverdue <= 0) {

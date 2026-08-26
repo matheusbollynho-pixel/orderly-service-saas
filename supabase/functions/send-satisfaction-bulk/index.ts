@@ -46,9 +46,13 @@ const LEGACY_DEFAULT_STORE_ID = '9fd27114-97d1-48cd-ad09-1b057fa9c185'
 const MAX_POR_EXECUCAO = 20
 
 async function processarLoja(
-  store: { id: string; company_name: string; whatsapp_satisfaction_template: string | null; whatsapp_provider: string | null; whatsapp_instance_url: string | null; whatsapp_instance_token: string | null },
+  store: { id: string; company_name: string; whatsapp_satisfaction_template: string | null; whatsapp_provider: string | null; whatsapp_instance_url: string | null; whatsapp_instance_token: string | null; whatsapp_bulk_paused?: boolean },
   force: boolean
 ): Promise<{ store_id: string; enviados: number; erros: number }> {
+  if (store.whatsapp_bulk_paused) {
+    console.log(`⏸️ Loja ${store.company_name} com envios em massa pausados manualmente — pulando`)
+    return { store_id: store.id, enviados: 0, erros: 0 }
+  }
   if (!store.whatsapp_instance_url && store.id !== LEGACY_DEFAULT_STORE_ID) {
     console.log(`⏭️ Loja ${store.company_name} sem WhatsApp configurado — pulando envio em massa`)
     return { store_id: store.id, enviados: 0, erros: 0 }
@@ -148,7 +152,7 @@ Deno.serve(async (req) => {
 
     const { data: stores, error } = await supabase
       .from('store_settings')
-      .select('id, company_name, whatsapp_satisfaction_template, whatsapp_provider, whatsapp_instance_url, whatsapp_instance_token')
+      .select('id, company_name, whatsapp_satisfaction_template, whatsapp_provider, whatsapp_instance_url, whatsapp_instance_token, whatsapp_bulk_paused')
       .eq('active', true)
 
     if (error) throw error

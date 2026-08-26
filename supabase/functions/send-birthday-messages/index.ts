@@ -94,7 +94,11 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-async function processarLoja(store: { id: string; company_name: string; whatsapp_birthday_template: string | null; whatsapp_provider: string | null; whatsapp_instance_url: string | null; whatsapp_instance_token: string | null }) {
+async function processarLoja(store: { id: string; company_name: string; whatsapp_birthday_template: string | null; whatsapp_provider: string | null; whatsapp_instance_url: string | null; whatsapp_instance_token: string | null; whatsapp_bulk_paused?: boolean }) {
+  if (store.whatsapp_bulk_paused) {
+    console.log(`⏸️ Loja ${store.company_name} com envios em massa pausados manualmente — pulando`)
+    return { store_id: store.id, enviados: 0 }
+  }
   if (!store.whatsapp_instance_url && store.id !== LEGACY_DEFAULT_STORE_ID) {
     console.log(`⏭️ Loja ${store.company_name} sem WhatsApp configurado — pulando aniversários`)
     return { store_id: store.id, enviados: 0 }
@@ -189,7 +193,7 @@ Deno.serve(async (_req) => {
 
     const { data: stores, error } = await supabase
       .from('store_settings')
-      .select('id, company_name, whatsapp_birthday_template, whatsapp_provider, whatsapp_instance_url, whatsapp_instance_token')
+      .select('id, company_name, whatsapp_birthday_template, whatsapp_provider, whatsapp_instance_url, whatsapp_instance_token, whatsapp_bulk_paused')
       .eq('active', true)
 
     if (error) throw error
