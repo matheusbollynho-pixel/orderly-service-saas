@@ -134,6 +134,23 @@ Deno.serve(async (req) => {
 
         const msgObjFull = msgObj as Record<string, unknown>;
 
+        // Ignorar mensagem de GRUPO — sender_pn/sender é sempre a pessoa que
+        // postou, mesmo dentro de um grupo, então sem esse filtro o Max
+        // respondia no PRIVADO de todo mundo que falava em algum grupo
+        const chatObj = (body.chat || {}) as Record<string, unknown>
+        const possiveisIdsChat = [
+          msgObjFull.chatid, msgObjFull.chatId, msgObjFull.from,
+          chatObj.id, chatObj.wa_chatid,
+        ].filter((v): v is string => typeof v === 'string')
+        const ehGrupo = Boolean(msgObjFull.isGroup) || possiveisIdsChat.some(id => id.includes('@g.us'))
+        if (ehGrupo) {
+          console.log('⏭️ Mensagem de grupo — ignorada')
+          return new Response(JSON.stringify({ received: true, ignored: 'group_message' }), {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+
         // Extrair ID único da mensagem para deduplicação
         messageId = (msgObjFull.id as string) || null;
 

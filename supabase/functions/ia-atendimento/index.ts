@@ -855,6 +855,13 @@ Deno.serve(async (req) => {
     // Phone vem de body.chat.wa_chatid ou body.message.chatid ou body.phone
     const chat = (body.chat || {}) as Record<string, unknown>;
     const rawPhone = ((chat.wa_chatid || msg.chatid || msg.phone || msg.from || body.phone) as string || '');
+
+    // Segunda camada contra mensagem de grupo (a primeira é no webhook-whatsapp,
+    // que já filtra antes de encaminhar pra cá) — nunca responder em grupo
+    if (rawPhone.includes('@g.us') || Boolean(msg.isGroup)) {
+      return new Response('ok', { status: 200 });
+    }
+
     phone = rawPhone.replace(/@.*$/, '').replace(/[^0-9]/g, '');
 
     // Texto vem de body.message.content ou body.text
