@@ -235,8 +235,8 @@ function ProductFormDialog({ open, product, isEditing, isSaving, onChange, onBul
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Identificação</h3>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Código interno *</Label>
-                <Input value={product.code} onChange={(e) => onChange('code', e.target.value)} placeholder="Ex: PEÇ-001" />
+                <Label>Código interno {isEditing ? '*' : ''}</Label>
+                <Input value={product.code ?? ''} onChange={(e) => onChange('code', e.target.value)} placeholder={isEditing ? 'Ex: PEÇ-001' : 'Em branco = gera automático'} />
               </div>
               <div>
                 <Label>Nome *</Label>
@@ -615,17 +615,10 @@ export default function InventoryPage() {
     [products]
   );
 
-  const nextCode = () => {
-    const nums = products
-      .map((p) => parseInt(p.code.replace(/\D/g, ''), 10))
-      .filter((n) => !isNaN(n));
-    const max = nums.length > 0 ? Math.max(...nums) : 0;
-    return String(max + 1).padStart(3, '0');
-  };
-
   const handleOpenNew = () => {
     setEditingProduct(null);
-    setFormData({ ...EMPTY_FORM, code: nextCode() });
+    // Código interno é gerado no servidor (trigger) quando enviado em branco.
+    setFormData({ ...EMPTY_FORM });
     setFormOpen(true);
   };
 
@@ -654,8 +647,9 @@ export default function InventoryPage() {
   };
 
   const handleSaveProduct = () => {
-    if (!formData.code.trim()) { toast.error('Código interno obrigatório'); return; }
     if (!formData.name.trim()) { toast.error('Nome obrigatório'); return; }
+    // Cadastro novo: código em branco é gerado pelo servidor. Na edição continua obrigatório.
+    if (editingProduct && !formData.code.trim()) { toast.error('Código interno obrigatório'); return; }
 
     if (editingProduct) {
       updateProduct({ id: editingProduct.id, ...formData }, { onSuccess: () => setFormOpen(false) });

@@ -41,8 +41,13 @@ export function useInventory() {
       queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
       toast.success('Produto cadastrado com sucesso!');
     },
-    onError: (error: Error) => {
-      toast.error(`Erro ao cadastrar produto: ${error.message}`);
+    onError: (error: unknown) => {
+      const e = error as { code?: string; message?: string };
+      if (e?.code === '23505' || /duplicate key|conflict/i.test(e?.message ?? '')) {
+        toast.error('Esse código interno já existe no seu estoque. Deixe em branco pra gerar automático ou escolha outro.');
+        return;
+      }
+      toast.error(`Erro ao cadastrar produto: ${e?.message ?? 'erro desconhecido'}`);
     },
   });
 
