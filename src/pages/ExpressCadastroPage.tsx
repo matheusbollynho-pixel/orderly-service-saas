@@ -196,7 +196,8 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
       // Evitar duplicidade: buscar cliente por telefone
       let savedClient: Client | null = null;
       const phoneDigits = normalizePhone(client.phone);
-      const cpfDigits = normalizeCPF(client.cpf);
+      // Só persiste CPF completo (11 dígitos); parcial/vazio vira NULL, nunca lixo na coluna.
+      const cpfDigits = isValidCPF(client.cpf) ? normalizeCPF(client.cpf) : undefined;
       if (selectedClient) {
         savedClient = selectedClient;
       } else {
@@ -222,7 +223,7 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
 
       // Cliente já existia sem CPF válido e o atendente informou um agora: completa o cadastro.
       if (isValidCPF(client.cpf) && !isValidCPF(savedClient.cpf || '')) {
-        const updated = await updateClientById(savedClient.id, { cpf: cpfDigits });
+        const updated = await updateClientById(savedClient.id, { cpf: normalizeCPF(client.cpf) });
         if (updated) savedClient = updated;
       }
 
