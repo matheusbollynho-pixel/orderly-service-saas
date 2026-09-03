@@ -76,10 +76,10 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
 
   const normalizePhone = (value: string) => value.replace(/\D/g, '');
   const normalizePlate = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7);
+  // slice(11) só pra mascarar digitação; a validação olha a string inteira.
   const normalizeCPF = (value: string) => value.replace(/\D/g, '').slice(0, 11);
-  const isValidCPF = (value: string) => normalizeCPF(value).length === 11;
-  // CPF fica NULL quando não informado — nada de placeholder no campo do documento.
-  const cpfToPersist = (value: string) => (isValidCPF(value) ? normalizeCPF(value) : null);
+  const isValidCPF = (value: string) =>
+    !/[a-zA-Z]/.test(value) && value.replace(/\D/g, '').length === 11;
   const toNoonISOStringFromToday = () => {
     if (!atendimentoId.trim()) {
       toast.error('Atendente é obrigatório');
