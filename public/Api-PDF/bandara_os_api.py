@@ -16,6 +16,7 @@ Uso direto em Python:
 
 import io
 import os
+import re
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import mm
@@ -233,10 +234,13 @@ def create_os_pdf(output_path: str, dados: dict) -> None:
             except:
                 return sv(val)
         def fmt_cpf(val):
-            v = sv(val).replace('.','').replace('-','').replace(' ','')
+            # Só considera CPF quando são exatamente 11 dígitos. Qualquer outra coisa
+            # (vazio, placeholder legado "EXP-<tel>-<timestamp>", documento incompleto)
+            # vira string vazia pra nunca imprimir lixo no lugar do CPF.
+            v = re.sub(r'\D', '', sv(val))
             if len(v) == 11:
                 return f"{v[:3]}.{v[3:6]}.{v[6:9]}-{v[9:]}"
-            return v
+            return ''
         def fmt_phone(val):
             v = sv(val).replace('(','').replace(')','').replace(' ','').replace('-','')
             if len(v) == 11:
@@ -305,7 +309,7 @@ def create_os_pdf(output_path: str, dados: dict) -> None:
             ter = {
                 'nome':     sv(dados.get('terceiro_nome') or dados.get('authorized_name') or _ter_nome or ''),
                 'telefone': sv(dados.get('terceiro_telefone') or dados.get('authorized_phone') or _ter_tel or ''),
-                'cpf':      sv(dados.get('terceiro_cpf') or dados.get('authorized_cpf') or _ter_cpf or ''),
+                'cpf':      fmt_cpf(dados.get('terceiro_cpf') or dados.get('authorized_cpf') or _ter_cpf or ''),
             }
         # Atualizar _ter_* com os valores finais do ter
         _ter_nome = ter.get('nome', '')

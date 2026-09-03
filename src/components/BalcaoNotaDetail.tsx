@@ -488,6 +488,8 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     const numeroNota = String(order.numero ?? '').padStart(4, '0');
     const nomeCliente = editClientName || order.client_name || '';
     const dataHoje = new Date().toLocaleDateString('pt-BR');
+    // Só mostra CPF quando é um documento real (11 dígitos) — nunca placeholder legado "EXP-..."
+    const cpfNota = (editClientCpf || '').replace(/\D/g, '').length === 11 ? editClientCpf : '';
 
     const itemsHtml = items.map((i, idx) => `
       <tr style="background:${idx % 2 === 0 ? '#fff' : '#f9f9f9'}">
@@ -552,12 +554,12 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
       </div>
       <div class="redline"></div>
 
-      ${nomeCliente || editClientCpf || editClientPhone || editClientAddress ? `
+      ${nomeCliente || cpfNota || editClientPhone || editClientAddress ? `
       <div class="section-title">Dados do Cliente</div>
       <div class="section-body">
         <div class="info-grid">
           ${nomeCliente ? `<div class="info-row"><span>Nome:</span><strong>${nomeCliente}</strong></div>` : ''}
-          ${editClientCpf ? `<div class="info-row"><span>CPF:</span>${editClientCpf}</div>` : ''}
+          ${cpfNota ? `<div class="info-row"><span>CPF:</span>${cpfNota}</div>` : ''}
           ${editClientPhone ? `<div class="info-row"><span>Telefone:</span>${editClientPhone}</div>` : ''}
           ${editClientAddress ? `<div class="info-row"><span>Endereço:</span>${editClientAddress}</div>` : ''}
         </div>

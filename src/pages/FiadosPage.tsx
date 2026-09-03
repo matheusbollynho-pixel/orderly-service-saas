@@ -409,7 +409,7 @@ export default function FiadosPage() {
                         {fiado.client_phone && (
                           <span className="text-xs text-muted-foreground">{fiado.client_phone}</span>
                         )}
-                        {fiado.client_cpf && (
+                        {(fiado.client_cpf || '').replace(/\D/g, '').length === 11 && (
                           <span className="text-xs text-muted-foreground">CPF: {fiado.client_cpf}</span>
                         )}
                       </div>

@@ -22,6 +22,7 @@ interface ExpressCadastroPageProps {
 export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroPageProps) {
   const {
     upsertClient,
+    updateClientById,
     upsertMotorcycle,
     searchClientByCPF,
     searchClientByName,
@@ -60,6 +61,7 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
   const [client, setClient] = useState({
     name: '',
     phone: '',
+    cpf: '',
   });
   const [moto, setMoto] = useState({
     placa: '',
@@ -74,10 +76,10 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
 
   const normalizePhone = (value: string) => value.replace(/\D/g, '');
   const normalizePlate = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7);
-  const buildExpressCPF = (phone: string) => {
-    const cleanPhone = normalizePhone(phone);
-    return `EXP-${cleanPhone || 'SEMTELEFONE'}-${Date.now()}`;
-  };
+  const normalizeCPF = (value: string) => value.replace(/\D/g, '').slice(0, 11);
+  const isValidCPF = (value: string) => normalizeCPF(value).length === 11;
+  // CPF fica NULL quando não informado — nada de placeholder no campo do documento.
+  const cpfToPersist = (value: string) => (isValidCPF(value) ? normalizeCPF(value) : null);
   const toNoonISOStringFromToday = () => {
     if (!atendimentoId.trim()) {
       toast.error('Atendente é obrigatório');
@@ -128,6 +130,8 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
     setClient({
       name: selected.name || '',
       phone: selected.phone || '',
+      // Só traz o CPF do cadastro se for um documento real (11 dígitos), nunca o placeholder legado.
+      cpf: isValidCPF(selected.cpf || '') ? normalizeCPF(selected.cpf || '') : '',
     });
     try {
       const motos = await getClientMotorcycles(selected.id);
@@ -192,6 +196,7 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
       // Evitar duplicidade: buscar cliente por telefone
       let savedClient: Client | null = null;
       const phoneDigits = normalizePhone(client.phone);
+      const cpfDigits = normalizeCPF(client.cpf);
       if (selectedClient) {
         savedClient = selectedClient;
       } else {
@@ -199,10 +204,10 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
         if (existingClient) {
           savedClient = existingClient;
         } else {
-          const cpfToSave = buildExpressCPF(client.phone);
           savedClient = await upsertClient({
             name: client.name.trim(),
-            cpf: cpfToSave,
+            // Documento real ou NULL — sem placeholder "EXP-..." no lugar do CPF.
+            cpf: cpfDigits,
             phone: phoneDigits,
             autoriza_instagram: false,
             autoriza_lembretes: autorizaLembretes,
@@ -213,6 +218,12 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
       if (!savedClient) {
         toast.error('Erro ao salvar cliente');
         return;
+      }
+
+      // Cliente já existia sem CPF válido e o atendente informou um agora: completa o cadastro.
+      if (isValidCPF(client.cpf) && !isValidCPF(savedClient.cpf || '')) {
+        const updated = await updateClientById(savedClient.id, { cpf: cpfDigits });
+        if (updated) savedClient = updated;
       }
 
       const savedMoto = await upsertMotorcycle({
@@ -288,7 +299,7 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
       setSelectedClient(null);
       setSearchResults([]);
       setClientMotorcycles([]);
-      setClient({ name: '', phone: '' });
+      setClient({ name: '', phone: '', cpf: '' });
       setMoto({ placa: '', marca: '', modelo: '', ano: '', cor: '' });
       setServiceDescription('');
       setAtendimentoId('');
@@ -389,6 +400,19 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
               placeholder="(xx) xxxxx-xxxx"
               className="h-11"
             />
+          </div>
+          <div className="space-y-2">
+            <Label>CPF</Label>
+            <Input
+              value={client.cpf}
+              onChange={(e) => setClient((prev) => ({ ...prev, cpf: normalizeCPF(e.target.value) }))}
+              placeholder="Somente números (opcional)"
+              inputMode="numeric"
+              className="h-11"
+            />
+            {client.cpf && !isValidCPF(client.cpf) && (
+              <p className="text-xs text-amber-600">CPF incompleto — precisa ter 11 dígitos. Fica em branco na OS se não completar.</p>
+            )}
           </div>
         </CardContent>
       </Card>
