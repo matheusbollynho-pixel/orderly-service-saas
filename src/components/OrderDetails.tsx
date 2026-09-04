@@ -650,7 +650,7 @@ export function OrderDetails({
 
   const handleAddPayment = () => {
     if (!onAddPayment) return;
-    if (!order.delivery_signature_data && !isExpress) {
+    if (!deliverySignatureData && !isExpress) {
       alert('É necessário coletar a assinatura do Termo de Entrega do Veículo antes de registrar o pagamento.');
       return;
     }
@@ -700,6 +700,12 @@ export function OrderDetails({
 
   const buildPDFPayload = () => ({
     ...order,
+    // order.signature_data/delivery_signature_data só chegam depois do
+    // round-trip com o banco (refetch). O estado local já tem o valor certo
+    // no instante em que a assinatura é coletada — usa ele pra nunca gerar
+    // um PDF sem a assinatura que acabou de ser assinada na tela.
+    signature_data: signatureData,
+    delivery_signature_data: deliverySignatureData,
     mechanic_name: mechanics.find(m => m.id === order.mechanic_id)?.name || '',
     created_by: teamMembers.find(m => m.id === order.atendimento_id)?.name || '',
     delivery_person_type: deliveryPersonType,
@@ -710,7 +716,7 @@ export function OrderDetails({
   });
 
   const handleSendWhatsAppPDF = async () => {
-    if (!order.signature_data && !isExpress) {
+    if (!signatureData && !isExpress) {
       alert('É necessário coletar a assinatura do cliente antes de enviar o PDF.');
       return;
     }
@@ -834,7 +840,7 @@ export function OrderDetails({
   };
 
   const handleDownloadPDF = async () => {
-    if (!order.signature_data && !isExpress) {
+    if (!signatureData && !isExpress) {
       alert('É necessário coletar a assinatura do cliente antes de gerar o PDF.');
       return;
     }
@@ -1844,7 +1850,7 @@ const renderDeliverySection = () => {
               size="sm"
               title="Imprime só o equipamento e o serviço a fazer — não é a Ordem de Serviço completa"
               onClick={() => {
-                if (!order.signature_data) {
+                if (!signatureData) {
                   alert('É necessário coletar a assinatura do cliente antes de imprimir.');
                   return;
                 }
