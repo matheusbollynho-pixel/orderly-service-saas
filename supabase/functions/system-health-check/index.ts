@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
 
     if (cronsFalhando.size === 0 && porLoja.size === 0) {
       if (DONO_PHONE) {
-        await sendWhatsAppText(normalizeBrPhone(DONO_PHONE), '✅ SpeedSeek OS — relatório diário\n\nTudo funcionando normal nas últimas 24h. Nenhum cron falhou, nenhum envio de WhatsApp deu erro.')
+        await sendWhatsAppText(normalizeBrPhone(DONO_PHONE), '✅ SpeedSeek OS — relatório diário\n\nTudo funcionando normal nas últimas 24h. Nenhum cron falhou, nenhum envio de WhatsApp deu erro.', undefined, { feature: 'health_check', allowGlobalFallback: true })
       }
       return new Response(JSON.stringify({ ok: true, problemas: false }), { status: 200, headers: CORS })
     }
@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
     msg += '\nVeja detalhes em Configurações → SuperAdmin → Central de Erros.'
 
     if (DONO_PHONE) {
-      await sendWhatsAppText(normalizeBrPhone(DONO_PHONE), msg)
+      await sendWhatsAppText(normalizeBrPhone(DONO_PHONE), msg, undefined, { feature: 'health_check', allowGlobalFallback: true })
     }
 
     return new Response(JSON.stringify({ ok: true, problemas: true, crons: cronsFalhando.size, lojas: porLoja.size }), { status: 200, headers: CORS })

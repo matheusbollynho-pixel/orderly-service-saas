@@ -65,7 +65,12 @@ function lojaPodeEnviar(store: StoreRow): boolean {
 async function enviarAlertaDono(phone: string, msg: string, wppConfig: StoreWhatsAppConfig | undefined, storeId: string): Promise<void> {
   if (!phone) return;
   try {
-    await sendWhatsAppText(normalizeBrPhone(phone), msg, wppConfig, { storeId, feature: 'agendamento_lembrete' });
+    // Sem wppConfig = alerta interno da loja legada pela instância global (permitido só aqui).
+    await sendWhatsAppText(normalizeBrPhone(phone), msg, wppConfig, {
+      storeId,
+      feature: 'agendamento_lembrete',
+      allowGlobalFallback: wppConfig === undefined,
+    });
   } catch (e) {
     console.error('Erro ao alertar dono:', e);
   }

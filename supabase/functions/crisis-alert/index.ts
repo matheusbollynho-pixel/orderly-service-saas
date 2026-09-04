@@ -22,11 +22,18 @@ Deno.serve(async (req) => {
     const isCrisis = (atendimento !== null && atendimento < 3) || (servico !== null && servico < 3)
     if (!isCrisis) return new Response(JSON.stringify({ skipped: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
-    // Busca dados da loja
+    // Loja legada (Bandara) — pode usar a instância global como fallback.
+    const LEGACY_DEFAULT_STORE_ID = '9fd27114-97d1-48cd-ad09-1b057fa9c185'
+
+    // Busca dados DA LOJA DA AVALIAÇÃO (nunca "a primeira loja").
+    const storeId = rating.store_id as string | undefined
+    if (!storeId) {
+      return new Response(JSON.stringify({ skipped: true, reason: 'Avaliação sem store_id' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
     const { data: settings } = await supabase
       .from('store_settings')
-      .select('company_name, boleto_notify_phone_1, boleto_notify_phone_2')
-      .limit(1)
+      .select('company_name, boleto_notify_phone_1, boleto_notify_phone_2, whatsapp_provider, whatsapp_instance_url, whatsapp_instance_token')
+      .eq('id', storeId)
       .maybeSingle()
 
     const company = settings?.company_name || 'Minha Oficina'
@@ -35,6 +42,21 @@ Deno.serve(async (req) => {
     if (phones.length === 0) {
       return new Response(JSON.stringify({ skipped: true, reason: 'Nenhum número configurado' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
+
+    // Alerta sai pela instância DA LOJA. Sem instância própria (e não sendo a
+    // legada) → não envia, pra não vazar pelo número global.
+    const temInstanciaPropria = !!settings?.whatsapp_instance_url
+    const isLegacy = storeId === LEGACY_DEFAULT_STORE_ID
+    if (!temInstanciaPropria && !isLegacy) {
+      return new Response(JSON.stringify({ skipped: true, reason: 'Loja sem WhatsApp próprio' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+    const wppConfig = temInstanciaPropria
+      ? {
+          provider: settings?.whatsapp_provider || undefined,
+          instance_url: settings?.whatsapp_instance_url || undefined,
+          instance_token: settings?.whatsapp_instance_token || undefined,
+        }
+      : undefined
 
     // Busca nome do cliente
     let clientName = 'Cliente'
@@ -63,9 +85,13 @@ Deno.serve(async (req) => {
     const comment = rating.comment ? `\n💬 *Comentário:* "${rating.comment}"` : ''
     const msg = `🚨 *Alerta de Crise — ${company}*\n\nUm cliente deixou uma avaliação crítica:\n\n👤 *Cliente:* ${clientName}${clientPhone ? `\n📱 *Telefone:* ${clientPhone}` : ''}\n⭐ *${notas.join(' | ')}*${comment}\n\nEntre em contato para resolver a situação!`
 
-    // Envia para todos os números configurados
+    // Envia para todos os números configurados, pela instância da loja
     const results = await Promise.allSettled(
-      phones.map(phone => sendWhatsAppText(normalizeBrPhone(phone), msg))
+      phones.map(phone => sendWhatsAppText(normalizeBrPhone(phone), msg, wppConfig, {
+        storeId,
+        feature: 'alerta_crise',
+        allowGlobalFallback: wppConfig === undefined,
+      }))
     )
 
     const sent = results.filter(r => r.status === 'fulfilled').length

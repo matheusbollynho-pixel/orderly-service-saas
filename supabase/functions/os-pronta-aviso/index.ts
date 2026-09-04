@@ -72,8 +72,14 @@ async function processarLoja(store: { id: string; company_name: string; whatsapp
   if (semRetirada?.length && DONO_PHONE) {
     const lista = semRetirada.map(o => `• ${o.client_name} — ${o.equipment || 'moto'}`).join('\n');
     try {
-      await sendWhatsAppText(normalizeBrPhone(DONO_PHONE),
-        `⚠️ *[${company_name}] OS prontas há +24h sem retirada:*\n\n${lista}`);
+      // Alerta interno sai pela instância da própria loja (ou global só na legada).
+      const temInstanciaPropria = !!store.whatsapp_instance_url;
+      await sendWhatsAppText(
+        normalizeBrPhone(DONO_PHONE),
+        `⚠️ *[${company_name}] OS prontas há +24h sem retirada:*\n\n${lista}`,
+        temInstanciaPropria ? wppConfig : undefined,
+        { storeId: store.id, feature: 'os_pronta_dono', allowGlobalFallback: !temInstanciaPropria },
+      );
     } catch (_) { /* silencioso */ }
   }
 

@@ -16,6 +16,10 @@ export interface StoreWhatsAppConfig {
 export interface SendContext {
   storeId?: string | null
   feature: string  // ex: 'satisfacao' | 'aniversario' | 'agendamento_confirmacao' | 'fiado_cobranca' | 'balcao_followup' | 'lembrete_manutencao' | 'boleto_alerta' | 'max_atendimento' | 'documento_pdf' | 'teste_manual'
+  // Só marque true em alertas internos pro dono/operação (SpeedSeek), NUNCA em
+  // mensagem que vai pro cliente final. Sem isso, um envio sem storeConfig é
+  // bloqueado — pra nunca mais vazar o número da instância global (Bandara).
+  allowGlobalFallback?: boolean
 }
 
 export async function logWhatsAppSend(ctx: SendContext | undefined, success: boolean, errorMessage?: string) {
@@ -38,14 +42,21 @@ export function normalizeBrPhone(phone: string): string {
   return clean.startsWith('55') ? clean : `55${clean}`;
 }
 
-function resolveConfig(storeConfig?: StoreWhatsAppConfig) {
+function resolveConfig(storeConfig?: StoreWhatsAppConfig, allowGlobalFallback = false) {
   // Quando o chamador passa um storeConfig (mesmo que incompleto), a intenção é
   // usar o WhatsApp DESSA loja especificamente — nunca cair de volta pra uma
   // instância global/compartilhada (isso já vazou o número real da Bandara Motos
   // pra mensagens de outras lojas sem WhatsApp configurado). O fallback pra
-  // variáveis de ambiente só vale quando NENHUM storeConfig é passado, ou seja,
-  // quando o próprio chamador optou por um envio global/não-multi-tenant.
+  // variáveis de ambiente só vale quando NENHUM storeConfig é passado E o
+  // chamador marcou allowGlobalFallback explicitamente (alerta interno pro
+  // dono/operação). Sem storeConfig e sem essa flag = envio bloqueado.
   const isStoreScoped = storeConfig !== undefined;
+  if (!isStoreScoped && !allowGlobalFallback) {
+    throw new Error(
+      'Envio de WhatsApp sem config da loja e sem allowGlobalFallback — bloqueado ' +
+      'pra não usar a instância global (número da Bandara). Passe o storeConfig da loja.'
+    );
+  }
   const provider = (storeConfig?.provider || (!isStoreScoped ? Deno.env.get('WHATSAPP_PROVIDER') : undefined) || 'uazapi').toLowerCase();
 
   if (provider === 'uazapi') {
@@ -68,7 +79,7 @@ function resolveConfig(storeConfig?: StoreWhatsAppConfig) {
 }
 
 export async function sendWhatsAppText(phone: string, message: string, storeConfig?: StoreWhatsAppConfig, context?: SendContext) {
-  const cfg = resolveConfig(storeConfig);
+  const cfg = resolveConfig(storeConfig, context?.allowGlobalFallback === true);
   const formattedPhone = normalizeBrPhone(phone);
 
   let url: string;
@@ -109,7 +120,7 @@ export async function sendWhatsAppDocument(
   storeConfig?: StoreWhatsAppConfig,
   context?: SendContext
 ) {
-  const cfg = resolveConfig(storeConfig);
+  const cfg = resolveConfig(storeConfig, context?.allowGlobalFallback === true);
   const formattedPhone = normalizeBrPhone(phone);
 
   let url: string;
@@ -147,7 +158,7 @@ export async function sendWhatsAppLocation(
   storeConfig?: StoreWhatsAppConfig,
   context?: SendContext
 ) {
-  const cfg = resolveConfig(storeConfig);
+  const cfg = resolveConfig(storeConfig, context?.allowGlobalFallback === true);
   const formattedPhone = normalizeBrPhone(phone);
 
   if (cfg.provider === 'uazapi') {
