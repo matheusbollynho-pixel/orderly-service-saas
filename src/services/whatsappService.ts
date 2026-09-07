@@ -172,20 +172,25 @@ export async function sendWhatsAppDocument(params: {
   // Fazer upload para Storage primeiro (necessário para ambos os caminhos)
   const fileUrl = await uploadBase64PdfToSupabaseStorage(params.base64, safeFileName);
 
-  // Tenta enviar via API da loja
+  // Envia SÓ como anexo (documento) pela instância da loja. Se falhar, avisa o
+  // erro — não cola link de PDF na conversa (link do Storage é temporário e o
+  // cliente abria depois de expirado, virava "InvalidJWT" feio na tela dele).
+  let res: Record<string, unknown>;
   try {
-    const res = await callEdgeFunction({ to: phone, fileUrl, caption, fileName: safeFileName, ...(storeId ? { store_id: storeId } : {}) });
-    // Se API retornou sucesso=false (sem WhatsApp configurado ou envio real falhou), abre wa.me
-    if ((res as { success?: boolean }).success === false) {
-      openWaMeFallback(phone, `${caption}\n\n📄 PDF: ${fileUrl}`);
-      return false;
-    }
-    return !!res;
-  } catch {
-    // Fallback: abre WhatsApp Web com link do PDF
-    openWaMeFallback(phone, `${caption}\n\n📄 PDF: ${fileUrl}`);
-    return false;
+    res = await callEdgeFunction({ to: phone, fileUrl, caption, fileName: safeFileName, ...(storeId ? { store_id: storeId } : {}) });
+  } catch (err) {
+    throw new Error(
+      'Não consegui enviar a OS como anexo pelo WhatsApp da loja. ' +
+      (err instanceof Error ? err.message : String(err))
+    );
   }
+  if ((res as { success?: boolean }).success === false) {
+    throw new Error(
+      (res?.error as string) ||
+      'WhatsApp da loja não está configurado/conectado — não foi possível enviar a OS como anexo.'
+    );
+  }
+  return !!res;
 }
 
 /**
