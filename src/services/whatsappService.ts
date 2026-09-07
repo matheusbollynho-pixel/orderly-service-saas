@@ -240,10 +240,12 @@ export async function uploadBase64PdfToSupabaseStorage(
     throw error;
   }
 
-  // Preferir URL assinada (funciona mesmo em bucket privado)
+  // Preferir URL assinada (funciona mesmo em bucket privado).
+  // TTL longo (1 ano): o cliente costuma abrir a OS no WhatsApp dias/semanas
+  // depois — com 1h o link expirava e dava InvalidJWT "exp claim check failed".
   const { data: signedData, error: signedError } = await supabase.storage
     .from(bucket)
-    .createSignedUrl(data.path, 60 * 60); // 1 hora
+    .createSignedUrl(data.path, 60 * 60 * 24 * 365); // 1 ano
 
   if (!signedError && signedData?.signedUrl) {
     return signedData.signedUrl;
