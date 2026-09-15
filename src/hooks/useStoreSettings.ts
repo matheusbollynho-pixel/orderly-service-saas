@@ -25,7 +25,13 @@ export interface StoreSettings {
   google_maps_url?: string | null;
   opening_hours?: string | null;
   payment_methods?: string | null;
+  inspection_terms_text?: string | null;
+  delivery_terms_text?: string | null;
 }
+
+export const DEFAULT_INSPECTION_TERMS_TEXT = 'Declaro que o checklist de inspeção do veículo foi realizado e conferido no ato do atendimento, estando ciente das condições registradas e autorizando a execução dos serviços descritos nesta Ordem de Serviço. Estou ciente do prazo de até 30 dias para retirada da motocicleta após a conclusão do serviço. Após esse período, será cobrada taxa de estadia no valor de R$ 6,00 por dia. O não comparecimento para retirada poderá caracterizar abandono do veículo, nos termos da legislação vigente.';
+
+export const DEFAULT_DELIVERY_TERMS_TEXT = 'Declaro que recebi nesta data a motocicleta referente a esta Ordem de Serviço, após a execução dos serviços descritos. Confirmo que o veículo foi entregue, conferido e encontra-se em condições de uso, não constatando irregularidades aparentes no ato da entrega.';
 
 const DEFAULTS: Omit<StoreSettings, 'id'> = {
   company_name: import.meta.env.VITE_COMPANY_NAME || 'Minha Oficina',

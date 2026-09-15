@@ -23,10 +23,25 @@ export const PLAN_BUDGET_BRL: Record<string, number> = {
   enterprise: Infinity,
 }
 
-function calcCostUsd(model: string, inputTokens: number, outputTokens: number): number {
+// Preço de cache (Anthropic): escrita = 1,25x o input base, leitura = 0,1x.
+const CACHE_WRITE_MULT = 1.25
+const CACHE_READ_MULT = 0.1
+
+function calcCostUsd(
+  model: string,
+  inputTokens: number,
+  outputTokens: number,
+  cacheWriteTokens = 0,
+  cacheReadTokens = 0,
+): number {
   const pricing = MODEL_PRICING[model]
   if (!pricing) return 0
-  return inputTokens * pricing.input + outputTokens * pricing.output
+  return (
+    inputTokens * pricing.input +
+    outputTokens * pricing.output +
+    cacheWriteTokens * pricing.input * CACHE_WRITE_MULT +
+    cacheReadTokens * pricing.input * CACHE_READ_MULT
+  )
 }
 
 // Registra uma chamada de IA. Nunca deve derrubar o fluxo principal por causa de um erro aqui.
@@ -35,11 +50,25 @@ export async function logAiUsage(
   supabase: any,
   storeId: string | null | undefined,
   functionName: string,
-  usage?: { model: string; inputTokens: number; outputTokens: number }
+  usage?: {
+    model: string
+    inputTokens: number
+    outputTokens: number
+    cacheWriteTokens?: number
+    cacheReadTokens?: number
+  }
 ) {
   if (!storeId) return
   try {
-    const cost_usd = usage ? calcCostUsd(usage.model, usage.inputTokens, usage.outputTokens) : null
+    const cost_usd = usage
+      ? calcCostUsd(
+          usage.model,
+          usage.inputTokens,
+          usage.outputTokens,
+          usage.cacheWriteTokens ?? 0,
+          usage.cacheReadTokens ?? 0,
+        )
+      : null
     await supabase.from('ai_usage_log').insert({
       store_id: storeId,
       function_name: functionName,

@@ -40,7 +40,7 @@ import {
   type StoreInfo,
 } from '../_shared/database.ts';
 import { sendWhatsAppText, sendWhatsAppLocation, normalizeBrPhone, type StoreWhatsAppConfig } from '../_shared/whatsapp.ts';
-import { logAiUsage } from '../_shared/aiUsage.ts';
+import { logAiUsage, checkAiBudget } from '../_shared/aiUsage.ts';
 
 // ============================================================
 // CONFIGURAÇÕES
@@ -614,8 +614,9 @@ async function executarFerramenta(
 
 async function chamarClaude(
   systemPrompt: string,
-  messages: { role: 'user' | 'assistant'; content: string | unknown[] }[]
-): Promise<{ content: unknown[]; stop_reason: string; usage?: { input_tokens: number; output_tokens: number } }> {
+  messages: { role: 'user' | 'assistant'; content: string | unknown[] }[],
+  tools: unknown[]
+): Promise<{ content: unknown[]; stop_reason: string; usage?: { input_tokens: number; output_tokens: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number } }> {
   const MAX_RETRIES = 3;
   const RETRY_DELAYS = [3000, 8000, 15000]; // 3s, 8s, 15s
 
@@ -630,8 +631,15 @@ async function chamarClaude(
       body: JSON.stringify({
         model: CLAUDE_MODEL,
         max_tokens: 1024,
-        system: systemPrompt,
-        tools: TOOLS,
+        // cache_control no bloco do system cacheia tools + system juntos
+        // (render order: tools -> system -> messages). Evita reprocessar os
+        // ~4k tokens de prompt fixo nas até 5 voltas do loop de tool_use e
+        // entre mensagens seguidas da mesma loja (TTL 5min). Haiku 4.5 só
+        // cacheia prefixo >= 4096 tokens — tools+system ficam acima disso.
+        system: [
+          { type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } },
+        ],
+        tools,
         messages,
       }),
     });
@@ -657,8 +665,9 @@ async function chamarClaude(
 // SYSTEM PROMPT
 // ============================================================
 
-function buildSystemPrompt(store: StoreInfo, clienteNome?: string): string {
-  const nome = clienteNome ? `O cliente se chama ${clienteNome}.` : '';
+function buildSystemPrompt(store: StoreInfo): string {
+  // Nada de dado por-cliente aqui (nome, etc.) — isso quebraria o prompt cache
+  // por cliente. O nome do cliente já vai no contextSummary da 1ª mensagem.
   const horario = store.opening_hours || store.store_hours || 'Segunda a sexta: 8h às 18h | Sábado: 8h às 14h';
   const pagamentos = store.payment_methods || store.accepted_payments || 'Pix, Dinheiro, Cartão';
   const endereco = store.store_address || '';
@@ -666,8 +675,6 @@ function buildSystemPrompt(store: StoreInfo, clienteNome?: string): string {
   const obs = store.ai_notes || '';
   return `Você é o atendente virtual da ${store.company_name}, uma oficina de motos.
 Seu nome é "Max".
-
-${nome}
 
 ## INFORMAÇÕES DA LOJA
 - *Endereço:* ${endereco || 'Consulte o endereço com nossa equipe'}
@@ -888,6 +895,23 @@ Deno.serve(async (req) => {
     if (settings && (settings as Record<string, unknown>).ai_enabled === false) {
       console.log('⏸️ IA pausada (ai_enabled=false)');
       return new Response(JSON.stringify({ ok: true, paused: true }), { status: 200 });
+    }
+
+    // ----------------------------------------------------------
+    // 0.1 Verificar orçamento mensal de IA da loja (mesmo gate das
+    // outras funções de IA). Se estourou, a IA fica em silêncio até
+    // o próximo mês — igual ao comportamento de ai_enabled=false.
+    // Em caso de erro na checagem, checkAiBudget libera (fail-open).
+    // ----------------------------------------------------------
+    const aiBudget = await checkAiBudget(sb, resolvedStoreId);
+    if (!aiBudget.allowed) {
+      console.log(`💸 Orçamento de IA estourado: R$${aiBudget.spentBrl.toFixed(2)} / R$${aiBudget.budgetBrl.toFixed(2)} — não respondendo`);
+      return new Response(JSON.stringify({
+        ok: true,
+        blocked: 'ai_budget_exceeded',
+        spent_brl: aiBudget.spentBrl,
+        budget_brl: aiBudget.budgetBrl,
+      }), { status: 200 });
     }
 
     // ----------------------------------------------------------
@@ -1247,7 +1271,15 @@ Deno.serve(async (req) => {
     // ----------------------------------------------------------
     // 7. Montar mensagens para o Claude (com histórico)
     // ----------------------------------------------------------
-    const systemPrompt = buildSystemPrompt(store, ctx.client_name);
+    const systemPrompt = buildSystemPrompt(store);
+
+    // Loja sem módulo de estoque ativo → tira as ferramentas de consulta de
+    // peças da mesa (não basta pedir no prompt, o modelo chamava mesmo assim).
+    // O ramo !tem_estoque do system prompt já manda o Max responder que vai
+    // encaminhar a pergunta de peça/preço pro setor responsável.
+    const activeTools = store.tem_estoque
+      ? TOOLS
+      : TOOLS.filter(t => t.name !== 'consultar_pecas' && t.name !== 'consultar_historico_balcao');
 
     // Contexto resumido da conversa para o Claude
     const osResumo = ctx.os_id
@@ -1297,13 +1329,15 @@ Deno.serve(async (req) => {
     while (loopCount < MAX_LOOPS) {
       loopCount++;
 
-      let claudeResult: { content: unknown[]; stop_reason: string; usage?: { input_tokens: number; output_tokens: number } };
+      let claudeResult: { content: unknown[]; stop_reason: string; usage?: { input_tokens: number; output_tokens: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number } };
       try {
-        claudeResult = await chamarClaude(systemPrompt, messages);
+        claudeResult = await chamarClaude(systemPrompt, messages, activeTools);
         await logAiUsage(sb, resolvedStoreId, 'ia-atendimento', {
           model: CLAUDE_MODEL,
           inputTokens: claudeResult.usage?.input_tokens ?? 0,
           outputTokens: claudeResult.usage?.output_tokens ?? 0,
+          cacheWriteTokens: claudeResult.usage?.cache_creation_input_tokens ?? 0,
+          cacheReadTokens: claudeResult.usage?.cache_read_input_tokens ?? 0,
         });
       } catch (e) {
         console.error('Erro ao chamar Claude:', e);

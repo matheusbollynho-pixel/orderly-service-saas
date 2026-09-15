@@ -5,7 +5,7 @@ import { useServiceOrders } from '@/hooks/useServiceOrders';
 import { useAuth } from '@/hooks/useAuth';
 import { useStore } from '@/contexts/StoreContext';
 import { MaintenanceKeywordsManager } from '@/components/MaintenanceKeywordsManager';
-import { useStoreSettings, StoreSettings } from '@/hooks/useStoreSettings';
+import { useStoreSettings, StoreSettings, DEFAULT_INSPECTION_TERMS_TEXT, DEFAULT_DELIVERY_TERMS_TEXT } from '@/hooks/useStoreSettings';
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import { UpgradeModal } from '@/components/UpgradeModal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -100,6 +100,8 @@ export default function ConfigToolsPage() {
   const [googleMapsUrl, setGoogleMapsUrl] = useState('');
   const [openingHours, setOpeningHours] = useState('');
   const [paymentMethods, setPaymentMethods] = useState('');
+  const [inspectionTermsText, setInspectionTermsText] = useState('');
+  const [deliveryTermsText, setDeliveryTermsText] = useState('');
   const [templates, setTemplates] = useState<Record<MessageKey, string>>({
     whatsapp_confirmation_template: '',
     whatsapp_satisfaction_template: '',
@@ -133,6 +135,8 @@ export default function ConfigToolsPage() {
       setGoogleMapsUrl(settings.google_maps_url || '');
       setOpeningHours(settings.opening_hours || '');
       setPaymentMethods(settings.payment_methods || '');
+      setInspectionTermsText(settings.inspection_terms_text || DEFAULT_INSPECTION_TERMS_TEXT);
+      setDeliveryTermsText(settings.delivery_terms_text || DEFAULT_DELIVERY_TERMS_TEXT);
       setTemplates({
         whatsapp_confirmation_template: settings.whatsapp_confirmation_template,
         whatsapp_satisfaction_template: settings.whatsapp_satisfaction_template,
@@ -167,6 +171,8 @@ export default function ConfigToolsPage() {
       google_maps_url: googleMapsUrl || null,
       opening_hours: openingHours || null,
       payment_methods: paymentMethods || null,
+      inspection_terms_text: inspectionTermsText || DEFAULT_INSPECTION_TERMS_TEXT,
+      delivery_terms_text: deliveryTermsText || DEFAULT_DELIVERY_TERMS_TEXT,
       ...templates,
     } as Partial<StoreSettings>);
   }
@@ -362,6 +368,35 @@ export default function ConfigToolsPage() {
                 />
                 <p className="text-xs text-neutral-500">Máximo de agendamentos aceitos por dia (distribuídos entre manhã e tarde)</p>
               </div>
+              {/* Termos de Assinatura (Inspeção e Entrega) */}
+              <div className="border border-white/10 rounded-lg p-3 space-y-3 bg-black/20">
+                <p className="text-xs text-neutral-400 font-semibold uppercase tracking-wide">Termos de Assinatura (OS)</p>
+
+                <div className="space-y-1">
+                  <label className="text-xs text-neutral-400 font-medium">Termo de Inspeção do Veículo</label>
+                  <textarea
+                    rows={5}
+                    value={inspectionTermsText}
+                    onChange={e => setInspectionTermsText(e.target.value)}
+                    placeholder={DEFAULT_INSPECTION_TERMS_TEXT}
+                    className="w-full p-2 border border-white/20 rounded text-sm bg-black/30 text-neutral-200"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs text-neutral-400 font-medium">Termo de Entrega do Veículo</label>
+                  <textarea
+                    rows={4}
+                    value={deliveryTermsText}
+                    onChange={e => setDeliveryTermsText(e.target.value)}
+                    placeholder={DEFAULT_DELIVERY_TERMS_TEXT}
+                    className="w-full p-2 border border-white/20 rounded text-sm bg-black/30 text-neutral-200"
+                  />
+                </div>
+
+                <p className="text-xs text-neutral-500">Texto que o cliente confirma antes de assinar na tela e que sai impresso no PDF da Ordem de Serviço.</p>
+              </div>
+
               <Button className="w-full" disabled={saving} onClick={handleSave}>
                 {saving ? 'Salvando...' : 'Salvar informações'}
               </Button>

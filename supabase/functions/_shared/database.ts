@@ -565,7 +565,7 @@ export interface StoreInfo {
 export async function buscarStoreSettings(sb: SupabaseClient, storeId?: string): Promise<StoreInfo> {
   let query = sb
     .from('store_settings')
-    .select('id, company_name, store_address, store_phone, opening_hours, payment_methods, ai_notes, max_agendamentos_dia, google_maps_url, asaas_api_key, boleto_notify_phone_1, boleto_notify_phone_2');
+    .select('id, company_name, store_address, store_phone, opening_hours, payment_methods, ai_notes, max_agendamentos_dia, google_maps_url, asaas_api_key, boleto_notify_phone_1, boleto_notify_phone_2, ai_stock_search_enabled');
 
   if (storeId) {
     query = query.eq('id', storeId);
@@ -577,12 +577,17 @@ export async function buscarStoreSettings(sb: SupabaseClient, storeId?: string):
   const d = data as Record<string, any> | null;
   if (storeErr) console.error('❌ buscarStoreSettings error:', storeErr.message);
 
-  // Só ativa a busca real de estoque pro Max se a loja de fato cadastra
-  // produtos — senão ele fica prometendo/negando peças com base numa
-  // tabela vazia (caso da Bandara Motos, que não usa esse módulo).
+  // Busca de estoque pro Max:
+  //  - ai_stock_search_enabled = true/false → configuração explícita (SuperAdmin) manda
+  //  - null → comportamento antigo: liga só se a loja de fato cadastra produtos,
+  //    senão ele fica prometendo/negando peças com base numa tabela quase vazia
+  //    (caso da Bandara Motos, que não usa esse módulo).
   let temEstoque = false;
   const resolvedId = d?.id as string | undefined;
-  if (resolvedId) {
+  const stockFlag = d?.ai_stock_search_enabled as boolean | null | undefined;
+  if (stockFlag === true || stockFlag === false) {
+    temEstoque = stockFlag;
+  } else if (resolvedId) {
     const { count } = await sb
       .from('inventory_products')
       .select('id', { count: 'exact', head: true })

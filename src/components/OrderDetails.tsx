@@ -47,7 +47,7 @@ import {
 import { useMechanics } from '@/hooks/useMechanics';
 import { useClients } from '@/hooks/useClients';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
-import { useStoreSettings } from '@/hooks/useStoreSettings';
+import { useStoreSettings, DEFAULT_INSPECTION_TERMS_TEXT, DEFAULT_DELIVERY_TERMS_TEXT } from '@/hooks/useStoreSettings';
 import { useStore } from '@/contexts/StoreContext';
 import { sendWhatsAppText, sendWhatsAppDocument } from '@/lib/whatsappService';
 import { supabase } from '@/integrations/supabase/client';
@@ -713,6 +713,8 @@ export function OrderDetails({
     delivery_person_phone: deliveryPersonType === 'outro' ? deliveryPersonPhone : order.client_phone,
     delivery_person_cpf: deliveryPersonType === 'outro' ? deliveryPersonCpf : order.client_cpf,
     logo_url: storeSettings?.logo_url || `${window.location.origin}${import.meta.env.VITE_LOGO_PATH || '/bandara-logo.png'}`,
+    inspection_terms_text: storeSettings?.inspection_terms_text || DEFAULT_INSPECTION_TERMS_TEXT,
+    delivery_terms_text: storeSettings?.delivery_terms_text || DEFAULT_DELIVERY_TERMS_TEXT,
   });
 
   const handleSendWhatsAppPDF = async () => {
@@ -878,7 +880,7 @@ export function OrderDetails({
             disabled={order.status === 'concluida_entregue'}
           />
           <label htmlFor="terms-checkbox" className="text-sm text-foreground leading-relaxed cursor-pointer">
-            <span className="font-semibold">Declaro que o checklist de inspeção do veículo foi realizado e conferido no ato do atendimento, estando ciente das condições registradas e autorizando a execução dos serviços descritos nesta Ordem de Serviço.</span> Estou ciente do prazo de até 30 dias para retirada da motocicleta após a conclusão do serviço. Após esse período, será cobrada taxa de estadia no valor de R$ 6,00 por dia. O não comparecimento para retirada poderá caracterizar abandono do veículo, nos termos da legislação vigente.
+            {storeSettings?.inspection_terms_text || DEFAULT_INSPECTION_TERMS_TEXT}
           </label>
         </div>
       </div>
@@ -1066,7 +1068,7 @@ const renderDeliverySection = () => {
             disabled={order.status === 'concluida_entregue'}
           />
           <label htmlFor="delivery-terms-checkbox" className="text-sm text-foreground leading-relaxed cursor-pointer">
-            <span className="font-semibold">Declaro que recebi nesta data a motocicleta referente a esta Ordem de Serviço, após a execução dos serviços descritos.</span> Confirmo que o veículo foi entregue, conferido e encontra-se em condições de uso, não constatando irregularidades aparentes no ato da entrega.
+            {storeSettings?.delivery_terms_text || DEFAULT_DELIVERY_TERMS_TEXT}
           </label>
         </div>
       </div>

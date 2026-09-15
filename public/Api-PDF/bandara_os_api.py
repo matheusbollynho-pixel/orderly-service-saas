@@ -808,11 +808,13 @@ def create_os_pdf(output_path: str, dados: dict) -> None:
     # ── TERMOS E ASSINATURAS ───────────────────────────────────────────────
     y = section_header('Termos e Assinaturas', y)
 
-    inspect_text = ('Declaro que o checklist de inspecao do veiculo foi realizado e conferido no ato do atendimento, '
+    inspect_text = sv(dados.get('inspection_terms_text')) or (
+                    'Declaro que o checklist de inspecao do veiculo foi realizado e conferido no ato do atendimento, '
                     'estando ciente das condicoes registradas e autorizando a execucao dos servicos descritos nesta '
                     'Ordem de Servico. Estou ciente do prazo de ate 30 dias para retirada apos a conclusao. '
                     'Apos esse periodo, sera cobrada taxa de estada de R$ 6,00/dia.')
-    deliver_text  = ('Declaro que recebi nesta data a motocicleta referente a esta Ordem de Servico, apos a execucao '
+    deliver_text  = sv(dados.get('delivery_terms_text')) or (
+                    'Declaro que recebi nesta data a motocicleta referente a esta Ordem de Servico, apos a execucao '
                     'dos servicos descritos. Confirmo que o veiculo foi entregue, conferido e encontra-se sem '
                     'irregularidades aparentes no ato da entrega.')
 
