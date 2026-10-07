@@ -81,6 +81,7 @@ export default function ConfigToolsPage() {
   const { canAccess, getUpgradeLink, getRequiredPlan } = usePlanFeatures();
   const iaLocked = !canAccess('ia-atendimento');
   const [showIaUpgrade, setShowIaUpgrade] = useState(false);
+  const [showWppUpgrade, setShowWppUpgrade] = useState(false);
   const navigate = useNavigate();
   const [showKeywords, setShowKeywords] = useState(false);
   const [removeOsId, setRemoveOsId] = useState('');
@@ -586,7 +587,15 @@ export default function ConfigToolsPage() {
 
         {/* ABA MENSAGENS */}
         <TabsContent value="mensagens" className="space-y-4">
-          {isOwner && <WhatsappConexao />}
+          {showWppUpgrade && (
+            <UpgradeModal
+              feature="WhatsApp automático"
+              requiredPlan={getRequiredPlan('pos-venda')}
+              upgradeLink={getUpgradeLink('pos-venda')}
+              onClose={() => setShowWppUpgrade(false)}
+            />
+          )}
+          {isOwner && <WhatsappConexao bloqueadoPlano={!canAccess('pos-venda')} onUpgrade={() => setShowWppUpgrade(true)} />}
           {loadingSettings ? (
             <p className="text-sm text-neutral-400">Carregando...</p>
           ) : (

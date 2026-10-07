@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Loader2, QrCode, Smartphone } from 'lucide-react';
+import { Loader2, Lock, QrCode, Smartphone } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 
@@ -26,7 +26,7 @@ async function chamar(acao: 'status' | 'conectar' | 'desconectar'): Promise<Resp
 }
 
 /** Dono reconecta o WhatsApp da loja lendo um QR Code (instância cadastrada pelo suporte). */
-export function WhatsappConexao() {
+export function WhatsappConexao({ bloqueadoPlano = false, onUpgrade }: { bloqueadoPlano?: boolean; onUpgrade?: () => void }) {
   const qc = useQueryClient();
   const [qr, setQr] = useState<string | undefined>();
 
@@ -78,6 +78,23 @@ export function WhatsappConexao() {
     );
   } else if (isError || (data && !data.ok)) {
     corpo = <p className="text-sm text-neutral-400">Não deu pra verificar o WhatsApp agora. Recarregue a página em instantes.</p>;
+  } else if (data?.status === 'sem_instancia' && bloqueadoPlano) {
+    // plano sem WhatsApp: vira convite de upgrade. Se o suporte já cadastrou uma
+    // instância manualmente, cai nos ramos de baixo e o dono reconecta normal.
+    corpo = (
+      <div className="flex flex-col items-center text-center gap-3 py-2">
+        <div className="bg-primary/10 p-3 rounded-full">
+          <Lock className="h-5 w-5 text-primary" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-neutral-200">WhatsApp automático é do plano Profissional</p>
+          <p className="text-xs text-neutral-500 mt-1 max-w-sm">
+            Confirmação de agendamento, aviso de OS pronta, pesquisa de satisfação, aniversário e cobrança de fiado saindo sozinhos pelo número da sua oficina.
+          </p>
+        </div>
+        <Button size="sm" onClick={onUpgrade}>Fazer upgrade</Button>
+      </div>
+    );
   } else if (data?.status === 'sem_instancia') {
     corpo = (
       <p className="text-sm text-neutral-400">
