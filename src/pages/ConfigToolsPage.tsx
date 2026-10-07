@@ -8,6 +8,7 @@ import { MaintenanceKeywordsManager } from '@/components/MaintenanceKeywordsMana
 import { useStoreSettings, StoreSettings, DEFAULT_INSPECTION_TERMS_TEXT, DEFAULT_DELIVERY_TERMS_TEXT } from '@/hooks/useStoreSettings';
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import { UpgradeModal } from '@/components/UpgradeModal';
+import { WhatsappConexao } from '@/components/WhatsappConexao';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Settings, Zap, MessageSquare, CalendarCheck, Star, Cake, ShoppingCart, Store, Bot, Users, CreditCard, Send, Loader2, Lock, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -585,6 +586,7 @@ export default function ConfigToolsPage() {
 
         {/* ABA MENSAGENS */}
         <TabsContent value="mensagens" className="space-y-4">
+          {isOwner && <WhatsappConexao />}
           {loadingSettings ? (
             <p className="text-sm text-neutral-400">Carregando...</p>
           ) : (

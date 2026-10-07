@@ -74,3 +74,5 @@ verify_jwt = false
 
 [functions.provision-client]
 verify_jwt = false
+[functions.whatsapp-conexao]
+verify_jwt = false
