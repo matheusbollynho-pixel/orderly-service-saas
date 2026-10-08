@@ -901,7 +901,7 @@ Deno.serve(async (req) => {
     // 0.1 Verificar orçamento mensal de IA da loja (mesmo gate das
     // outras funções de IA). Se estourou, a IA fica em silêncio até
     // o próximo mês — igual ao comportamento de ai_enabled=false.
-    // Em caso de erro na checagem, checkAiBudget libera (fail-open).
+    // Em caso de erro na checagem, checkAiBudget bloqueia (fail-closed).
     // ----------------------------------------------------------
     const aiBudget = await checkAiBudget(sb, resolvedStoreId);
     if (!aiBudget.allowed) {

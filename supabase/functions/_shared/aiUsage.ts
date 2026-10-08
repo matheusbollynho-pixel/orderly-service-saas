@@ -83,39 +83,44 @@ export async function logAiUsage(
 }
 
 // Verifica se a loja ainda tem orçamento de IA disponível este mês.
-// Em caso de erro na checagem, deixa passar (nunca bloqueia por falha interna nossa).
+// Fail-closed: sem loja identificada ou com erro na checagem, BLOQUEIA — a IA
+// roda na chave Anthropic da plataforma, então liberar no escuro é custo nosso
+// sem limite (ex: chamada anônima no ai-fill-product, banco fora do ar).
 export async function checkAiBudget(
   // deno-lint-ignore no-explicit-any
   supabase: any,
   storeId: string | null | undefined
 ): Promise<{ allowed: boolean; spentBrl: number; budgetBrl: number }> {
-  if (!storeId) return { allowed: true, spentBrl: 0, budgetBrl: Infinity }
+  if (!storeId) return { allowed: false, spentBrl: 0, budgetBrl: 0 }
   try {
-    const { data: store } = await supabase
+    const { data: store, error: storeErr } = await supabase
       .from('store_settings')
       .select('plan, ai_monthly_budget_brl')
       .eq('id', storeId)
       .maybeSingle()
+    if (storeErr || !store) throw storeErr ?? new Error('loja não encontrada')
 
-    const budgetBrl = store?.ai_monthly_budget_brl ?? PLAN_BUDGET_BRL[store?.plan ?? 'trial'] ?? PLAN_BUDGET_BRL.trial
+    const budgetBrl = store.ai_monthly_budget_brl ?? PLAN_BUDGET_BRL[store.plan ?? 'trial'] ?? PLAN_BUDGET_BRL.trial
     if (budgetBrl === Infinity) return { allowed: true, spentBrl: 0, budgetBrl }
 
     const startOfMonth = new Date()
     startOfMonth.setDate(1)
     startOfMonth.setHours(0, 0, 0, 0)
 
-    const { data: rows } = await supabase
+    const { data: rows, error: rowsErr } = await supabase
       .from('ai_usage_log')
       .select('cost_usd')
       .eq('store_id', storeId)
       .gte('created_at', startOfMonth.toISOString())
+
+    if (rowsErr) throw rowsErr
 
     const spentUsd = (rows || []).reduce((s: number, r: { cost_usd: number | null }) => s + (r.cost_usd || 0), 0)
     const spentBrl = spentUsd * USD_TO_BRL
 
     return { allowed: spentBrl < budgetBrl, spentBrl, budgetBrl }
   } catch (e) {
-    console.error('checkAiBudget falhou, liberando por segurança:', e)
-    return { allowed: true, spentBrl: 0, budgetBrl: Infinity }
+    console.error('checkAiBudget falhou, bloqueando IA por segurança (custo da plataforma):', e)
+    return { allowed: false, spentBrl: 0, budgetBrl: 0 }
   }
 }
