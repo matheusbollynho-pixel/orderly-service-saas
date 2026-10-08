@@ -11,7 +11,7 @@ import { UpgradeModal } from '@/components/UpgradeModal';
 import { WhatsappConexao } from '@/components/WhatsappConexao';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Settings, Zap, MessageSquare, CalendarCheck, Star, Cake, ShoppingCart, Store, Bot, Users, CreditCard, Send, Loader2, Lock, ArrowLeft } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -83,6 +83,7 @@ export default function ConfigToolsPage() {
   const [showIaUpgrade, setShowIaUpgrade] = useState(false);
   const [showWppUpgrade, setShowWppUpgrade] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [showKeywords, setShowKeywords] = useState(false);
   const [removeOsId, setRemoveOsId] = useState('');
   const { settings, loading: loadingSettings, saving, saveSettings } = useStoreSettings();
@@ -234,7 +235,7 @@ export default function ConfigToolsPage() {
         </h1>
       </div>
 
-      <Tabs defaultValue="loja">
+      <Tabs defaultValue={searchParams.get('aba') === 'mensagens' ? 'mensagens' : 'loja'}>
         <TabsList className="w-full mb-6">
           <TabsTrigger value="loja" className="flex-1 flex items-center gap-2">
             <Store size={15} /> Loja

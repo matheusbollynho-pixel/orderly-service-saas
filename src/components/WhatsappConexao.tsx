@@ -5,7 +5,7 @@ import { Loader2, Lock, QrCode, Smartphone } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 
-type Resp = {
+export type WhatsappResp = {
   ok: boolean;
   status?: 'sem_instancia' | 'desconectado' | 'conectando' | 'conectado';
   qrcode?: string;
@@ -15,15 +15,15 @@ type Resp = {
   error?: string;
 };
 
-async function chamar(acao: 'status' | 'conectar' | 'desconectar'): Promise<Resp> {
+export async function chamarWhatsappConexao(acao: 'status' | 'conectar' | 'desconectar'): Promise<WhatsappResp> {
   const { data, error } = await supabase.functions.invoke('whatsapp-conexao', { body: { acao } });
   if (error) {
     // 4xx/5xx voltam como erro do invoke; o corpo tem a mensagem
     const corpo = await (error as { context?: Response }).context?.json?.().catch(() => null);
-    if (corpo) return corpo as Resp;
+    if (corpo) return corpo as WhatsappResp;
     throw error;
   }
-  return data as Resp;
+  return data as WhatsappResp;
 }
 
 /** Dono reconecta o WhatsApp da loja lendo um QR Code (instância cadastrada pelo suporte). */
@@ -33,7 +33,7 @@ export function WhatsappConexao({ bloqueadoPlano = false, onUpgrade }: { bloquea
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['whatsapp-conexao'],
-    queryFn: () => chamar('status'),
+    queryFn: () => chamarWhatsappConexao('status'),
     // enquanto o QR está na tela, confere a cada 4s se já conectou
     refetchInterval: (q) => (qr && q.state.data?.status !== 'conectado' ? 4000 : false),
   });
@@ -48,7 +48,7 @@ export function WhatsappConexao({ bloqueadoPlano = false, onUpgrade }: { bloquea
   }, [data, qr]);
 
   const conectar = useMutation({
-    mutationFn: () => chamar('conectar'),
+    mutationFn: () => chamarWhatsappConexao('conectar'),
     onSuccess: (r) => {
       if (!r.ok) return toast.error(r.error ?? 'Não foi possível conectar');
       if (r.status === 'conectado') toast.success('WhatsApp já está conectado');
@@ -60,7 +60,7 @@ export function WhatsappConexao({ bloqueadoPlano = false, onUpgrade }: { bloquea
   });
 
   const desconectar = useMutation({
-    mutationFn: () => chamar('desconectar'),
+    mutationFn: () => chamarWhatsappConexao('desconectar'),
     onSuccess: () => {
       setQr(undefined);
       toast.success('WhatsApp desconectado');

@@ -30,6 +30,7 @@ import { cleanupOldPhotos } from "./lib/photoService";
 import { useLocalSync } from "./hooks/useLocalSync";
 import { useRealtimeSync } from "./hooks/useRealtimeSync";
 import { useStoreSettings } from "./hooks/useStoreSettings";
+import { WhatsappAvisoQueda } from "@/components/WhatsappAvisoQueda";
 
 console.log('📦 App.tsx importado');
 
@@ -125,6 +126,7 @@ function AuthenticatedApp() {
     <StoreProvider user={user}>
       <StoreTitle />
       <StoreGuard>
+        <WhatsappAvisoQueda />
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/config" element={<ConfigToolsPage />} />
