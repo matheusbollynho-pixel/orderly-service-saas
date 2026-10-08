@@ -11,6 +11,7 @@ type Resp = {
   qrcode?: string;
   numero?: string;
   perfil?: string;
+  bloqueio?: 'plano' | 'trial' | 'inativo';
   error?: string;
 };
 
@@ -78,7 +79,7 @@ export function WhatsappConexao({ bloqueadoPlano = false, onUpgrade }: { bloquea
     );
   } else if (isError || (data && !data.ok)) {
     corpo = <p className="text-sm text-neutral-400">Não deu pra verificar o WhatsApp agora. Recarregue a página em instantes.</p>;
-  } else if (data?.status === 'sem_instancia' && bloqueadoPlano) {
+  } else if (data?.status === 'sem_instancia' && (bloqueadoPlano || data.bloqueio === 'plano')) {
     // plano sem WhatsApp: vira convite de upgrade. Se o suporte já cadastrou uma
     // instância manualmente, cai nos ramos de baixo e o dono reconecta normal.
     corpo = (
@@ -95,12 +96,14 @@ export function WhatsappConexao({ bloqueadoPlano = false, onUpgrade }: { bloquea
         <Button size="sm" onClick={onUpgrade}>Fazer upgrade</Button>
       </div>
     );
-  } else if (data?.status === 'sem_instancia') {
+  } else if (data?.status === 'sem_instancia' && data.bloqueio === 'trial') {
     corpo = (
       <p className="text-sm text-neutral-400">
-        O WhatsApp automático ainda não foi ativado pra sua loja. Fale com o suporte do SpeedSeek pra liberar.
+        O WhatsApp automático é liberado depois do primeiro pagamento do plano Profissional ou Premium.
       </p>
     );
+  } else if (data?.status === 'sem_instancia' && data.bloqueio === 'inativo') {
+    corpo = <p className="text-sm text-neutral-400">Assinatura vencida. Regularize em Assinatura pra usar o WhatsApp.</p>;
   } else if (data?.status === 'conectado') {
     corpo = (
       <div className="space-y-3 text-sm">
@@ -142,7 +145,11 @@ export function WhatsappConexao({ bloqueadoPlano = false, onUpgrade }: { bloquea
   } else {
     corpo = (
       <div className="space-y-3 text-sm">
-        <p className="text-amber-400 font-medium">⚠️ WhatsApp desconectado — as mensagens automáticas não estão saindo.</p>
+        {data?.status === 'sem_instancia' ? (
+          <p className="text-neutral-300">Conecte o WhatsApp da oficina e os avisos saem sozinhos, pelo seu número.</p>
+        ) : (
+          <p className="text-amber-400 font-medium">⚠️ WhatsApp desconectado — as mensagens automáticas não estão saindo.</p>
+        )}
         <ul className="ml-4 list-disc space-y-1 text-xs text-neutral-400">
           <li>Pegue o <b>celular da loja</b> (o mesmo número de sempre).</li>
           <li>Abra esta tela no computador ou tablet pra escanear com o celular.</li>

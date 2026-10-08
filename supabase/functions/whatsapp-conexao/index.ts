@@ -1,10 +1,12 @@
-// Reconexão self-service do WhatsApp (UazAPI) da loja.
-// A instância continua sendo cadastrada pelo SuperAdmin (url+token em
-// store_settings); aqui o dono só vê o status e lê o QR quando o número cai,
-// sem precisar chamar o suporte. O token da instância nunca vai pro navegador.
+// Conexão self-service do WhatsApp (UazAPI) da loja.
+// Loja Profissional/Premium ativa (já pagou — trial não) toca em "Conectar":
+// se ainda não tem instância, a função cria uma na conta UazAPI da plataforma
+// (admin token só existe aqui no servidor) e devolve o QR. Se a instância foi
+// cadastrada à mão no SuperAdmin, só reconecta. O token nunca vai pro navegador.
+// A limpeza das automáticas de quem deixou de pagar fica no check-overdue-subscriptions.
 //
 // Body: { acao: "status" | "conectar" | "desconectar" }
-// Resposta: { ok, status: "sem_instancia"|"desconectado"|"conectando"|"conectado", qrcode?, numero?, perfil?, error? }
+// Resposta: { ok, status: "sem_instancia"|"desconectado"|"conectando"|"conectado", qrcode?, numero?, perfil?, bloqueio?, error? }
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -19,16 +21,23 @@ function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: CORS_HEADERS })
 }
 
+const UAZAPI_ADMIN_URL = (Deno.env.get('UAZAPI_URL') || Deno.env.get('UAZAPI_BASE_URL') || '').replace(/\/$/, '')
+const UAZAPI_ADMIN_TOKEN = Deno.env.get('UAZAPI_ADMIN_TOKEN') || ''
+const PLANOS_COM_WHATSAPP = ['pro', 'premium', 'enterprise']
+
 const supabaseAdmin = createClient(
   Deno.env.get('SUPABASE_URL')!,
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 )
 
-async function uazapi(base: string, path: string, token: string, method: 'GET' | 'POST', body?: unknown) {
+async function uazapi(base: string, path: string, token: string, method: 'GET' | 'POST' | 'DELETE', body?: unknown, admintoken?: string) {
   try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (token) headers.token = token
+    if (admintoken) headers.admintoken = admintoken
     const res = await fetch(`${base}${path}`, {
       method,
-      headers: { token, 'Content-Type': 'application/json' },
+      headers,
       body: method === 'POST' ? JSON.stringify(body ?? {}) : undefined,
     })
     const raw = await res.text()
@@ -77,23 +86,82 @@ Deno.serve(async (req) => {
 
   const { data: loja } = await supabaseAdmin
     .from('store_settings')
-    .select('whatsapp_instance_url, whatsapp_instance_token, whatsapp_provider')
+    .select('id, plan, active, custom_features, whatsapp_instance_url, whatsapp_instance_token, whatsapp_provider')
     .eq('id', member.store_id)
     .single()
+  if (!loja) return json({ ok: false, error: 'Loja não encontrada' }, 404)
 
-  const base = (loja?.whatsapp_instance_url ?? '').replace(/\/$/, '')
-  const token = loja?.whatsapp_instance_token ?? ''
-  const provider = (loja?.whatsapp_provider || 'uazapi').toLowerCase()
-  if (!base || !token || provider !== 'uazapi') return json({ ok: true, status: 'sem_instancia' })
+  // Pode GANHAR instância nova? Plano com WhatsApp + loja ativa (pagamento em dia).
+  // Trial não: cada número ocupa vaga paga na UazAPI.
+  const custom = Array.isArray(loja.custom_features) ? loja.custom_features as string[] : null
+  const planoTemWhatsapp = custom ? custom.includes('pos-venda') : PLANOS_COM_WHATSAPP.includes(loja.plan)
+  const bloqueio = !loja.active ? 'inativo' : loja.plan === 'trial' ? 'trial' : !planoTemWhatsapp ? 'plano' : undefined
 
-  if (acao === 'status') return json({ ok: true, ...(await lerStatus(base, token)) })
+  let base = (loja.whatsapp_instance_url ?? '').replace(/\/$/, '')
+  let token = loja.whatsapp_instance_token ?? ''
+  const provider = (loja.whatsapp_provider || 'uazapi').toLowerCase()
+  if (provider !== 'uazapi' && base && token) return json({ ok: true, status: 'sem_instancia', bloqueio })
+  const temInstancia = !!(base && token)
 
+  if (acao === 'status') {
+    if (!temInstancia) return json({ ok: true, status: 'sem_instancia', bloqueio })
+    return json({ ok: true, ...(await lerStatus(base, token)) })
+  }
+
+  // Desconectar só desliga o número: a instância continua salva na loja e é
+  // reaproveitada no próximo "Conectar" (mesmo número ou outro) — nunca cria outra.
   if (acao === 'desconectar') {
+    if (!temInstancia) return json({ ok: true, status: 'sem_instancia', bloqueio })
     await uazapi(base, '/instance/disconnect', token, 'POST')
     return json({ ok: true, status: 'desconectado' })
   }
 
   // conectar
+  if (!temInstancia) {
+    if (bloqueio === 'trial') return json({ ok: false, bloqueio, error: 'O WhatsApp é liberado depois do primeiro pagamento do plano Profissional.' }, 402)
+    if (bloqueio === 'plano') return json({ ok: false, bloqueio, error: 'WhatsApp automático é do plano Profissional.' }, 402)
+    if (bloqueio === 'inativo') return json({ ok: false, bloqueio, error: 'Assinatura vencida. Regularize pra usar o WhatsApp.' }, 402)
+    if (!UAZAPI_ADMIN_URL || !UAZAPI_ADMIN_TOKEN) return json({ ok: false, error: 'WhatsApp ainda não configurado na plataforma. Fale com o suporte do SpeedSeek.' }, 503)
+
+    const corpo = { name: `speedseek-${loja.id.slice(0, 8)}`, systemName: 'speedseekos', adminField01: loja.id }
+    // v2.4+ é /instance/create; servidores mais antigos usam /instance/init
+    let r = await uazapi(UAZAPI_ADMIN_URL, '/instance/create', '', 'POST', corpo, UAZAPI_ADMIN_TOKEN)
+    if (!r.ok && (r.status === 404 || r.status === 405)) {
+      r = await uazapi(UAZAPI_ADMIN_URL, '/instance/init', '', 'POST', corpo, UAZAPI_ADMIN_TOKEN)
+    }
+    const novoToken = r.data?.token ?? r.data?.instance?.token
+    if (!r.ok || !novoToken) {
+      const msg = r.status === 429
+        ? 'Sem vaga de número no servidor de WhatsApp agora. Fale com o suporte do SpeedSeek.'
+        : `Falha ao criar a conexão (${r.erro ?? 'sem token'}). Tente de novo em instantes.`
+      return json({ ok: false, error: msg }, 502)
+    }
+    // Só grava se a loja AINDA não tem instância (dois cliques/abas ao mesmo
+    // tempo não podem deixar 2 instâncias ocupando vaga). Perdeu a corrida =
+    // apaga a recém-criada e usa a que já ficou salva.
+    const { data: gravou, error } = await supabaseAdmin
+      .from('store_settings')
+      .update({ whatsapp_instance_url: UAZAPI_ADMIN_URL, whatsapp_instance_token: novoToken, whatsapp_provider: 'uazapi', whatsapp_instance_auto: true })
+      .eq('id', loja.id)
+      .is('whatsapp_instance_token', null)
+      .select('id')
+    if (error || !gravou?.length) {
+      await uazapi(UAZAPI_ADMIN_URL, '/instance', novoToken, 'DELETE', undefined, UAZAPI_ADMIN_TOKEN)
+      if (error) return json({ ok: false, error: error.message }, 500)
+      const { data: atualLoja } = await supabaseAdmin
+        .from('store_settings')
+        .select('whatsapp_instance_url, whatsapp_instance_token')
+        .eq('id', loja.id)
+        .single()
+      base = (atualLoja?.whatsapp_instance_url ?? '').replace(/\/$/, '')
+      token = atualLoja?.whatsapp_instance_token ?? ''
+      if (!base || !token) return json({ ok: false, error: 'Tente de novo em instantes.' }, 409)
+    } else {
+      base = UAZAPI_ADMIN_URL
+      token = novoToken
+    }
+  }
+
   const atual = await lerStatus(base, token)
   if (atual.status === 'conectado') return json({ ok: true, ...atual })
   const c = await uazapi(base, '/instance/connect', token, 'POST', {})
