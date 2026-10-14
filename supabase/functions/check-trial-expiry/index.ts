@@ -5,7 +5,12 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 )
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
+  // Só o cron chama (segredo próprio, ver _shared/ritmo / cron_http)
+  const segredo = Deno.env.get('CRON_SECRET')
+  if (!segredo || req.headers.get('x-cron-secret') !== segredo) {
+    return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403 })
+  }
   const now = new Date().toISOString()
 
   // Busca lojas trial com trial_ends_at expirado e ainda ativas

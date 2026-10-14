@@ -79,3 +79,6 @@ verify_jwt = false
 
 [functions.system-health-check]
 verify_jwt = false
+
+[functions.check-overdue-subscriptions]
+verify_jwt = false

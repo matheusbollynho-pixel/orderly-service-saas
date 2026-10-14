@@ -51,13 +51,26 @@ Deno.serve(async (req) => {
   const store_id = body.store_id as string
   if (!store_id) return json({ error: 'store_id obrigatório' }, 400)
 
+  // Só o dono da loja gera cobrança pra ela
+  const jwt = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '')
+  const { data: userData } = await sb.auth.getUser(jwt)
+  if (!userData?.user) return json({ error: 'Não autenticado' }, 401)
+  const { data: membro } = await sb
+    .from('store_members')
+    .select('role')
+    .eq('store_id', store_id)
+    .eq('user_id', userData.user.id)
+    .eq('active', true)
+    .maybeSingle()
+  if (membro?.role !== 'owner') return json({ error: 'Só o dono da loja pode gerar a cobrança' }, 403)
+
   // Plano alvo: se veio 'plan' no body é upgrade, senão renova o plano atual
   const targetPlan = body.plan as string | undefined
 
   // Busca dados da loja e assinatura
   const { data: store } = await sb
     .from('store_settings')
-    .select('id, company_name, owner_email, asaas_customer_id, plan')
+    .select('id, company_name, owner_email, asaas_customer_id, plan, store_cnpj, store_phone')
     .eq('id', store_id)
     .maybeSingle()
 
@@ -72,10 +85,38 @@ Deno.serve(async (req) => {
     .limit(1)
     .maybeSingle()
 
-  const asaasCustomerId = store.asaas_customer_id || sub?.asaas_customer_id
-  if (!asaasCustomerId) return json({ error: 'Cliente não encontrado no Asaas. Entre em contato com o suporte.' }, 400)
+  let asaasCustomerId = store.asaas_customer_id || sub?.asaas_customer_id
 
-  const plan = targetPlan || sub?.plan || store.plan || 'basic'
+  // Loja em teste grátis ainda não tem cadastro no Asaas: cria na hora.
+  // O Asaas exige CPF/CNPJ; se a loja não tem CNPJ salvo, o app pede.
+  if (!asaasCustomerId) {
+    const doc = String(body.cpf_cnpj || store.store_cnpj || '').replace(/\D/g, '')
+    if (doc.length !== 11 && doc.length !== 14) {
+      return json({ error: 'Informe o CPF ou CNPJ para gerar o Pix', precisa_documento: true })
+    }
+    const createCustomer = await fetch(`${ASAAS_API_URL}/customers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'access_token': ASAAS_API_KEY },
+      body: JSON.stringify({
+        name: store.company_name || store.owner_email,
+        email: store.owner_email || undefined,
+        cpfCnpj: doc,
+        mobilePhone: (store.store_phone || '').replace(/\D/g, '') || undefined,
+        externalReference: `speedseek_store_${store_id}`,
+      }),
+    })
+    const customer = await createCustomer.json()
+    if (!createCustomer.ok || !customer?.id) {
+      const errMsg = customer?.errors?.[0]?.description || 'Erro ao cadastrar no Asaas'
+      return json({ error: errMsg, precisa_documento: true })
+    }
+    asaasCustomerId = customer.id as string
+    await sb.from('store_settings').update({ asaas_customer_id: asaasCustomerId }).eq('id', store_id)
+  }
+
+  // Loja em teste não tem plano pago próprio: usa o da assinatura (ou Básico)
+  const planoAtual = store.plan === 'trial' ? null : store.plan
+  const plan = targetPlan || sub?.plan || planoAtual || 'basic'
   // Upgrade usa o valor fixo do plano; renovação usa o valor da assinatura (pode ter desconto)
   const amount = targetPlan ? (PLAN_VALUES[plan] || 79) : (sub?.amount || PLAN_VALUES[plan] || 79)
   const dueDate = nextDueDate()

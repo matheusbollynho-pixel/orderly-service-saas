@@ -44,7 +44,12 @@ async function limparWhatsappSemDireito() {
   return apagadas
 }
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
+  // Só o cron chama (segredo próprio, ver _shared/ritmo / cron_http)
+  const segredo = Deno.env.get('CRON_SECRET')
+  if (!segredo || req.headers.get('x-cron-secret') !== segredo) {
+    return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403 })
+  }
   const now = new Date()
   const graceCutoff = new Date(now)
   graceCutoff.setDate(graceCutoff.getDate() - GRACE_DAYS)
@@ -52,13 +57,20 @@ Deno.serve(async () => {
 
   console.log(`Verificando inadimplência — vencimentos antes de ${cutoff} (${GRACE_DAYS} dias de carência)`)
 
-  // Busca assinaturas ativas com vencimento passado (além da carência)
-  const { data: overdue, error } = await supabase
+  // Cada pagamento cria uma linha nova em saas_subscriptions e a antiga fica
+  // 'active' com due_date velho. Só a MAIS RECENTE de cada loja vale — senão
+  // quem pagou em dia seria pausado pela linha do mês anterior.
+  const { data: todas, error } = await supabase
     .from('saas_subscriptions')
-    .select('id, store_id, owner_email, plan, due_date')
-    .eq('status', 'active')
-    .not('due_date', 'is', null)
-    .lt('due_date', cutoff)
+    .select('id, store_id, owner_email, plan, status, due_date, created_at')
+    .order('created_at', { ascending: false })
+
+  const vistas = new Set<string>()
+  const overdue = (todas || []).filter((s: any) => {
+    if (vistas.has(s.store_id)) return false
+    vistas.add(s.store_id)
+    return s.status === 'active' && s.due_date && s.due_date < cutoff
+  })
 
   if (error) {
     console.error('Erro ao buscar assinaturas:', error.message)

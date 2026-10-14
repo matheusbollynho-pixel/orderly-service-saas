@@ -456,7 +456,10 @@ Deno.serve(async (req) => {
     const webhookToken = req.headers.get('asaas-access-token')
     const authHeader = req.headers.get('authorization') || ''
     const isServiceRole = authHeader === `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
-    if (ASAAS_WEBHOOK_TOKEN && webhookToken !== ASAAS_WEBHOOK_TOKEN && !isServiceRole) {
+    // Sem ASAAS_WEBHOOK_TOKEN configurado recusa tudo (antes aceitava qualquer
+    // chamada — dava pra forjar PAYMENT_CONFIRMED e liberar loja de graça).
+    const tokenOk = !!ASAAS_WEBHOOK_TOKEN && webhookToken === ASAAS_WEBHOOK_TOKEN
+    if (!tokenOk && !isServiceRole) {
       console.warn('Token inválido:', webhookToken)
       return json({ error: 'Unauthorized' }, 401)
     }

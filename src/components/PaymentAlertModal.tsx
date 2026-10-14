@@ -34,8 +34,12 @@ interface SubInfo {
 }
 
 export function PaymentAlertModal() {
-  const { storeId } = useStore();
+  const { storeId, isOwner } = useStore();
   const [subInfo, setSubInfo] = useState<SubInfo | null>(null);
+  // Loja em teste grátis: data em que o teste acaba (null = não é teste)
+  const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
+  const [precisaDocumento, setPrecisaDocumento] = useState(false);
+  const [documento, setDocumento] = useState('');
   const [show, setShow] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const [dismissed, setDismissed] = useState(false);
@@ -45,7 +49,10 @@ export function PaymentAlertModal() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const envPlan = import.meta.env.VITE_PLAN as string | undefined;
-  const isDemo = import.meta.env.VITE_DEMO === 'true' || window.location.hostname.includes('demo');
+  // Só a env de demo libera. (O hostname não serve: o deploy de produção
+  // também se chama speedseekos-demo.vercel.app.) Contas demo são liberadas
+  // pelo trial_ends_at longo no banco.
+  const isDemo = import.meta.env.VITE_DEMO === 'true';
 
   useEffect(() => {
     if (!storeId || envPlan === 'enterprise' || isDemo) return;
@@ -61,12 +68,32 @@ export function PaymentAlertModal() {
       .limit(1)
       .maybeSingle();
 
+    // Teste grátis: avisa nos últimos 5 dias (igual à assinatura) e bloqueia quando acaba
+    const { data: loja } = await (supabase as any)
+      .from('store_settings')
+      .select('plan, trial_ends_at')
+      .eq('id', storeId)
+      .maybeSingle();
+
+    if (loja?.plan === 'trial' && loja.trial_ends_at) {
+      const restanteMs = new Date(loja.trial_ends_at).getTime() - Date.now();
+      const plano = data?.plan && data.plan !== 'trial' ? data.plan : 'basic';
+      const valor = data?.amount ?? ({ basic: 79, pro: 149, premium: 219 } as Record<string, number>)[plano] ?? 79;
+      if (restanteMs <= 5 * 86400000) {
+        setTrialEndsAt(loja.trial_ends_at);
+        setSubInfo({ status: 'trial', due_date: loja.trial_ends_at, amount: valor, plan: plano });
+        setBlocked(restanteMs <= 0);
+        setShow(true);
+      }
+      return;
+    }
+
     if (!data) return;
 
     const status = data.status as string;
     const dueDate = data.due_date as string | null;
 
-    // Trial/pending — não mostra aviso de pagamento
+    // Pending fora do teste — não mostra aviso de pagamento
     if (status === 'pending' || data.plan === 'trial') return;
 
     // Já vencido/cancelado — bloqueia
@@ -131,8 +158,13 @@ export function PaymentAlertModal() {
     setPixData(null);
     try {
       const { data, error } = await supabase.functions.invoke('gerar-cobranca', {
-        body: { store_id: storeId },
+        body: { store_id: storeId, ...(documento ? { cpf_cnpj: documento } : {}) },
       });
+      if (data?.precisa_documento) {
+        setPrecisaDocumento(true);
+        if (documento) toast.error(data.error);
+        return;
+      }
       if (error || !data?.success) {
         toast.error(data?.error || error?.message || 'Erro ao gerar cobrança');
         return;
@@ -153,6 +185,10 @@ export function PaymentAlertModal() {
 
   if (!show || dismissed || envPlan === 'enterprise' || isDemo) return null;
 
+  const trialDaysLeft = trialEndsAt
+    ? Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / 86400000)
+    : null;
+
   const daysLeft = subInfo?.due_date
     ? Math.floor((new Date(subInfo.due_date + 'T12:00:00').getTime() - new Date().setHours(0,0,0,0)) / (1000 * 60 * 60 * 24))
     : null;
@@ -169,10 +205,18 @@ export function PaymentAlertModal() {
             }
             <div>
               <p className={`font-bold text-sm ${blocked ? 'text-red-300' : 'text-amber-300'}`}>
-                {blocked ? 'Assinatura vencida' : 'Pagamento próximo do vencimento'}
+                {trialEndsAt
+                  ? (blocked ? 'Seu teste grátis acabou' : 'Seu teste grátis está acabando')
+                  : (blocked ? 'Assinatura vencida' : 'Pagamento próximo do vencimento')}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {blocked
+                {trialEndsAt
+                  ? (blocked
+                    ? 'Assine para continuar usando o sistema'
+                    : trialDaysLeft !== null && trialDaysLeft <= 1
+                      ? 'Último dia do teste — assine para não perder o acesso'
+                      : `Termina em ${trialDaysLeft} dias — ${fmtDate(trialEndsAt)}`)
+                  : blocked
                   ? 'Renove para continuar usando o sistema'
                   : daysLeft === 0
                     ? 'Vence hoje!'
@@ -204,21 +248,42 @@ export function PaymentAlertModal() {
                   <span className="text-foreground font-medium">{fmtMoney(subInfo?.amount ?? null)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Vencimento</span>
+                  <span>{trialEndsAt ? 'Fim do teste' : 'Vencimento'}</span>
                   <span className={`font-medium ${blocked ? 'text-red-400' : 'text-amber-400'}`}>{fmtDate(subInfo?.due_date ?? null)}</span>
                 </div>
               </div>
 
-              <Button
-                className="w-full gap-2"
-                onClick={gerarPix}
-                disabled={generating}
-              >
-                {generating
-                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Gerando PIX...</>
-                  : <><CreditCard className="h-4 w-4" /> Gerar PIX para pagar</>
-                }
-              </Button>
+              {!isOwner ? (
+                <p className="text-sm text-center text-muted-foreground">
+                  Peça ao dono da loja para entrar no sistema e fazer o pagamento.
+                </p>
+              ) : (
+                <>
+                  {precisaDocumento && (
+                    <div className="space-y-1">
+                      <label htmlFor="pix-documento" className="text-xs text-muted-foreground">CPF ou CNPJ do responsável</label>
+                      <input
+                        id="pix-documento"
+                        inputMode="numeric"
+                        value={documento}
+                        onChange={e => setDocumento(e.target.value)}
+                        placeholder="Somente números"
+                        className="w-full h-9 rounded-md border border-border bg-background px-3 text-sm"
+                      />
+                    </div>
+                  )}
+                  <Button
+                    className="w-full gap-2"
+                    onClick={gerarPix}
+                    disabled={generating || (precisaDocumento && documento.replace(/\D/g, '').length < 11)}
+                  >
+                    {generating
+                      ? <><Loader2 className="h-4 w-4 animate-spin" /> Gerando PIX...</>
+                      : <><CreditCard className="h-4 w-4" /> {trialEndsAt ? 'Assinar com PIX' : 'Gerar PIX para pagar'}</>
+                    }
+                  </Button>
+                </>
+              )}
             </>
           ) : (
             <div className="space-y-3 text-center">
