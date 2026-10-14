@@ -38,6 +38,12 @@ const CORS = {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
+  // Só o cron chama (segredo próprio, ver send-satisfaction-bulk).
+  const segredo = Deno.env.get('CRON_SECRET')
+  if (!segredo || req.headers.get('x-cron-secret') !== segredo) {
+    return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers: { ...CORS, 'Content-Type': 'application/json' } })
+  }
+
   try {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 
