@@ -1,7 +1,8 @@
 /**
  * system-health-check
- * Cron diário. Verifica cron jobs falhando e envios de WhatsApp com erro
- * nas últimas 24h, agrupados por loja, e manda um resumo pro dono (DONO_PHONE).
+ * Cron diário. Verifica cron jobs falhando, respostas com erro das edge
+ * functions chamadas pelos crons (cron_http_falhas) e envios de WhatsApp com
+ * erro nas últimas 24h, agrupados por loja, e manda um resumo pro dono (DONO_PHONE).
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { sendWhatsAppText, normalizeBrPhone } from '../_shared/whatsapp.ts'
@@ -49,6 +50,15 @@ Deno.serve(async (req) => {
 
     const { data: failedCrons } = await sb.rpc('get_failed_cron_runs', { since })
 
+    // O cron aparece como "succeeded" mesmo quando a função responde 401/500;
+    // a resposta real é coletada de hora em hora em cron_http_falhas.
+    await sb.rpc('coletar_falhas_http_cron')
+    const { data: falhasHttp } = await sb
+      .from('cron_http_falhas')
+      .select('jobs, status_code, timed_out, erro, created')
+      .gte('created', since)
+      .order('created', { ascending: false })
+
     const { data: failedSends } = await sb
       .from('whatsapp_send_log')
       .select('store_id, feature, created_at, error_message, store_settings(company_name)')
@@ -63,6 +73,15 @@ Deno.serve(async (req) => {
       else cronsFalhando.set(c.jobname, { count: 1, lastError: c.return_message || '' })
     }
 
+    const respostasComErro = new Map<string, { count: number; lastError: string }>()
+    for (const f of falhasHttp || []) {
+      const chave = f.jobs || 'chamada de gatilho do banco'
+      const detalhe = f.timed_out ? 'sem resposta (timeout)' : `HTTP ${f.status_code ?? '?'} ${f.erro || ''}`
+      const existing = respostasComErro.get(chave)
+      if (existing) existing.count++
+      else respostasComErro.set(chave, { count: 1, lastError: detalhe })
+    }
+
     const porLoja = new Map<string, { nome: string; recursos: Map<string, { count: number; lastError: string }> }>()
     for (const s of failedSends || []) {
       const storeId = s.store_id as string
@@ -74,7 +93,7 @@ Deno.serve(async (req) => {
       else entry.recursos.set(s.feature, { count: 1, lastError: (s as { error_message?: string }).error_message || '' })
     }
 
-    if (cronsFalhando.size === 0 && porLoja.size === 0) {
+    if (cronsFalhando.size === 0 && respostasComErro.size === 0 && porLoja.size === 0) {
       if (DONO_PHONE) {
         await sendWhatsAppText(normalizeBrPhone(DONO_PHONE), '✅ SpeedSeek OS — relatório diário\n\nTudo funcionando normal nas últimas 24h. Nenhum cron falhou, nenhum envio de WhatsApp deu erro.', undefined, { feature: 'health_check', allowGlobalFallback: true })
       }
@@ -87,6 +106,15 @@ Deno.serve(async (req) => {
       msg += '*🔧 Tarefas automáticas quebradas:*\n'
       for (const [job, d] of cronsFalhando) {
         msg += `• ${job} — falhou ${d.count}x\n`
+        if (d.lastError) msg += `  _${truncar(d.lastError)}_\n`
+      }
+      msg += '\n'
+    }
+
+    if (respostasComErro.size > 0) {
+      msg += '*🚫 Tarefas que rodaram mas a função recusou/deu erro:*\n'
+      for (const [job, d] of respostasComErro) {
+        msg += `• ${job} — ${d.count}x\n`
         if (d.lastError) msg += `  _${truncar(d.lastError)}_\n`
       }
       msg += '\n'
@@ -109,7 +137,7 @@ Deno.serve(async (req) => {
       await sendWhatsAppText(normalizeBrPhone(DONO_PHONE), msg, undefined, { feature: 'health_check', allowGlobalFallback: true })
     }
 
-    return new Response(JSON.stringify({ ok: true, problemas: true, crons: cronsFalhando.size, lojas: porLoja.size }), { status: 200, headers: CORS })
+    return new Response(JSON.stringify({ ok: true, problemas: true, crons: cronsFalhando.size, respostas_com_erro: respostasComErro.size, lojas: porLoja.size }), { status: 200, headers: CORS })
   } catch (err) {
     console.error('system-health-check error:', err)
     return new Response(JSON.stringify({ error: String(err) }), { status: 500, headers: CORS })
