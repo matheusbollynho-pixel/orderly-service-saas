@@ -1,6 +1,6 @@
 /**
  * agendamento-lembrete-dia-anterior
- * Cron diário às 18h BRT (21h UTC).
+ * Cron às 17h, 18h e 19h BRT (o que não couber numa rodada sai na seguinte).
  * Verifica agendamentos do dia seguinte e envia lembrete com pedido de confirmação.
  * Se cliente responder NÃO → cancela agendamento e notifica dono.
  * Se não responder em 2h → mantém agendamento.
@@ -13,6 +13,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { sendWhatsAppText, normalizeBrPhone, type StoreWhatsAppConfig } from '../_shared/whatsapp.ts';
+import { criarRitmo, emSegundoPlano } from '../_shared/ritmo.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -130,6 +131,9 @@ async function enviarLembretes(): Promise<void> {
   let erros = 0;
   let pulados = 0;
   const enviadosPorLoja = new Map<string, Ag[]>();
+  // Pausa sorteada entre clientes; o que não couber na rodada sai na próxima
+  // (o cron roda 3x no fim da tarde). Ver _shared/ritmo.ts
+  const ritmo = criarRitmo();
 
   for (const ag of lista) {
     if (!ag.client_phone) continue;
@@ -166,6 +170,7 @@ async function enviarLembretes(): Promise<void> {
       `🔧 *Serviço:* ${servico}\n\n` +
       `Confirma sua presença? Responda *SIM* ou *NÃO* 😊`;
 
+    if (!(await ritmo.podeEnviar())) break;
     try {
       await sendWhatsAppText(normalizeBrPhone(phone), msg, wppConfig, {
         storeId: store.id,
@@ -226,22 +231,9 @@ async function enviarLembretes(): Promise<void> {
   }
 }
 
-Deno.serve(async (req) => {
+Deno.serve((req) => {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
   }
-
-  try {
-    await enviarLembretes();
-
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-  } catch (error) {
-    console.error('❌ Erro no agendamento-lembrete-dia-anterior:', error);
-    return new Response(JSON.stringify({ success: false, error: String(error) }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  return emSegundoPlano('agendamento-lembrete-dia-anterior', enviarLembretes);
 });

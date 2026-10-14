@@ -51,7 +51,7 @@ const ESPERA_MIN_S = 5
 const ESPERA_MAX_S = 150
 const MAX_POR_DIA_POR_LOJA = 40
 const HORA_INICIO = 8   // BRT
-const HORA_FIM = 12     // BRT, exclusivo (só de manhã)
+const HORA_FIM = 18     // BRT, exclusivo
 // OS anteriores a isso nunca recebem (cron quebrou em 25/08/2026; o que é
 // mais antigo é histórico de antes da funcionalidade existir).
 const ENVIAR_DESDE = '2026-08-20T00:00:00-03:00'

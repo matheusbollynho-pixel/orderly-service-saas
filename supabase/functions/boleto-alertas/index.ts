@@ -9,6 +9,8 @@ const supabase = createClient(
 // Loja "dona" da instância global compartilhada (legado, pré multi-tenant).
 const LEGACY_DEFAULT_STORE_ID = '9fd27114-97d1-48cd-ad09-1b057fa9c185'
 
+function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)) }
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -77,6 +79,8 @@ async function processarLoja(store: {
       `💰 *Valor:* ${valorFmt}\n` +
       `📋 *Categoria:* ${boleto.categoria}`
 
+    // Vai pro telefone do próprio dono, mas mesmo assim sem rajada
+    if (sent > 0) await sleep(3000 + Math.random() * 5000)
     await Promise.allSettled(
       phones.map(phone => sendWhatsAppText(normalizeBrPhone(phone), msg, wppConfig, { storeId: store.id, feature: 'boleto_alerta' }))
     )

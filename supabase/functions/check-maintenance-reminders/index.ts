@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.0";
 import { sendWhatsAppText, type StoreWhatsAppConfig } from "../_shared/whatsapp.ts";
+import { criarRitmo, dentroDoHorarioComercial, emSegundoPlano, MAX_POR_RODADA } from "../_shared/ritmo.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -9,16 +10,11 @@ const supabase = createClient(
 // Loja "dona" da instância global compartilhada (legado, pré multi-tenant).
 const LEGACY_DEFAULT_STORE_ID = '9fd27114-97d1-48cd-ad09-1b057fa9c185';
 
-const MAX_POR_EXECUCAO = 15; // nunca mandar rajada grande de uma vez
-const DELAY_ENTRE_ENVIOS_MS = 1500;
+// Ritmo (pausa, teto por rodada, horário) em _shared/ritmo.ts
 const MAX_TENTATIVAS = 3;
 const ERROS_SEM_RETRY = /not on whatsapp|invalid.*number|número.*inválido/i;
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function processarLoja(storeId: string, companyName: string, wppConfig: StoreWhatsAppConfig) {
+async function processarLoja(storeId: string, companyName: string, wppConfig: StoreWhatsAppConfig, ritmo: ReturnType<typeof criarRitmo>) {
   if (!wppConfig.instance_url && storeId !== LEGACY_DEFAULT_STORE_ID) {
     console.log(`⏭️ Loja ${companyName} sem WhatsApp configurado — pulando lembretes de manutenção`);
     return { store_id: storeId, enviados: 0, erros: 0 };
@@ -34,7 +30,7 @@ async function processarLoja(storeId: string, companyName: string, wppConfig: St
     .lt("reminder_attempts", MAX_TENTATIVAS)
     .lte("reminder_due_date", new Date().toISOString())
     .order("reminder_due_date", { ascending: true })
-    .limit(MAX_POR_EXECUCAO);
+    .limit(MAX_POR_RODADA * 3);
 
   if (error || !dueReminders?.length) return { store_id: storeId, enviados: 0, erros: 0 };
 
@@ -43,6 +39,7 @@ async function processarLoja(storeId: string, companyName: string, wppConfig: St
   let erros = 0;
 
   for (const reminder of dueReminders) {
+    if (enviados >= MAX_POR_RODADA) break;
     try {
       const phone = reminder.client_phone?.replace(/\D/g, "");
       if (!phone || phone.length < 10 || phone.length > 13) {
@@ -74,6 +71,8 @@ async function processarLoja(storeId: string, companyName: string, wppConfig: St
         .replace("{days}", String(daysAgo))
         .replace("{keyword}", reminder.keyword?.keyword || "serviço");
 
+      // O resto fica pendente e sai na próxima rodada
+      if (!(await ritmo.podeEnviar())) break;
       await sendWhatsAppText(fullPhone, message, wppConfig, { storeId, feature: 'lembrete_manutencao' });
 
       await supabase.from("maintenance_reminders")
@@ -82,7 +81,6 @@ async function processarLoja(storeId: string, companyName: string, wppConfig: St
 
       enviados++;
       console.log(`✅ [${companyName}] Lembrete enviado: ${reminder.id}`);
-      await sleep(DELAY_ENTRE_ENVIOS_MS);
     } catch (e) {
       const errorMsg = String(e);
       const tentativas = (reminder.reminder_attempts || 0) + 1;
@@ -102,43 +100,39 @@ async function processarLoja(storeId: string, companyName: string, wppConfig: St
   return { store_id: storeId, company: companyName, enviados, erros };
 }
 
-Deno.serve(async (req) => {
-  if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
+async function rodada() {
+  const { data: stores, error } = await supabase
+    .from("store_settings")
+    .select("id, company_name, whatsapp_provider, whatsapp_instance_url, whatsapp_instance_token, whatsapp_bulk_paused")
+    .eq("active", true);
+  if (error) throw error;
 
-  try {
-    const { data: stores, error } = await supabase
-      .from("store_settings")
-      .select("id, company_name, whatsapp_provider, whatsapp_instance_url, whatsapp_instance_token, whatsapp_bulk_paused")
-      .eq("active", true);
-
-    if (error) throw error;
-
-    const results = [];
-    for (const store of stores || []) {
-      if (store.whatsapp_bulk_paused) {
-        console.log(`⏸️ Loja ${store.company_name} com envios em massa pausados manualmente — pulando`);
-        results.push({ store_id: store.id, enviados: 0, erros: 0 });
-        continue;
-      }
-      const wppConfig: StoreWhatsAppConfig = {
-        provider: store.whatsapp_provider || undefined,
-        instance_url: store.whatsapp_instance_url || undefined,
-        instance_token: store.whatsapp_instance_token || undefined,
-      };
-      const result = await processarLoja(store.id, store.company_name || "Oficina", wppConfig);
-      results.push(result);
+  const ritmo = criarRitmo();
+  const results = [];
+  for (const store of stores || []) {
+    if (store.whatsapp_bulk_paused) {
+      console.log(`⏸️ Loja ${store.company_name} com envios em massa pausados manualmente — pulando`);
+      results.push({ store_id: store.id, enviados: 0, erros: 0 });
+      continue;
     }
-
-    const totalEnviados = results.reduce((s, r) => s + r.enviados, 0);
-    console.log(`📊 Total: ${totalEnviados} lembretes em ${results.length} loja(s)`);
-
-    return new Response(JSON.stringify({ success: true, lojas: results.length, enviados: totalEnviados }), {
-      headers: { "Content-Type": "application/json" },
-    });
-  } catch (error) {
-    console.error("Erro geral:", error);
-    return new Response(JSON.stringify({ success: false, error: error.message }), {
-      status: 500, headers: { "Content-Type": "application/json" },
-    });
+    const wppConfig: StoreWhatsAppConfig = {
+      provider: store.whatsapp_provider || undefined,
+      instance_url: store.whatsapp_instance_url || undefined,
+      instance_token: store.whatsapp_instance_token || undefined,
+    };
+    const result = await processarLoja(store.id, store.company_name || "Oficina", wppConfig, ritmo);
+    results.push(result);
   }
+
+  const totalEnviados = results.reduce((s, r) => s + r.enviados, 0);
+  console.log(`📊 Total: ${totalEnviados} lembretes em ${results.length} loja(s)`);
+}
+
+Deno.serve((req) => {
+  if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
+  // Cron roda de hora em hora, inclusive de madrugada: fora do horário não manda.
+  if (!dentroDoHorarioComercial()) {
+    return new Response(JSON.stringify({ ok: true, fora_do_horario: true }), { headers: { "Content-Type": "application/json" } });
+  }
+  return emSegundoPlano("check-maintenance-reminders", rodada);
 });

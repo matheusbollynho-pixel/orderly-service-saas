@@ -6,6 +6,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { sendWhatsAppText, normalizeBrPhone, type StoreWhatsAppConfig } from '../_shared/whatsapp.ts';
+import { criarRitmo, dentroDoHorarioComercial, emSegundoPlano, MAX_POR_RODADA } from '../_shared/ritmo.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -14,7 +15,7 @@ const AVISO_RETIRADA_HORAS = parseInt(Deno.env.get('AVISO_RETIRADA_HORAS') || '4
 
 const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-async function processarLoja(store: { id: string; company_name: string; whatsapp_provider: string | null; whatsapp_instance_url: string | null; whatsapp_instance_token: string | null }) {
+async function processarLoja(store: { id: string; company_name: string; whatsapp_provider: string | null; whatsapp_instance_url: string | null; whatsapp_instance_token: string | null }, ritmo: ReturnType<typeof criarRitmo>) {
   const wppConfig: StoreWhatsAppConfig = {
     provider: store.whatsapp_provider || undefined,
     instance_url: store.whatsapp_instance_url || undefined,
@@ -41,6 +42,8 @@ async function processarLoja(store: { id: string; company_name: string; whatsapp
     if (!os.client_phone) continue;
     const phone = os.client_phone.replace(/\D/g, '');
     if (phone.length < 10) continue;
+    // O resto fica pendente e sai na próxima rodada (ver _shared/ritmo.ts)
+    if (enviados >= MAX_POR_RODADA || !(await ritmo.podeEnviar())) break;
 
     const nome = os.client_name?.split(' ')[0] || 'Cliente';
     const moto = os.equipment || 'sua moto';
@@ -86,33 +89,27 @@ async function processarLoja(store: { id: string; company_name: string; whatsapp
   return { store_id: store.id, company: company_name, enviados };
 }
 
-Deno.serve(async (req) => {
-  if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+async function rodada() {
+  const { data: stores, error } = await sb
+    .from('store_settings')
+    .select('id, company_name, whatsapp_provider, whatsapp_instance_url, whatsapp_instance_token')
+    .eq('active', true);
+  if (error) throw error;
 
-  try {
-    const { data: stores, error } = await sb
-      .from('store_settings')
-      .select('id, company_name, whatsapp_provider, whatsapp_instance_url, whatsapp_instance_token')
-      .eq('active', true);
-
-    if (error) throw error;
-
-    const results = [];
-    for (const store of stores || []) {
-      const result = await processarLoja(store);
-      results.push(result);
-    }
-
-    const totalEnviados = results.reduce((s, r) => s + r.enviados, 0);
-    console.log(`📊 Total: ${totalEnviados} avisos em ${results.length} loja(s)`);
-
-    return new Response(JSON.stringify({ success: true, lojas: results.length, enviados: totalEnviados }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-  } catch (error) {
-    console.error('❌ Erro:', error);
-    return new Response(JSON.stringify({ success: false, error: String(error) }), {
-      status: 500, headers: { 'Content-Type': 'application/json' },
-    });
+  const ritmo = criarRitmo();
+  const results = [];
+  for (const store of stores || []) {
+    results.push(await processarLoja(store, ritmo));
   }
+
+  const totalEnviados = results.reduce((s, r) => s + r.enviados, 0);
+  console.log(`📊 Total: ${totalEnviados} avisos em ${results.length} loja(s)`);
+}
+
+Deno.serve((req) => {
+  if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+  if (!dentroDoHorarioComercial()) {
+    return new Response(JSON.stringify({ ok: true, fora_do_horario: true }), { headers: { 'Content-Type': 'application/json' } });
+  }
+  return emSegundoPlano('os-pronta-aviso', rodada);
 });
