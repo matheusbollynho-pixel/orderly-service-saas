@@ -75,7 +75,8 @@ export function PaymentAlertModal() {
       .eq('id', storeId)
       .maybeSingle();
 
-    if (loja?.plan === 'trial' && loja.trial_ends_at) {
+    // Assinatura ativa (liberada no SuperAdmin ou paga) vence o trial
+    if (loja?.plan === 'trial' && loja.trial_ends_at && data?.status !== 'active') {
       const restanteMs = new Date(loja.trial_ends_at).getTime() - Date.now();
       const plano = data?.plan && data.plan !== 'trial' ? data.plan : 'basic';
       const valor = data?.amount ?? ({ basic: 79, pro: 149, premium: 219 } as Record<string, number>)[plano] ?? 79;

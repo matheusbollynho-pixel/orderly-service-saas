@@ -559,7 +559,13 @@ export default function SuperAdminPage() {
         owner_email: selected.owner_email || 'sem-email@speedseekos.com.br',
       });
     }
-    if (subStatus === 'active') await sb.from('store_settings').update({ active: true }).eq('id', selected.store_id);
+    if (subStatus === 'active') {
+      // Sai do trial, senão o aviso de teste vencido continua bloqueando
+      const subPlan = selected.subscription?.plan;
+      const update: Record<string, any> = { active: true };
+      if (selected.plan === 'trial') update.plan = subPlan && subPlan !== 'trial' ? subPlan : 'basic';
+      await sb.from('store_settings').update(update).eq('id', selected.store_id);
+    }
     if (subStatus === 'cancelled') await sb.from('store_settings').update({ active: false }).eq('id', selected.store_id);
     setSaving(false);
     toast.success('Assinatura atualizada!');
