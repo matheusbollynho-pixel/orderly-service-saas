@@ -153,6 +153,14 @@ function daysUntil(dateStr: string | null): number | null {
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
+// Update que falha alto: se o RLS barrar, o Supabase não dá erro, só altera 0 linhas.
+// Sem isso a tela mostrava "salvo" e nada mudava no banco.
+async function atualizar(table: string, values: Record<string, any>, id: string) {
+  const { data, error } = await (supabase as any).from(table).update(values).eq('id', id).select('id');
+  if (error) throw new Error(error.message);
+  if (!data?.length) throw new Error('O banco recusou a alteração (sem permissão de super admin)');
+}
+
 export default function SuperAdminPage() {
   const navigate = useNavigate();
   const { isSuperAdmin, loading: authLoading } = useSuperAdmin();
@@ -369,7 +377,8 @@ export default function SuperAdminPage() {
   };
 
   const toggleActive = async (storeId: string, current: boolean | null) => {
-    await (supabase as any).from('store_settings').update({ active: !current }).eq('id', storeId);
+    try { await atualizar('store_settings', { active: !current }, storeId); }
+    catch (e: any) { toast.error(e.message); return; }
     toast.success(`Loja ${!current ? 'ativada' : 'desativada'}`);
     setClients(prev => prev.map(c => c.store_id === storeId ? { ...c, active: !current } : c));
     if (selected?.store_id === storeId) setSelected(prev => prev ? { ...prev, active: !current } : null);
@@ -378,9 +387,10 @@ export default function SuperAdminPage() {
   const cancelSubscription = async () => {
     if (!selected?.subscription) return;
     if (!confirm('Cancelar assinatura? O cliente perderá acesso.')) return;
-    const sb = supabase as any;
-    await sb.from('saas_subscriptions').update({ status: 'cancelled' }).eq('id', selected.subscription.id);
-    await sb.from('store_settings').update({ active: false }).eq('id', selected.store_id);
+    try {
+      await atualizar('saas_subscriptions', { status: 'cancelled' }, selected.subscription.id);
+      await atualizar('store_settings', { active: false }, selected.store_id);
+    } catch (e: any) { toast.error(e.message); return; }
     toast.success('Assinatura cancelada');
     loadClients();
     setSelected(null);
@@ -478,13 +488,9 @@ export default function SuperAdminPage() {
     setSavingAiBudget(true);
     const trimmed = aiBudgetInput.trim();
     const value = trimmed === '' ? null : Number(trimmed.replace(',', '.'));
-    const sb = supabase as any;
-    const { error } = await sb.from('store_settings').update({ ai_monthly_budget_brl: value }).eq('id', selected.store_id);
+    try { await atualizar('store_settings', { ai_monthly_budget_brl: value }, selected.store_id); }
+    catch (e: any) { setSavingAiBudget(false); toast.error('Erro ao salvar orçamento de IA: ' + e.message); return; }
     setSavingAiBudget(false);
-    if (error) {
-      toast.error('Erro ao salvar orçamento de IA');
-      return;
-    }
     toast.success(value == null ? 'Override removido — volta a usar o padrão do plano' : `Orçamento de IA definido em R$ ${value.toFixed(2)}/mês`);
     setSelected(prev => prev ? { ...prev, ai_monthly_budget_brl: value } : null);
     setClients(prev => prev.map(c => c.store_id === selected.store_id ? { ...c, ai_monthly_budget_brl: value } : c));
@@ -494,13 +500,14 @@ export default function SuperAdminPage() {
   const saveWpp = async () => {
     if (!selected) return;
     setSaving(true);
-    const { error } = await (supabase as any).from('store_settings').update({
-      whatsapp_instance_url: wppUrl || null,
-      whatsapp_instance_token: wppToken || null,
-      whatsapp_provider: wppProvider || null,
-    }).eq('id', selected.store_id);
+    try {
+      await atualizar('store_settings', {
+        whatsapp_instance_url: wppUrl || null,
+        whatsapp_instance_token: wppToken || null,
+        whatsapp_provider: wppProvider || null,
+      }, selected.store_id);
+    } catch (e: any) { setSaving(false); toast.error(e.message); return; }
     setSaving(false);
-    if (error) { toast.error(error.message); return; }
     toast.success('WhatsApp salvo!');
     setSelected(prev => prev ? { ...prev, whatsapp_instance_url: wppUrl, whatsapp_instance_token: wppToken, whatsapp_provider: wppProvider } : null);
     setClients(prev => prev.map(c => c.store_id === selected.store_id ? { ...c, whatsapp_instance_url: wppUrl, whatsapp_instance_token: wppToken } : c));
@@ -512,13 +519,15 @@ export default function SuperAdminPage() {
   const savePlan = async () => {
     if (!selected) return;
     setSaving(true);
-    await (supabase as any).from('store_settings').update({ plan: newPlan, custom_features: null }).eq('id', selected.store_id);
-    if (selected.subscription) {
-      await (supabase as any).from('saas_subscriptions').update({
-        plan: newPlan,
-        amount: PLAN_AMOUNTS[newPlan] ?? selected.subscription.amount,
-      }).eq('id', selected.subscription.id);
-    }
+    try {
+      await atualizar('store_settings', { plan: newPlan, custom_features: null }, selected.store_id);
+      if (selected.subscription) {
+        await atualizar('saas_subscriptions', {
+          plan: newPlan,
+          amount: PLAN_AMOUNTS[newPlan] ?? selected.subscription.amount,
+        }, selected.subscription.id);
+      }
+    } catch (e: any) { setSaving(false); toast.error(e.message); return; }
     setSaving(false);
     toast.success('Plano atualizado!');
     const newAmount = PLAN_AMOUNTS[newPlan] ?? selected.subscription?.amount ?? null;
@@ -530,7 +539,8 @@ export default function SuperAdminPage() {
   const saveCustomFeatures = async () => {
     if (!selected) return;
     setSaving(true);
-    await (supabase as any).from('store_settings').update({ custom_features: customFeatures }).eq('id', selected.store_id);
+    try { await atualizar('store_settings', { custom_features: customFeatures }, selected.store_id); }
+    catch (e: any) { setSaving(false); toast.error(e.message); return; }
     setSaving(false);
     toast.success('Funcionalidades salvas!');
     setSelected(prev => prev ? { ...prev, custom_features: customFeatures } : null);
@@ -542,31 +552,34 @@ export default function SuperAdminPage() {
     if (!selected) return;
     setSaving(true);
     const sb = supabase as any;
-    if (selected.subscription) {
-      await sb.from('saas_subscriptions').update({
-        due_date: subDueDate || null,
-        status: subStatus,
-        amount: subAmount ? parseFloat(subAmount) : null,
-      }).eq('id', selected.subscription.id);
-    } else {
-      await sb.from('saas_subscriptions').insert({
-        store_id: selected.store_id,
-        plan: selected.plan || 'basic',
-        status: subStatus,
-        amount: subAmount ? parseFloat(subAmount) : null,
-        due_date: subDueDate || null,
-        owner_name: selected.company_name || 'Cliente',
-        owner_email: selected.owner_email || 'sem-email@speedseekos.com.br',
-      });
-    }
-    if (subStatus === 'active') {
-      // Sai do trial, senão o aviso de teste vencido continua bloqueando
-      const subPlan = selected.subscription?.plan;
-      const update: Record<string, any> = { active: true };
-      if (selected.plan === 'trial') update.plan = subPlan && subPlan !== 'trial' ? subPlan : 'basic';
-      await sb.from('store_settings').update(update).eq('id', selected.store_id);
-    }
-    if (subStatus === 'cancelled') await sb.from('store_settings').update({ active: false }).eq('id', selected.store_id);
+    try {
+      if (selected.subscription) {
+        await atualizar('saas_subscriptions', {
+          due_date: subDueDate || null,
+          status: subStatus,
+          amount: subAmount ? parseFloat(subAmount) : null,
+        }, selected.subscription.id);
+      } else {
+        const { error } = await sb.from('saas_subscriptions').insert({
+          store_id: selected.store_id,
+          plan: selected.plan || 'basic',
+          status: subStatus,
+          amount: subAmount ? parseFloat(subAmount) : null,
+          due_date: subDueDate || null,
+          owner_name: selected.company_name || 'Cliente',
+          owner_email: selected.owner_email || 'sem-email@speedseekos.com.br',
+        });
+        if (error) throw new Error(error.message);
+      }
+      if (subStatus === 'active') {
+        // Sai do trial, senão o aviso de teste vencido continua bloqueando
+        const subPlan = selected.subscription?.plan;
+        const update: Record<string, any> = { active: true };
+        if (selected.plan === 'trial') update.plan = subPlan && subPlan !== 'trial' ? subPlan : 'basic';
+        await atualizar('store_settings', update, selected.store_id);
+      }
+      if (subStatus === 'cancelled') await atualizar('store_settings', { active: false }, selected.store_id);
+    } catch (e: any) { setSaving(false); toast.error(e.message); return; }
     setSaving(false);
     toast.success('Assinatura atualizada!');
     const updatedSub = {
