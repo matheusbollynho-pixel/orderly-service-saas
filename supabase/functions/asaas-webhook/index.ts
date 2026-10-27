@@ -43,14 +43,33 @@ function toISODate(): string {
   return new Date().toISOString().split('T')[0]
 }
 
-// Retorna o dia 10 do próximo mês como YYYY-MM-DD
-function nextDueDate(): string {
-  // Usa horário de Brasília (UTC-3) para evitar bug de fuso
-  const now = new Date(new Date().getTime() - 3 * 60 * 60 * 1000)
-  const day = now.getUTCDate()
-  const year = day < 10 ? now.getUTCFullYear() : (now.getUTCMonth() === 11 ? now.getUTCFullYear() + 1 : now.getUTCFullYear())
-  const month = day < 10 ? now.getUTCMonth() : (now.getUTCMonth() === 11 ? 0 : now.getUTCMonth() + 1)
-  return `${year}-${String(month + 1).padStart(2, '0')}-10`
+// Hoje em Brasília (UTC-3) como YYYY-MM-DD
+function hojeBRT(): string {
+  return new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().split('T')[0]
+}
+
+// Próximo vencimento = 1 mês depois do vencimento atual; se já venceu (ou é a
+// 1ª vez), 1 mês a partir de hoje. Antes era sempre "próximo dia 10": quem
+// pagava dia 8 vencia de novo dia 10 e quem pagava adiantado perdia os dias.
+async function proximoVencimento(storeId: string | null): Promise<string> {
+  const hoje = hojeBRT()
+  let base = hoje
+  if (storeId) {
+    const { data } = await supabase
+      .from('saas_subscriptions')
+      .select('due_date')
+      .eq('store_id', storeId)
+      .eq('status', 'active')
+      .order('due_date', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (data?.due_date && data.due_date > hoje) base = data.due_date
+  }
+  const [y, m, d] = base.split('-').map(Number)
+  const alvo = new Date(Date.UTC(y, m, 1)) // 1º dia do mês seguinte
+  const ultimoDia = new Date(Date.UTC(alvo.getUTCFullYear(), alvo.getUTCMonth() + 1, 0)).getUTCDate()
+  alvo.setUTCDate(Math.min(d, ultimoDia)) // 31/01 → 28/02
+  return alvo.toISOString().split('T')[0]
 }
 
 function planFromRef(ref: string): string | null {
@@ -58,7 +77,8 @@ function planFromRef(ref: string): string | null {
   const r = ref.toLowerCase()
   if (r.includes('basico') || r.includes('básico') || r.includes('basic')) return 'basic'
   if (r.includes('profissional') || r.includes('pro')) return 'pro'
-  if (r.includes('premium') || r.includes('enterprise')) return 'enterprise'
+  if (r.includes('premium')) return 'premium'
+  if (r.includes('enterprise')) return 'enterprise'
   return null
 }
 
@@ -73,6 +93,7 @@ function storeIdFromRef(ref: string): string | null {
 function planFromValue(value: number): string {
   if (value <= 90) return 'basic'
   if (value <= 160) return 'pro'
+  if (value <= 250) return 'premium'
   return 'enterprise'
 }
 
@@ -97,6 +118,17 @@ async function provisionarCliente(payment: Record<string, unknown>) {
   const plan = planFromRef(externalRef) || planFromValue(valor)
 
   console.log(`Provisionando: asaas_payment=${asaasPaymentId} customer=${asaasCustomerId} plan=${plan} valor=${valor}`)
+
+  // O Asaas manda PAYMENT_CONFIRMED e depois PAYMENT_RECEIVED do mesmo
+  // pagamento (e reenvia se falhar): registra uma vez só.
+  if (asaasPaymentId) {
+    const { data: jaTem } = await supabase
+      .from('saas_subscriptions')
+      .select('id')
+      .eq('asaas_payment_id', asaasPaymentId)
+      .maybeSingle()
+    if (jaTem) return { skipped: true, reason: 'Pagamento já registrado', asaas_payment_id: asaasPaymentId }
+  }
 
   // Prioridade 1: store_id embutido no externalReference (pagamentos gerados pelo sistema)
   const refStoreId = storeIdFromRef(externalRef)
@@ -126,11 +158,9 @@ async function provisionarCliente(payment: Record<string, unknown>) {
   if (existingStore) {
     // Cliente já existe — atualiza plano e registra renovação
     console.log(`Cliente já existe (${existingStore.id}) — registrando renovação`)
-    await supabase.from('store_settings')
-      .update({ plan, active: true, updated_at: new Date().toISOString() })
-      .eq('id', existingStore.id)
+    const vencimento = await proximoVencimento(existingStore.id)
 
-    await supabase.from('saas_subscriptions').insert({
+    const { error: subErr } = await supabase.from('saas_subscriptions').insert({
       store_id: existingStore.id,
       asaas_payment_id: asaasPaymentId,
       asaas_customer_id: asaasCustomerId,
@@ -140,12 +170,29 @@ async function provisionarCliente(payment: Record<string, unknown>) {
       owner_name: existingStore.owner_email,
       amount: valor,
       paid_at: new Date().toISOString(),
-      due_date: nextDueDate(),
+      due_date: vencimento,
     })
+    // 23505 = os dois avisos do Asaas chegaram juntos; o outro já registrou
+    if (subErr?.code === '23505') return { skipped: true, reason: 'Pagamento já registrado' }
+    if (subErr) throw new Error(`Erro ao registrar pagamento: ${subErr.message}`)
+
+    const { error: lojaErr } = await supabase.from('store_settings')
+      .update({ plan, active: true, updated_at: new Date().toISOString() })
+      .eq('id', existingStore.id)
+    if (lojaErr) throw new Error(`Erro ao liberar loja: ${lojaErr.message}`)
 
     const planLabel: Record<string, string> = { basic: 'Básico', pro: 'Profissional', premium: 'Premium' }
-    await notifyDono(`💰 *Pagamento recebido!*\n🏪 ${existingStore.owner_email}\n💼 Plano: ${planLabel[plan] || plan}\n💵 R$ ${valor.toFixed(2)}\n📅 Próximo vencimento: ${nextDueDate()}`)
+    await notifyDono(`💰 *Pagamento recebido!*\n🏪 ${existingStore.owner_email}\n💼 Plano: ${planLabel[plan] || plan}\n💵 R$ ${valor.toFixed(2)}\n📅 Próximo vencimento: ${vencimento}`)
     return { ok: true, action: 'renovacao', store_id: existingStore.id, plan }
+  }
+
+  // Cliente novo só nasce de link de assinatura (referência com nome do plano).
+  // Cobrança avulsa sem referência criada à mão no Asaas criava loja e mandava
+  // convite pro e-mail de quem pagou.
+  if (!planFromRef(externalRef)) {
+    await notifyDono(`*Pagamento no Asaas sem loja identificada*
+Pagamento ${asaasPaymentId} de R$ ${valor.toFixed(2)} (cliente Asaas ${asaasCustomerId}). Nenhuma loja liberada, confira no painel.`)
+    return { skipped: true, reason: 'Pagamento sem referência de plano e sem loja vinculada' }
   }
 
   // Cliente novo — buscar dados no Asaas (ou usar dados de teste)
@@ -229,7 +276,7 @@ async function provisionarCliente(payment: Record<string, unknown>) {
     company_name: companyName,
     amount: valor,
     paid_at: new Date().toISOString(),
-    due_date: nextDueDate(),
+    due_date: await proximoVencimento(null),
   })
 
   // Notificar dono via WhatsApp
@@ -237,6 +284,42 @@ async function provisionarCliente(payment: Record<string, unknown>) {
   await notifyDono(`🎉 *Novo cliente SpeedSeek OS!*\n\n👤 ${ownerName}\n📧 ${ownerEmail}\n📱 ${ownerPhone}\n🏪 ${companyName}\n💼 Plano: ${planLabel[plan] || plan}\n💰 R$ ${valor.toFixed(2)}\n\n⚙️ Configure o WhatsApp e IA para este cliente.`)
 
   return { ok: true, action: 'novo_cliente', store_id: storeId, plan, email: ownerEmail }
+}
+
+// ── Estorno de mensalidade ─────────────────────────────────────────────────────
+async function estornarAssinatura(payment: Record<string, unknown>, event: string) {
+  const asaasPaymentId = (payment?.id as string) || ''
+  if (!asaasPaymentId) return { skipped: true, reason: 'Sem id de pagamento' }
+
+  const { data: sub } = await supabase
+    .from('saas_subscriptions')
+    .select('id, store_id, status, owner_email')
+    .eq('asaas_payment_id', asaasPaymentId)
+    .maybeSingle()
+  // Não é mensalidade (pode ser OS/fiado/balcão) — não mexe
+  if (!sub) return { skipped: true, reason: 'Estorno sem assinatura vinculada', event }
+  if (sub.status === 'cancelled') return { skipped: true, reason: 'Já estornado' }
+
+  const { error } = await supabase.from('saas_subscriptions').update({ status: 'cancelled' }).eq('id', sub.id)
+  if (error) throw new Error(`Erro ao marcar estorno: ${error.message}`)
+
+  // Só bloqueia se esse era o pagamento que mantinha a loja liberada
+  const { data: ultima } = await supabase
+    .from('saas_subscriptions')
+    .select('id')
+    .eq('store_id', sub.store_id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const bloqueou = ultima?.id === sub.id
+  if (bloqueou) {
+    const { error: lojaErr } = await supabase.from('store_settings').update({ active: false }).eq('id', sub.store_id)
+    if (lojaErr) throw new Error(`Erro ao bloquear loja: ${lojaErr.message}`)
+  }
+
+  const motivo = event === 'PAYMENT_REFUNDED' ? 'Estorno' : 'Chargeback'
+  await notifyDono(`*${motivo} de mensalidade*\nLoja: ${sub.owner_email}\nPagamento ${asaasPaymentId}\n${bloqueou ? 'Loja BLOQUEADA.' : 'Loja segue liberada (tem pagamento mais novo).'}`)
+  return { ok: true, action: 'estorno', store_id: sub.store_id, bloqueou }
 }
 
 // ── Nota de Balcão ─────────────────────────────────────────────────────────
@@ -469,6 +552,11 @@ Deno.serve(async (req) => {
     const payment = body?.payment as Record<string, unknown>
 
     console.log('asaas-webhook event:', event, 'ref:', payment?.externalReference, 'id:', payment?.id)
+
+    // Estorno / chargeback de mensalidade: antes era ignorado e a loja seguia liberada
+    if (['PAYMENT_REFUNDED', 'PAYMENT_CHARGEBACK_REQUESTED'].includes(event)) {
+      return json(await estornarAssinatura(payment, event))
+    }
 
     if (!['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED'].includes(event)) {
       return json({ skipped: true, event })
