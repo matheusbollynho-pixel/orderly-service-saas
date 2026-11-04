@@ -104,14 +104,26 @@ export default function MinhaContaPage() {
     setLoading(false);
   };
 
-  const gerarPagamento = async () => {
+  const gerarPagamento = async (cpfCnpj?: string) => {
     if (!storeId) return;
     setGenerating(true);
     setPixData(null);
     try {
       const { data, error } = await supabase.functions.invoke('gerar-cobranca', {
-        body: { store_id: storeId },
+        body: { store_id: storeId, ...(cpfCnpj ? { cpf_cnpj: cpfCnpj } : {}) },
       });
+      // Sem CPF/CNPJ válido salvo o Asaas não gera — antes aqui não tinha onde digitar
+      if (data?.precisa_documento) {
+        if (cpfCnpj) toast.error(data.error);
+        const doc = window.prompt('Para gerar o Pix, digite o CPF ou CNPJ do responsável (só números):');
+        const limpo = (doc || '').replace(/\D/g, '');
+        if (limpo.length === 11 || limpo.length === 14) {
+          setGenerating(false);
+          return gerarPagamento(limpo);
+        }
+        if (doc !== null) toast.error('CPF tem 11 números e CNPJ tem 14');
+        return;
+      }
       if (error || !data?.success) {
         toast.error(data?.error || error?.message || 'Erro ao gerar cobrança');
         return;
@@ -260,7 +272,7 @@ export default function MinhaContaPage() {
                   </p>
                   <Button
                     className="w-full gap-2"
-                    onClick={gerarPagamento}
+                    onClick={() => gerarPagamento()}
                     disabled={generating}
                   >
                     {generating

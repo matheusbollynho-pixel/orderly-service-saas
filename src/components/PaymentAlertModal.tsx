@@ -122,8 +122,10 @@ export function PaymentAlertModal() {
         body: { store_id: storeId, ...(documento ? { cpf_cnpj: documento } : {}) },
       });
       if (data?.precisa_documento) {
+        // Antes só aparecia o campo, sem aviso — parecia que o botão não fazia nada
         setPrecisaDocumento(true);
-        if (documento) toast.error(data.error);
+        toast.error(documento ? data.error : 'Digite o CPF ou CNPJ do responsável no campo acima e clique de novo');
+        setTimeout(() => document.getElementById('pix-documento')?.focus(), 50);
         return;
       }
       if (error || !data?.success) {
