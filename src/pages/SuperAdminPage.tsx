@@ -269,9 +269,10 @@ export default function SuperAdminPage() {
       setSubAmount(selected.subscription?.amount?.toString() || '');
       setCustomFeatures(selected.custom_features ?? null);
       setValorPago(selected.subscription?.amount?.toString() || '');
+      // Data LOCAL (toISOString é UTC: à noite pulava um dia)
       const umMes = new Date();
       umMes.setMonth(umMes.getMonth() + 1);
-      setLiberarAte(umMes.toISOString().split('T')[0]);
+      setLiberarAte(`${umMes.getFullYear()}-${String(umMes.getMonth() + 1).padStart(2, '0')}-${String(umMes.getDate()).padStart(2, '0')}`);
       setWppStatus(null);
       setEditWpp(false);
       setEditPlan(false);
@@ -424,6 +425,13 @@ export default function SuperAdminPage() {
 
   const liberarLoja = () => {
     if (!liberarAte) { toast.error('Escolha até quando liberar'); return; }
+    // O campo de data é fácil de errar digitando — confirma por extenso
+    const [y, m, d] = liberarAte.split('-').map(Number);
+    const trava = new Date(y, m - 1, d + 4).toLocaleDateString('pt-BR');
+    if (!confirm(`Vencimento: ${fmt(liberarAte)}
+Se não pagar, trava em: ${trava}
+
+Confirmar?`)) return;
     comandoLoja('liberar', 'admin_liberar_loja', { p_ate: liberarAte }, `Liberada até ${fmt(liberarAte)}`);
   };
 
