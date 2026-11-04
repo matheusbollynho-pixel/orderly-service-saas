@@ -45,7 +45,39 @@ interface StoreClient {
   custom_features: string[] | null;
   ai_spend_month_brl: number;
   ai_monthly_budget_brl: number | null;
+  situacao: Situacao | null;
 }
+
+// Resposta de situacao_loja() no banco — a MESMA regra que trava o cliente
+interface Situacao {
+  situacao: 'liberada' | 'aviso' | 'bloqueada';
+  motivo: string;
+  plano: string;
+  valor: number | null;
+  vencimento: string | null;
+  dias: number | null;
+  bloqueia_em: string | null;
+}
+
+const MOTIVO_LABELS: Record<string, string> = {
+  em_dia: 'em dia',
+  vencendo: 'vence em breve',
+  vencida_tolerancia: 'venceu, ainda na tolerância de 3 dias',
+  vencida: 'assinatura vencida',
+  cancelada: 'assinatura cancelada',
+  desativada: 'bloqueada por você no painel',
+  teste_acabou: 'teste grátis acabou',
+  teste_acabando: 'teste grátis acabando',
+  em_teste: 'em teste grátis',
+  sem_assinatura: 'sem assinatura (não trava)',
+  pendente: 'assinatura pendente (não trava)',
+};
+
+const SITUACAO_CORES: Record<string, string> = {
+  liberada: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+  aviso: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+  bloqueada: 'bg-red-500/20 text-red-300 border-red-500/30',
+};
 
 const ALL_FEATURES = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -194,9 +226,10 @@ export default function SuperAdminPage() {
   const [loadingGlobalErrors, setLoadingGlobalErrors] = useState(false);
   const [wppProvider, setWppProvider] = useState('uazapi');
   const [newPlan, setNewPlan] = useState('basic');
-  const [subDueDate, setSubDueDate] = useState('');
-  const [subStatus, setSubStatus] = useState('active');
   const [subAmount, setSubAmount] = useState('');
+  const [liberarAte, setLiberarAte] = useState('');
+  const [valorPago, setValorPago] = useState('');
+  const [acaoLoja, setAcaoLoja] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [impersonating, setImpersonating] = useState(false);
 
@@ -233,19 +266,12 @@ export default function SuperAdminPage() {
       setAiBudgetInput(selected.ai_monthly_budget_brl != null ? String(selected.ai_monthly_budget_brl) : '');
       loadSendLog(selected.store_id);
       setNewPlan(selected.plan || 'basic');
-      setSubStatus(selected.subscription?.status || 'active');
       setSubAmount(selected.subscription?.amount?.toString() || '');
       setCustomFeatures(selected.custom_features ?? null);
-      // Se não tem due_date, defaulta para o dia 10 do próximo mês
-      const existingDue = selected.subscription?.due_date;
-      if (!existingDue) {
-        const now = new Date();
-        const year = now.getDate() < 10 ? now.getFullYear() : (now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear());
-        const month = now.getDate() < 10 ? now.getMonth() : (now.getMonth() === 11 ? 0 : now.getMonth() + 1);
-        setSubDueDate(`${year}-${String(month + 1).padStart(2, '0')}-10`);
-      } else {
-        setSubDueDate(existingDue);
-      }
+      setValorPago(selected.subscription?.amount?.toString() || '');
+      const umMes = new Date();
+      umMes.setMonth(umMes.getMonth() + 1);
+      setLiberarAte(umMes.toISOString().split('T')[0]);
       setWppStatus(null);
       setEditWpp(false);
       setEditPlan(false);
@@ -287,6 +313,11 @@ export default function SuperAdminPage() {
       aiSpendUsdByStore[r.store_id] = (aiSpendUsdByStore[r.store_id] || 0) + (r.cost_usd || 0);
     });
 
+    const { data: situacoes, error: sitErr } = await sb.rpc('situacao_todas_lojas');
+    if (sitErr) toast.error('Não consegui ler a situação das lojas: ' + sitErr.message);
+    const situacaoByStore: Record<string, Situacao> = {};
+    (situacoes || []).forEach((r: any) => { situacaoByStore[r.store_id] = r.situacao; });
+
     const result: StoreClient[] = stores.map((s: any) => ({
       store_id: s.id,
       company_name: s.company_name,
@@ -301,6 +332,7 @@ export default function SuperAdminPage() {
       subscription: subsByStore[s.id] ?? null,
       ai_spend_month_brl: (aiSpendUsdByStore[s.id] || 0) * USD_TO_BRL,
       ai_monthly_budget_brl: s.ai_monthly_budget_brl ?? null,
+      situacao: situacaoByStore[s.id] ?? null,
     }));
 
     setClients(result);
@@ -376,12 +408,35 @@ export default function SuperAdminPage() {
     }
   };
 
-  const toggleActive = async (storeId: string, current: boolean | null) => {
-    try { await atualizar('store_settings', { active: !current }, storeId); }
-    catch (e: any) { toast.error(e.message); return; }
-    toast.success(`Loja ${!current ? 'ativada' : 'desativada'}`);
-    setClients(prev => prev.map(c => c.store_id === storeId ? { ...c, active: !current } : c));
-    if (selected?.store_id === storeId) setSelected(prev => prev ? { ...prev, active: !current } : null);
+  // Comandos de bloqueio: RPCs no banco (tudo ou nada) que devolvem a
+  // situação nova — a mesma que o cliente passa a ver.
+  const comandoLoja = async (nome: string, fn: string, args: Record<string, any>, msg: string) => {
+    if (!selected) return;
+    setAcaoLoja(nome);
+    const { data, error } = await (supabase as any).rpc(fn, { p_store_id: selected.store_id, ...args });
+    setAcaoLoja(null);
+    if (error) { toast.error(error.message); return; }
+    const sit = data as Situacao;
+    toast.success(`${msg} — cliente vê: ${sit.situacao} (${MOTIVO_LABELS[sit.motivo] ?? sit.motivo})`);
+    setSelected(prev => prev ? { ...prev, situacao: sit } : null);
+    await loadClients();
+  };
+
+  const liberarLoja = () => {
+    if (!liberarAte) { toast.error('Escolha até quando liberar'); return; }
+    comandoLoja('liberar', 'admin_liberar_loja', { p_ate: liberarAte }, `Liberada até ${fmt(liberarAte)}`);
+  };
+
+  const bloquearLoja = () => {
+    if (!confirm('Bloquear o acesso desta loja agora? Ela volta quando você liberar ou o cliente pagar.')) return;
+    comandoLoja('bloquear', 'admin_bloquear_loja', {}, 'Loja bloqueada');
+  };
+
+  const registrarPagamento = () => {
+    const valor = parseFloat(valorPago.replace(',', '.'));
+    if (!valor || valor <= 0) { toast.error('Informe o valor recebido'); return; }
+    if (!confirm(`Registrar pagamento de R$ ${valor.toFixed(2)}? O vencimento anda 1 mês.`)) return;
+    comandoLoja('pagamento', 'admin_registrar_pagamento', { p_valor: valor }, 'Pagamento registrado');
   };
 
   const cancelSubscription = async () => {
@@ -548,48 +603,18 @@ export default function SuperAdminPage() {
     setEditFeatures(false);
   };
 
+  // Editar assinatura agora só muda o valor mensal. Status e vencimento
+  // mudam pelos comandos Liberar / Bloquear / Dar baixa (quadro Acesso).
   const saveSubscription = async () => {
-    if (!selected) return;
+    if (!selected?.subscription) return;
+    const valor = subAmount ? parseFloat(subAmount.replace(',', '.')) : null;
     setSaving(true);
-    const sb = supabase as any;
     try {
-      if (selected.subscription) {
-        await atualizar('saas_subscriptions', {
-          due_date: subDueDate || null,
-          status: subStatus,
-          amount: subAmount ? parseFloat(subAmount) : null,
-        }, selected.subscription.id);
-      } else {
-        const { error } = await sb.from('saas_subscriptions').insert({
-          store_id: selected.store_id,
-          plan: selected.plan || 'basic',
-          status: subStatus,
-          amount: subAmount ? parseFloat(subAmount) : null,
-          due_date: subDueDate || null,
-          owner_name: selected.company_name || 'Cliente',
-          owner_email: selected.owner_email || 'sem-email@speedseekos.com.br',
-        });
-        if (error) throw new Error(error.message);
-      }
-      if (subStatus === 'active') {
-        // Sai do trial, senão o aviso de teste vencido continua bloqueando
-        const subPlan = selected.subscription?.plan;
-        const update: Record<string, any> = { active: true };
-        if (selected.plan === 'trial') update.plan = subPlan && subPlan !== 'trial' ? subPlan : 'basic';
-        await atualizar('store_settings', update, selected.store_id);
-      }
-      if (subStatus === 'cancelled') await atualizar('store_settings', { active: false }, selected.store_id);
+      await atualizar('saas_subscriptions', { amount: valor }, selected.subscription.id);
     } catch (e: any) { setSaving(false); toast.error(e.message); return; }
     setSaving(false);
-    toast.success('Assinatura atualizada!');
-    const updatedSub = {
-      ...(selected.subscription || {}),
-      due_date: subDueDate || null,
-      status: subStatus,
-      amount: subAmount ? parseFloat(subAmount) : null,
-    } as any;
-    setSelected(prev => prev ? { ...prev, subscription: updatedSub } : null);
-    setClients(prev => prev.map(c => c.store_id === selected.store_id ? { ...c, subscription: updatedSub } : c));
+    toast.success('Valor atualizado!');
+    setSelected(prev => prev && prev.subscription ? { ...prev, subscription: { ...prev.subscription, amount: valor } } : prev);
     loadClients();
     setEditSub(false);
   };
@@ -693,8 +718,8 @@ export default function SuperAdminPage() {
                 <Badge className={PLAN_COLORS[selected.plan ?? 'basic']}>
                   {PLAN_LABELS[selected.plan ?? 'basic'] ?? selected.plan}
                 </Badge>
-                <Badge className={selected.active !== false ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-red-500/20 text-red-300 border-red-500/30'}>
-                  {selected.active !== false ? 'App ativo' : 'App inativo'}
+                <Badge className={SITUACAO_CORES[selected.situacao?.situacao ?? 'liberada']}>
+                  {selected.situacao?.situacao === 'bloqueada' ? 'Bloqueado' : selected.situacao?.situacao === 'aviso' ? 'Aviso' : 'Liberado'}
                 </Badge>
                 <Button size="sm" variant="outline" onClick={entrarComoCliente} disabled={impersonating} className="gap-1 h-7 text-xs border-blue-500/50 text-blue-400 hover:bg-blue-500/10 mt-1">
                   {impersonating ? <Loader2 className="h-3 w-3 animate-spin" /> : <LogIn className="h-3 w-3" />}
@@ -738,27 +763,10 @@ export default function SuperAdminPage() {
               <p className="text-sm text-muted-foreground">Nenhuma assinatura registrada.</p>
             ) : editSub ? (
               <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-muted-foreground">Status</label>
-                    <Select value={subStatus} onValueChange={setSubStatus}>
-                      <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="active">Ativo</SelectItem>
-                        <SelectItem value="pending">Pendente</SelectItem>
-                        <SelectItem value="overdue">Vencido</SelectItem>
-                        <SelectItem value="cancelled">Cancelado</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground">Valor mensal (R$)</label>
-                    <Input value={subAmount} onChange={e => setSubAmount(e.target.value)} placeholder="ex: 99.90" className="h-8 text-sm" />
-                  </div>
-                </div>
                 <div>
-                  <label className="text-xs text-muted-foreground">Próximo vencimento</label>
-                  <Input type="date" value={subDueDate} onChange={e => setSubDueDate(e.target.value)} className="h-8 text-sm" />
+                  <label className="text-xs text-muted-foreground">Valor mensal (R$)</label>
+                  <Input value={subAmount} onChange={e => setSubAmount(e.target.value)} placeholder="ex: 99.90" className="h-8 text-sm" />
+                  <p className="text-[11px] text-muted-foreground mt-1">Pra liberar, bloquear ou dar baixa use o quadro "Acesso" abaixo.</p>
                 </div>
                 <Button size="sm" onClick={saveSubscription} disabled={saving} className="gap-1 h-8 w-full">
                   {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />} Salvar
@@ -1080,25 +1088,65 @@ export default function SuperAdminPage() {
           </CardContent>
         </Card>
 
-        {/* Ações perigosas */}
-        <Card className="glass-card border-red-500/20">
+        {/* Acesso: o que o cliente vê + comandos */}
+        <Card className={`glass-card ${selected.situacao?.situacao === 'bloqueada' ? 'border-red-500/40' : selected.situacao?.situacao === 'aviso' ? 'border-amber-500/40' : 'border-emerald-500/30'}`}>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base text-red-400 flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4" /> Ações
+            <CardTitle className="text-base flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" /> Acesso
             </CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-col gap-2">
-            <Button
-              variant={selected.active ? 'destructive' : 'default'}
-              onClick={() => toggleActive(selected.store_id, selected.active)}
-            >
-              {selected.active ? <><Ban className="h-4 w-4 mr-2" />Desativar app</> : <><RefreshCw className="h-4 w-4 mr-2" />Reativar app</>}
-            </Button>
-            {selected.subscription?.status !== 'cancelled' && (
-              <Button variant="outline" className="border-red-500/50 text-red-400 hover:bg-red-500/10" onClick={cancelSubscription}>
-                <XCircle className="h-4 w-4 mr-2" /> Cancelar assinatura
-              </Button>
+          <CardContent className="space-y-4">
+            {selected.situacao ? (
+              <div className="text-sm space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-muted-foreground">O cliente está vendo:</span>
+                  <Badge className={SITUACAO_CORES[selected.situacao.situacao]}>
+                    {selected.situacao.situacao === 'liberada' ? 'Liberado' : selected.situacao.situacao === 'aviso' ? 'Aviso de pagamento' : 'BLOQUEADO'}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Motivo: {MOTIVO_LABELS[selected.situacao.motivo] ?? selected.situacao.motivo}
+                  {selected.situacao.bloqueia_em && selected.situacao.situacao !== 'bloqueada' && ` · se não pagar, trava em ${fmt(selected.situacao.bloqueia_em)}`}
+                </p>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">Situação indisponível (falta rodar a migration situacao_loja no banco).</p>
             )}
+
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Liberar até</label>
+              <div className="flex gap-2">
+                <Input type="date" value={liberarAte} onChange={e => setLiberarAte(e.target.value)} className="h-8 text-sm" />
+                <Button size="sm" onClick={liberarLoja} disabled={!!acaoLoja} className="h-8 gap-1 shrink-0">
+                  {acaoLoja === 'liberar' ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />} Liberar
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">Destrava e coloca esse dia como vencimento. Não volta a travar antes disso.</p>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Recebi pagamento fora do Asaas (R$)</label>
+              <div className="flex gap-2">
+                <Input value={valorPago} onChange={e => setValorPago(e.target.value)} placeholder="149.00" className="h-8 text-sm" />
+                <Button size="sm" variant="outline" onClick={registrarPagamento} disabled={!!acaoLoja} className="h-8 gap-1 shrink-0">
+                  {acaoLoja === 'pagamento' ? <Loader2 className="h-3 w-3 animate-spin" /> : <DollarSign className="h-3 w-3" />} Dar baixa
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">Registra o pagamento e joga o vencimento 1 mês pra frente.</p>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-3 border-t border-border/50">
+              {selected.situacao?.situacao !== 'bloqueada' && (
+                <Button variant="destructive" onClick={bloquearLoja} disabled={!!acaoLoja}>
+                  {acaoLoja === 'bloquear' ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Ban className="h-4 w-4 mr-2" />}Bloquear agora
+                </Button>
+              )}
+              {selected.subscription?.status !== 'cancelled' && (
+                <Button variant="outline" className="border-red-500/50 text-red-400 hover:bg-red-500/10" onClick={cancelSubscription}>
+                  <XCircle className="h-4 w-4 mr-2" /> Cancelar assinatura
+                </Button>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -1110,10 +1158,14 @@ export default function SuperAdminPage() {
     ? clients
     : filterStatus === 'no_sub'
       ? clients.filter(c => !c.subscription)
-      : clients.filter(c => c.subscription?.status === filterStatus);
+      : filterStatus === 'active'
+        ? clients.filter(c => c.situacao?.situacao !== 'bloqueada')
+        : filterStatus === 'overdue'
+          ? clients.filter(c => c.situacao?.situacao === 'bloqueada')
+          : clients.filter(c => c.subscription?.status === filterStatus);
 
-  const active = clients.filter(c => c.active !== false);
-  const overdue = clients.filter(c => c.subscription?.status === 'overdue');
+  const active = clients.filter(c => c.situacao?.situacao !== 'bloqueada');
+  const overdue = clients.filter(c => c.situacao?.situacao === 'bloqueada');
   const noSub = clients.filter(c => !c.subscription);
 
   return (
@@ -1147,13 +1199,13 @@ export default function SuperAdminPage() {
         <Card className="glass-card border-border/50 bg-emerald-500/10 cursor-pointer hover:bg-emerald-500/20" onClick={() => setFilterStatus('active')}>
           <CardContent className="pt-4 pb-3">
             <p className="text-2xl font-bold text-emerald-400">{active.length}</p>
-            <p className="text-xs text-muted-foreground">Ativos</p>
+            <p className="text-xs text-muted-foreground">Liberados</p>
           </CardContent>
         </Card>
         <Card className="glass-card border-border/50 bg-red-500/10 cursor-pointer hover:bg-red-500/20" onClick={() => setFilterStatus('overdue')}>
           <CardContent className="pt-4 pb-3">
             <p className="text-2xl font-bold text-red-400">{overdue.length}</p>
-            <p className="text-xs text-muted-foreground">Vencidos</p>
+            <p className="text-xs text-muted-foreground">Bloqueados</p>
           </CardContent>
         </Card>
         <Card className="glass-card border-border/50 bg-yellow-500/10 cursor-pointer hover:bg-yellow-500/20" onClick={() => setFilterStatus('no_sub')}>
@@ -1247,9 +1299,11 @@ export default function SuperAdminPage() {
                 onClick={() => setSelected(c)}
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  {c.active !== false
-                    ? <CheckCircle className="h-4 w-4 text-emerald-400 shrink-0" />
-                    : <XCircle className="h-4 w-4 text-red-400 shrink-0" />}
+                  {c.situacao?.situacao === 'bloqueada'
+                    ? <XCircle className="h-4 w-4 text-red-400 shrink-0" />
+                    : c.situacao?.situacao === 'aviso'
+                      ? <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
+                      : <CheckCircle className="h-4 w-4 text-emerald-400 shrink-0" />}
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-foreground truncate">{c.company_name || 'Sem nome'}</p>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">

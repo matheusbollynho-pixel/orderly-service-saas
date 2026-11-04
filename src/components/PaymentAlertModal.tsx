@@ -43,6 +43,7 @@ export function PaymentAlertModal() {
   const [show, setShow] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const [motivo, setMotivo] = useState<string | null>(null);
   const [pixData, setPixData] = useState<PixData | null>(null);
   const [generating, setGenerating] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -57,67 +58,31 @@ export function PaymentAlertModal() {
   useEffect(() => {
     if (!storeId || envPlan === 'enterprise' || isDemo) return;
     checkSubscription();
+    // Quem deixa a aba aberta o dia todo também precisa ser conferido
+    const timer = setInterval(checkSubscription, 30 * 60 * 1000);
+    const onFocus = () => checkSubscription();
+    window.addEventListener('focus', onFocus);
+    return () => { clearInterval(timer); window.removeEventListener('focus', onFocus); };
   }, [storeId]);
 
+  // A regra mora no banco (situacao_loja) — a mesma que o SuperAdmin mostra.
   const checkSubscription = async () => {
-    const { data } = await (supabase as any)
-      .from('saas_subscriptions')
-      .select('status, due_date, amount, plan')
-      .eq('store_id', storeId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const { data, error } = await (supabase as any).rpc('situacao_loja', { p_store_id: storeId });
+    // Falha de rede/banco não trava ninguém
+    if (error || !data) return;
 
-    // Teste grátis: avisa nos últimos 5 dias (igual à assinatura) e bloqueia quando acaba
-    const { data: loja } = await (supabase as any)
-      .from('store_settings')
-      .select('plan, trial_ends_at')
-      .eq('id', storeId)
-      .maybeSingle();
-
-    // Assinatura ativa (liberada no SuperAdmin ou paga) vence o trial
-    if (loja?.plan === 'trial' && loja.trial_ends_at && data?.status !== 'active') {
-      const restanteMs = new Date(loja.trial_ends_at).getTime() - Date.now();
-      const plano = data?.plan && data.plan !== 'trial' ? data.plan : 'basic';
-      const valor = data?.amount ?? ({ basic: 79, pro: 149, premium: 219 } as Record<string, number>)[plano] ?? 79;
-      if (restanteMs <= 5 * 86400000) {
-        setTrialEndsAt(loja.trial_ends_at);
-        setSubInfo({ status: 'trial', due_date: loja.trial_ends_at, amount: valor, plan: plano });
-        setBlocked(restanteMs <= 0);
-        setShow(true);
-      }
+    if (data.situacao === 'liberada') {
+      setShow(false);
+      setBlocked(false);
       return;
     }
 
-    if (!data) return;
-
-    const status = data.status as string;
-    const dueDate = data.due_date as string | null;
-
-    // Pending fora do teste — não mostra aviso de pagamento
-    if (status === 'pending' || data.plan === 'trial') return;
-
-    // Já vencido/cancelado — bloqueia
-    if (status === 'overdue' || status === 'cancelled') {
-      setSubInfo(data);
-      setBlocked(true);
-      setShow(true);
-      return;
-    }
-
-    // Verifica dias restantes (apenas contas ativas)
-    if (dueDate) {
-      const due = new Date(dueDate + 'T12:00:00');
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const diff = Math.floor((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
-      if (diff <= 5) {
-        setSubInfo(data);
-        setBlocked(false);
-        setShow(true);
-      }
-    }
+    setMotivo(data.motivo);
+    setTrialEndsAt(data.eh_teste ? data.vencimento : null);
+    setSubInfo({ status: data.motivo, due_date: data.vencimento ?? null, amount: data.valor ?? null, plan: data.plano });
+    setBlocked(data.situacao === 'bloqueada');
+    if (data.situacao === 'bloqueada') setDismissed(false);
+    setShow(true);
   };
 
   // Inicia polling quando PIX é exibido
@@ -129,17 +94,12 @@ export function PaymentAlertModal() {
     pollRef.current = setInterval(async () => {
       setChecking(true);
       try {
-        const { data } = await (supabase as any)
-          .from('saas_subscriptions')
-          .select('status, due_date')
-          .eq('store_id', storeId)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+        const { data } = await (supabase as any).rpc('situacao_loja', { p_store_id: storeId });
         if (!data) return;
+        // Pagou = saiu do bloqueio, ou o vencimento andou pra frente
         const paid = blocked
-          ? data.status === 'active'
-          : data.due_date !== initialDueDate;
+          ? data.situacao !== 'bloqueada'
+          : data.situacao === 'liberada' || data.vencimento !== initialDueDate;
         if (paid) {
           clearInterval(pollRef.current!);
           toast.success('Pagamento confirmado! 🎉');
@@ -208,6 +168,8 @@ export function PaymentAlertModal() {
               <p className={`font-bold text-sm ${blocked ? 'text-red-300' : 'text-amber-300'}`}>
                 {trialEndsAt
                   ? (blocked ? 'Seu teste grátis acabou' : 'Seu teste grátis está acabando')
+                  : motivo === 'desativada' ? 'Acesso suspenso'
+                  : motivo === 'cancelada' ? 'Assinatura cancelada'
                   : (blocked ? 'Assinatura vencida' : 'Pagamento próximo do vencimento')}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
