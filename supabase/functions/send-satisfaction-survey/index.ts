@@ -71,6 +71,13 @@ Deno.serve(async (req) => {
         .eq('id', body.order_id)
         .single()
 
+      // Sem telefone válido: não é erro, só não tem pra quem mandar
+      // (antes isso voltava 500 da UazAPI "Missing required fields").
+      const digitos = (order?.client_phone || '').replace(/\D/g, '')
+      if (order && digitos.length < 10) {
+        return new Response(JSON.stringify({ success: true, skipped: 'sem_telefone' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+
       if (order) {
         // Busca configurações da loja específica
         const { data: settings } = await supabase

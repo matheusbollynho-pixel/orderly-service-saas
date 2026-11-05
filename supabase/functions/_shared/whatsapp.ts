@@ -78,9 +78,21 @@ function resolveConfig(storeConfig?: StoreWhatsAppConfig, allowGlobalFallback = 
   return { provider: 'zapi', instanceId, token, clientToken };
 }
 
+// Barra antes de chamar a UazAPI: número vazio/curto ou texto vazio voltava
+// como "Missing required fields" (400) e aparecia como falha no relatório.
+function validarEnvio(formattedPhone: string, conteudo?: string) {
+  if (!formattedPhone || formattedPhone.length < 12) {
+    throw new Error(`Envio cancelado: cliente sem telefone válido (${formattedPhone || 'vazio'}).`);
+  }
+  if (conteudo !== undefined && !conteudo.trim()) {
+    throw new Error('Envio cancelado: mensagem vazia.');
+  }
+}
+
 export async function sendWhatsAppText(phone: string, message: string, storeConfig?: StoreWhatsAppConfig, context?: SendContext) {
   const cfg = resolveConfig(storeConfig, context?.allowGlobalFallback === true);
   const formattedPhone = normalizeBrPhone(phone);
+  validarEnvio(formattedPhone, message);
 
   let url: string;
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -122,6 +134,7 @@ export async function sendWhatsAppDocument(
 ) {
   const cfg = resolveConfig(storeConfig, context?.allowGlobalFallback === true);
   const formattedPhone = normalizeBrPhone(phone);
+  validarEnvio(formattedPhone);
 
   let url: string;
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };

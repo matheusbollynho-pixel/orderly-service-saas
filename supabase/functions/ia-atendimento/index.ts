@@ -1222,7 +1222,7 @@ Deno.serve(async (req) => {
       let resposta = '';
       if (materiaisCtx.length > 0) {
         const listaItens = materiaisCtx.map(m => `• ${m.descricao}: R$ ${(m.valor * m.quantidade).toFixed(2)}`).join('\n');
-        resposta = `O serviço ficou assim, Matheus:\n\n${listaItens}\n\n*Total: R$ ${((totalPendente || 0) + (totalPago || 0)).toFixed(2)}*`;
+        resposta = `O serviço ficou assim${ctx.apelido || ctx.client_name ? `, ${(ctx.apelido as string) || String(ctx.client_name).split(' ')[0]}` : ''}:\n\n${listaItens}\n\n*Total: R$ ${((totalPendente || 0) + (totalPago || 0)).toFixed(2)}*`;
         if ((totalPendente || 0) > 0) {
           resposta += `\n\nAinda há *R$ ${(totalPendente as number).toFixed(2)}* pendente. Prefere pagar via PIX agora ou na retirada?`;
         } else {
