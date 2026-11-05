@@ -279,10 +279,14 @@ export default function SuperAdminPage() {
       setEditSub(false);
       setEditFeatures(false);
     }
-  }, [selected]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.store_id]);
 
-  const loadClients = async () => {
-    setLoading(true);
+  // silencioso = recarrega sem trocar a tela inteira pelo spinner (usado depois
+  // de salvar algo no detalhe). Também atualiza a loja aberta com o dado novo —
+  // antes, depois de Liberar/Dar baixa, o quadro Assinatura ficava com a data velha.
+  const loadClients = async (silencioso = false) => {
+    if (!silencioso) setLoading(true);
     const sb = supabase as any;
 
     const { data: stores } = await sb
@@ -337,6 +341,7 @@ export default function SuperAdminPage() {
     }));
 
     setClients(result);
+    setSelected(prev => prev ? (result.find(c => c.store_id === prev.store_id) ?? prev) : null);
     setLoading(false);
   };
 
@@ -420,7 +425,7 @@ export default function SuperAdminPage() {
     const sit = data as Situacao;
     toast.success(`${msg} — cliente vê: ${sit.situacao} (${MOTIVO_LABELS[sit.motivo] ?? sit.motivo})`);
     setSelected(prev => prev ? { ...prev, situacao: sit } : null);
-    await loadClients();
+    await loadClients(true);
   };
 
   const liberarLoja = () => {
@@ -573,27 +578,26 @@ Confirmar?`)) return;
     setSaving(false);
     toast.success('WhatsApp salvo!');
     setSelected(prev => prev ? { ...prev, whatsapp_instance_url: wppUrl, whatsapp_instance_token: wppToken, whatsapp_provider: wppProvider } : null);
-    setClients(prev => prev.map(c => c.store_id === selected.store_id ? { ...c, whatsapp_instance_url: wppUrl, whatsapp_instance_token: wppToken } : c));
+    setClients(prev => prev.map(c => c.store_id === selected.store_id ? { ...c, whatsapp_instance_url: wppUrl, whatsapp_instance_token: wppToken, whatsapp_provider: wppProvider } : c));
     setEditWpp(false);
   };
 
-  const PLAN_AMOUNTS: Record<string, number> = { basic: 79, pro: 149, premium: 219 };
-
+  // Trocar plano NÃO mexe no valor cobrado (pode ser preço combinado, ex: BAMOTOS
+  // Premium a R$149). Valor só muda pelo Editar da Assinatura.
   const savePlan = async () => {
     if (!selected) return;
+    if (selected.custom_features !== null && !confirm('Essa loja tem funcionalidades personalizadas. Trocar o plano volta as funcionalidades pro padrão do plano novo. Continuar?')) return;
     setSaving(true);
     try {
       await atualizar('store_settings', { plan: newPlan, custom_features: null }, selected.store_id);
       if (selected.subscription) {
-        await atualizar('saas_subscriptions', {
-          plan: newPlan,
-          amount: PLAN_AMOUNTS[newPlan] ?? selected.subscription.amount,
-        }, selected.subscription.id);
+        await atualizar('saas_subscriptions', { plan: newPlan }, selected.subscription.id);
       }
     } catch (e: any) { setSaving(false); toast.error(e.message); return; }
     setSaving(false);
-    toast.success('Plano atualizado!');
-    const newAmount = PLAN_AMOUNTS[newPlan] ?? selected.subscription?.amount ?? null;
+    toast.success(`Plano atualizado! Valor cobrado continua ${fmtMoney(selected.subscription?.amount ?? null)} — mude no Editar da Assinatura se precisar.`);
+    setCustomFeatures(null);
+    const newAmount = selected.subscription?.amount ?? null;
     setSelected(prev => prev ? { ...prev, plan: newPlan, custom_features: null, subscription: prev.subscription ? { ...prev.subscription, plan: newPlan, amount: newAmount } : null } : null);
     setClients(prev => prev.map(c => c.store_id === selected.store_id ? { ...c, plan: newPlan, custom_features: null, subscription: c.subscription ? { ...c.subscription, plan: newPlan, amount: newAmount } : null } : c));
     setEditPlan(false);
@@ -623,7 +627,7 @@ Confirmar?`)) return;
     setSaving(false);
     toast.success('Valor atualizado!');
     setSelected(prev => prev && prev.subscription ? { ...prev, subscription: { ...prev.subscription, amount: valor } } : prev);
-    loadClients();
+    loadClients(true);
     setEditSub(false);
   };
 
@@ -705,7 +709,14 @@ Confirmar?`)) return;
   if (selected) {
     const sub = selected.subscription;
     const days = daysUntil(sub?.due_date ?? null);
-    const statusCfg = STATUS_CONFIG[sub?.status ?? 'pending'];
+    // Status mostrado segue a MESMA regra que trava o cliente (situacao_loja),
+    // não só a coluna status da assinatura — senão aparecia "Ativo" vencida.
+    const sit = selected.situacao;
+    const statusCfg = sub?.status === 'active' && sit?.situacao === 'bloqueada'
+      ? { ...STATUS_CONFIG.overdue, label: 'Bloqueado' }
+      : sub?.status === 'active' && sit?.motivo === 'vencida_tolerancia'
+        ? { ...STATUS_CONFIG.pending, label: 'No prazo de 3 dias' }
+        : STATUS_CONFIG[sub?.status ?? 'pending'];
     const StatusIcon = statusCfg?.icon ?? AlertTriangle;
 
     return (
@@ -804,7 +815,8 @@ Confirmar?`)) return;
                       <p className="text-foreground">{fmt(sub.due_date)}</p>
                       {days !== null && (
                         <p className={`text-xs font-medium ${days < 0 ? 'text-red-400' : days <= 5 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                          {days < 0 ? `Venceu há ${Math.abs(days)} dias` : days === 0 ? 'Vence hoje' : `${days} dias restantes`}
+                          {days < 0 ? `Venceu há ${Math.abs(days)} dia${Math.abs(days) > 1 ? 's' : ''}` : days === 0 ? 'Vence hoje' : `${days} dias restantes`}
+                          {sit?.bloqueia_em && sit.situacao !== 'bloqueada' && days <= 0 && ` · trava em ${fmt(sit.bloqueia_em)}`}
                         </p>
                       )}
                     </div>
@@ -898,7 +910,10 @@ Confirmar?`)) return;
                       <div className={`h-full ${over ? 'bg-red-500' : 'bg-primary'}`} style={{ width: `${pct}%` }} />
                     </div>
                   )}
-                  {over && (
+                  {budget === 0 && (
+                    <p className="text-xs text-amber-400">Orçamento R$ 0 — o Max dessa loja está desligado, mesmo com a IA marcada nas funcionalidades.</p>
+                  )}
+                  {over && budget > 0 && (
                     <p className="text-xs text-red-400">Passou do orçamento do plano — a IA dessa loja já está bloqueada até o próximo mês (ou até liberar mais acima).</p>
                   )}
                 </div>
@@ -1184,7 +1199,7 @@ Confirmar?`)) return;
           <p className="text-muted-foreground text-sm">SpeedSeekOS — Gestão de clientes</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={loadClients} size="sm" className="gap-1">
+          <Button variant="outline" onClick={() => loadClients()} size="sm" className="gap-1">
             <RefreshCw className="h-3.5 w-3.5" /> Atualizar
           </Button>
           <Button size="sm" variant="outline" onClick={() => setShowDemo(true)} className="gap-2 border-amber-500/50 text-amber-400 hover:bg-amber-500/10">
