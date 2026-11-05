@@ -483,6 +483,7 @@ async function executarFerramenta(
       await saveConversationState(sb, input.phone as string, 'aguardando_humano', {
         ...conversationContext,
         escalada_motivo: motivo,
+        humano_assumiu_em: new Date().toISOString(),
       }, storeId);
 
       // Alertar dono
@@ -969,10 +970,13 @@ Deno.serve(async (req) => {
     // ----------------------------------------------------------
     // 2. Se aguardando humano, verificar se já passaram 2h (reativa IA se sim)
     // ----------------------------------------------------------
+    // Sem horário anotado (escalação antiga por erro/ferramenta) contava como
+    // "pra sempre" — o Max ficava mudo com aquele cliente. Agora conta como
+    // vencido e o Max volta a atender.
     if (state === 'aguardando_humano') {
       const assumiuEm = ctx.humano_assumiu_em;
-      if (assumiuEm) {
-        const diffHoras = (Date.now() - new Date(assumiuEm).getTime()) / (1000 * 60 * 60);
+      {
+        const diffHoras = assumiuEm ? (Date.now() - new Date(assumiuEm).getTime()) / (1000 * 60 * 60) : Infinity;
         if (diffHoras >= 2) {
           console.log('🔄 IA reativada — continuando fluxo normal');
           ctx.humano_assumiu_em = undefined;
@@ -984,9 +988,6 @@ Deno.serve(async (req) => {
           // Atendente assumiu — IA fica em silêncio total
           return new Response(JSON.stringify({ ok: true, state: 'aguardando_humano' }), { status: 200 });
         }
-      } else {
-        // Atendente assumiu — IA fica em silêncio total
-        return new Response(JSON.stringify({ ok: true, state: 'aguardando_humano' }), { status: 200 });
       }
     }
 
@@ -1533,7 +1534,10 @@ Deno.serve(async (req) => {
         await enviarAlertaDono(`❌ Erro na IA de atendimento\n📱 ${phone}\n💬 "${text?.slice(0, 100)}"\n\nErro: ${String(error)}`, storeIdParam);
         // Marcar como aguardando humano
         const sb2 = getSupabaseClient();
-        await saveConversationState(sb2, phone, 'aguardando_humano', { escalada_motivo: 'Erro interno da IA' });
+        await saveConversationState(sb2, phone, 'aguardando_humano', {
+          escalada_motivo: 'Erro interno da IA',
+          humano_assumiu_em: new Date().toISOString(),
+        }, storeIdParam);
       }
     } catch (fallbackError) {
       console.error('Erro no fallback:', fallbackError);
