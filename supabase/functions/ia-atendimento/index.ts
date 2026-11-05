@@ -810,6 +810,14 @@ Deno.serve(async (req) => {
     return new Response('Method not allowed', { status: 405 });
   }
 
+  // Só o webhook-whatsapp chama esta função, sempre com a service key no
+  // Authorization. Sem isso qualquer um na internet fazia o Max de qualquer
+  // loja gastar IA e mandar WhatsApp pra qualquer número (verify_jwt=false).
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+  if (!serviceKey || req.headers.get('Authorization') !== `Bearer ${serviceKey}`) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+
   const sb = getSupabaseClient();
 
   // Extrai store_id da query string (?store_id=xxx) — multi-tenant
