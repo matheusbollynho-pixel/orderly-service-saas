@@ -95,7 +95,7 @@ export async function checkAiBudget(
   try {
     const { data: store, error: storeErr } = await supabase
       .from('store_settings')
-      .select('plan, ai_monthly_budget_brl')
+      .select('plan, ai_monthly_budget_brl, ai_budget_avulso_desde')
       .eq('id', storeId)
       .maybeSingle()
     if (storeErr || !store) throw storeErr ?? new Error('loja não encontrada')
@@ -103,15 +103,20 @@ export async function checkAiBudget(
     const budgetBrl = store.ai_monthly_budget_brl ?? PLAN_BUDGET_BRL[store.plan ?? 'trial'] ?? PLAN_BUDGET_BRL.trial
     if (budgetBrl === Infinity) return { allowed: true, spentBrl: 0, budgetBrl }
 
+    // Saldo avulso: conta o gasto desde que o valor foi definido, sem renovar
+    // na virada do mês. Senão, conta desde o dia 1º (limite mensal).
     const startOfMonth = new Date()
     startOfMonth.setDate(1)
     startOfMonth.setHours(0, 0, 0, 0)
+    const desde = store.ai_budget_avulso_desde && store.ai_monthly_budget_brl != null
+      ? new Date(store.ai_budget_avulso_desde)
+      : startOfMonth
 
     const { data: rows, error: rowsErr } = await supabase
       .from('ai_usage_log')
       .select('cost_usd')
       .eq('store_id', storeId)
-      .gte('created_at', startOfMonth.toISOString())
+      .gte('created_at', desde.toISOString())
 
     if (rowsErr) throw rowsErr
 

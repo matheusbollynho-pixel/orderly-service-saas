@@ -45,6 +45,7 @@ interface StoreClient {
   custom_features: string[] | null;
   ai_spend_month_brl: number;
   ai_monthly_budget_brl: number | null;
+  ai_budget_avulso_desde: string | null;
   situacao: Situacao | null;
 }
 
@@ -220,6 +221,7 @@ export default function SuperAdminPage() {
   const [loadingSendLog, setLoadingSendLog] = useState(false);
   const [editAiBudget, setEditAiBudget] = useState(false);
   const [aiBudgetInput, setAiBudgetInput] = useState('');
+  const [aiAvulso, setAiAvulso] = useState(false);
   const [savingAiBudget, setSavingAiBudget] = useState(false);
   const [globalErrorsByStore, setGlobalErrorsByStore] = useState<{ storeId: string; nome: string; recursos: { feature: string; count: number; last: string; lastError: string }[] }[]>([]);
   const [failedCronsGlobal, setFailedCronsGlobal] = useState<{ jobname: string; count: number; last: string; lastError: string }[]>([]);
@@ -264,6 +266,7 @@ export default function SuperAdminPage() {
       setTestPhone('');
       setEditAiBudget(false);
       setAiBudgetInput(selected.ai_monthly_budget_brl != null ? String(selected.ai_monthly_budget_brl) : '');
+      setAiAvulso(!!selected.ai_budget_avulso_desde);
       loadSendLog(selected.store_id);
       setNewPlan(selected.plan || 'basic');
       setSubAmount(selected.subscription?.amount?.toString() || '');
@@ -291,7 +294,7 @@ export default function SuperAdminPage() {
 
     const { data: stores } = await sb
       .from('store_settings')
-      .select('id, company_name, store_phone, plan, active, created_at, whatsapp_instance_url, whatsapp_instance_token, whatsapp_provider, custom_features, ai_monthly_budget_brl')
+      .select('id, company_name, store_phone, plan, active, created_at, whatsapp_instance_url, whatsapp_instance_token, whatsapp_provider, custom_features, ai_monthly_budget_brl, ai_budget_avulso_desde')
       .order('created_at', { ascending: false });
 
     if (!stores) { setLoading(false); return; }
@@ -309,12 +312,24 @@ export default function SuperAdminPage() {
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
+    // Cada loja conta o gasto a partir do seu início: dia 1º (limite mensal)
+    // ou a data em que o saldo avulso foi definido (mesma regra do aiUsage.ts).
+    const inicioPorLoja: Record<string, number> = {};
+    let inicioMaisAntigo = startOfMonth.getTime();
+    stores.forEach((s: any) => {
+      const ini = s.ai_budget_avulso_desde && s.ai_monthly_budget_brl != null
+        ? new Date(s.ai_budget_avulso_desde).getTime()
+        : startOfMonth.getTime();
+      inicioPorLoja[s.id] = ini;
+      if (ini < inicioMaisAntigo) inicioMaisAntigo = ini;
+    });
     const { data: aiUsage } = await sb
       .from('ai_usage_log')
-      .select('store_id, cost_usd')
-      .gte('created_at', startOfMonth.toISOString());
+      .select('store_id, cost_usd, created_at')
+      .gte('created_at', new Date(inicioMaisAntigo).toISOString());
     const aiSpendUsdByStore: Record<string, number> = {};
     (aiUsage || []).forEach((r: any) => {
+      if (new Date(r.created_at).getTime() < (inicioPorLoja[r.store_id] ?? startOfMonth.getTime())) return;
       aiSpendUsdByStore[r.store_id] = (aiSpendUsdByStore[r.store_id] || 0) + (r.cost_usd || 0);
     });
 
@@ -337,6 +352,7 @@ export default function SuperAdminPage() {
       subscription: subsByStore[s.id] ?? null,
       ai_spend_month_brl: (aiSpendUsdByStore[s.id] || 0) * USD_TO_BRL,
       ai_monthly_budget_brl: s.ai_monthly_budget_brl ?? null,
+      ai_budget_avulso_desde: s.ai_budget_avulso_desde ?? null,
       situacao: situacaoByStore[s.id] ?? null,
     }));
 
@@ -556,13 +572,19 @@ Confirmar?`)) return;
     setSavingAiBudget(true);
     const trimmed = aiBudgetInput.trim();
     const value = trimmed === '' ? null : Number(trimmed.replace(',', '.'));
-    try { await atualizar('store_settings', { ai_monthly_budget_brl: value }, selected.store_id); }
+    if (value != null && (isNaN(value) || value < 0)) { setSavingAiBudget(false); toast.error('Valor inválido'); return; }
+    const avulso = aiAvulso && value != null;
+    if (aiAvulso && value == null) { setSavingAiBudget(false); toast.error('Saldo avulso precisa de um valor'); return; }
+    // Saldo avulso: o gasto passa a contar do zero a partir de agora
+    const desde = avulso ? new Date().toISOString() : null;
+    try { await atualizar('store_settings', { ai_monthly_budget_brl: value, ai_budget_avulso_desde: desde }, selected.store_id); }
     catch (e: any) { setSavingAiBudget(false); toast.error('Erro ao salvar orçamento de IA: ' + e.message); return; }
     setSavingAiBudget(false);
-    toast.success(value == null ? 'Override removido — volta a usar o padrão do plano' : `Orçamento de IA definido em R$ ${value.toFixed(2)}/mês`);
-    setSelected(prev => prev ? { ...prev, ai_monthly_budget_brl: value } : null);
-    setClients(prev => prev.map(c => c.store_id === selected.store_id ? { ...c, ai_monthly_budget_brl: value } : c));
+    toast.success(value == null ? 'Voltou pro padrão do plano'
+      : avulso ? `Saldo avulso de R$ ${value.toFixed(2)} a partir de agora — não renova no mês que vem`
+      : `Limite de IA: R$ ${value.toFixed(2)}/mês`);
     setEditAiBudget(false);
+    await loadClients(true);
   };
 
   const saveWpp = async () => {
@@ -873,7 +895,7 @@ Confirmar?`)) return;
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2">
-                <Cpu className="h-4 w-4" /> Uso de IA (este mês)
+                <Cpu className="h-4 w-4" /> {selected.ai_budget_avulso_desde ? `Uso de IA (saldo avulso desde ${fmt(selected.ai_budget_avulso_desde)})` : 'Uso de IA (este mês)'}
               </CardTitle>
               <Button size="sm" variant="ghost" onClick={() => setEditAiBudget(v => !v)} className="gap-1 h-7 text-xs">
                 <Pencil className="h-3 w-3" /> {editAiBudget ? 'Cancelar' : 'Editar'}
@@ -883,7 +905,15 @@ Confirmar?`)) return;
           <CardContent className="space-y-3">
             {editAiBudget && (
               <div className="space-y-2 pb-2 border-b border-border/40">
-                <label className="text-xs text-muted-foreground">Orçamento de IA pra esta loja (R$/mês) — deixe vazio pra usar o padrão do plano ({selected.plan ? PLAN_LABELS[selected.plan] ?? selected.plan : '—'})</label>
+                <div className="flex items-center gap-2">
+                  <Switch checked={aiAvulso} onCheckedChange={setAiAvulso} />
+                  <span className="text-xs font-medium text-foreground">Saldo avulso (não renova todo mês)</span>
+                </div>
+                <label className="text-xs text-muted-foreground">
+                  {aiAvulso
+                    ? 'Saldo de IA a partir de agora (R$). O gasto começa do zero ao salvar; bateu no teto, corta até você mudar aqui.'
+                    : `Limite de IA por mês (R$), renova todo dia 1º — deixe vazio pra usar o padrão do plano (${selected.plan ? PLAN_LABELS[selected.plan] ?? selected.plan : '—'})`}
+                </label>
                 <div className="flex gap-2">
                   <Input value={aiBudgetInput} onChange={e => setAiBudgetInput(e.target.value)} placeholder={`padrão: R$ ${(AI_PLAN_BUDGET_BRL[selected.plan ?? 'basic'] ?? AI_PLAN_BUDGET_BRL.basic) === Infinity ? '∞' : (AI_PLAN_BUDGET_BRL[selected.plan ?? 'basic'] ?? AI_PLAN_BUDGET_BRL.basic).toFixed(2)}`} className="h-8 text-sm flex-1" type="number" step="0.01" min="0" />
                   <Button size="sm" onClick={saveAiBudget} disabled={savingAiBudget} className="gap-1 h-8">
@@ -901,7 +931,7 @@ Confirmar?`)) return;
                 <div className="space-y-1.5">
                   <div className="flex items-baseline justify-between">
                     <span className={`text-lg font-semibold ${over ? 'text-red-400' : 'text-foreground'}`}>
-                      R$ {spent.toFixed(2)} {budget !== Infinity && <span className="text-sm text-muted-foreground font-normal">/ R$ {budget.toFixed(2)} incluídos{selected.ai_monthly_budget_brl != null ? ' (override)' : ''}</span>}
+                      R$ {spent.toFixed(2)} {budget !== Infinity && <span className="text-sm text-muted-foreground font-normal">/ R$ {budget.toFixed(2)} {selected.ai_budget_avulso_desde ? 'de saldo' : 'incluídos'}{selected.ai_monthly_budget_brl != null && !selected.ai_budget_avulso_desde ? ' (override)' : ''}</span>}
                     </span>
                     {budget === Infinity && <span className="text-xs text-muted-foreground">sem limite (enterprise)</span>}
                   </div>
@@ -914,7 +944,7 @@ Confirmar?`)) return;
                     <p className="text-xs text-amber-400">Orçamento R$ 0 — o Max dessa loja está desligado, mesmo com a IA marcada nas funcionalidades.</p>
                   )}
                   {over && budget > 0 && (
-                    <p className="text-xs text-red-400">Passou do orçamento do plano — a IA dessa loja já está bloqueada até o próximo mês (ou até liberar mais acima).</p>
+                    <p className="text-xs text-red-400">{selected.ai_budget_avulso_desde ? 'Saldo acabou — a IA dessa loja está cortada até você colocar mais saldo.' : 'Passou do orçamento do plano — a IA dessa loja já está bloqueada até o próximo mês (ou até liberar mais acima).'}</p>
                   )}
                 </div>
               );
