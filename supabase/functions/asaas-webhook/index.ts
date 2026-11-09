@@ -132,12 +132,12 @@ async function provisionarCliente(payment: Record<string, unknown>) {
 
   // Prioridade 1: store_id embutido no externalReference (pagamentos gerados pelo sistema)
   const refStoreId = storeIdFromRef(externalRef)
-  let existingStore: { id: string; owner_email: string } | null = null
+  let existingStore: { id: string; owner_email: string; company_name?: string } | null = null
 
   if (refStoreId) {
     const { data } = await supabase
       .from('store_settings')
-      .select('id, owner_email')
+      .select('id, owner_email, company_name')
       .eq('id', refStoreId)
       .maybeSingle()
     existingStore = data ?? null
@@ -148,11 +148,31 @@ async function provisionarCliente(payment: Record<string, unknown>) {
   if (!existingStore) {
     const { data } = await supabase
       .from('store_settings')
-      .select('id, owner_email')
+      .select('id, owner_email, company_name')
       .eq('asaas_customer_id', asaasCustomerId)
       .maybeSingle()
     existingStore = data ?? null
     if (existingStore) console.log(`Store identificada via asaas_customer_id: ${asaasCustomerId}`)
+  }
+
+  // Buscar dados do cliente no Asaas antecipadamente (usado para identificação e fallbacks)
+  const customer = (payment._customer as Record<string, unknown>) || (asaasCustomerId ? await fetchAsaasCustomer(asaasCustomerId) : null)
+
+  // Prioridade 3: vincular por e-mail caso a cobrança tenha vindo sem externalReference e sem asaas_customer_id salvo
+  if (!existingStore && customer?.email) {
+    const custEmail = String(customer.email).trim().toLowerCase()
+    const { data } = await supabase
+      .from('store_settings')
+      .select('id, owner_email, company_name')
+      .ilike('owner_email', custEmail)
+      .maybeSingle()
+    if (data) {
+      existingStore = data
+      console.log(`Store identificada via email do cliente Asaas: ${custEmail}`)
+      if (asaasCustomerId) {
+        await supabase.from('store_settings').update({ asaas_customer_id: asaasCustomerId }).eq('id', data.id)
+      }
+    }
   }
 
   if (existingStore) {
@@ -160,29 +180,37 @@ async function provisionarCliente(payment: Record<string, unknown>) {
     console.log(`Cliente já existe (${existingStore.id}) — registrando renovação`)
     const vencimento = await proximoVencimento(existingStore.id)
 
+    // 1. PRIMEIRO LIBERA A LOJA (A prioridade do cliente é ter o acesso ativo!)
+    const { error: lojaErr } = await supabase.from('store_settings')
+      .update({ plan, active: true, updated_at: new Date().toISOString() })
+      .eq('id', existingStore.id)
+    if (lojaErr) throw new Error(`Erro ao liberar loja: ${lojaErr.message}`)
+
+    // 2. REGISTRA A ASSINATURA COM FALLBACKS SEGUROS (Impede erro de NOT NULL no banco)
+    const safeEmail = existingStore.owner_email || (customer?.email as string) || 'sem-email@speedseekos.com.br'
+    const safeName = existingStore.company_name || safeEmail || 'Cliente SpeedSeek OS'
+
     const { error: subErr } = await supabase.from('saas_subscriptions').insert({
       store_id: existingStore.id,
       asaas_payment_id: asaasPaymentId,
       asaas_customer_id: asaasCustomerId,
       plan,
       status: 'active',
-      owner_email: existingStore.owner_email,
-      owner_name: existingStore.owner_email,
+      owner_email: safeEmail,
+      owner_name: safeName,
       amount: valor,
       paid_at: new Date().toISOString(),
       due_date: vencimento,
     })
     // 23505 = os dois avisos do Asaas chegaram juntos; o outro já registrou
     if (subErr?.code === '23505') return { skipped: true, reason: 'Pagamento já registrado' }
-    if (subErr) throw new Error(`Erro ao registrar pagamento: ${subErr.message}`)
-
-    const { error: lojaErr } = await supabase.from('store_settings')
-      .update({ plan, active: true, updated_at: new Date().toISOString() })
-      .eq('id', existingStore.id)
-    if (lojaErr) throw new Error(`Erro ao liberar loja: ${lojaErr.message}`)
+    if (subErr) {
+      // Loja já está liberada com sucesso; apenas loga o aviso para não travar o webhook
+      console.error(`Aviso ao registrar pagamento em saas_subscriptions: ${subErr.message}`)
+    }
 
     const planLabel: Record<string, string> = { basic: 'Básico', pro: 'Profissional', premium: 'Premium' }
-    await notifyDono(`💰 *Pagamento recebido!*\n🏪 ${existingStore.owner_email}\n💼 Plano: ${planLabel[plan] || plan}\n💵 R$ ${valor.toFixed(2)}\n📅 Próximo vencimento: ${vencimento}`)
+    await notifyDono(`💰 *Pagamento recebido!*\n🏪 ${safeName}\n📧 ${safeEmail}\n💼 Plano: ${planLabel[plan] || plan}\n💵 R$ ${valor.toFixed(2)}\n📅 Próximo vencimento: ${vencimento}`)
     return { ok: true, action: 'renovacao', store_id: existingStore.id, plan }
   }
 
@@ -195,19 +223,22 @@ Pagamento ${asaasPaymentId} de R$ ${valor.toFixed(2)} (cliente Asaas ${asaasCust
     return { skipped: true, reason: 'Pagamento sem referência de plano e sem loja vinculada' }
   }
 
-  // Cliente novo — buscar dados no Asaas (ou usar dados de teste)
-  const customer = (payment._customer as Record<string, unknown>) || await fetchAsaasCustomer(asaasCustomerId)
+  // Cliente novo — validação segura dos dados retornados do Asaas
   if (!customer) {
-    throw new Error(`Cliente Asaas não encontrado: ${asaasCustomerId}`)
+    console.error(`Cliente Asaas não encontrado: ${asaasCustomerId}`)
+    await notifyDono(`*Pagamento Asaas não provisionado*\nPagamento ${asaasPaymentId} recebido, mas cliente ${asaasCustomerId} não foi encontrado na API do Asaas.`)
+    return { skipped: true, reason: `Cliente Asaas ${asaasCustomerId} não encontrado na API` }
   }
 
-  const ownerEmail = customer.email as string
-  const ownerName = (customer.company || customer.name) as string
-  const ownerPhone = (customer.mobilePhone || customer.phone || '') as string
-  const companyName = (customer.company || customer.name) as string
+  const ownerEmail = (customer.email as string) || ''
+  const ownerName = ((customer.company || customer.name) as string) || 'Cliente'
+  const ownerPhone = ((customer.mobilePhone || customer.phone || '') as string)
+  const companyName = ((customer.company || customer.name) as string) || 'Oficina'
 
   if (!ownerEmail) {
-    throw new Error(`Cliente ${asaasCustomerId} não tem email cadastrado no Asaas`)
+    console.error(`Cliente ${asaasCustomerId} não tem email cadastrado no Asaas`)
+    await notifyDono(`*Pagamento Asaas sem e-mail*\nPagamento ${asaasPaymentId} de ${ownerName} recebido, mas não há e-mail cadastrado para criar o acesso.`)
+    return { skipped: true, reason: `Cliente ${asaasCustomerId} não tem email cadastrado no Asaas` }
   }
 
   console.log(`Novo cliente: ${ownerName} <${ownerEmail}> plano=${plan}`)
@@ -263,15 +294,15 @@ Pagamento ${asaasPaymentId} de R$ ${valor.toFixed(2)} (cliente Asaas ${asaasCust
     }
   }
 
-  // Registrar na saas_subscriptions
+  // Registrar na saas_subscriptions com fallbacks seguros
   await supabase.from('saas_subscriptions').insert({
     store_id: storeId,
     asaas_payment_id: asaasPaymentId,
     asaas_customer_id: asaasCustomerId,
     plan,
     status: 'active',
-    owner_name: ownerName,
-    owner_email: ownerEmail,
+    owner_name: ownerName || companyName || 'Cliente',
+    owner_email: ownerEmail || 'sem-email@speedseekos.com.br',
     owner_phone: ownerPhone,
     company_name: companyName,
     amount: valor,
