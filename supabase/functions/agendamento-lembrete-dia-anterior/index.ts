@@ -24,10 +24,19 @@ const LEGACY_DEFAULT_STORE_ID = '9fd27114-97d1-48cd-ad09-1b057fa9c185';
 const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const TURNO_LABEL: Record<string, string> = {
+  manha: 'Manhã',
+  tarde: 'Tarde',
   MANHA: 'Manhã',
   TARDE: 'Tarde',
   dia_todo: 'Dia todo',
 };
+
+// "09:30 (Manhã)" quando tem horário; senão só o turno
+function quando(ag: { shift: string; appointment_time: string | null }): string {
+  const turno = TURNO_LABEL[ag.shift] || ag.shift;
+  const hora = ag.appointment_time ? ag.appointment_time.slice(0, 5) : '';
+  return hora ? `${hora} (${turno})` : turno;
+}
 
 interface StoreRow {
   id: string;
@@ -87,7 +96,7 @@ async function enviarLembretes(): Promise<void> {
 
   const { data: agendamentos, error } = await sb
     .from('appointments')
-    .select('id, store_id, client_name, client_phone, appointment_date, shift, equipment, service_description, lembrete_enviado_em')
+    .select('id, store_id, client_name, client_phone, appointment_date, shift, appointment_time, equipment, service_description, lembrete_enviado_em')
     .eq('appointment_date', amanhaStr)
     .neq('status', 'cancelado')
     .is('lembrete_enviado_em', null)
@@ -111,6 +120,7 @@ async function enviarLembretes(): Promise<void> {
     client_phone: string | null;
     appointment_date: string;
     shift: string;
+    appointment_time: string | null;
     equipment: string | null;
     service_description: string | null;
     lembrete_enviado_em: string | null;
@@ -157,7 +167,7 @@ async function enviarLembretes(): Promise<void> {
     const empresa = store.company_name || 'nossa oficina';
     const nome = ag.client_name?.split(' ')[0] || 'Cliente';
     const dataFmt = formatDate(ag.appointment_date);
-    const turno = TURNO_LABEL[ag.shift] || ag.shift;
+    const turno = quando(ag);
     const moto = ag.equipment || 'seu veículo';
     const servico = ag.service_description || 'serviço agendado';
 
@@ -165,7 +175,7 @@ async function enviarLembretes(): Promise<void> {
       `Olá ${nome}! 👋\n\n` +
       `Lembrando do seu agendamento de amanhã na *${empresa}*:\n\n` +
       `📅 *Data:* ${dataFmt}\n` +
-      `🕐 *Turno:* ${turno}\n` +
+      `🕐 *Horário:* ${turno}\n` +
       `🏍️ *Veículo:* ${moto}\n` +
       `🔧 *Serviço:* ${servico}\n\n` +
       `Confirma sua presença? Responda *SIM* ou *NÃO* 😊`;
@@ -217,7 +227,8 @@ async function enviarLembretes(): Promise<void> {
     if (!store) continue;
 
     const resumo = ags
-      .map((a) => `• ${a.client_name} — ${TURNO_LABEL[a.shift] || a.shift} — ${a.equipment || ''} — ${a.service_description || ''}`)
+      .sort((a, b) => (a.appointment_time || '99').localeCompare(b.appointment_time || '99'))
+      .map((a) => `• ${a.client_name} — ${quando(a)} — ${a.equipment || ''} — ${a.service_description || ''}`)
       .join('\n');
     const texto = `📅 *Agendamentos de amanhã (${amanhaStr}):*\n\n${resumo}\n\nLembretes enviados: ${ags.length}`;
 

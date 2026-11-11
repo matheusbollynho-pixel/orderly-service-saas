@@ -10,6 +10,7 @@ import {
   Appointment, AppointmentShift, AppointmentStatus,
   SHIFT_LABELS, STATUS_LABELS, STATUS_COLORS,
   CreateAppointmentPayload,
+  formatApptTime, shiftFromTime, apptWhenLabel,
 } from '@/hooks/useAppointments';
 import { useClients } from '@/hooks/useClients';
 import { useMechanics } from '@/hooks/useMechanics';
@@ -54,6 +55,7 @@ interface FormState {
   service_description: string;
   appointment_date: string;
   shift: AppointmentShift;
+  appointment_time: string; // 'HH:MM' ou ''
   mechanic_id: string;
   notes: string;
   status: AppointmentStatus;
@@ -67,6 +69,7 @@ const EMPTY_FORM: FormState = {
   service_description: '',
   appointment_date: '',
   shift: 'manha',
+  appointment_time: '',
   mechanic_id: '',
   notes: '',
   status: 'agendado',
@@ -92,7 +95,12 @@ function AppointmentCard({
       onClick={onEdit}
     >
       <div className="flex items-start justify-between gap-1">
-        <p className="font-semibold text-xs leading-tight truncate flex-1">{appt.client_name}</p>
+        <p className="font-semibold text-xs leading-tight truncate flex-1">
+          {appt.appointment_time && (
+            <span className="text-primary mr-1">{formatApptTime(appt.appointment_time)}</span>
+          )}
+          {appt.client_name}
+        </p>
         <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full border flex-shrink-0', STATUS_COLORS[appt.status])}>
           {STATUS_LABELS[appt.status]}
         </span>
@@ -145,6 +153,18 @@ export default function AgendaPage({ onConvertToOS }: AgendaPageProps = {}) {
     ).slice(0, 5);
   }, [clients, clientSearch]);
 
+  // Outro agendamento (não cancelado) no mesmo dia e horário — só aviso, o dono decide
+  const horarioOcupadoPor = useMemo(() => {
+    if (!form.appointment_time || !form.appointment_date) return null;
+    const conflito = allAppointments.find(a =>
+      a.id !== editingAppt?.id &&
+      a.status !== 'cancelado' &&
+      a.appointment_date === form.appointment_date &&
+      formatApptTime(a.appointment_time) === form.appointment_time
+    );
+    return conflito?.client_name ?? null;
+  }, [allAppointments, form.appointment_time, form.appointment_date, editingAppt]);
+
   function openNewForm(date: Date, shift: AppointmentShift) {
     setEditingAppt(null);
     setForm({ ...EMPTY_FORM, appointment_date: format(date, 'yyyy-MM-dd'), shift });
@@ -162,6 +182,7 @@ export default function AgendaPage({ onConvertToOS }: AgendaPageProps = {}) {
       service_description: appt.service_description,
       appointment_date: appt.appointment_date,
       shift: appt.shift,
+      appointment_time: formatApptTime(appt.appointment_time),
       mechanic_id: appt.mechanic_id ?? '',
       notes: appt.notes ?? '',
       status: appt.status,
@@ -182,7 +203,8 @@ export default function AgendaPage({ onConvertToOS }: AgendaPageProps = {}) {
       equipment: form.equipment,
       service_description: form.service_description,
       appointment_date: form.appointment_date,
-      shift: form.shift,
+      shift: form.appointment_time ? shiftFromTime(form.appointment_time) : form.shift,
+      appointment_time: form.appointment_time || null,
       status: form.status,
       mechanic_id: form.mechanic_id || null,
       notes: form.notes || null,
@@ -197,10 +219,13 @@ export default function AgendaPage({ onConvertToOS }: AgendaPageProps = {}) {
   }
 
   function getAppts(day: Date, shift: AppointmentShift) {
-    return appointments.filter(a =>
-      isSameDay(parseISO(a.appointment_date), day) &&
-      (a.shift === shift || a.shift === 'dia_todo')
-    );
+    return appointments
+      .filter(a =>
+        isSameDay(parseISO(a.appointment_date), day) &&
+        (a.shift === shift || a.shift === 'dia_todo')
+      )
+      // Com horário primeiro, em ordem; sem horário no fim
+      .sort((a, b) => (a.appointment_time || '99').localeCompare(b.appointment_time || '99'));
   }
 
   const weekLabel = `${format(weekDays[0], "d 'de' MMM", { locale: ptBR })} – ${format(weekDays[weekDays.length - 1], "d 'de' MMM", { locale: ptBR })}`;
@@ -369,7 +394,7 @@ export default function AgendaPage({ onConvertToOS }: AgendaPageProps = {}) {
                       </span>
                       <span className="text-[11px] text-muted-foreground">
                         {format(parseISO(appt.appointment_date), "dd/MM/yy", { locale: ptBR })}
-                        {' · '}{SHIFT_LABELS[appt.shift]}
+                        {' · '}{apptWhenLabel(appt)}
                       </span>
                     </div>
                   </div>
@@ -518,6 +543,38 @@ export default function AgendaPage({ onConvertToOS }: AgendaPageProps = {}) {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            {/* Horário (opcional) */}
+            <div className="space-y-1">
+              <Label className="text-xs">Horário (opcional)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="time"
+                  value={form.appointment_time}
+                  onChange={e => {
+                    const t = e.target.value;
+                    setForm(f => ({ ...f, appointment_time: t, shift: t ? shiftFromTime(t) : f.shift }));
+                  }}
+                  className="h-9 text-sm w-32"
+                />
+                {form.appointment_time && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 text-xs"
+                    onClick={() => setForm(f => ({ ...f, appointment_time: '' }))}
+                  >
+                    Sem horário
+                  </Button>
+                )}
+              </div>
+              {horarioOcupadoPor && (
+                <p className="text-[11px] text-amber-500">
+                  ⚠️ Já tem agendamento nesse horário: {horarioOcupadoPor}
+                </p>
+              )}
             </div>
 
             {/* Busca de cliente */}

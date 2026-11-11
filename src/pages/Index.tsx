@@ -1,4 +1,4 @@
-import { matchesSearch } from '@/lib/textSearch';
+import { matchesSearch, accentPattern } from '@/lib/textSearch';
 import { useState, useEffect, useRef } from 'react';
 import { useServiceOrders } from '@/hooks/useServiceOrders';
 import { useMechanics } from '@/hooks/useMechanics';
@@ -547,7 +547,7 @@ Retirada: ${retiradaInfo}`;
             conclusion_date, previsao_entrega, status_oficina, created_at, updated_at,
             mechanic_id, checklist_items(*), materials(*), payments(*)
           `)
-          .or(`client_name.ilike.%${q}%,equipment.ilike.%${q}%,client_phone.ilike.%${q}%`)
+          .or(`client_name.imatch."${accentPattern(q)}",equipment.imatch."${accentPattern(q)}",client_phone.imatch."${accentPattern(q)}"`)
           .order('created_at', { ascending: false })
           .limit(100);
 

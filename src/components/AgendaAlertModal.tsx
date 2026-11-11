@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useAppointments, Appointment, SHIFT_LABELS } from '@/hooks/useAppointments';
+import { useAppointments, Appointment, apptWhenLabel } from '@/hooks/useAppointments';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
@@ -31,7 +31,7 @@ function ApptRow({ appt }: { appt: Appointment }) {
         </div>
       </div>
       <span className="text-xs text-muted-foreground flex-shrink-0 mt-0.5">
-        {SHIFT_LABELS[appt.shift]}
+        {apptWhenLabel(appt)}
       </span>
     </div>
   );

@@ -22,7 +22,7 @@ const DEFAULT_TEMPLATE = `Olá{{nome}}! 👋
 Seu agendamento na *{{empresa}}* foi confirmado! ✅
 
 📅 *Data:* {{data}}
-🕐 *Turno:* {{turno}}
+🕐 *Horário:* {{turno}}
 🏍️ *Moto:* {{moto}}
 🔧 *Serviço:* {{servico}}
 
@@ -65,6 +65,7 @@ function buildMessage(params: {
   client_name: string
   appointment_date: string
   shift: string
+  appointment_time: string | null
   equipment: string
   service_description: string
   company_name: string
@@ -72,13 +73,18 @@ function buildMessage(params: {
 }): string {
   const nome = params.client_name ? `, ${params.client_name.split(' ')[0]}` : ''
   const data = formatDate(params.appointment_date)
-  const turno = SHIFT_LABELS[params.shift] ?? params.shift
+  const turnoLabel = SHIFT_LABELS[params.shift] ?? params.shift
+  const hora = params.appointment_time ? params.appointment_time.slice(0, 5) : ''
+  // {{turno}} já existe nos templates salvos das lojas: com horário vira "09:30 (Manhã)"
+  const turno = hora ? `${hora} (${turnoLabel})` : turnoLabel
+  const horario = hora || turnoLabel
 
   return params.template
     .replace(/\{\{nome\}\}/g, nome)
     .replace(/\{\{empresa\}\}/g, params.company_name)
     .replace(/\{\{data\}\}/g, data)
     .replace(/\{\{turno\}\}/g, turno)
+    .replace(/\{\{horario\}\}/g, horario)
     .replace(/\{\{moto\}\}/g, params.equipment || '')
     .replace(/\{\{servico\}\}/g, params.service_description || '')
 }
@@ -92,15 +98,51 @@ const corsHeaders = {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders })
 
+  const json = (obj: unknown, status = 200) =>
+    new Response(JSON.stringify(obj), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+
   try {
-    const body = await req.json()
-    const { client_name, client_phone, appointment_date, shift, equipment, service_description, store_id } = body
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || ''
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+    const admin = createClient(supabaseUrl, serviceKey)
+
+    // Quem pode chamar: a IA (service key) ou alguém logado que é membro da loja do agendamento.
+    // Antes era aberta: qualquer um mandava mensagem pelo WhatsApp de qualquer loja.
+    const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
+    if (!token) return json({ success: false, error: 'Sem autenticação' }, 401)
+    const isService = !!serviceKey && token === serviceKey
+
+    const body = await req.json().catch(() => ({}))
+    const appointmentId = typeof body?.appointment_id === 'string' ? body.appointment_id : ''
+    if (!appointmentId) return json({ success: false, error: 'appointment_id obrigatório' }, 400)
+
+    // Dados vêm do banco, nunca do corpo da requisição
+    const { data: appt } = await admin
+      .from('appointments')
+      .select('id, store_id, client_name, client_phone, appointment_date, shift, appointment_time, equipment, service_description, status')
+      .eq('id', appointmentId)
+      .maybeSingle()
+    if (!appt) return json({ success: false, error: 'Agendamento não encontrado' }, 404)
+
+    if (!isService) {
+      const { data: userData } = await admin.auth.getUser(token)
+      if (!userData?.user) return json({ success: false, error: 'Sessão inválida' }, 401)
+      const { data: member } = await admin
+        .from('store_members')
+        .select('store_id')
+        .eq('user_id', userData.user.id)
+        .eq('store_id', appt.store_id)
+        .eq('active', true)
+        .maybeSingle()
+      if (!member) return json({ success: false, error: 'Sem acesso a esta loja' }, 403)
+    }
+
+    if (appt.status === 'cancelado') return json({ success: false, error: 'Agendamento cancelado' })
+
+    const { client_name, client_phone, appointment_date, shift, appointment_time, equipment, service_description, store_id } = appt
 
     if (!client_phone) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Telefone do cliente não informado' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      return json({ success: false, error: 'Telefone do cliente não informado' }, 400)
     }
 
     const phone = normalizeBrPhone(client_phone)
@@ -114,7 +156,7 @@ Deno.serve(async (req) => {
       )
     }
 
-    const message = buildMessage({ client_name, appointment_date, shift, equipment, service_description, company_name, template })
+    const message = buildMessage({ client_name, appointment_date, shift, appointment_time, equipment, service_description, company_name, template })
 
     await sendWhatsAppText(phone, message, wppConfig, { storeId: store_id, feature: 'agendamento_confirmacao' })
 

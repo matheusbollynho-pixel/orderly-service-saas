@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useStore } from '@/contexts/StoreContext';
+import { accentPattern } from '@/lib/textSearch';
 
 export interface Client {
   id: string;
@@ -75,7 +76,7 @@ export function useClients() {
       const { data, error } = await supabase
         .from('clients')
         .select('*')
-        .ilike('name', `%${name}%`)
+        .filter('name', 'imatch', accentPattern(name))
         .eq('active', true)
         .limit(10);
 
@@ -122,7 +123,7 @@ export function useClients() {
       const { data, error } = await supabase
         .from('motorcycles')
         .select('*, clients(*)')
-        .or(`modelo.ilike.%${term}%,marca.ilike.%${term}%,cor.ilike.%${term}%,placa.ilike.%${clean}%`)
+        .or(`modelo.imatch."${accentPattern(term)}",marca.imatch."${accentPattern(term)}",cor.imatch."${accentPattern(term)}",placa.ilike.%${clean}%`)
         .eq('active', true)
         .limit(10);
 

@@ -15,6 +15,7 @@ export interface Appointment {
   service_description: string;
   appointment_date: string; // 'YYYY-MM-DD'
   shift: AppointmentShift;
+  appointment_time?: string | null; // 'HH:MM' ou 'HH:MM:SS' (opcional)
   status: AppointmentStatus;
   mechanic_id?: string | null;
   service_order_id?: string | null;
@@ -30,6 +31,23 @@ export const SHIFT_LABELS: Record<AppointmentShift, string> = {
   tarde: 'Tarde',
   dia_todo: 'Dia todo',
 };
+
+// '09:30:00' -> '09:30'
+export function formatApptTime(time?: string | null): string {
+  return time ? time.slice(0, 5) : '';
+}
+
+// Turno a partir do horário: antes de 12h = manhã, depois = tarde
+export function shiftFromTime(time: string): AppointmentShift {
+  const hour = Number(time.slice(0, 2));
+  return hour < 12 ? 'manha' : 'tarde';
+}
+
+// "Manhã" ou "09:30 (Manhã)"
+export function apptWhenLabel(appt: Pick<Appointment, 'shift' | 'appointment_time'>): string {
+  const t = formatApptTime(appt.appointment_time);
+  return t ? `${t} (${SHIFT_LABELS[appt.shift]})` : SHIFT_LABELS[appt.shift];
+}
 
 export const STATUS_LABELS: Record<AppointmentStatus, string> = {
   agendado: 'Agendado',
@@ -56,7 +74,8 @@ export function useAppointments(startDate?: string, endDate?: string) {
         .from('appointments')
         .select('*')
         .order('appointment_date', { ascending: true })
-        .order('shift', { ascending: true });
+        .order('shift', { ascending: true })
+        .order('appointment_time', { ascending: true, nullsFirst: false });
 
       if (startDate) query = query.gte('appointment_date', startDate);
       if (endDate) query = query.lte('appointment_date', endDate);
@@ -83,15 +102,8 @@ export function useAppointments(startDate?: string, endDate?: string) {
       // Enviar confirmação via WhatsApp se tiver telefone
       if (appt.client_phone) {
         supabase.functions.invoke('send-appointment-confirmation', {
-          body: {
-            client_name: appt.client_name,
-            client_phone: appt.client_phone,
-            appointment_date: appt.appointment_date,
-            shift: appt.shift,
-            equipment: appt.equipment,
-            service_description: appt.service_description,
-            store_id: appt.store_id,
-          },
+          // A função busca os dados do agendamento no banco (não confia em texto vindo do navegador)
+          body: { appointment_id: appt.id },
         }).then(({ error }) => {
           if (error) console.error('Erro ao enviar confirmação WhatsApp:', error);
         });

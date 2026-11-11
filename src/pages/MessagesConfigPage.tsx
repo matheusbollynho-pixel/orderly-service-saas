@@ -3,7 +3,7 @@ import { useStoreSettings } from '@/hooks/useStoreSettings';
 import { Button } from '@/components/ui/button';
 import { MessageSquare } from 'lucide-react';
 
-const VARIABLES = ['{{nome}}', '{{empresa}}', '{{data}}', '{{turno}}', '{{moto}}', '{{servico}}'];
+const VARIABLES = ['{{nome}}', '{{empresa}}', '{{data}}', '{{turno}}', '{{horario}}', '{{moto}}', '{{servico}}'];
 
 export default function MessagesConfigPage() {
   const { settings, loading, saving, saveSettings } = useStoreSettings();
@@ -73,7 +73,8 @@ export default function MessagesConfigPage() {
               .replace(/\{\{nome\}\}/g, ', João')
               .replace(/\{\{empresa\}\}/g, companyName || 'Minha Oficina')
               .replace(/\{\{data\}\}/g, 'quarta-feira, 19/03/2026')
-              .replace(/\{\{turno\}\}/g, 'Manhã')
+              .replace(/\{\{turno\}\}/g, '09:30 (Manhã)')
+              .replace(/\{\{horario\}\}/g, '09:30')
               .replace(/\{\{moto\}\}/g, 'CG 125 2020')
               .replace(/\{\{servico\}\}/g, 'Troca de óleo')
             }

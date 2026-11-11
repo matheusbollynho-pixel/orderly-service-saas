@@ -45,7 +45,7 @@ const DEFAULTS: Omit<StoreSettings, 'id'> = {
 Seu agendamento na *{{empresa}}* foi confirmado! ✅
 
 📅 *Data:* {{data}}
-🕐 *Turno:* {{turno}}
+🕐 *Horário:* {{turno}}
 🏍️ *Moto:* {{moto}}
 🔧 *Serviço:* {{servico}}
 

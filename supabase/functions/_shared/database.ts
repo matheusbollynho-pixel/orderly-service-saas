@@ -3,6 +3,7 @@
  * Helpers de banco de dados compartilhados entre Edge Functions da IA.
  */
 
+import { accentPattern } from './textSearch.ts';
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 export function getSupabaseClient(): SupabaseClient {
@@ -296,7 +297,7 @@ export async function buscarOSPorNome(
   let query = sb
     .from('service_orders')
     .select(`id, client_name, equipment, status, status_oficina, mechanic_id, entry_date, conclusion_date, problem_description, satisfaction_survey_sent_at`)
-    .ilike('client_name', `%${nomeLimpo}%`);
+    .filter('client_name', 'imatch', accentPattern(nomeLimpo));
 
   if (storeId) query = query.eq('store_id', storeId);
 
@@ -389,7 +390,7 @@ export async function buscarProdutoEstoque(
   const palavras = descricao.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
   if (palavras.length === 0) return [];
 
-  const filtros = palavras.map((p) => `name.ilike.%${p}%`).join(',');
+  const filtros = palavras.map((p) => `name.imatch."${accentPattern(p)}"`).join(',');
 
   let query = sb
     .from('inventory_products')
@@ -411,7 +412,7 @@ export async function buscarHistoricoBalcao(
   const palavras = descricao.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
   if (palavras.length === 0) return [];
 
-  const filtros = palavras.map((p) => `descricao.ilike.%${p}%`).join(',');
+  const filtros = palavras.map((p) => `descricao.imatch."${accentPattern(p)}"`).join(',');
 
   let query = sb
     .from('balcao_items')
@@ -453,7 +454,7 @@ export async function buscarHorariosDisponiveis(
   sb: SupabaseClient,
   diasAdiante = 7,
   storeId?: string
-): Promise<{ date: string; turnos_livres: string[] }[]> {
+): Promise<{ date: string; dia_semana: string; turnos_livres: string[]; horarios_ocupados: string[] }[]> {
   // Buscar capacidade máxima configurada
   let storeQuery = sb.from('store_settings').select('max_agendamentos_dia');
   if (storeId) storeQuery = storeQuery.eq('id', storeId);
@@ -461,26 +462,28 @@ export async function buscarHorariosDisponiveis(
   const maxDia: number = (storeData as { max_agendamentos_dia?: number } | null)?.max_agendamentos_dia ?? 10;
   const maxPorTurno = Math.ceil(maxDia / 2);
 
-  const hoje = new Date();
-  const resultado: { date: string; turnos_livres: string[] }[] = [];
+  // "Hoje" no horário de Brasília (o servidor roda em UTC: depois das 21h já seria amanhã)
+  const hojeBR = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  const DIAS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+  const resultado: { date: string; dia_semana: string; turnos_livres: string[]; horarios_ocupados: string[] }[] = [];
 
   for (let i = 1; i <= diasAdiante; i++) {
-    const d = new Date(hoje);
-    d.setDate(d.getDate() + i);
+    const d = new Date(hojeBR);
+    d.setUTCDate(d.getUTCDate() + i);
     // Pular domingos (0)
-    if (d.getDay() === 0) continue;
+    if (d.getUTCDay() === 0) continue;
 
     const dateStr = d.toISOString().split('T')[0];
 
     let apptQuery = sb
       .from('appointments')
-      .select('shift')
+      .select('shift, appointment_time')
       .eq('appointment_date', dateStr)
       .neq('status', 'cancelado');
     if (storeId) apptQuery = apptQuery.eq('store_id', storeId);
     const { data: agendados } = await apptQuery;
 
-    const lista = (agendados as { shift: string }[] | null) || [];
+    const lista = (agendados as { shift: string; appointment_time: string | null }[] | null) || [];
     const countManha = lista.filter((a) => a.shift === 'manha').length;
     const countTarde = lista.filter((a) => a.shift === 'tarde').length;
     const totalDia = lista.length;
@@ -492,11 +495,43 @@ export async function buscarHorariosDisponiveis(
     }
 
     if (livres.length > 0) {
-      resultado.push({ date: dateStr, turnos_livres: livres });
+      const ocupados = lista
+        .map((a) => (a.appointment_time ? a.appointment_time.slice(0, 5) : ''))
+        .filter(Boolean)
+        .sort();
+      resultado.push({ date: dateStr, dia_semana: DIAS[d.getUTCDay()], turnos_livres: livres, horarios_ocupados: ocupados });
     }
   }
 
   return resultado;
+}
+
+// Horário "HH:MM" válido (24h)
+export function horarioValido(time: string | null | undefined): boolean {
+  return !!time && /^([01]\d|2[0-3]):[0-5]\d$/.test(time);
+}
+
+// Antes de 12h = manhã, depois = tarde
+export function turnoDoHorario(time: string): 'manha' | 'tarde' {
+  return Number(time.slice(0, 2)) < 12 ? 'manha' : 'tarde';
+}
+
+// Já existe agendamento (não cancelado) nesse dia e horário?
+export async function horarioOcupado(
+  sb: SupabaseClient,
+  date: string,
+  time: string,
+  storeId?: string | null
+): Promise<boolean> {
+  let q = sb
+    .from('appointments')
+    .select('id')
+    .eq('appointment_date', date)
+    .eq('appointment_time', time)
+    .neq('status', 'cancelado');
+  if (storeId) q = q.eq('store_id', storeId);
+  const { data } = await q.limit(1);
+  return !!data && data.length > 0;
 }
 
 export async function criarAgendamento(
@@ -509,6 +544,7 @@ export async function criarAgendamento(
     status?: string;
     appointment_date: string;
     shift: string;
+    appointment_time?: string | null;
     equipment: string;
     service_description: string;
     mechanic_id?: string | null;
@@ -523,6 +559,7 @@ export async function criarAgendamento(
       store_id: dados.store_id || null,
       appointment_date: dados.appointment_date,
       shift: dados.shift,
+      appointment_time: dados.appointment_time || null,
       equipment: dados.equipment,
       service_description: dados.service_description,
       mechanic_id: dados.mechanic_id || null,

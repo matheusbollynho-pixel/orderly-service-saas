@@ -32,6 +32,9 @@ import {
   buscarHistoricoBalcao,
   buscarHorariosDisponiveis,
   criarAgendamento,
+  horarioValido,
+  turnoDoHorario,
+  horarioOcupado,
   buscarStoreSettings,
   buscarUltimoServicoKeyword,
   buscarLinkSatisfacao,
@@ -182,7 +185,7 @@ const TOOLS = [
   },
   {
     name: 'consultar_agendamentos_disponiveis',
-    description: 'Retorna os dias e turnos disponíveis para agendamento nos próximos 7 dias.',
+    description: 'Retorna os dias e turnos disponíveis para agendamento nos próximos 7 dias, com os horários já ocupados de cada dia (horarios_ocupados).',
     input_schema: {
       type: 'object',
       properties: {},
@@ -199,11 +202,11 @@ const TOOLS = [
         client_phone: { type: 'string' },
         client_id: { type: 'string', description: 'ID do cliente (opcional)' },
         appointment_date: { type: 'string', description: 'Data no formato YYYY-MM-DD' },
-        shift: { type: 'string', enum: ['manha', 'tarde'] },
+        appointment_time: { type: 'string', description: 'Horário combinado com o cliente, formato HH:MM (24h), ex: 09:30 ou 14:00' },
         equipment: { type: 'string', description: 'Moto (marca/modelo/placa)' },
         service_description: { type: 'string', description: 'Descrição do serviço' },
       },
-      required: ['client_name', 'client_phone', 'appointment_date', 'shift', 'equipment', 'service_description'],
+      required: ['client_name', 'client_phone', 'appointment_date', 'appointment_time', 'equipment', 'service_description'],
     },
   },
   {
@@ -388,33 +391,36 @@ async function executarFerramenta(
 
     case 'criar_agendamento': {
       const storeForAppt = await buscarStoreSettings(sb, storeId);
+      const apptDate = input.appointment_date as string;
+      const apptTime = String(input.appointment_time ?? '').trim().slice(0, 5);
+      if (!horarioValido(apptTime)) {
+        return { criado: false, erro: 'horario_invalido', instrucao: 'Pergunte ao cliente um horário no formato HH:MM (ex: 09:30) dentro do horário de funcionamento.' };
+      }
+      if (await horarioOcupado(sb, apptDate, apptTime, storeForAppt.id || storeId)) {
+        return { criado: false, erro: 'horario_ocupado', instrucao: `Já existe agendamento às ${apptTime} nesse dia. Ofereça outro horário ao cliente.` };
+      }
       const result = await criarAgendamento(sb, {
         client_name: input.client_name as string,
         client_phone: input.client_phone as string,
         client_id: (input.client_id as string) || conversationContext.client_id || null,
         store_id: storeForAppt.id || null,
-        appointment_date: input.appointment_date as string,
-        shift: input.shift as string,
+        appointment_date: apptDate,
+        appointment_time: apptTime,
+        shift: turnoDoHorario(apptTime),
         equipment: input.equipment as string,
         service_description: input.service_description as string,
       });
       if (result) {
         const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
         const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+        // A função lê o agendamento (com a loja certa) direto do banco
         fetch(`${supabaseUrl}/functions/v1/send-appointment-confirmation`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${serviceKey}` },
-          body: JSON.stringify({
-            client_name: input.client_name,
-            client_phone: input.client_phone,
-            appointment_date: input.appointment_date,
-            shift: input.shift,
-            equipment: input.equipment,
-            service_description: input.service_description,
-          }),
+          body: JSON.stringify({ appointment_id: result.id }),
         }).catch((e) => console.error('Erro ao enviar confirmação:', e));
       }
-      return { criado: !!result, agendamento_id: result?.id };
+      return { criado: !!result, agendamento_id: result?.id, horario: apptTime };
     }
 
     case 'consultar_store_settings': {
@@ -720,12 +726,14 @@ ${obs ? `- *Observações:* ${obs}` : ''}
 ## FLUXO DE AGENDAMENTO
 - Se o cliente quer agendar, siga este fluxo independente de estar cadastrado ou não:
   1. Pergunte o nome (se ainda não souber)
-  2. Chame consultar_agendamentos_disponiveis para ver os horários livres
-  3. Pergunte qual moto (marca/modelo/placa)
-  4. Pergunte qual serviço
-  5. Mostre um resumo completo e pergunte "Confirma?"
-  6. SOMENTE após o cliente responder SIM → chame criar_agendamento imediatamente
-  7. Após criar, confirme com "✅ Agendamento marcado!"
+  2. Chame consultar_agendamentos_disponiveis para ver os dias livres
+  3. Pergunte o dia e o HORÁRIO que o cliente prefere (ex: 9h, 14h30). O horário precisa estar dentro do horário de funcionamento da loja daquele dia e NÃO pode ser um dos horarios_ocupados do dia — se for, ofereça um horário próximo livre
+  4. Pergunte qual moto (marca/modelo/placa)
+  5. Pergunte qual serviço
+  6. Mostre um resumo completo com dia da semana, data e horário (ex: "quinta, 13/11 às 09:30") e pergunte "Confirma?"
+  7. SOMENTE após o cliente responder SIM → chame criar_agendamento imediatamente, com appointment_time no formato HH:MM
+  8. Se criar_agendamento voltar erro horario_ocupado ou horario_invalido, explique e ofereça outro horário (não diga que marcou)
+  9. Após criar, confirme com "✅ Agendamento marcado!" repetindo dia e horário
 - NUNCA chame criar_agendamento antes do cliente confirmar com SIM
 - NUNCA abandone o fluxo de agendamento só porque o cliente não está cadastrado — use o nome e telefone informados
 - Se o cliente quiser agendar para HOJE: informe que para o mesmo dia é necessário falar diretamente com um atendente para verificar encaixe, e ofereça chamar um atendente aqui mesmo no chat (use escalar_humano)
