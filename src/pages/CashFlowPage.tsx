@@ -1,3 +1,4 @@
+import { matchesSearch } from '@/lib/textSearch';
 import { useState, useEffect, useRef } from 'react';
 import { useCashFlow, useCashFlowPeriod } from '@/hooks/useCashFlow';
 import { useInventory, type InventoryProduct } from '@/hooks/useInventory';
@@ -105,7 +106,7 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder }: CashFlowPag
       const found = q.length === 0
         ? inventoryProducts.filter((p) => p.active).slice(0, 8)
         : inventoryProducts
-            .filter((p) => p.active && (p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)))
+            .filter((p) => p.active && matchesSearch(q, p.name, p.code))
             .slice(0, 8);
       setProductSuggestions(found);
       setShowProductSuggestions(true);
@@ -118,7 +119,7 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder }: CashFlowPag
       const found = q.length === 0
         ? inventoryProducts.filter((p) => p.active).slice(0, 8)
         : inventoryProducts
-            .filter((p) => p.active && (p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)))
+            .filter((p) => p.active && matchesSearch(q, p.name, p.code))
             .slice(0, 8);
       setProductSuggestions(found);
       setShowProductSuggestions(true);

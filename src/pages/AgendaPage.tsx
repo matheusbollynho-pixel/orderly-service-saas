@@ -1,3 +1,4 @@
+import { matchesSearch } from '@/lib/textSearch';
 import { useState, useMemo } from 'react';
 import {
   startOfWeek, endOfWeek, addWeeks, subWeeks,
@@ -140,7 +141,7 @@ export default function AgendaPage({ onConvertToOS }: AgendaPageProps = {}) {
     if (!clientSearch) return [];
     const q = clientSearch.toLowerCase();
     return clients.filter(c =>
-      c.name.toLowerCase().includes(q) || (c.phone ?? '').includes(q)
+      matchesSearch(q, c.name, c.phone)
     ).slice(0, 5);
   }, [clients, clientSearch]);
 

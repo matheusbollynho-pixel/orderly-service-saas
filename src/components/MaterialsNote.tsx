@@ -1,3 +1,4 @@
+import { matchesSearch } from '@/lib/textSearch';
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -75,7 +76,7 @@ export function MaterialsNote({
       const found = q.length === 0
         ? inventoryProducts.filter((p) => p.active).slice(0, 8)
         : inventoryProducts
-            .filter((p) => p.active && (p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)))
+            .filter((p) => p.active && matchesSearch(q, p.name, p.code))
             .slice(0, 8);
       setSuggestions(found);
       setShowSuggestions(true);
@@ -88,7 +89,7 @@ export function MaterialsNote({
       const found = q.length === 0
         ? inventoryProducts.filter((p) => p.active).slice(0, 8)
         : inventoryProducts
-            .filter((p) => p.active && (p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)))
+            .filter((p) => p.active && matchesSearch(q, p.name, p.code))
             .slice(0, 8);
       setSuggestions(found);
       setShowSuggestions(true);

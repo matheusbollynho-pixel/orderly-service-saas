@@ -1,3 +1,4 @@
+import { matchesSearch } from '@/lib/textSearch';
 import { useState, useEffect, useRef } from 'react';
 import { useServiceOrders } from '@/hooks/useServiceOrders';
 import { useMechanics } from '@/hooks/useMechanics';
@@ -563,13 +564,7 @@ Retirada: ${retiradaInfo}`;
     ? (dbSearchResults !== null
         ? dbSearchResults
         : orders.filter((order) => {
-            const query = searchQuery.toLowerCase();
-            return (
-              order.client_name?.toLowerCase().includes(query) ||
-              order.client_phone?.toLowerCase().includes(query) ||
-              order.equipment?.toLowerCase().includes(query) ||
-              order.id?.toLowerCase().includes(query)
-            );
+            return matchesSearch(searchQuery, order.client_name, order.client_phone, order.equipment, order.id);
           }))
     : orders;
 

@@ -1,3 +1,4 @@
+import { matchesSearch } from '@/lib/textSearch';
 import { useMemo, useState } from 'react';
 import { ServiceOrder, PaymentMethod } from '@/types/service-order';
 import { Card, CardContent } from '@/components/ui/card';
@@ -100,8 +101,7 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
 
     if (!q) return list;
     return list.filter(o =>
-      o.client_name.toLowerCase().includes(q) ||
-      o.equipment.toLowerCase().includes(q)
+      matchesSearch(q, o.client_name, o.equipment)
     );
   }, [orders, query, rangeStart, statusFilter]);
 

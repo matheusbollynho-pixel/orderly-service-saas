@@ -1,3 +1,4 @@
+import { matchesSearch } from '@/lib/textSearch';
 import React, { useState, useEffect } from 'react';
 import { useBalcao, type BalcaoOrder } from '@/hooks/useBalcao';
 import { BalcaoNotaDetail } from '@/components/BalcaoNotaDetail';
@@ -65,9 +66,7 @@ export default function VendaBalcaoPage({ initialOrderId, onInitialOrderConsumed
     if (search.trim()) {
       const q = search.toLowerCase();
       return (
-        o.client_name?.toLowerCase().includes(q) ||
-        o.id.toLowerCase().includes(q) ||
-        String(o.numero ?? '').includes(q)
+        matchesSearch(q, o.client_name, o.id, String(o.numero ?? ''))
       );
     }
     return true;

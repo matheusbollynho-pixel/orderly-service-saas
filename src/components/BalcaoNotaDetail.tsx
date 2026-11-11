@@ -1,3 +1,4 @@
+import { matchesSearch } from '@/lib/textSearch';
 import { useState, useRef, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBalcao, type BalcaoOrder, type BalcaoItem, type PaymentEntry } from '@/hooks/useBalcao';
@@ -342,7 +343,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     const found = q.length === 0
       ? activeProducts.slice(0, 8)
       : activeProducts.filter(p =>
-          p.name.toLowerCase().includes(q) || (p.code && p.code.toLowerCase().includes(q))
+          matchesSearch(q, p.name, p.code)
         ).slice(0, 8);
     setSuggestions(found);
     setShowSuggestions(true);
@@ -354,7 +355,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
       const found = q.length === 0
         ? activeProducts.slice(0, 8)
         : activeProducts.filter(p =>
-            p.name.toLowerCase().includes(q) || (p.code && p.code.toLowerCase().includes(q))
+            matchesSearch(q, p.name, p.code)
           ).slice(0, 8);
       setSuggestions(found);
       setShowSuggestions(true);

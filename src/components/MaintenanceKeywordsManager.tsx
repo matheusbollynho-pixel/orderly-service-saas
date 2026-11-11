@@ -1,3 +1,4 @@
+import { matchesSearch } from '@/lib/textSearch';
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -143,8 +144,7 @@ export function MaintenanceKeywordsManager() {
   }
 
   const filteredKeywords = keywords.filter((keyword) =>
-    keyword.keyword.toLowerCase().includes(searchFilter.toLowerCase()) ||
-    (keyword.description || '').toLowerCase().includes(searchFilter.toLowerCase())
+    matchesSearch(searchFilter, keyword.keyword, keyword.description)
   );
 
   return (

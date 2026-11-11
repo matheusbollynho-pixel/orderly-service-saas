@@ -1,3 +1,4 @@
+import { matchesSearch } from '@/lib/textSearch';
 import { useEffect, useMemo, useState } from 'react';
 import { useServiceOrders } from '@/hooks/useServiceOrders';
 import { useMechanics } from '@/hooks/useMechanics';
@@ -155,8 +156,7 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder }: ReportsPageProps
     // Filtro por busca
     if (q) {
       filtered = filtered.filter(item =>
-        item.client_name.toLowerCase().includes(q) ||
-        item.equipment.toLowerCase().includes(q)
+        matchesSearch(q, item.client_name, item.equipment)
       );
     }
     
@@ -172,7 +172,7 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder }: ReportsPageProps
     const q = estoqueQuery.trim().toLowerCase();
     return inventoryProducts.filter(p => {
       if (estoqueCategoria !== 'todas' && p.category !== estoqueCategoria) return false;
-      if (q && !(p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q))) return false;
+      if (q && !matchesSearch(q, p.name, p.code)) return false;
       return true;
     });
   }, [inventoryProducts, estoqueQuery, estoqueCategoria]);

@@ -1,3 +1,4 @@
+import { matchesSearch } from '@/lib/textSearch';
 import { useState, useMemo } from 'react';
 import { useInventory, type InventoryProduct, type InventoryProductInsert, type InventoryMovementInsert } from '@/hooks/useInventory';
 import { Button } from '@/components/ui/button';
@@ -602,11 +603,7 @@ export default function InventoryPage() {
     const q = search.toLowerCase();
     return list.filter(
       (p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.code.toLowerCase().includes(q) ||
-        (p.category ?? '').toLowerCase().includes(q) ||
-        (p.brand ?? '').toLowerCase().includes(q) ||
-        (p.moto_model ?? '').toLowerCase().includes(q)
+        matchesSearch(q, p.name, p.code, p.category, p.brand, p.moto_model)
     );
   }, [products, search, filterLowStock]);
 

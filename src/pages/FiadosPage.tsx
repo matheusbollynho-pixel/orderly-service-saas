@@ -1,3 +1,4 @@
+import { matchesSearch } from '@/lib/textSearch';
 import { useState, useMemo, useRef } from 'react';
 import { useFiados, Fiado, FiadoItem, CreateFiadoInput } from '@/hooks/useFiados';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
@@ -192,9 +193,7 @@ export default function FiadosPage() {
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter(f =>
-        f.client_name.toLowerCase().includes(q) ||
-        (f.client_phone || '').includes(q) ||
-        (f.client_cpf || '').includes(q)
+        matchesSearch(q, f.client_name, f.client_phone, f.client_cpf)
       );
     }
 
@@ -653,8 +652,7 @@ export default function FiadosPage() {
                 {newItems.map((item, idx) => {
                   const filteredProducts = item.desc.length >= 1
                     ? inventoryProducts.filter(p =>
-                        p.name.toLowerCase().includes(item.desc.toLowerCase()) ||
-                        (p.code || '').toLowerCase().includes(item.desc.toLowerCase())
+                        matchesSearch(item.desc, p.name, p.code)
                       ).slice(0, 6)
                     : [];
                   const showDropdown = productDropdownIdx === idx && filteredProducts.length > 0 && !item.inventory_product_id;
