@@ -176,9 +176,12 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder }: CashFlowPag
         inventory_movement_id: movement.id,
       });
     } else {
+      // Item avulso (fora do estoque): o valor digitado é o preço unitário,
+      // multiplica pela quantidade igual ao item de estoque.
+      const qty = parseFloat(formData.quantity) || 1;
       createEntry({
         type: formData.type,
-        amount: parseFloat(formData.amount),
+        amount: qty * (parseFloat(formData.amount) || 0),
         description: formData.description,
         category:
           formData.type === 'saida'
@@ -779,7 +782,7 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder }: CashFlowPag
                     {/* Valor */}
                     <div className="col-span-2">
                       <Label htmlFor="amount">
-                        {selectedProductId ? (
+                        {selectedProductId || (parseFloat(formData.quantity) || 1) !== 1 ? (
                           <>
                             Preço unit.{' '}
                             {formData.quantity && formData.amount && (
