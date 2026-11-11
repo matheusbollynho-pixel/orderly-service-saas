@@ -14,6 +14,7 @@ import {
 } from '@/hooks/useAppointments';
 import { useClients } from '@/hooks/useClients';
 import { useMechanics } from '@/hooks/useMechanics';
+import { useStoreSettings } from '@/hooks/useStoreSettings';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -136,6 +137,7 @@ export default function AgendaPage({ onConvertToOS }: AgendaPageProps = {}) {
   // Todos os agendamentos — para o dashboard
   const { appointments: allAppointments } = useAppointments();
   const { clients, searchClientByPhone } = useClients();
+  const { settings: storeSettings } = useStoreSettings();
   const { mechanics } = useMechanics();
 
   const [pageView, setPageView] = useState<'calendario' | 'dashboard'>('dashboard');
@@ -153,17 +155,19 @@ export default function AgendaPage({ onConvertToOS }: AgendaPageProps = {}) {
     ).slice(0, 5);
   }, [clients, clientSearch]);
 
-  // Outro agendamento (não cancelado) no mesmo dia e horário — só aviso, o dono decide
+  // Horário cheio (já tem o máximo de agendamentos configurado pra esse horário) — só aviso, o dono decide
+  const maxPorHorario = storeSettings?.max_por_horario ?? 1;
   const horarioOcupadoPor = useMemo(() => {
     if (!form.appointment_time || !form.appointment_date) return null;
-    const conflito = allAppointments.find(a =>
+    const mesmos = allAppointments.filter(a =>
       a.id !== editingAppt?.id &&
       a.status !== 'cancelado' &&
       a.appointment_date === form.appointment_date &&
       formatApptTime(a.appointment_time) === form.appointment_time
     );
-    return conflito?.client_name ?? null;
-  }, [allAppointments, form.appointment_time, form.appointment_date, editingAppt]);
+    if (mesmos.length < maxPorHorario) return null;
+    return mesmos.map(a => a.client_name).join(', ');
+  }, [allAppointments, form.appointment_time, form.appointment_date, editingAppt, maxPorHorario]);
 
   function openNewForm(date: Date, shift: AppointmentShift) {
     setEditingAppt(null);
@@ -572,7 +576,7 @@ export default function AgendaPage({ onConvertToOS }: AgendaPageProps = {}) {
               </div>
               {horarioOcupadoPor && (
                 <p className="text-[11px] text-amber-500">
-                  ⚠️ Já tem agendamento nesse horário: {horarioOcupadoPor}
+                  ⚠️ Horário cheio ({maxPorHorario === 1 ? 'aceita 1 por horário' : `aceita ${maxPorHorario} por horário`}): {horarioOcupadoPor}
                 </p>
               )}
             </div>

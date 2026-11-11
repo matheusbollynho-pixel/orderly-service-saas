@@ -94,6 +94,7 @@ export default function ConfigToolsPage() {
   const [storeInstagram, setStoreInstagram] = useState('');
   const [storeOwner, setStoreOwner] = useState('');
   const [maxAgendamentosDia, setMaxAgendamentosDia] = useState(10);
+  const [maxPorHorario, setMaxPorHorario] = useState(1);
   const [aiEnabled, setAiEnabled] = useState(true);
   const [aiNotes, setAiNotes] = useState('');
   const [boletoNotifyPhone1, setBoletoNotifyPhone1] = useState('');
@@ -129,6 +130,7 @@ export default function ConfigToolsPage() {
       setStoreInstagram(settings.store_instagram || '');
       setStoreOwner(settings.store_owner || '');
       setMaxAgendamentosDia(settings.max_agendamentos_dia ?? 10);
+      setMaxPorHorario(settings.max_por_horario ?? 1);
       setAiEnabled(settings.ai_enabled ?? true);
       setAiNotes(settings.ai_notes || '');
       setBoletoNotifyPhone1((settings as any).boleto_notify_phone_1 || '');
@@ -165,6 +167,7 @@ export default function ConfigToolsPage() {
       store_instagram: storeInstagram,
       store_owner: storeOwner,
       max_agendamentos_dia: maxAgendamentosDia,
+      max_por_horario: maxPorHorario,
       ai_enabled: aiEnabled,
       ai_notes: aiNotes,
       boleto_notify_phone_1: boletoNotifyPhone1 || null,
@@ -370,6 +373,21 @@ export default function ConfigToolsPage() {
                   className="w-full p-2 border border-white/20 rounded text-sm bg-black/30 text-neutral-200"
                 />
                 <p className="text-xs text-neutral-500">Máximo de agendamentos aceitos por dia (distribuídos entre manhã e tarde)</p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs text-neutral-400 font-medium">{VEHICLES_CAP} no mesmo horário</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={maxPorHorario}
+                  onChange={e => setMaxPorHorario(Math.max(1, Number(e.target.value) || 1))}
+                  placeholder="Ex: 1"
+                  title={`${VEHICLES_CAP} aceitos no mesmo horário`}
+                  className="w-full p-2 border border-white/20 rounded text-sm bg-black/30 text-neutral-200"
+                />
+                <p className="text-xs text-neutral-500">Quantos agendamentos aceitar no mesmo horário (ex: 14:30). Use o número de mecânicos que recebem ao mesmo tempo. A IA respeita esse limite.</p>
               </div>
               {/* Termos de Assinatura (Inspeção e Entrega) */}
               <div className="border border-white/10 rounded-lg p-3 space-y-3 bg-black/20">

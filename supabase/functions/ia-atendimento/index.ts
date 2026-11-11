@@ -34,7 +34,7 @@ import {
   criarAgendamento,
   horarioValido,
   turnoDoHorario,
-  horarioOcupado,
+  contarNoHorario,
   buscarStoreSettings,
   buscarUltimoServicoKeyword,
   buscarLinkSatisfacao,
@@ -190,6 +190,18 @@ const TOOLS = [
       type: 'object',
       properties: {},
       required: [],
+    },
+  },
+  {
+    name: 'verificar_horario',
+    description: 'Verifica se um dia + horário ainda tem vaga. Chamar ASSIM QUE o cliente disser o dia e o horário, antes de pedir moto/serviço.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        appointment_date: { type: 'string', description: 'Data no formato YYYY-MM-DD' },
+        appointment_time: { type: 'string', description: 'Horário HH:MM (24h), ex: 14:30' },
+      },
+      required: ['appointment_date', 'appointment_time'],
     },
   },
   {
@@ -389,6 +401,18 @@ async function executarFerramenta(
       return { disponiveis };
     }
 
+    case 'verificar_horario': {
+      const store = await buscarStoreSettings(sb, storeId);
+      const date = String(input.appointment_date ?? '');
+      const time = String(input.appointment_time ?? '').trim().slice(0, 5);
+      if (!horarioValido(time)) return { livre: false, erro: 'horario_invalido' };
+      const n = await contarNoHorario(sb, date, time, store.id || storeId);
+      const livre = n < store.max_por_horario;
+      return livre
+        ? { livre: true, horario: time }
+        : { livre: false, erro: 'horario_ocupado', instrucao: `Às ${time} desse dia já está cheio. Ofereça um horário próximo (ex: 30 min antes ou depois) e verifique de novo.` };
+    }
+
     case 'criar_agendamento': {
       const storeForAppt = await buscarStoreSettings(sb, storeId);
       const apptDate = input.appointment_date as string;
@@ -396,7 +420,7 @@ async function executarFerramenta(
       if (!horarioValido(apptTime)) {
         return { criado: false, erro: 'horario_invalido', instrucao: 'Pergunte ao cliente um horário no formato HH:MM (ex: 09:30) dentro do horário de funcionamento.' };
       }
-      if (await horarioOcupado(sb, apptDate, apptTime, storeForAppt.id || storeId)) {
+      if ((await contarNoHorario(sb, apptDate, apptTime, storeForAppt.id || storeId)) >= storeForAppt.max_por_horario) {
         return { criado: false, erro: 'horario_ocupado', instrucao: `Já existe agendamento às ${apptTime} nesse dia. Ofereça outro horário ao cliente.` };
       }
       const result = await criarAgendamento(sb, {
@@ -727,7 +751,7 @@ ${obs ? `- *Observações:* ${obs}` : ''}
 - Se o cliente quer agendar, siga este fluxo independente de estar cadastrado ou não:
   1. Pergunte o nome (se ainda não souber)
   2. Chame consultar_agendamentos_disponiveis para ver os dias livres
-  3. Pergunte o dia e o HORÁRIO que o cliente prefere (ex: 9h, 14h30). O horário precisa estar dentro do horário de funcionamento da loja daquele dia e NÃO pode ser um dos horarios_ocupados do dia — se for, ofereça um horário próximo livre
+  3. Pergunte o dia e o HORÁRIO que o cliente prefere (ex: 9h, 14h30). O horário precisa estar dentro do horário de funcionamento da loja daquele dia. ASSIM QUE o cliente disser dia e horário, chame verificar_horario ANTES de continuar. Se voltar livre=false, diga que esse horário já está cheio e ofereça um horário próximo (nunca aceite um horário sem verificar)
   4. Pergunte qual moto (marca/modelo/placa)
   5. Pergunte qual serviço
   6. Mostre um resumo completo com dia da semana, data e horário (ex: "quinta, 13/11 às 09:30") e pergunte "Confirma?"
@@ -803,7 +827,7 @@ Quando a OS tiver status "concluida" (pronta para retirada), SEMPRE verifique os
   - Se o cliente quiser PIX: peça o valor e chame gerar_pix_os
 - Para "concluida_entregue": a moto já foi entregue. Não mencione pagamento pendente.
 
-Hoje é ${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}.`;
+Hoje é ${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', timeZone: 'America/Bahia' })}.`;
 }
 
 // ============================================================

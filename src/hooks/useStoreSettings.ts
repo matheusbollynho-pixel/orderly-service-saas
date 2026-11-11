@@ -16,6 +16,7 @@ export interface StoreSettings {
   whatsapp_birthday_template: string;
   whatsapp_balcao_followup_template: string;
   max_agendamentos_dia: number;
+  max_por_horario: number; // motos aceitas no mesmo horário
   ai_enabled: boolean;
   ai_notes: string;
   boleto_notify_phone_1?: string | null;
@@ -74,6 +75,7 @@ Pra comemorar, você ganhou:
 
 *{{empresa}}* — cuidando da sua moto como você merece!`,
   max_agendamentos_dia: 10,
+  max_por_horario: 1,
   ai_enabled: true,
   ai_notes: '',
   whatsapp_balcao_followup_template: `Olá{{nome}}! 👋

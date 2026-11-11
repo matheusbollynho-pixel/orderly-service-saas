@@ -456,10 +456,11 @@ export async function buscarHorariosDisponiveis(
   storeId?: string
 ): Promise<{ date: string; dia_semana: string; turnos_livres: string[]; horarios_ocupados: string[] }[]> {
   // Buscar capacidade máxima configurada
-  let storeQuery = sb.from('store_settings').select('max_agendamentos_dia');
+  let storeQuery = sb.from('store_settings').select('max_agendamentos_dia, max_por_horario');
   if (storeId) storeQuery = storeQuery.eq('id', storeId);
   const { data: storeData } = await storeQuery.limit(1).maybeSingle();
   const maxDia: number = (storeData as { max_agendamentos_dia?: number } | null)?.max_agendamentos_dia ?? 10;
+  const maxPorHorario: number = (storeData as { max_por_horario?: number } | null)?.max_por_horario ?? 1;
   const maxPorTurno = Math.ceil(maxDia / 2);
 
   // "Hoje" no horário de Brasília (o servidor roda em UTC: depois das 21h já seria amanhã)
@@ -495,9 +496,16 @@ export async function buscarHorariosDisponiveis(
     }
 
     if (livres.length > 0) {
-      const ocupados = lista
-        .map((a) => (a.appointment_time ? a.appointment_time.slice(0, 5) : ''))
-        .filter(Boolean)
+      // Só horários que já bateram o limite de motos por horário da loja
+      const porHorario = new Map<string, number>();
+      for (const a of lista) {
+        if (!a.appointment_time) continue;
+        const h = a.appointment_time.slice(0, 5);
+        porHorario.set(h, (porHorario.get(h) || 0) + 1);
+      }
+      const ocupados = [...porHorario.entries()]
+        .filter(([, n]) => n >= maxPorHorario)
+        .map(([h]) => h)
         .sort();
       resultado.push({ date: dateStr, dia_semana: DIAS[d.getUTCDay()], turnos_livres: livres, horarios_ocupados: ocupados });
     }
@@ -516,22 +524,22 @@ export function turnoDoHorario(time: string): 'manha' | 'tarde' {
   return Number(time.slice(0, 2)) < 12 ? 'manha' : 'tarde';
 }
 
-// Já existe agendamento (não cancelado) nesse dia e horário?
-export async function horarioOcupado(
+// Quantos agendamentos (não cancelados) já existem nesse dia e horário
+export async function contarNoHorario(
   sb: SupabaseClient,
   date: string,
   time: string,
   storeId?: string | null
-): Promise<boolean> {
+): Promise<number> {
   let q = sb
     .from('appointments')
-    .select('id')
+    .select('id', { count: 'exact', head: true })
     .eq('appointment_date', date)
     .eq('appointment_time', time)
     .neq('status', 'cancelado');
   if (storeId) q = q.eq('store_id', storeId);
-  const { data } = await q.limit(1);
-  return !!data && data.length > 0;
+  const { count } = await q;
+  return count ?? 0;
 }
 
 export async function criarAgendamento(
@@ -593,6 +601,7 @@ export interface StoreInfo {
   ai_notes: string | null;
   ai_enabled: boolean | null;
   max_agendamentos_dia: number;
+  max_por_horario: number;
   asaas_api_key: string | null;
   boleto_notify_phone_1: string | null;
   boleto_notify_phone_2: string | null;
@@ -602,7 +611,7 @@ export interface StoreInfo {
 export async function buscarStoreSettings(sb: SupabaseClient, storeId?: string): Promise<StoreInfo> {
   let query = sb
     .from('store_settings')
-    .select('id, company_name, store_address, store_phone, opening_hours, payment_methods, ai_notes, max_agendamentos_dia, google_maps_url, asaas_api_key, boleto_notify_phone_1, boleto_notify_phone_2, ai_stock_search_enabled');
+    .select('id, company_name, store_address, store_phone, opening_hours, payment_methods, ai_notes, max_agendamentos_dia, max_por_horario, google_maps_url, asaas_api_key, boleto_notify_phone_1, boleto_notify_phone_2, ai_stock_search_enabled');
 
   if (storeId) {
     query = query.eq('id', storeId);
@@ -645,6 +654,7 @@ export async function buscarStoreSettings(sb: SupabaseClient, storeId?: string):
     ai_notes: d?.ai_notes || null,
     ai_enabled: null,
     max_agendamentos_dia: d?.max_agendamentos_dia ?? 10,
+    max_por_horario: d?.max_por_horario ?? 1,
     asaas_api_key: d?.asaas_api_key || null,
     boleto_notify_phone_1: d?.boleto_notify_phone_1 || null,
     boleto_notify_phone_2: d?.boleto_notify_phone_2 || null,
