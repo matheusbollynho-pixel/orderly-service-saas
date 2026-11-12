@@ -1171,7 +1171,7 @@ const renderDeliverySection = () => {
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={onDelete} className="bg-destructive hover:bg-destructive/90">
+                  <AlertDialogAction onClick={onDelete} className="border-2 border-destructive bg-transparent text-destructive hover:bg-destructive/10">
                     Excluir
                   </AlertDialogAction>
                 </AlertDialogFooter>

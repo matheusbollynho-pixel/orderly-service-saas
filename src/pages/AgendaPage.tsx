@@ -738,7 +738,7 @@ export default function AgendaPage({ onConvertToOS }: AgendaPageProps = {}) {
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => { deleteAppointment(editingAppt.id); setShowForm(false); }} className="bg-destructive">
+                    <AlertDialogAction onClick={() => { deleteAppointment(editingAppt.id); setShowForm(false); }} className="border-2 border-destructive bg-transparent text-destructive hover:bg-destructive/10">
                       Remover
                     </AlertDialogAction>
                   </AlertDialogFooter>

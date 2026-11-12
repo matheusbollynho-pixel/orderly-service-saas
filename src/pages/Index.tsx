@@ -592,7 +592,10 @@ Retirada: ${retiradaInfo}`;
           <div className="flex items-center justify-between">
             <div className="flex-1"></div>
             <div className="flex items-center justify-center flex-1">
-              <img src={import.meta.env.VITE_LOGO_PATH || '/bandara-logo.png'} alt="Logo" className="h-32 w-auto" />
+              {/* Logos são quadrados com o desenho numa faixa no meio: mostra a faixa e corta a borda vazia (topo baixo no celular) */}
+              <div className="h-14 overflow-hidden flex items-center justify-center">
+                <img src={import.meta.env.VITE_LOGO_PATH || '/bandara-logo.png'} alt="Logo" className="h-24 w-auto max-w-none" />
+              </div>
             </div>
             <div className="flex-1 flex justify-end items-center gap-2">
               {isAdmin && (
