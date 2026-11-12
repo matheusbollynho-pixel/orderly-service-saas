@@ -140,7 +140,7 @@ export function useFiados() {
     // Quando origem é balcão/manual: insere no cash_flow direto
     if (fiado.origin_type === 'os' && fiado.origin_id) {
       // Registra o valor parcial ou total pago na OS (trigger cria cash_flow)
-      await supabase.from('payments').insert({
+      const { error: payErr } = await supabase.from('payments').insert({
         store_id: storeId!,
         order_id: fiado.origin_id,
         amount,
@@ -148,6 +148,7 @@ export function useFiados() {
         method,
         notes: notes || `Fiado recebido - ${fiado.client_name || 'Cliente'}`,
       });
+      if (payErr) toast.error(`Pagamento anotado no fiado, mas NÃO entrou na OS/caixa: ${payErr.message}`);
       // Só marca como concluída e entregue quando o fiado estiver totalmente quitado
       if (newStatus === 'pago') {
         await supabase.from('service_orders')
@@ -160,15 +161,19 @@ export function useFiados() {
       if (newStatus === 'pago' && fiado.origin_type === 'balcao' && fiado.origin_id) {
         await supabase.from('balcao_orders').update({ status: 'finalizada' }).eq('id', fiado.origin_id);
       }
-      await supabase.from('cash_flow').insert([{
+      // Antes gravava type 'devolucao', que o caixa não aceita: o lançamento sumia sem aviso.
+      const hoje = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Fortaleza' }).format(new Date());
+      const { error: caixaErr } = await supabase.from('cash_flow').insert([{
         store_id: storeId!,
-        type: 'devolucao',
+        type: 'entrada',
+        category: 'Fiado',
         description: `Fiado recebido - ${fiado.client_name || 'Cliente'}`,
         amount,
         payment_method: method,
-        date: new Date().toISOString().split('T')[0],
+        date: hoje,
         notes: notes || null,
       }]);
+      if (caixaErr) toast.error(`Pagamento anotado no fiado, mas NÃO entrou no caixa: ${caixaErr.message}`);
     }
 
     toast.success('Pagamento registrado!');
