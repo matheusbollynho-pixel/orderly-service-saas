@@ -515,7 +515,11 @@ function DialogInformar({ e, modeloInicial, enc, cot, onFechar }: {
   const precoN = num(preco);
   const totalN = precoN != null ? precoN * Number(e.quantidade) : null;
   const pago = Number(e.pago_adiantado || 0);
-  const margem = precoN != null && custo?.preco ? Math.round(((precoN - custo.preco) / custo.preco) * 100) : null;
+  const [freteTxt, setFreteTxt] = useState('');
+  const freteN = num(freteTxt) ?? 0;
+  const custoTotal = custo?.preco != null ? custo.preco + (Number.isNaN(freteN) ? 0 : freteN) : null;
+  const margem = precoN != null && custoTotal ? Math.round(((precoN - custoTotal) / custoTotal) * 100) : null;
+  const lucro = precoN != null && custoTotal != null ? precoN - custoTotal : null;
 
   const rascunho = { ...e, preco_venda: precoN, prazo_texto: prazo, pago_adiantado: Math.round(pago * 100) / 100 };
   const mensagem = texto ?? mensagemCliente(modelo, rascunho, incluirValor);
@@ -526,7 +530,7 @@ function DialogInformar({ e, modeloInicial, enc, cot, onFechar }: {
       id: e.id,
       preco_venda: precoN != null && !Number.isNaN(precoN) ? precoN : e.preco_venda,
       prazo_texto: prazo.trim() || null,
-      custo: custo?.preco ?? e.custo,
+      custo: custoTotal ?? e.custo,
     };
     try {
       await enc.atualizar.mutateAsync(campos);
@@ -546,7 +550,7 @@ function DialogInformar({ e, modeloInicial, enc, cot, onFechar }: {
       id: e.id,
       preco_venda: precoN != null && !Number.isNaN(precoN) ? precoN : e.preco_venda,
       prazo_texto: prazo.trim() || null,
-      custo: custo?.preco ?? e.custo,
+      custo: custoTotal ?? e.custo,
     };
     try {
       await enc.atualizar.mutateAsync(campos);
@@ -596,6 +600,8 @@ function DialogInformar({ e, modeloInicial, enc, cot, onFechar }: {
             </div>
           )}
 
+          {custo && <QuadroFrete custo={custo} cot={cot} itemId={e.cotacao_item_id} onFrete={(v) => { setFreteTxt(v); setTexto(null); }} freteTxt={freteTxt} />}
+
           {!custo && e.cotacao_item_id && (
             anotar
               ? <FormPrecoManual itemId={e.cotacao_item_id} cot={cot} onFim={() => setAnotar(false)} />
@@ -606,7 +612,11 @@ function DialogInformar({ e, modeloInicial, enc, cot, onFechar }: {
             <div>
               <Label>Preço pro cliente (unidade)</Label>
               <Input inputMode="decimal" value={preco} onChange={(ev) => { setPreco(ev.target.value); setTexto(null); }} placeholder="150,00" />
-              {verCusto && margem != null && <p className={`text-xs mt-1 ${margem < 0 ? 'text-red-600' : 'text-muted-foreground'}`}>Margem: {margem}%</p>}
+              {verCusto && margem != null && (
+                <p className={`text-xs mt-1 ${margem < 0 ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}>
+                  Lucro {brl(lucro)} ({margem}%){freteN > 0 ? ' já tirando o frete' : ''}{margem < 0 ? ': no vermelho!' : ''}
+                </p>
+              )}
             </div>
             <div>
               <Label>Prazo</Label>
@@ -814,5 +824,79 @@ function DialogDesistir({ e, enc, onFechar }: { e: Encomenda; enc: Enc; onFechar
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ------------------------------------------------------------------ Frete da opção escolhida
+
+function QuadroFrete({ custo, cot, itemId, freteTxt, onFrete }: {
+  custo: CotacaoPreco; cot: Cot; itemId: string | null; freteTxt: string; onFrete: (v: string) => void;
+}) {
+  const fmt = (n: number) => n.toFixed(2).replace('.', ',');
+
+  // Compra pela internet: frete informado no preço
+  if (custo.fonte === 'internet') {
+    return (
+      <div className="rounded-md border p-2 space-y-2 text-xs">
+        <p className="font-medium">🚚 Entrega (internet)</p>
+        <p>{custo.frete != null ? <>Frete até a loja: <b>{brl(custo.frete)}</b></> : 'Frete não informado.'}</p>
+        <div className="flex gap-2 items-center">
+          {custo.frete != null && <Button size="sm" variant="outline" onClick={() => onFrete(fmt(custo.frete!))}>Usar {brl(custo.frete)}</Button>}
+          <Input className="h-8 w-32" inputMode="decimal" placeholder="Frete R$" value={freteTxt} onChange={(ev) => onFrete(ev.target.value)} />
+        </div>
+      </div>
+    );
+  }
+
+  const rep = cot.representantes.find((r) => r.id === custo.representante_id);
+  if (!rep) return null;
+
+  // Peças já escolhidas com esse representante (pra dividir o frete e ver o pedido mínimo)
+  const escolhidas = cot.itens.filter((i) => i.status === 'pendente' && i.pedido_preco_id && (() => {
+    const pp = cot.precos.find((x) => x.id === i.pedido_preco_id);
+    return pp?.representante_id === rep.id;
+  })());
+  const contaEssa = itemId && !escolhidas.some((i) => i.id === itemId) ? 1 : 0;
+  const nPecas = escolhidas.length + contaEssa;
+  const somaPedido = escolhidas.reduce((s, i) => {
+    const pp = cot.precos.find((x) => x.id === i.pedido_preco_id);
+    return s + (pp?.preco ?? 0) * Number(i.quantidade);
+  }, 0) + (contaEssa ? custo.preco ?? 0 : 0);
+
+  const gratis = proximaEntregaGratis(rep);
+  const dataGratis = gratis ? `${['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'][gratis.getDay()]} ${String(gratis.getDate()).padStart(2, '0')}/${String(gratis.getMonth() + 1).padStart(2, '0')}` : null;
+  const nomeExtra = rep.entrega_extra ? { van: 'van', onibus: 'ônibus', transportadora: 'transportadora', outro: 'entrega' }[rep.entrega_extra] : null;
+  const porPeca = rep.frete_extra_valor != null && nPecas > 0 ? rep.frete_extra_valor / nPecas : null;
+  const faltaMinimo = rep.pedido_minimo != null ? rep.pedido_minimo - somaPedido : null;
+
+  return (
+    <div className="rounded-md border p-2 space-y-1 text-xs">
+      <p className="font-medium">🚚 Entrega com {rep.nome}</p>
+      {dataGratis && <p>• Grátis: <b>{dataGratis}</b></p>}
+      {rep.pedido_minimo != null && (
+        <p>• Grátis acima de {brl(rep.pedido_minimo)}: já tem <b>{brl(somaPedido)}</b> escolhido com ele
+          {faltaMinimo != null && faltaMinimo > 0 ? <> (faltam <b>{brl(faltaMinimo)}</b>)</> : <span className="text-green-600"> ✓ frete grátis</span>}</p>
+      )}
+      {nomeExtra && (
+        <p>• {dataGratis || rep.pedido_minimo != null ? 'Antes disso / abaixo do mínimo' : 'Entrega'}: {nomeExtra}{' '}
+          {rep.frete_extra_valor != null
+            ? <><b>{brl(rep.frete_extra_valor)}</b>{nPecas > 1 ? <> · {nPecas} peças escolhidas com ele = <b>{brl(porPeca)}</b> por peça</> : null}</>
+            : '(valor varia, pergunte)'}
+        </p>
+      )}
+      {!dataGratis && rep.pedido_minimo == null && !nomeExtra && <p className="text-muted-foreground">Entrega não cadastrada no representante.</p>}
+      <div className="flex flex-wrap gap-2 items-center pt-1">
+        <span>Frete dessa peça:</span>
+        {(dataGratis || (faltaMinimo != null && faltaMinimo <= 0)) && (
+          <Button size="sm" variant="outline" className="h-7" onClick={() => onFrete('')}>Grátis{dataGratis ? ` (esperar ${dataGratis})` : ''}</Button>
+        )}
+        {porPeca != null && (
+          <Button size="sm" variant="outline" className="h-7" onClick={() => onFrete(fmt(porPeca))}>
+            {nomeExtra} {nPecas > 1 ? 'dividido' : ''}: {brl(porPeca)}
+          </Button>
+        )}
+        <Input className="h-7 w-28" inputMode="decimal" placeholder="R$" value={freteTxt} onChange={(ev) => onFrete(ev.target.value)} />
+      </div>
+    </div>
   );
 }
