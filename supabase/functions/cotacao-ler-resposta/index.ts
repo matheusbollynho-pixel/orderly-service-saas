@@ -70,7 +70,9 @@ Para cada peça mencionada na resposta, diga a qual número da lista ela corresp
 Regras:
 - Ignore acentos, maiúsculas e abreviações comuns: "camara" = "câmara", "relacao" = "relação", "acel" = "acelerador", "escap" = "escapamento". Isso vale pra lista, pro dicionário e pra resposta.
 - Errar a peça custa caro (peça errada chega e tem que devolver). Na dúvida, marque "duvida" e explique. Nunca chute.
-- Se a peça é parecida mas diferente da pedida (outro lado, outro cabo, só parte do kit, ponteira em vez de escape), marque "nao_serve".
+- Se a peça é parecida mas diferente da pedida (outro lado, outro cabo, só parte do kit, ponteira/protetor em vez de escape), marque "nao_serve" e coloque em item_numero o número da peça da lista que ela PARECE (pra loja ver que esse representante não tem a certa).
+- Peça que não tem nada a ver com nenhum item da lista (ex: óleo quando a lista não pede óleo): item_numero null.
+- Regras do dicionário que dizem que um texto do representante é uma peça da lista valem também pra mesma descrição com OUTRA MARCA.
 - Se a medida/modelo não está no dicionário e não dá pra ter certeza, marque "duvida".
 - Um mesmo item pode ter várias opções de marca; cada opção é uma linha.
 - Se o representante disse que não tem, marque "nao_tem".
@@ -233,6 +235,28 @@ Deno.serve(async (req) => {
       await supabaseAdmin.from('cotacao_respostas').delete().eq('id', resposta.id)
       return json({ error: 'Erro ao salvar os preços.' }, 500)
     }
+  }
+
+  // Resposta nova do MESMO representante substitui os preços antigos dele pras
+  // mesmas peças (tabela muda todo mês). Preço já escolhido pra pedido fica.
+  const itensNovos = [...new Set(linhas.map((l) => l.item_id).filter((x): x is string => !!x))]
+  if (representanteId && itensNovos.length > 0) {
+    const { data: escolhidos } = await supabaseAdmin
+      .from('cotacao_itens')
+      .select('pedido_preco_id')
+      .eq('store_id', storeId)
+      .not('pedido_preco_id', 'is', null)
+    const protegidos = (escolhidos ?? []).map((e) => e.pedido_preco_id as string)
+    let del = supabaseAdmin
+      .from('cotacao_precos')
+      .delete()
+      .eq('store_id', storeId)
+      .eq('representante_id', representanteId)
+      .in('item_id', itensNovos)
+      .neq('resposta_id', resposta.id)
+    if (protegidos.length) del = del.not('id', 'in', `(${protegidos.join(',')})`)
+    const { error: delErr } = await del
+    if (delErr) console.error('Erro ao substituir preços antigos:', delErr)
   }
 
   return json({

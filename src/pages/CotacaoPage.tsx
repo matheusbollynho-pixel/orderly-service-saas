@@ -56,7 +56,10 @@ export default function CotacaoPage() {
         </TabsList>
         <TabsContent value="faltas"><AbaFaltas cot={cot} /></TabsContent>
         <TabsContent value="pedir"><AbaPedir cot={cot} /></TabsContent>
-        <TabsContent value="resposta"><AbaResposta cot={cot} irParaFaltas={() => setAba('faltas')} /></TabsContent>
+        {/* forceMount: não perde o representante/texto/arquivo ao trocar de aba */}
+        <TabsContent value="resposta" forceMount className="data-[state=inactive]:hidden">
+          <AbaResposta cot={cot} irParaFaltas={() => setAba('faltas')} />
+        </TabsContent>
         <TabsContent value="pedidos"><AbaPedidos cot={cot} /></TabsContent>
         <TabsContent value="reps"><AbaRepresentantes cot={cot} /></TabsContent>
         <TabsContent value="dicionario"><AbaDicionario cot={cot} /></TabsContent>
@@ -240,7 +243,14 @@ function OpcaoPreco({ p, item, cot, escolhido }: { p: CotacaoPreco; item: Cotaca
   const confirmar = () => {
     cot.atualizarPreco.mutate({ id: p.id, situacao: 'cotado', confirmado: true });
     if (p.texto_original && p.fonte === 'representante') {
-      cot.adicionarRegra.mutate(`Quando ${fonte} escreve "${p.texto_original.slice(0, 200)}", é a peça que a loja chama de "${item.texto}".`);
+      // Tira a marca do fim ("... - VAZ") pra regra valer pra qualquer marca
+      let desc = p.texto_original.slice(0, 200).trim();
+      if (p.marca) {
+        const m = p.marca.trim().toLowerCase();
+        const sufixo = desc.toLowerCase().lastIndexOf(m);
+        if (sufixo > 0 && sufixo + m.length >= desc.length - 1) desc = desc.slice(0, sufixo).replace(/[\s\-–·|,]+$/, '');
+      }
+      cot.adicionarRegra.mutate(`"${desc}" (de qualquer marca) é a peça que a loja chama de "${item.texto}".`);
     }
   };
 
@@ -458,7 +468,12 @@ function AbaResposta({ cot, irParaFaltas }: { cot: Cot; irParaFaltas: () => void
     );
   };
 
-  const soltas = cot.precos.filter((p) => !p.item_id && p.resposta_id && (ultima ? p.resposta_id === ultima : true)).slice(0, 30);
+  const [verOutras, setVerOutras] = useState(false);
+  const todasSoltas = cot.precos.filter((p) => !p.item_id && p.resposta_id && (ultima ? p.resposta_id === ultima : true));
+  // Dúvida/cotado sem peça pede atenção; "não serve"/"não tem" sem peça (óleo, vela...) fica escondido
+  const importantes = todasSoltas.filter((p) => p.situacao === 'duvida' || p.situacao === 'cotado');
+  const outras = todasSoltas.filter((p) => p.situacao === 'nao_serve' || p.situacao === 'nao_tem');
+  const soltas = [...importantes, ...(verOutras ? outras : [])].slice(0, 40);
 
   return (
     <div className="space-y-4 mt-3">
@@ -504,6 +519,13 @@ function AbaResposta({ cot, irParaFaltas }: { cot: Cot; irParaFaltas: () => void
 
       {ultima && (
         <Button variant="outline" className="w-full" onClick={irParaFaltas}>Ver a comparação na aba Faltas</Button>
+      )}
+
+      {outras.length > 0 && (
+        <Button variant="ghost" size="sm" onClick={() => setVerOutras((v) => !v)}>
+          {verOutras ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
+          {verOutras ? 'Esconder' : 'Ver'} {outras.length} peça(s) da resposta que não estão na lista
+        </Button>
       )}
 
       {soltas.length > 0 && (
