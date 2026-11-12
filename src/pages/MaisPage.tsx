@@ -1,4 +1,6 @@
 // v2: área "Mais" com tudo o que não é do dia a dia, agrupado, e a busca "Onde está?".
+// Configurações (WhatsApp, Asaas, IA, logins, assinatura) NÃO entram aqui de propósito (decisão do dono, 12/11):
+// ficam só na engrenagem do topo, que recarrega a página e pede o login de novo.
 import { useMemo, useState } from 'react';
 import { ChevronRight, Lock, LogOut, Search, Smartphone } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -17,13 +19,6 @@ const GRUPOS: Item[] = [
   { tipo: 'tela', view: 'pos-venda', grupo: 'Clientes' },
   { tipo: 'tela', view: 'satisfacao', grupo: 'Clientes' },
   { tipo: 'tela', view: 'mechanics', grupo: 'Equipe' },
-  { tipo: 'link', rota: '/config', grupo: 'Ajustes', nome: 'Configurações da loja', busca: 'configuracao dados loja horario termos', soDono: true },
-  { tipo: 'link', rota: '/config?aba=mensagens', grupo: 'Ajustes', nome: 'WhatsApp e mensagens', busca: 'whatsapp conexao qr mensagem modelo', soDono: true },
-  { tipo: 'link', rota: '/config?aba=cobranca', grupo: 'Ajustes', nome: 'Cobrança online (Asaas)', busca: 'asaas pix boleto cartao link cobranca', soDono: true },
-  { tipo: 'link', rota: '/config?aba=ia', grupo: 'Ajustes', nome: 'Atendente IA', busca: 'ia inteligencia artificial robo atendimento 24h', soDono: true },
-  { tipo: 'link', rota: '/config?aba=ferramentas', grupo: 'Ajustes', nome: 'Reabrir OS entregue', busca: 'reabrir os desfazer entrega ferramentas', soDono: true },
-  { tipo: 'link', rota: '/colaboradores', grupo: 'Ajustes', nome: 'Logins e permissões', busca: 'colaborador login acesso permissao convidar', soDono: true },
-  { tipo: 'link', rota: '/minha-conta', grupo: 'Ajustes', nome: 'Assinatura SpeedSeek', busca: 'assinatura plano mensalidade pagar conta', soDono: true },
 ];
 
 // Telas de outras áreas que a busca também encontra
@@ -60,7 +55,12 @@ export default function MaisPage({ acessoDe, goTo, abrirRota, isOwner, telaInici
         texto: `${TELAS[v].nome} ${TELAS[v].busca ?? ''} ${LOCAL[v] ?? ''}`,
       })),
     ];
-    return todos.filter((t) => q.split(/\s+/).every((p) => semAcento(t.texto).includes(p)));
+    const achados = todos.filter((t) => q.split(/\s+/).every((p) => semAcento(t.texto).includes(p)));
+    // Configurações não têm atalho aqui: só avisa onde ficam (abre recarregando, então pede login)
+    if (/config|whats|asaas|cobranca|\bia\b|robo|login|acesso|permiss|colaborador|assinatura|plano|mensalidade|termo|horario|reabrir|qr/.test(q)) {
+      achados.unshift({ nome: 'Configurações da loja', onde: 'Fica na engrenagem ⚙ no topo da tela (pede login)', abrir: () => { window.location.href = '/config'; }, travado: false, texto: '' });
+    }
+    return achados;
   }, [busca, visiveis, acessoDe, goTo, abrirRota]);
 
   const grupos = useMemo(() => {

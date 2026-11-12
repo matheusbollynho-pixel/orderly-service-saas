@@ -94,8 +94,8 @@ export function MechanicsPage() {
         ) : (
           <div className="space-y-3">
             {mechanics.map((m) => (
-              <div key={m.id} className={`flex items-center justify-between p-4 border rounded-xl transition-opacity ${
-                m.active ? '' : 'opacity-50 bg-gray-50'
+              <div key={m.id} className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 border rounded-xl transition-opacity ${
+                m.active ? '' : 'opacity-50 bg-muted/40'
               }`}>
                 <div className="flex items-center gap-3">
                   <Avatar className="h-12 w-12">
@@ -109,7 +109,7 @@ export function MechanicsPage() {
                     <p className="text-sm text-muted-foreground">Comissão: {m.commission_rate}%</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2">
                   <div className="flex items-center gap-2">
                     <span className="text-sm">Ativo</span>
                     <Switch checked={m.active} onCheckedChange={(v) => updateMechanic({ id: m.id, active: Boolean(v) })} />
@@ -218,8 +218,8 @@ export function MechanicsPage() {
         ) : (
           <div className="space-y-3">
             {members.map((m) => (
-              <div key={m.id} className={`flex items-center justify-between p-4 border rounded-xl transition-opacity ${
-                m.active ? '' : 'opacity-50 bg-gray-50'
+              <div key={m.id} className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 border rounded-xl transition-opacity ${
+                m.active ? '' : 'opacity-50 bg-muted/40'
               }`}>
                 <div className="flex items-center gap-3">
                   <Avatar className="h-12 w-12">
@@ -236,7 +236,7 @@ export function MechanicsPage() {
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 flex-wrap justify-end">
+                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                   <div className="flex items-center gap-2">
                     <span className="text-sm">Ativo</span>
                     <Switch checked={m.active} onCheckedChange={(v) => updateMember({ id: m.id, active: Boolean(v) })} />

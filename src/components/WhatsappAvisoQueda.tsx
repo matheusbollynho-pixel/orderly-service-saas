@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { AlertTriangle } from 'lucide-react';
 import { useStore } from '@/contexts/StoreContext';
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
@@ -14,7 +14,6 @@ export function WhatsappAvisoQueda() {
   const { isOwner } = useStore();
   const { canAccess } = usePlanFeatures();
   const { pathname } = useLocation();
-  const navigate = useNavigate();
   const ativo = isOwner && canAccess('pos-venda') && !pathname.startsWith('/print') && pathname !== '/config';
 
   const { data } = useQuery({
@@ -35,7 +34,7 @@ export function WhatsappAvisoQueda() {
       </span>
       <button
         type="button"
-        onClick={() => navigate('/config?aba=mensagens')}
+        onClick={() => { window.location.href = '/config?aba=mensagens'; /* recarrega: pede login, igual à engrenagem */ }}
         className="underline font-semibold hover:opacity-90"
       >
         Reconectar agora

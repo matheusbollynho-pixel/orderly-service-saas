@@ -363,11 +363,11 @@ export default function SatisfactionDashboardPage() {
         <Card className="border-border/50">
           <CardContent className="pt-4 pb-3 space-y-3">
             <p className="text-xs text-muted-foreground font-medium">Link de avaliação da loja (QR Code / WhatsApp)</p>
-            <div className="flex gap-4 items-start">
-              <div className="bg-white p-2 rounded" id="qr-code-container">
+            <div className="flex flex-col sm:flex-row gap-4 items-center sm:items-start">
+              <div className="bg-white p-2 rounded shrink-0" id="qr-code-container">
                 <QRCodeCanvas value={storeLink} size={200} id="qr-code-canvas" />
               </div>
-              <div className="flex-1 space-y-2">
+              <div className="w-full min-w-0 sm:flex-1 space-y-2">
                 <code className="text-xs bg-muted px-2 py-1 rounded block break-all">{storeLink}</code>
                 <div className="flex gap-2 flex-wrap">
                   <Button size="sm" variant="outline" type="button" onClick={() => { navigator.clipboard.writeText(storeLink); toast.success('Link copiado!'); }}>
