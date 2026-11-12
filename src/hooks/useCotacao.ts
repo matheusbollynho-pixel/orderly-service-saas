@@ -147,6 +147,24 @@ export function proximaEntregaGratis(rep: Representante, agora = new Date()): Da
   return null;
 }
 
+/** Quando chega pela entrega paga (van/ônibus/transportadora), respeitando o horário de corte. */
+export function dataEntregaExtra(rep: Representante, agora = new Date()): Date | null {
+  if (!rep.entrega_extra || rep.prazo_dias == null) return null;
+  const extra = rep.prazo_dias === 0 && passouDoCorte(agora, rep.horario_corte) ? 1 : rep.prazo_dias;
+  const d = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
+  d.setDate(d.getDate() + extra);
+  return d;
+}
+
+/** "hoje", "amanhã" ou "sexta (13/11)". */
+export function textoData(d: Date, agora = new Date()): string {
+  const hoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
+  const diff = Math.round((d.getTime() - hoje.getTime()) / 86_400_000);
+  if (diff === 0) return 'hoje';
+  if (diff === 1) return 'amanhã';
+  return `${DIAS[d.getDay()]} (${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')})`;
+}
+
 /** Resumo curto de como e quando o representante entrega. */
 export function resumoEntrega(rep: Representante, agora = new Date()): string[] {
   const linhas: string[] = [];

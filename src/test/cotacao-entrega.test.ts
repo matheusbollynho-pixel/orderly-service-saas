@@ -103,3 +103,22 @@ describe('ordenarOpcoes', () => {
     expect(r.map((x) => x.id)).toEqual(['b', 'd', 'c', 'e', 'a']);
   });
 });
+
+describe('dataEntregaExtra / textoData (van paga da Osia)', () => {
+  const osia = { ...base, entrega_dia_semana: 5, entrega_extra: 'van' as const, frete_extra_valor: 45, prazo_dias: 0, horario_corte: '12:00:00' };
+  const madrugada = new Date(2026, 10, 12, 2, 0); // quinta 02h
+
+  it('antes do corte: chega hoje', async () => {
+    const { dataEntregaExtra, textoData } = await import('@/hooks/useCotacao');
+    expect(textoData(dataEntregaExtra(osia, madrugada)!, madrugada)).toBe('hoje');
+  });
+  it('depois do corte: chega amanhã', async () => {
+    const { dataEntregaExtra, textoData } = await import('@/hooks/useCotacao');
+    const tarde = new Date(2026, 10, 12, 13, 0);
+    expect(textoData(dataEntregaExtra(osia, tarde)!, tarde)).toBe('amanhã');
+  });
+  it('grátis: sexta (13/11)', async () => {
+    const { textoData } = await import('@/hooks/useCotacao');
+    expect(textoData(proximaEntregaGratis(osia, madrugada)!, madrugada)).toBe('sexta (13/11)');
+  });
+});

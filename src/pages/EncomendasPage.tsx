@@ -21,6 +21,7 @@ import { FormPrecoManual } from '@/components/cotacao/FormPrecoManual';
 import { ListaCotacoes } from '@/components/cotacao/ListaCotacoes';
 import {
   useCotacao, brl, diasAtras, enviarWhats, mensagemCotacao, mensagemLink, urlLink, resumoEntrega, ordenarOpcoes, proximaEntregaGratis,
+  dataEntregaExtra, textoData,
   type CotacaoPreco,
 } from '@/hooks/useCotacao';
 import {
@@ -621,7 +622,29 @@ function DialogInformar({ e, modeloInicial, enc, cot, onFechar }: {
             <div>
               <Label>Prazo</Label>
               <Input value={prazo} onChange={(ev) => { setPrazo(ev.target.value); setPrazoManual(true); setTexto(null); }} placeholder="ex: sexta, amanhã" />
-              {!prazoManual && prazoEstimado && <p className="text-xs text-yellow-600 mt-1">O representante não disse o prazo: estimado pelo cadastro dele.</p>}
+              {rep && !prazoDaResposta && (() => {
+                const gratis = proximaEntregaGratis(rep);
+                const paga = dataEntregaExtra(rep);
+                if (!gratis && !paga) return null;
+                const nomeExtra = rep.entrega_extra ? { van: 'Van', onibus: 'Ônibus', transportadora: 'Transportadora', outro: 'Entrega' }[rep.entrega_extra] : '';
+                const escolher = (txt: string, frete: string) => { setPrazo(txt); setPrazoManual(true); setFreteTxt(frete); setTexto(null); };
+                return (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {gratis && (
+                      <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={() => escolher(textoData(gratis), '')}>
+                        Grátis: {textoData(gratis)}
+                      </Button>
+                    )}
+                    {paga && (
+                      <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
+                        onClick={() => escolher(textoData(paga), rep.frete_extra_valor != null ? rep.frete_extra_valor.toFixed(2).replace('.', ',') : '')}>
+                        {nomeExtra}: {textoData(paga)}{rep.frete_extra_valor != null ? ` + ${brl(rep.frete_extra_valor)}` : ' (frete a combinar)'}
+                      </Button>
+                    )}
+                  </div>
+                );
+              })()}
+              {!prazoManual && prazoEstimado && <p className="text-xs text-yellow-600 mt-1">O representante não disse o prazo: escolha acima ou digite.</p>}
               {!prazoManual && !prazo && custo && <p className="text-xs text-yellow-600 mt-1">Sem prazo: pergunte ao representante.</p>}
             </div>
           </div>
