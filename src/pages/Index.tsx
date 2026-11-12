@@ -69,6 +69,8 @@ export default function Index() {
   const canAccessCashFlow = permissions.caixa;
   const canAccessReports = permissions.relatorios;
   const [avisoPronta, setAvisoPronta] = useState<ServiceOrder | null>(null);
+  // Quando a moto ficou pronta pelo Quadro, a janela do aviso também oferece Desfazer
+  const [desfazerPronta, setDesfazerPronta] = useState<(() => Promise<boolean>) | null>(null);
   const { settings: storeSettings } = useStoreSettings();
   const [currentView, setCurrentView] = useState<View>(() => lerTelaInicial(permissions));
   const [selectedOrder, setSelectedOrder] = useState<ServiceOrder | null>(null);
@@ -870,12 +872,11 @@ Retirada: ${retiradaInfo}`;
 
         {currentView === 'quadro' && (
           <QuadroOficinaPage
-            orders={orders}
             onSelectOrder={(order) => {
               setSelectedOrder(order);
               setCurrentView('details');
             }}
-            onUpdateOrder={updateOrder}
+            onPronta={(nova, voltar) => { setDesfazerPronta(() => voltar); setAvisoPronta(nova); }}
           />
         )}
 
@@ -1044,11 +1045,13 @@ Retirada: ${retiradaInfo}`;
       {avisoPronta && (
         <AvisoMotoProntaDialog
           order={avisoPronta}
+          onDesfazer={desfazerPronta ? async () => { const ok = await desfazerPronta(); if (ok) { setDesfazerPronta(null); setAvisoPronta(null); } } : undefined}
           empresa={storeSettings?.company_name || ''}
           onFechar={() => {
             const marcada = { aviso_retirada_enviado_em: new Date().toISOString() };
             setSelectedOrder(prev => prev && prev.id === avisoPronta.id ? { ...prev, ...marcada } : prev);
             setAvisoPronta(null);
+            setDesfazerPronta(null);
           }}
         />
       )}

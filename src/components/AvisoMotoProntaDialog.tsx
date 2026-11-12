@@ -38,10 +38,12 @@ async function marcarAvisoResolvido(orderId: string) {
   if (error) throw error;
 }
 
-export function AvisoMotoProntaDialog({ order, empresa, onFechar }: {
+export function AvisoMotoProntaDialog({ order, empresa, onFechar, onDesfazer }: {
   order: ServiceOrder;
   empresa: string;
   onFechar: () => void;
+  /** Marcou Pronta sem querer: volta a etapa (não marca nada do aviso). */
+  onDesfazer?: () => void;
 }) {
   const { vehicle } = useVehicleLabel();
   const [texto, setTexto] = useState(() => mensagemMotoPronta(order, empresa || 'oficina', vehicle));
@@ -83,6 +85,11 @@ export function AvisoMotoProntaDialog({ order, empresa, onFechar }: {
           <Textarea rows={6} value={texto} onChange={(e) => setTexto(e.target.value)} disabled={enviando} />
         )}
 
+        {onDesfazer && (
+          <Button variant="ghost" className="h-11 text-muted-foreground" onClick={onDesfazer} disabled={enviando}>
+            Desfazer (não está pronta)
+          </Button>
+        )}
         <AlertDialogFooter className="gap-2">
           {temTelefone ? (
             <>

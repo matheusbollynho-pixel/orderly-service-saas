@@ -25,7 +25,9 @@ async function processarLoja(store: { id: string; company_name: string; whatsapp
     instance_token: store.whatsapp_instance_token || undefined,
   };
   const agora = new Date();
-  const limiteHoras = new Date(agora.getTime() - AVISO_RETIRADA_HORAS * 60 * 60 * 1000).toISOString();
+  // Espera no mínimo 10 min depois de ficar Pronta: dá tempo de desfazer ou de avisar pela tela (sem duplicar)
+  const esperaMin = Math.max(AVISO_RETIRADA_HORAS * 60, 10);
+  const limiteHoras = new Date(agora.getTime() - esperaMin * 60 * 1000).toISOString();
   // Nada retroativo: só OS concluídas nas últimas 24h.
   const janela24h = new Date(agora.getTime() - 24 * 60 * 60 * 1000).toISOString();
   const company_name = store.company_name || 'Oficina';
