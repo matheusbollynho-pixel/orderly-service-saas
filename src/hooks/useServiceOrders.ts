@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { ServiceOrder, ChecklistItem, OrderStatus, getDefaultChecklistItems } from '@/types/service-order';
@@ -529,12 +530,10 @@ export function useServiceOrders() {
     },
   });
 
+  // Pagamento não é apagado: é ESTORNADO (sai da OS; no caixa fica o original riscado + o estorno com motivo).
   const deletePaymentMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('payments')
-        .delete()
-        .eq('id', id);
+    mutationFn: async ({ id, motivo }: { id: string; motivo: string }) => {
+      const { error } = await (supabase as unknown as SupabaseClient).rpc('estornar_pagamento_os', { p_id: id, p_motivo: motivo });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -542,11 +541,11 @@ export function useServiceOrders() {
       queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
       queryClient.invalidateQueries({ queryKey: ['cash-flow-summary'] });
       queryClient.invalidateQueries({ queryKey: ['cash-flow-period'] });
-      toast.success('Pagamento removido!');
+      toast.success('Pagamento estornado. O registro fica no caixa.');
     },
     onError: (error: Error | unknown) => {
       console.error('Delete payment error:', error);
-      toast.error(`Erro ao remover pagamento: ${error?.message || 'Erro desconhecido'}`);
+      toast.error(`Erro ao estornar pagamento: ${error?.message || 'Erro desconhecido'}`);
     },
   });
 

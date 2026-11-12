@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -269,31 +270,12 @@ export function useBalcao() {
   // ── Cancelar nota (admin) ─────────────────────────────────────
   const cancelOrderMutation = useMutation({
     mutationFn: async ({ orderId, cancelReason, cancelNotes }: { orderId: string; cancelReason: string; cancelNotes?: string }) => {
-      const { data: order, error: fetchErr } = await supabase
-        .from('balcao_orders')
-        .select('*, balcao_items(*)')
-        .eq('id', orderId)
-        .single();
-      if (fetchErr) throw fetchErr;
-      if (order.status === 'cancelada') throw new Error('Nota já cancelada');
-
-      if (order.status === 'finalizada') {
-        // Remover lançamento do caixa — o trigger fn_restore_stock_on_cashflow_delete
-        // já cuida de restaurar o estoque automaticamente ao deletar
-        await supabase.from('cash_flow').delete().eq('balcao_order_id', orderId);
-      }
-
-      // Marcar como cancelada com motivo
-      const { error: updErr } = await supabase
-        .from('balcao_orders')
-        .update({
-          status: 'cancelada',
-          cancel_reason: cancelReason,
-          cancel_notes: cancelNotes || null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', orderId);
-      if (updErr) throw updErr;
+      // Função no banco: estorna no caixa, devolve as peças ao estoque e marca cancelada com motivo.
+      // O app não consegue apagar lançamento do caixa direto.
+      const { error } = await (supabase as unknown as SupabaseClient).rpc('cancelar_nota_balcao', {
+        p_order_id: orderId, p_motivo: cancelReason, p_obs: cancelNotes || null,
+      });
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['balcao-orders'] });

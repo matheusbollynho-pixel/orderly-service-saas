@@ -218,6 +218,12 @@ export interface CashFlow {
   payment_id?: string | null;
   balcao_order_id?: string | null;
   inventory_movement_id?: string | null;
+  encomenda_id?: string | null;
+  /** Este lançamento é o estorno de outro (id do original). */
+  estorno_de?: string | null;
+  /** Preenchido quando o lançamento foi estornado. */
+  estornado_em?: string | null;
+  estorno_motivo?: string | null;
   date: string;
   notes?: string | null;
   created_at: string;

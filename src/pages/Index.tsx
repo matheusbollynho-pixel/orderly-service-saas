@@ -508,8 +508,8 @@ Retirada: ${retiradaInfo}`;
     });
   };
 
-  const handleDeletePayment = (id: string) => {
-    deletePayment(id, {
+  const handleDeletePayment = (id: string, motivo: string) => {
+    deletePayment({ id, motivo }, {
       onSuccess: () => {
         setSelectedOrder(prev => {
           if (!prev) return null;

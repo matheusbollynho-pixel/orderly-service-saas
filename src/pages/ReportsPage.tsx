@@ -369,8 +369,8 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder }: ReportsPageProps
               onAddPayment={({ order_id, amount, discount_amount, method, reference, notes }) => {
                 createPayment({ order_id, amount, discount_amount, method, reference, notes });
               }}
-              onDeletePayment={(id) => {
-                deletePayment(id);
+              onDeletePayment={(id, motivo) => {
+                deletePayment({ id, motivo });
               }}
               onUpdatePayment={(payload) => {
                 updatePayment(payload);

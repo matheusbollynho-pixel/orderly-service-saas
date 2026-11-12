@@ -1,3 +1,4 @@
+import { pedirMotivoEstorno } from '@/lib/estorno';
 import { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ServiceOrder, OrderStatus, STATUS_LABELS, PaymentMethod, Material, StatusOficina, STATUS_OFICINA_OPTIONS_LIST } from '@/types/service-order';
@@ -30,6 +31,7 @@ import {
   FileText,
   MessageCircle,
   Trash2,
+  Undo2,
   Loader2,
   Printer,
   Download,
@@ -85,7 +87,7 @@ interface OrderDetailsProps {
   onUpdateMaterial?: (id: string, field: string, value: string) => void;
   inventoryProducts?: InventoryProduct[];
   onAddPayment?: (payload: { order_id: string; amount: number; discount_amount?: number | null; method: PaymentMethod; reference?: string | null; notes?: string | null; finalized_by_staff_id?: string | null }) => void;
-  onDeletePayment?: (id: string) => void;
+  onDeletePayment?: (id: string, motivo: string) => void;
   isCreatingPayment?: boolean;
   isDeletingPayment?: boolean;
   isUpdating?: boolean;
@@ -2067,11 +2069,14 @@ const renderDeliverySection = () => {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-destructive"
-                        onClick={() => onDeletePayment(p.id)}
+                        className="h-8 px-2 text-xs text-muted-foreground"
+                        onClick={() => {
+                          const motivo = pedirMotivoEstorno(`o pagamento de R$ ${Number(p.amount || 0).toFixed(2)}`);
+                          if (motivo) onDeletePayment(p.id, motivo);
+                        }}
                         disabled={isDeletingPayment || order.status === 'concluida_entregue'}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Undo2 className="h-4 w-4 mr-1" /> Estornar
                       </Button>
                     )}
                   </div>

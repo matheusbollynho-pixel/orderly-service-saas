@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { CashFlow, CashFlowSummary, CashFlowPeriodSummary } from '@/types/service-order';
@@ -167,14 +168,11 @@ export function useCashFlow(selectedDate?: string) {
     },
   });
 
-  // Deletar entrada
-  const deleteEntryMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('cash_flow')
-        .delete()
-        .eq('id', id);
-
+  // Ninguém apaga nem edita lançamento (o banco bloqueia). Erro em lançamento manual = estorno:
+  // lança o valor contrário com motivo e marca o original como estornado.
+  const estornarMutation = useMutation({
+    mutationFn: async ({ id, motivo }: { id: string; motivo: string }) => {
+      const { error } = await (supabase as unknown as SupabaseClient).rpc('estornar_lancamento_caixa', { p_id: id, p_motivo: motivo });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -182,34 +180,10 @@ export function useCashFlow(selectedDate?: string) {
       queryClient.invalidateQueries({ queryKey: ['cash-flow-summary'] });
       queryClient.invalidateQueries({ queryKey: ['cash-flow-period'] });
       queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
-      toast.success('Registro removido do fluxo de caixa!');
+      toast.success('Estornado. O valor contrário foi lançado no caixa de hoje.');
     },
     onError: (error: Error) => {
-      toast.error(`Erro ao remover registro: ${error.message}`);
-    },
-  });
-
-  // Atualizar entrada
-  const updateEntryMutation = useMutation({
-    mutationFn: async ({ id, ...updates }: Partial<CashFlow> & { id: string }) => {
-      const { data, error } = await supabase
-        .from('cash_flow')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
-      queryClient.invalidateQueries({ queryKey: ['cash-flow-summary'] });
-      queryClient.invalidateQueries({ queryKey: ['cash-flow-period'] });
-      toast.success('Registro atualizado!');
-    },
-    onError: (error: Error) => {
-      toast.error(`Erro ao atualizar registro: ${error.message}`);
+      toast.error(`Erro ao estornar: ${error.message}`);
     },
   });
 
@@ -218,11 +192,9 @@ export function useCashFlow(selectedDate?: string) {
     summary: summaryQuery.data,
     isLoading: cashFlowQuery.isLoading || summaryQuery.isLoading,
     createEntry: createEntryMutation.mutate,
-    deleteEntry: deleteEntryMutation.mutate,
-    updateEntry: updateEntryMutation.mutate,
+    estornarEntry: estornarMutation.mutate,
     isCreating: createEntryMutation.isPending,
-    isDeleting: deleteEntryMutation.isPending,
-    isUpdating: updateEntryMutation.isPending,
+    isEstornando: estornarMutation.isPending,
   };
 }
 

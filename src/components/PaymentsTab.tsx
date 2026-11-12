@@ -1,3 +1,4 @@
+import { pedirMotivoEstorno } from '@/lib/estorno';
 import { matchesSearch } from '@/lib/textSearch';
 import { useMemo, useState } from 'react';
 import { ServiceOrder, PaymentMethod } from '@/types/service-order';
@@ -6,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Trash2, Plus } from 'lucide-react';
+import { Undo2, Plus } from 'lucide-react';
 
 interface PaymentsTabProps {
   orders: ServiceOrder[];
@@ -14,7 +15,7 @@ interface PaymentsTabProps {
   period: 'week' | 'month' | 'all';
   onPeriodChange: (p: 'week' | 'month' | 'all') => void;
   onAddPayment: (payload: { order_id: string; amount: number; discount_amount?: number | null; method: PaymentMethod; reference?: string | null; notes?: string | null; finalized_by_staff_id?: string | null }) => void;
-  onDeletePayment: (id: string) => void;
+  onDeletePayment: (id: string, motivo: string) => void;
   onUpdatePayment: (payload: { id: string; created_at?: string; amount?: number; discount_amount?: number | null; method?: PaymentMethod; notes?: string | null }) => void;
   onOpenOrder?: (id: string) => void;
 }
@@ -284,8 +285,11 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
                               {p.notes ? <p className="text-xs text-muted-foreground">Obs: {p.notes}</p> : null}
                             </div>
                             <div className="flex gap-1">
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => onDeletePayment(p.id)}>
-                                <Trash2 className="h-4 w-4" />
+                              <Button variant="ghost" size="sm" className="h-8 px-2 text-xs text-muted-foreground" onClick={() => {
+                                const motivo = pedirMotivoEstorno(`o pagamento de R$ ${Number(p.amount || 0).toFixed(2)}`);
+                                if (motivo) onDeletePayment(p.id, motivo);
+                              }}>
+                                <Undo2 className="h-4 w-4 mr-1" /> Estornar
                               </Button>
                             </div>
                           </div>

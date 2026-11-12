@@ -1,3 +1,4 @@
+import { pedirMotivoEstorno } from '@/lib/estorno';
 import { matchesSearch } from '@/lib/textSearch';
 import { useState, useEffect, useRef } from 'react';
 import { useCashFlow, useCashFlowPeriod } from '@/hooks/useCashFlow';
@@ -9,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ArrowUpCircle, ArrowDownCircle, DollarSign, Calendar, Trash2, Plus, Eye, EyeOff, Package } from 'lucide-react';
+import { ArrowUpCircle, ArrowDownCircle, DollarSign, Calendar, Undo2, Plus, Eye, EyeOff, Package } from 'lucide-react';
 import { CashFlowType, PaymentMethod, CashFlow } from '@/types/service-order';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -81,7 +82,7 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder }: CashFlowPag
       setSelectedDate(getLocalDate());
     }
   }, [activePeriod]);
-  const { cashFlow, summary, isLoading, createEntry, deleteEntry, isCreating } = useCashFlow(selectedDate);
+  const { cashFlow, summary, isLoading, createEntry, estornarEntry, isEstornando, isCreating } = useCashFlow(selectedDate);
   const { products: inventoryProducts, createMovementAsync, isCreatingMovement } = useInventory();
   const { summary: weeklySummary, isLoading: weeklyLoading } = useCashFlowPeriod('week');
   const { summary: monthlySummary, isLoading: monthlyLoading } = useCashFlowPeriod('month', selectedMonth);
@@ -488,8 +489,13 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder }: CashFlowPag
                     ) : (
                       <ArrowDownCircle className="h-5 w-5 text-red-600" />
                     )}
-                    <h3 className="font-semibold">{entry.description}</h3>
+                    <h3 className={`font-semibold ${entry.estornado_em ? 'line-through opacity-60' : ''}`}>{entry.description}</h3>
                   </div>
+                  {entry.estornado_em && (
+                    <p className="text-xs font-medium text-amber-500 mb-1">
+                      Estornado{entry.estorno_motivo ? `: ${entry.estorno_motivo}` : ''}
+                    </p>
+                  )}
                   {entry.category && (
                     <p className="text-sm text-muted-foreground mb-1">
                       {entry.category}
@@ -525,22 +531,20 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder }: CashFlowPag
                     {entry.type === 'entrada' ? '+' : '-'}
                     {formatCurrency(Math.abs(entry.amount))}
                   </span>
-                  {entry.order_id === null && entry.balcao_order_id === null && (
+                  {!entry.order_id && !entry.balcao_order_id && !entry.encomenda_id && !entry.payment_id &&
+                    !entry.estorno_de && !entry.estornado_em && (
                     <Button
                       variant="ghost"
-                      size="icon"
+                      size="sm"
+                      className="h-8 px-2 text-xs text-muted-foreground"
+                      disabled={isEstornando}
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (
-                          confirm(
-                            'Tem certeza que deseja excluir esta transação?'
-                          )
-                        ) {
-                          deleteEntry(entry.id);
-                        }
+                        const motivo = pedirMotivoEstorno(`"${entry.description}"`);
+                        if (motivo) estornarEntry({ id: entry.id, motivo });
                       }}
                     >
-                      <Trash2 className="h-4 w-4 text-destructive" />
+                      <Undo2 className="h-4 w-4 mr-1" /> Estornar
                     </Button>
                   )}
                 </div>
