@@ -8,10 +8,11 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Plus, X, Search, MessageCircle, Check, Truck, PackageCheck, Ban, Trash2, Loader2, Zap, Bot, Wrench,
+  ClipboardList, ShoppingCart, CheckCircle2,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useClients, type Client, type Motorcycle } from '@/hooks/useClients';
@@ -42,15 +43,48 @@ function custoDaCotacao(e: Encomenda, cot: Cot): CotacaoPreco | null {
     .find((p) => p.situacao === 'cotado' && p.preco != null) ?? null;
 }
 
+type Filtro = 'ativas' | 'finalizadas' | StatusEncomenda;
+
+// Cartões do topo (mesmo estilo do Dashboard do início). Clicar filtra a lista.
+const CARTOES: { id: Filtro; label: string; icon: typeof Check; status: StatusEncomenda[]; cor?: string }[] = [
+  { id: 'ativas', label: 'Em andamento', icon: ClipboardList, status: ATIVOS },
+  { id: 'aguardando_cotacao', label: 'Falta cotar', icon: Search, status: ['aguardando_cotacao'], cor: 'text-yellow-500' },
+  { id: 'cliente_avisado', label: 'Esperando cliente', icon: MessageCircle, status: ['cliente_avisado'], cor: 'text-blue-500' },
+  { id: 'aprovado', label: 'Falta pedir', icon: ShoppingCart, status: ['aprovado'], cor: 'text-purple-500' },
+  { id: 'pedido_feito', label: 'Já pedido', icon: Truck, status: ['pedido_feito'], cor: 'text-orange-500' },
+  { id: 'chegou', label: 'Chegou', icon: PackageCheck, status: ['chegou'], cor: 'text-green-500' },
+  { id: 'finalizadas', label: 'Finalizadas', icon: CheckCircle2, status: ['entregue', 'desistiu'] },
+];
+
+function Cartao({ label, valor, icon: Icon, ativo, cor, onClick }: {
+  label: string; valor: number; icon: typeof Check; ativo: boolean; cor?: string; onClick: () => void;
+}) {
+  return (
+    <button onClick={onClick} className="text-left transition-transform hover:scale-[1.01]">
+      <div className={cn(
+        'rounded-xl border p-3 md:p-4 transition-all bg-card h-full',
+        ativo ? 'border-primary/70 shadow-[0_0_0_1px_rgba(193,39,45,0.25)]' : 'border-neutral-800 hover:border-border',
+      )}>
+        <div className="mb-2 flex items-start justify-between gap-1 min-h-[28px]">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{label}</span>
+          <Icon className={cn('h-4 w-4 text-muted-foreground shrink-0', valor > 0 && cor)} />
+        </div>
+        <span className="text-3xl font-black tracking-tight leading-none">{valor}</span>
+      </div>
+    </button>
+  );
+}
+
 export default function EncomendasPage() {
   const enc = useEncomendas();
   const cot = useCotacao();
   const [nova, setNova] = useState(false);
-  const [filtro, setFiltro] = useState<'ativas' | 'finalizadas'>('ativas');
+  const [filtro, setFiltro] = useState<Filtro>('ativas');
   const [busca, setBusca] = useState('');
 
+  const atual = CARTOES.find((c) => c.id === filtro) ?? CARTOES[0];
   const lista = enc.encomendas
-    .filter((e) => (filtro === 'ativas' ? ATIVOS.includes(e.status) : !ATIVOS.includes(e.status)))
+    .filter((e) => atual.status.includes(e.status))
     .filter((e) => matchesSearch(busca, e.cliente_nome, e.peca, e.moto, e.cliente_whatsapp));
 
   return (
@@ -64,18 +98,23 @@ export default function EncomendasPage() {
 
       {nova && <NovaEncomenda enc={enc} cot={cot} onFim={() => setNova(false)} />}
 
-      <Tabs value={filtro} onValueChange={(v) => setFiltro(v as 'ativas' | 'finalizadas')}>
-        <TabsList>
-          <TabsTrigger value="ativas">Em andamento ({enc.encomendas.filter((e) => ATIVOS.includes(e.status)).length})</TabsTrigger>
-          <TabsTrigger value="finalizadas">Finalizadas</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <div className="bg-neutral-900 rounded-[8px] p-3 md:p-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 md:gap-3">
+          {CARTOES.map((c) => (
+            <Cartao key={c.id} label={c.label} icon={c.icon} cor={c.cor} ativo={filtro === c.id}
+              valor={enc.encomendas.filter((e) => c.status.includes(e.status)).length}
+              // Clicar de novo no mesmo cartão volta pra "Em andamento"
+              onClick={() => setFiltro(filtro === c.id ? 'ativas' : c.id)} />
+          ))}
+        </div>
+      </div>
 
       <div className="relative">
         <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <Input className="pl-9" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar cliente, peça ou moto (com ou sem acento)" />
       </div>
 
+      <p className="text-xs text-muted-foreground">Mostrando: <b>{atual.label}</b> ({lista.length})</p>
       {enc.carregando && <p className="text-sm text-muted-foreground">Carregando...</p>}
       {!enc.carregando && lista.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma encomenda aqui.</p>}
       {lista.map((e) => <CardEncomenda key={e.id} e={e} enc={enc} cot={cot} />)}
