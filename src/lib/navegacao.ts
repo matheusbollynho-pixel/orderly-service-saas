@@ -6,7 +6,7 @@ import type { MemberPermissions } from '@/hooks/useAuth';
 export type View =
   | 'dashboard' | 'new' | 'express' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics'
   | 'pos-venda' | 'fluxo-caixa' | 'satisfacao' | 'estoque' | 'balcao' | 'quadro' | 'agenda'
-  | 'boletos' | 'fiados' | 'cotacao' | 'encomendas' | 'mais';
+  | 'boletos' | 'fiados' | 'cotacao' | 'encomendas' | 'mais' | 'receber';
 
 export type Area = 'inicio' | 'oficina' | 'balcao' | 'caixa' | 'mais';
 
@@ -22,6 +22,7 @@ interface Tela {
 
 export const TELAS: Record<View, Tela> = {
   dashboard:     { nome: 'Início', area: 'inicio' },
+  receber:       { nome: 'A receber', area: 'inicio', busca: 'receber pagamento saldo devendo pendente' },
   orders:        { nome: 'Ordens', area: 'oficina', perm: 'orders', recurso: 'orders', busca: 'os ordem de servico lista placa' },
   quadro:        { nome: 'Quadro', area: 'oficina', perm: 'quadro', recurso: 'quadro', busca: 'oficina etapas mecanico' },
   agenda:        { nome: 'Agenda', area: 'oficina', perm: 'agenda', recurso: 'agenda', busca: 'agendamento horario marcar' },

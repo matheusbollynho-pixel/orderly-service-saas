@@ -34,6 +34,8 @@ import { NavPrincipal } from '@/components/v2/NavPrincipal';
 import { AbasArea } from '@/components/v2/AbasArea';
 import { UpgradeModal } from '@/components/UpgradeModal';
 import MaisPage from './MaisPage';
+import InicioPage from './InicioPage';
+import AReceberPage from './AReceberPage';
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -724,19 +726,41 @@ Retirada: ${retiradaInfo}`;
             onSair={async () => { await signOut(); toast.success('Saiu do sistema'); }}
           />
         )}
-        {currentView === 'dashboard' && (
+        {currentView === 'dashboard' && menuNovo && (
+          <InicioPage
+            orders={orders}
+            carregando={isLoading}
+            acessoDe={acessoDe}
+            goTo={goTo}
+            filtrarOrdens={(s) => { setStatusFilter(s); goTo('orders'); }}
+            abrirReceber={() => setCurrentView('receber')}
+            recentes={orders.length > 0 ? (
+              <div>
+                <h3 className="mb-3 text-sm font-medium text-muted-foreground">Últimas OS</h3>
+                <div className="space-y-3">
+                  {orders.slice(0, 3).map((order) => (
+                    <OrderCard key={order.id} order={order} onClick={() => handleOrderClick(order)} />
+                  ))}
+                </div>
+              </div>
+            ) : undefined}
+          />
+        )}
+        {currentView === 'receber' && (
+          <AReceberPage
+            abrirOS={(os) => { setSelectedOrder(os); setCurrentView('details'); }}
+            abrirFiados={() => goTo('fiados')}
+            abrirNota={(id) => { setInitialBalcaoOrderId(id); goTo('balcao'); }}
+            mostrarFiados={acessoDe('fiados') === 'ok'}
+            mostrarNotas={acessoDe('balcao') === 'ok'}
+          />
+        )}
+        {currentView === 'dashboard' && !menuNovo && (
           <div className="space-y-5 animate-fade-in">
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-foreground">Dashboard</h2>
               </div>
-              {menuNovo && (
-                <div className="mb-4 grid grid-cols-3 gap-2">
-                  {acessoDe('new') === 'ok' && <Button className="h-14 flex-col gap-1 text-sm" onClick={() => goTo('new')}><Plus className="h-5 w-5" />Nova OS</Button>}
-                  {acessoDe('express') === 'ok' && <Button variant="outline" className="h-14 flex-col gap-1 text-sm" onClick={() => goTo('express')}><Zap className="h-5 w-5" />Express</Button>}
-                  {acessoDe('balcao') !== 'sem_permissao' && <Button variant="outline" className="h-14 flex-col gap-1 text-sm" onClick={() => goTo('balcao')}><ShoppingCart className="h-5 w-5" />Vender</Button>}
-                </div>
-              )}
               {isLoading ? (
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   {[...Array(4)].map((_, i) => (
