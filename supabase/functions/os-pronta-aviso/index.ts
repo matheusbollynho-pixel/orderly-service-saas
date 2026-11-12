@@ -2,6 +2,9 @@
  * os-pronta-aviso
  * Cron a cada 2 horas no horário comercial (8h-18h BRT).
  * Itera por loja ativa — envia aviso de OS pronta para cada cliente.
+ *
+ * Até 12/11/2026 nunca enviou nada: filtrava status 'concluido' (não existe; o certo é 'concluida').
+ * Ao consertar: só OS concluídas nas últimas 24h (havia ~700 antigas sem aviso — nada de disparo em massa).
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -10,8 +13,8 @@ import { criarRitmo, dentroDoHorarioComercial, emSegundoPlano, MAX_POR_RODADA } 
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const DONO_PHONE = Deno.env.get('DONO_PHONE') || '';
-const AVISO_RETIRADA_HORAS = parseInt(Deno.env.get('AVISO_RETIRADA_HORAS') || '4');
+// Dono (12/11/2026): marcou Concluída = avisa o cliente na próxima rodada (sem esperar). Concluída e Entregue não avisa (já buscou).
+const AVISO_RETIRADA_HORAS = parseInt(Deno.env.get('AVISO_RETIRADA_HORAS') || '0');
 
 const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -23,15 +26,18 @@ async function processarLoja(store: { id: string; company_name: string; whatsapp
   };
   const agora = new Date();
   const limiteHoras = new Date(agora.getTime() - AVISO_RETIRADA_HORAS * 60 * 60 * 1000).toISOString();
+  // Nada retroativo: só OS concluídas nas últimas 24h.
+  const janela24h = new Date(agora.getTime() - 24 * 60 * 60 * 1000).toISOString();
   const company_name = store.company_name || 'Oficina';
 
   const { data: ordens, error } = await sb
     .from('service_orders')
     .select('id, client_name, client_phone, equipment, conclusion_date, aviso_retirada_enviado_em')
     .eq('store_id', store.id)
-    .eq('status', 'concluido')
+    .eq('status', 'concluida')
     .is('aviso_retirada_enviado_em', null)
     .not('client_phone', 'is', null)
+    .gte('conclusion_date', janela24h)
     .lt('conclusion_date', limiteHoras)
     .limit(50);
 
@@ -61,30 +67,9 @@ async function processarLoja(store: { id: string; company_name: string; whatsapp
     }
   }
 
-  // Verificar OS sem retirada há 24h e alertar dono
-  const limite24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const { data: semRetirada } = await sb
-    .from('service_orders')
-    .select('id, client_name, equipment')
-    .eq('store_id', store.id)
-    .eq('status', 'concluido')
-    .not('aviso_retirada_enviado_em', 'is', null)
-    .lt('aviso_retirada_enviado_em', limite24h)
-    .limit(20);
-
-  if (semRetirada?.length && DONO_PHONE) {
-    const lista = semRetirada.map(o => `• ${o.client_name} — ${o.equipment || 'moto'}`).join('\n');
-    try {
-      // Alerta interno sai pela instância da própria loja (ou global só na legada).
-      const temInstanciaPropria = !!store.whatsapp_instance_url;
-      await sendWhatsAppText(
-        normalizeBrPhone(DONO_PHONE),
-        `⚠️ *[${company_name}] OS prontas há +24h sem retirada:*\n\n${lista}`,
-        temInstanciaPropria ? wppConfig : undefined,
-        { storeId: store.id, feature: 'os_pronta_dono', allowGlobalFallback: !temInstanciaPropria },
-      );
-    } catch (_) { /* silencioso */ }
-  }
+  // DESLIGADO (12/11/2026): o alerta "OS prontas há +24h sem retirada" mandava para um número único
+  // (DONO_PHONE, global), com clientes de TODAS as lojas, e repetiria a cada 2h (não marca que já avisou).
+  // Refazer depois: para o dono de cada loja, uma vez por OS.
 
   return { store_id: store.id, company: company_name, enviados };
 }
@@ -108,6 +93,11 @@ async function rodada() {
 
 Deno.serve((req) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+  // Só o cron chama (segredo enviado por public.cron_http)
+  const segredo = Deno.env.get('CRON_SECRET');
+  if (!segredo || req.headers.get('x-cron-secret') !== segredo) {
+    return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403 });
+  }
   if (!dentroDoHorarioComercial()) {
     return new Response(JSON.stringify({ ok: true, fora_do_horario: true }), { headers: { 'Content-Type': 'application/json' } });
   }
