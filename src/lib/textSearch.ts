@@ -44,3 +44,13 @@ export const accentPattern = (value: string | null | undefined): string =>
   Array.from(normalizeSearch(value))
     .map((ch) => (ACCENT_CLASSES[ch] ? `[${ACCENT_CLASSES[ch]}]` : /[a-z0-9 ]/.test(ch) ? ch : '.'))
     .join('');
+
+// Termo para busca no banco (OS): placa e telefone ficam gravados só com letras/números,
+// então "ABC-1D23" vira "ABC1D23" e "(75) 98838-8629" vira "75988388629". Resto fica igual.
+export const termoBuscaBanco = (query: string): string => {
+  const q = query.trim();
+  const compacto = q.replace(/[^a-z0-9]/gi, '');
+  if (/^[a-z]{3}\d[a-z0-9]\d{2}$/i.test(compacto)) return compacto.toUpperCase(); // placa antiga ou Mercosul
+  if (/^[\d\s()+\-.]+$/.test(q) && compacto.length >= 4) return compacto;      // telefone
+  return q;
+};

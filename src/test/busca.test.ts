@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchesSearch } from '@/lib/textSearch';
+import { matchesSearch, termoBuscaBanco } from '@/lib/textSearch';
 
 describe('matchesSearch (busca por palavras)', () => {
   it('acha sem precisar do nome completo, em qualquer ordem', () => {
@@ -32,5 +32,22 @@ describe('matchesSearch (busca por palavras)', () => {
 
   it('telefone digitado com parênteses e espaço', () => {
     expect(matchesSearch('(75) 9 8838', 'Cliente', '75988388629')).toBe(true);
+  });
+});
+
+describe('termoBuscaBanco (busca de OS no banco)', () => {
+  it('placa com hífen, espaço ou minúscula vira só letras e números', () => {
+    expect(termoBuscaBanco('ABC-1234')).toBe('ABC1234');
+    expect(termoBuscaBanco('abc 1d23')).toBe('ABC1D23');
+    expect(termoBuscaBanco('fvt2e77')).toBe('FVT2E77');
+  });
+  it('telefone digitado com máscara vira só números', () => {
+    expect(termoBuscaBanco('(75) 98838-8629')).toBe('75988388629');
+    expect(termoBuscaBanco('8629')).toBe('8629');
+  });
+  it('nome e moto continuam como foram digitados', () => {
+    expect(termoBuscaBanco('João Silva')).toBe('João Silva');
+    expect(termoBuscaBanco('fan 160')).toBe('fan 160');
+    expect(termoBuscaBanco('cg 150 2012')).toBe('cg 150 2012');
   });
 });
