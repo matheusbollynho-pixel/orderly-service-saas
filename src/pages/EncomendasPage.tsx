@@ -33,16 +33,23 @@ type Cot = ReturnType<typeof useCotacao>;
 const descMoto = (m: Pick<Motorcycle, 'marca' | 'modelo' | 'ano'>) => [m.marca, m.modelo, m.ano].filter(Boolean).join(' ');
 
 /** Preço de custo da peça: o escolhido na cotação, senão o melhor cotado. */
+/** O que a loja paga: a opção que VOCÊ escolheu (o sistema não escolhe sozinho). */
 function custoDaCotacao(e: Encomenda, cot: Cot): CotacaoPreco | null {
   if (!e.cotacao_item_id) return null;
   const item = cot.itens.find((i) => i.id === e.cotacao_item_id);
-  if (item?.pedido_preco_id) {
-    const p = cot.precos.find((x) => x.id === item.pedido_preco_id);
-    if (p) return p;
-  }
-  return ordenarOpcoes(cot.precos.filter((p) => p.item_id === e.cotacao_item_id))
-    .find((p) => p.situacao === 'cotado' && p.preco != null) ?? null;
+  if (!item?.pedido_preco_id) return null;
+  return cot.precos.find((x) => x.id === item.pedido_preco_id) ?? null;
 }
+
+/** Todas as opções com preço (marca/fornecedor) pra essa peça, mais barata primeiro. */
+function opcoesDaCotacao(e: Encomenda, cot: Cot): CotacaoPreco[] {
+  if (!e.cotacao_item_id) return [];
+  return ordenarOpcoes(cot.precos.filter((p) => p.item_id === e.cotacao_item_id))
+    .filter((p) => p.situacao === 'cotado' && p.preco != null);
+}
+
+const nomeFornecedor = (p: CotacaoPreco, cot: Cot) =>
+  p.fonte === 'internet' ? `Internet${p.loja_internet ? ` · ${p.loja_internet}` : ''}` : cot.representantes.find((r) => r.id === p.representante_id)?.nome ?? 'Representante';
 
 type Filtro = 'ativas' | StatusEncomenda;
 
@@ -349,6 +356,7 @@ function CardEncomenda({ e, enc, cot }: { e: Encomenda; enc: Enc; cot: Cot }) {
   const s = STATUS_ENCOMENDA[e.status];
   const pago = Number(e.pago_adiantado || 0);
   const custo = custoDaCotacao(e, cot);
+  const opcoes = opcoesDaCotacao(e, cot);
   const total = totalEncomenda(e);
   const saldo = saldoEncomenda(e);
   const mudar = (status: StatusEncomenda) => enc.mudarStatus.mutate({ e, status });
@@ -379,7 +387,11 @@ function CardEncomenda({ e, enc, cot }: { e: Encomenda; enc: Enc; cot: Cot }) {
         </div>
         {verCusto && (
           <p className="text-xs text-muted-foreground border-l-2 border-yellow-500/50 pl-2">
-            Loja paga: {custo ? <b className="text-foreground">{brl(custo.preco)}</b> : 'nenhum representante respondeu ainda'}{custo?.marca ? ` (${custo.marca})` : ''}
+            {custo
+              ? <>Loja paga: <b className="text-foreground">{brl(custo.preco)}</b>{custo.marca ? ` (${custo.marca})` : ''}</>
+              : opcoes.length
+                ? <>{opcoes.length} opç{opcoes.length > 1 ? 'ões' : 'ão'} de fornecedor: escolha em "Informar cliente"</>
+                : 'Loja paga: nenhum representante respondeu ainda'}
             {custo?.preco && e.preco_venda ? ` · Margem ${Math.round(((e.preco_venda - custo.preco) / custo.preco) * 100)}%` : ''}
           </p>
         )}
@@ -456,6 +468,7 @@ function DialogInformar({ e, modeloInicial, enc, cot, onFechar }: {
 }) {
   const [verCusto] = useVerCusto();
   const custo = custoDaCotacao(e, cot);
+  const opcoes = opcoesDaCotacao(e, cot);
   const rep = custo?.representante_id ? cot.representantes.find((r) => r.id === custo.representante_id) : null;
   const prazoSugerido = useMemo(() => {
     if (e.prazo_texto) return e.prazo_texto;
@@ -546,6 +559,27 @@ function DialogInformar({ e, modeloInicial, enc, cot, onFechar }: {
               {verCusto && custo && <p>Loja paga: <b>{brl(custo.preco)}</b>{custo.marca ? ` · ${custo.marca}` : ''}{rep ? ` · ${rep.nome}` : ''}</p>}
               {rep && <p className="text-muted-foreground">{resumoEntrega(rep).join(' · ')}</p>}
               {ultimo && <p className="text-muted-foreground">Última vez cobrado desse cliente/peça: {brl(ultimo.preco_venda)} ({new Date(ultimo.created_at).toLocaleDateString('pt-BR')})</p>}
+            </div>
+          )}
+
+          {opcoes.length > 0 && (
+            <div className="space-y-1">
+              <Label>Qual opção o cliente vai levar?</Label>
+              {opcoes.map((p) => {
+                const escolhida = custo?.id === p.id;
+                return (
+                  <button key={p.id} type="button"
+                    onClick={() => e.cotacao_item_id && cot.atualizarItem.mutate({ id: e.cotacao_item_id, pedido_preco_id: p.id })}
+                    className={`w-full text-left rounded-md border px-3 py-2 text-sm flex items-center justify-between gap-2 ${escolhida ? 'border-primary bg-primary/10' : ''}`}>
+                    <span>
+                      {escolhida && <Check className="h-4 w-4 inline mr-1 text-primary" />}
+                      <b>{p.marca || 'Sem marca'}</b> <span className="text-muted-foreground">· {nomeFornecedor(p, cot)}</span>
+                    </span>
+                    {verCusto && <span className="text-muted-foreground">{brl(p.preco)}</span>}
+                  </button>
+                );
+              })}
+              {!custo && <p className="text-xs text-yellow-600">Toque na opção que o cliente escolher.</p>}
             </div>
           )}
 
