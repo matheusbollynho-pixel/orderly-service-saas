@@ -1,3 +1,4 @@
+import { pedirTexto } from '@/components/v2/Confirmacao';
 import { pedirMotivoEstorno } from '@/lib/estorno';
 import { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -282,7 +283,7 @@ export function OrderDetails({
         problem_description: editedServicesTodo,
       });
       setIsEditingServicesTodo(false);
-      alert('✅ Descrição do serviço atualizada com sucesso!');
+      toast.success('Descrição do serviço atualizada com sucesso!');
     }
   };
 
@@ -303,7 +304,7 @@ export function OrderDetails({
     }
     setEditedPhone(cleanPhone);
     setIsEditingPhone(false);
-    alert('✅ Telefone atualizado com sucesso!');
+    toast.success('Telefone atualizado com sucesso!');
   };
 
   // Função para cancelar a edição do telefone
@@ -653,7 +654,7 @@ export function OrderDetails({
   const handleAddPayment = () => {
     if (!onAddPayment) return;
     if (!deliverySignatureData && !isExpress) {
-      alert('É necessário coletar a assinatura do Termo de Entrega do Veículo antes de registrar o pagamento.');
+      toast.error('É necessário coletar a assinatura do Termo de Entrega do Veículo antes de registrar o pagamento.');
       return;
     }
     const amount = parseFloat(paymentForm.amount || '');
@@ -661,7 +662,7 @@ export function OrderDetails({
     if (!amount || amount <= 0) return;
     if (discountAmount < 0) return;
     if (!paymentForm.finalized_by_staff_id) {
-      alert('Selecione quem finalizou/recebeu o pagamento.');
+      toast.error('Selecione quem finalizou/recebeu o pagamento.');
       return;
     }
     onAddPayment({
@@ -721,7 +722,7 @@ export function OrderDetails({
 
   const handleSendWhatsAppPDF = async () => {
     if (!signatureData && !isExpress) {
-      alert('É necessário coletar a assinatura do cliente antes de enviar o PDF.');
+      toast.error('É necessário coletar a assinatura do cliente antes de enviar o PDF.');
       return;
     }
     try {
@@ -742,7 +743,7 @@ export function OrderDetails({
       const base64 = btoa(binary);
       const cleanPhone = order.client_phone?.replace(/\D/g, '') || '';
       if (cleanPhone.length < 10 || cleanPhone.length > 11) {
-        alert('Telefone do cliente inválido para WhatsApp.');
+        toast.error('Telefone do cliente inválido para WhatsApp.');
         return;
       }
       const enviouDireto = await sendWhatsAppDocument({
@@ -753,11 +754,11 @@ export function OrderDetails({
         store_id: order.store_id,
       });
       if (enviouDireto) {
-        alert('✅ PDF enviado para WhatsApp com sucesso!');
+        toast.success('PDF enviado para WhatsApp com sucesso!');
       }
     } catch (error: unknown) {
       console.error('Erro ao enviar WhatsApp:', error);
-      alert(error instanceof Error ? error.message : 'Erro ao enviar PDF. Tente novamente.');
+      toast.error(error instanceof Error ? error.message : 'Erro ao enviar PDF. Tente novamente.');
     } finally {
       setIsSendingPDF(false);
     }
@@ -765,7 +766,7 @@ export function OrderDetails({
 
   const handleSignatureSave = (signature: string) => {
     if (!termsAccepted) {
-      alert('Por favor, confirme que leu e concorda com os termos da Ordem de Serviço antes de assinar.');
+      toast.error('Por favor, confirme que leu e concorda com os termos da Ordem de Serviço antes de assinar.');
       return;
     }
     onSignatureSave(signature);
@@ -789,7 +790,7 @@ export function OrderDetails({
   const handleSendWhatsAppTest = async () => {
     const cleanPhone = order.client_phone?.replace(/\D/g, '') || '';
     if (cleanPhone.length < 10 || cleanPhone.length > 11) {
-      alert('Telefone do cliente inválido para WhatsApp.');
+      toast.error('Telefone do cliente inválido para WhatsApp.');
       return;
     }
 
@@ -812,10 +813,14 @@ export function OrderDetails({
       : '';
     console.log('link satisfação:', satisfactionLink);
 
-    const customText = window.prompt(
-      'Mensagem para enviar ao cliente (WhatsApp):',
-      `Olá, ${order.client_name.split(' ')[0]}! Sua moto está em serviço conosco. OS #${order.id} ✅\n\nAvalie nosso atendimento: ${satisfactionLink}`
-    );
+    const customText = await pedirTexto({
+      titulo: 'Mensagem para o cliente (WhatsApp)',
+      descricao: 'Pode editar antes de mandar.',
+      valorInicial: `Olá, ${order.client_name.split(' ')[0]}! Sua moto está em serviço conosco. OS #${order.id} ✅\n\nAvalie nosso atendimento: ${satisfactionLink}`,
+      multilinha: true,
+      obrigatorio: true,
+      verbo: 'Enviar',
+    });
 
     if (!customText) {
       return; // usuário cancelou
@@ -829,14 +834,14 @@ export function OrderDetails({
         store_id: order.store_id,
       });
       if (enviouDireto) {
-        alert('✅ Mensagem de teste enviada com sucesso!');
+        toast.success('Mensagem de teste enviada com sucesso!');
       }
     } catch (error: unknown) {
       console.error('Erro ao enviar mensagem:', error);
       if (error instanceof Error) {
-        alert(error.message || 'Erro ao enviar mensagem. Tente novamente.');
+        toast.error(error.message || 'Erro ao enviar mensagem. Tente novamente.');
       } else {
-        alert('Erro ao enviar mensagem. Tente novamente.');
+        toast.error('Erro ao enviar mensagem. Tente novamente.');
       }
     } finally {
       setIsSendingText(false);
@@ -845,7 +850,7 @@ export function OrderDetails({
 
   const handleDownloadPDF = async () => {
     if (!signatureData && !isExpress) {
-      alert('É necessário coletar a assinatura do cliente antes de gerar o PDF.');
+      toast.error('É necessário coletar a assinatura do cliente antes de gerar o PDF.');
       return;
     }
     try {
@@ -864,7 +869,7 @@ export function OrderDetails({
       URL.revokeObjectURL(url);
     } catch (error: unknown) {
       console.error('Erro ao baixar PDF:', error);
-      alert('Erro ao gerar PDF. Tente novamente.');
+      toast.error('Erro ao gerar PDF. Tente novamente.');
     }
   };
 
@@ -947,9 +952,9 @@ const renderDeliverySection = () => {
 
   const handleSaveDeliveryPerson = () => {
     if (deliveryPersonType === 'outro') {
-      if (!deliveryPersonName.trim()) { alert('Informe o nome de quem vai retirar.'); return; }
-      if (!deliveryPersonPhone.trim()) { alert('Informe o telefone de quem vai retirar.'); return; }
-      if (!deliveryPersonCpf.trim()) { alert('Informe o CPF de quem vai retirar.'); return; }
+      if (!deliveryPersonName.trim()) { toast.error('Informe o nome de quem vai retirar.'); return; }
+      if (!deliveryPersonPhone.trim()) { toast.error('Informe o telefone de quem vai retirar.'); return; }
+      if (!deliveryPersonCpf.trim()) { toast.error('Informe o CPF de quem vai retirar.'); return; }
     }
     if (onUpdateOrder) {
       onUpdateOrder({
@@ -960,7 +965,7 @@ const renderDeliverySection = () => {
         delivery_person_cpf: deliveryPersonType === 'outro' ? deliveryPersonCpf.trim() : order.client_cpf,
       } as any);
     }
-    alert('✅ Dados de retirada salvos!');
+    toast.success('Dados de retirada salvos!');
   };
 
   return (
@@ -1106,7 +1111,7 @@ const renderDeliverySection = () => {
           size="sm"
           onClick={() => {
             if (!deliveryTermsAccepted) {
-              alert('Por favor, confirme que leu e concorda com o termo de entrega do veículo antes de coletar a assinatura.');
+              toast.error('Por favor, confirme que leu e concorda com o termo de entrega do veículo antes de coletar a assinatura.');
               return;
             }
             setShowDeliverySignature(true);
@@ -1195,7 +1200,7 @@ const renderDeliverySection = () => {
                   if (order.status === 'concluida_entregue') return; // Bloqueia alteração
                   // Permite selecionar 'concluida_entregue' só após assinatura de entrega
                   if (value === 'concluida_entregue' && !deliverySignatureData && !isExpress) {
-                    alert('É necessário coletar a assinatura de entrega do veículo antes de marcar como Concluída e Pago.');
+                    toast.error('É necessário coletar a assinatura de entrega do veículo antes de marcar como Concluída e Pago.');
                     return;
                   }
 
@@ -1219,7 +1224,7 @@ const renderDeliverySection = () => {
                         // Auto-atribui o mecânico da OS aos serviços sem mecânico
                         servicosSemMecanico.forEach(m => onUpdateMaterial?.(m.id, 'mechanic_id', order.mechanic_id!));
                       } else {
-                        alert(`Existem ${servicosSemMecanico.length} serviço(s) sem mecânico atribuído:\n${servicosSemMecanico.map(m => `• ${m.descricao}`).join('\n')}\n\nAtribua um mecânico à OS ou a cada serviço antes de concluir.`);
+                        toast.error(`Existem ${servicosSemMecanico.length} serviço(s) sem mecânico atribuído:\n${servicosSemMecanico.map(m => `• ${m.descricao}`).join('\n')}\n\nAtribua um mecânico à OS ou a cada serviço antes de concluir.`);
                         return;
                       }
                     }
@@ -1384,7 +1389,7 @@ const renderDeliverySection = () => {
                       if (order.mechanic_id) {
                         servicosSemMecanico.forEach(m => onUpdateMaterial?.(m.id, 'mechanic_id', order.mechanic_id!));
                       } else {
-                        alert(`Existem ${servicosSemMecanico.length} serviço(s) sem mecânico atribuído:\n${servicosSemMecanico.map(m => `• ${m.descricao}`).join('\n')}\n\nAtribua um mecânico à OS ou a cada serviço antes de concluir.`);
+                        toast.error(`Existem ${servicosSemMecanico.length} serviço(s) sem mecânico atribuído:\n${servicosSemMecanico.map(m => `• ${m.descricao}`).join('\n')}\n\nAtribua um mecânico à OS ou a cada serviço antes de concluir.`);
                         return;
                       }
                     }
@@ -1845,7 +1850,7 @@ const renderDeliverySection = () => {
               title="Imprime só o equipamento e o serviço a fazer — não é a Ordem de Serviço completa"
               onClick={() => {
                 if (!signatureData) {
-                  alert('É necessário coletar a assinatura do cliente antes de imprimir.');
+                  toast.error('É necessário coletar a assinatura do cliente antes de imprimir.');
                   return;
                 }
                 const retiradaInfo = order.problem_description?.match(/Retirada: (.+?)(?:\n|$)/)?.[1] || 'Cliente';
@@ -2060,8 +2065,8 @@ const renderDeliverySection = () => {
                         variant="ghost"
                         size="icon"
                         className="h-8 px-2 text-xs text-muted-foreground"
-                        onClick={() => {
-                          const motivo = pedirMotivoEstorno(`o pagamento de R$ ${Number(p.amount || 0).toFixed(2)}`);
+                        onClick={async () => {
+                          const motivo = await pedirMotivoEstorno(`o pagamento de R$ ${Number(p.amount || 0).toFixed(2)}`);
                           if (motivo) onDeletePayment(p.id, motivo);
                         }}
                         disabled={isDeletingPayment || order.status === 'concluida_entregue'}

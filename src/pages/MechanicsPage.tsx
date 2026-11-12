@@ -1,3 +1,4 @@
+import { pedirTexto } from '@/components/v2/Confirmacao';
 import { useState } from 'react';
 import { useMechanics } from '@/hooks/useMechanics';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
@@ -117,9 +118,9 @@ export function MechanicsPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => {
-                      const novo = prompt('Nova comissão (%)', String(m.commission_rate));
-                      const val = novo ? parseFloat(novo) : NaN;
+                    onClick={async () => {
+                      const novo = await pedirTexto({ titulo: `Comissão de ${m.name}`, rotulo: 'Comissão (%)', valorInicial: String(m.commission_rate), numerico: true, obrigatorio: true, verbo: 'Salvar' });
+                      const val = novo ? parseFloat(novo.replace(',', '.')) : NaN;
                       if (!isNaN(val)) updateMechanic({ id: m.id, commission_rate: val });
                     }}
                   >
@@ -248,9 +249,9 @@ export function MechanicsPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => {
-                      const novo = prompt('Nova comissão (%)', String(m.commission_rate ?? 0));
-                      const val = novo ? parseFloat(novo) : NaN;
+                    onClick={async () => {
+                      const novo = await pedirTexto({ titulo: `Comissão de ${m.name}`, rotulo: 'Comissão (%)', valorInicial: String(m.commission_rate ?? 0), numerico: true, obrigatorio: true, verbo: 'Salvar' });
+                      const val = novo ? parseFloat(novo.replace(',', '.')) : NaN;
                       if (!isNaN(val)) updateMember({ id: m.id, commission_rate: val });
                     }}
                   >

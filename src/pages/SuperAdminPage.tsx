@@ -1,3 +1,4 @@
+import { confirmar } from '@/components/v2/Confirmacao';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -444,33 +445,30 @@ export default function SuperAdminPage() {
     await loadClients(true);
   };
 
-  const liberarLoja = () => {
+  const liberarLoja = async () => {
     if (!liberarAte) { toast.error('Escolha até quando liberar'); return; }
     // O campo de data é fácil de errar digitando — confirma por extenso
     const [y, m, d] = liberarAte.split('-').map(Number);
     const trava = new Date(y, m - 1, d + 4).toLocaleDateString('pt-BR');
-    if (!confirm(`Vencimento: ${fmt(liberarAte)}
-Se não pagar, trava em: ${trava}
-
-Confirmar?`)) return;
+    if (!(await confirmar({ titulo: `Liberar até ${fmt(liberarAte)}?`, descricao: `Se não pagar, trava em ${trava}.`, verbo: 'Liberar' }))) return;
     comandoLoja('liberar', 'admin_liberar_loja', { p_ate: liberarAte }, `Liberada até ${fmt(liberarAte)}`);
   };
 
-  const bloquearLoja = () => {
-    if (!confirm('Bloquear o acesso desta loja agora? Ela volta quando você liberar ou o cliente pagar.')) return;
+  const bloquearLoja = async () => {
+    if (!(await confirmar({ titulo: 'Bloquear o acesso desta loja agora?', descricao: 'Ela volta quando você liberar ou o cliente pagar.', verbo: 'Bloquear', perigo: true }))) return;
     comandoLoja('bloquear', 'admin_bloquear_loja', {}, 'Loja bloqueada');
   };
 
-  const registrarPagamento = () => {
+  const registrarPagamento = async () => {
     const valor = parseFloat(valorPago.replace(',', '.'));
     if (!valor || valor <= 0) { toast.error('Informe o valor recebido'); return; }
-    if (!confirm(`Registrar pagamento de R$ ${valor.toFixed(2)}? O vencimento anda 1 mês.`)) return;
+    if (!(await confirmar({ titulo: `Registrar pagamento de R$ ${valor.toFixed(2)}?`, descricao: 'O vencimento anda 1 mês.', verbo: 'Registrar' }))) return;
     comandoLoja('pagamento', 'admin_registrar_pagamento', { p_valor: valor }, 'Pagamento registrado');
   };
 
   const cancelSubscription = async () => {
     if (!selected?.subscription) return;
-    if (!confirm('Cancelar assinatura? O cliente perderá acesso.')) return;
+    if (!(await confirmar({ titulo: 'Cancelar a assinatura?', descricao: 'O cliente perde o acesso.', verbo: 'Cancelar assinatura', cancelar: 'Voltar', perigo: true }))) return;
     try {
       await atualizar('saas_subscriptions', { status: 'cancelled' }, selected.subscription.id);
       await atualizar('store_settings', { active: false }, selected.store_id);
@@ -608,7 +606,7 @@ Confirmar?`)) return;
   // Premium a R$149). Valor só muda pelo Editar da Assinatura.
   const savePlan = async () => {
     if (!selected) return;
-    if (selected.custom_features !== null && !confirm('Essa loja tem funcionalidades personalizadas. Trocar o plano volta as funcionalidades pro padrão do plano novo. Continuar?')) return;
+    if (selected.custom_features !== null && !(await confirmar({ titulo: 'Trocar o plano?', descricao: 'Essa loja tem funcionalidades personalizadas. Trocar o plano volta as funcionalidades para o padrão do plano novo.', verbo: 'Trocar plano' }))) return;
     setSaving(true);
     try {
       await atualizar('store_settings', { plan: newPlan, custom_features: null }, selected.store_id);

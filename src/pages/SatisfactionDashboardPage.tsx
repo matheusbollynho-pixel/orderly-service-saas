@@ -665,7 +665,7 @@ export default function SatisfactionDashboardPage() {
                       size="sm"
                       className="bg-[#C1272D] hover:bg-red-700"
                       onClick={() => {
-                        if (!phone) { alert('Telefone do cliente não disponível.'); return; }
+                        if (!phone) { toast.error('Telefone do cliente não disponível.'); return; }
                         window.open(wa, '_blank');
                       }}
                     >

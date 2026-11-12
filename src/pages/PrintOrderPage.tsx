@@ -1,3 +1,4 @@
+import { toast } from 'sonner';
 import { useParams, useLocation } from "react-router-dom"
 import { useEffect, useState, useCallback, useRef } from "react"
 import { supabase } from "@/integrations/supabase/client"
@@ -313,7 +314,7 @@ export function PrintOrderPage() {
       console.log('[PrintOrderPage] Download completed');
     } catch (error: Error | unknown) {
       console.error('[PrintOrderPage] Erro ao baixar PDF:', error)
-      alert('Erro ao gerar PDF. Tente novamente.')
+      toast.error('Erro ao gerar PDF. Tente novamente.')
     } finally {
       setIsDownloading(false)
     }
@@ -324,7 +325,7 @@ export function PrintOrderPage() {
     try {
       if (!orderData?.client_phone) {
         console.warn('[PrintOrderPage] Phone not found');
-        alert('Telefone do cliente não encontrado.')
+        toast.error('Telefone do cliente não encontrado.')
         return
       }
 
@@ -336,7 +337,7 @@ export function PrintOrderPage() {
       const cleanPhone = orderData.client_phone.replace(/\D/g, '')
       if (cleanPhone.length < 10 || cleanPhone.length > 11) {
         console.warn('[PrintOrderPage] Invalid phone:', cleanPhone);
-        alert('Telefone do cliente inválido para WhatsApp.')
+        toast.error('Telefone do cliente inválido para WhatsApp.')
         return
       }
 
@@ -353,7 +354,7 @@ export function PrintOrderPage() {
       console.log('[PrintOrderPage] WhatsApp send completed');
     } catch (error: Error | unknown) {
       console.error('[PrintOrderPage] Erro ao enviar WhatsApp:', error)
-      alert((error as Error)?.message || 'Erro ao enviar PDF. Tente novamente.')
+      toast.error((error as Error)?.message || 'Erro ao enviar PDF. Tente novamente.')
     } finally {
       setIsSendingWhatsApp(false)
     }

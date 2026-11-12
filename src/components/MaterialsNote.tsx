@@ -1,3 +1,4 @@
+import { toast } from 'sonner';
 import { matchesSearch } from '@/lib/textSearch';
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -113,11 +114,11 @@ export function MaterialsNote({
 
   const handleAddMaterial = () => {
     if (!newMaterial.descricao || !newMaterial.quantidade || !newMaterial.valor) {
-      alert('Preencha todos os campos para adicionar material');
+      toast.error('Preencha todos os campos para adicionar material');
       return;
     }
     if (newMaterial.is_service && !newMaterial.mechanic_id) {
-      alert('Selecione o mecânico responsável pelo serviço antes de adicionar.');
+      toast.error('Selecione o mecânico responsável pelo serviço antes de adicionar.');
       return;
     }
 

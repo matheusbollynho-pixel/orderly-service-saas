@@ -1,3 +1,4 @@
+import { confirmar } from '@/components/v2/Confirmacao';
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import { useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -250,7 +251,7 @@ function ItemFalta({ item, cot }: { item: CotacaoItem; cot: Cot }) {
                 <X className="h-4 w-4 mr-1" /> Não precisa mais
               </Button>
               <Button size="sm" variant="ghost" className="text-destructive"
-                onClick={() => { if (confirm(`Excluir "${item.texto}" e todos os preços dela?`)) cot.excluirItem.mutate(item.id); }}>
+                onClick={async () => { if (await confirmar({ titulo: `Excluir "${item.texto}"?`, descricao: 'Os preços dessa peça também saem.', verbo: 'Excluir', perigo: true })) cot.excluirItem.mutate(item.id); }}>
                 <Trash2 className="h-4 w-4" />
               </Button>
             </div>
@@ -778,7 +779,7 @@ function AbaRepresentantes({ cot }: { cot: Cot }) {
             <div className="flex">
               <Button size="icon" variant="ghost" onClick={() => setForm({ ...r })}><Pencil className="h-4 w-4" /></Button>
               <Button size="icon" variant="ghost" className="text-destructive"
-                onClick={() => { if (confirm(`Excluir ${r.nome}? Os preços dele continuam, mas sem nome.`)) cot.excluirRepresentante.mutate(r.id); }}>
+                onClick={async () => { if (await confirmar({ titulo: `Excluir ${r.nome}?`, descricao: 'Os preços dele continuam, mas sem nome.', verbo: 'Excluir', perigo: true })) cot.excluirRepresentante.mutate(r.id); }}>
                 <Trash2 className="h-4 w-4" />
               </Button>
             </div>
@@ -918,7 +919,7 @@ function AbaDicionario({ cot }: { cot: Cot }) {
         <div key={r.id} className="flex items-start justify-between gap-2 border-b pb-2 text-sm">
           <span>{r.regra}</span>
           <Button size="icon" variant="ghost" className="text-destructive shrink-0"
-            onClick={() => { if (confirm('Apagar essa regra?')) cot.excluirRegra.mutate(r.id); }}>
+            onClick={async () => { if (await confirmar({ titulo: 'Apagar essa regra do dicionário?', verbo: 'Apagar', perigo: true })) cot.excluirRegra.mutate(r.id); }}>
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>

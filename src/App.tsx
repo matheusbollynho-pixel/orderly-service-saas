@@ -1,5 +1,6 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
+import { ConfirmacaoHost } from "@/components/v2/Confirmacao";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
@@ -224,6 +225,7 @@ const App = () => {
           <TooltipProvider>
             <Toaster />
             <Sonner />
+            <ConfirmacaoHost />
             <BrowserRouter>
               <AppContent />
             </BrowserRouter>

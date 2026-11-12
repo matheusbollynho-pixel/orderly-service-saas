@@ -538,9 +538,9 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder }: CashFlowPag
                       size="sm"
                       className="h-8 px-2 text-xs text-muted-foreground"
                       disabled={isEstornando}
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation();
-                        const motivo = pedirMotivoEstorno(`"${entry.description}"`);
+                        const motivo = await pedirMotivoEstorno(`"${entry.description}"`);
                         if (motivo) estornarEntry({ id: entry.id, motivo });
                       }}
                     >

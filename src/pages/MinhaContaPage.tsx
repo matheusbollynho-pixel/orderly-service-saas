@@ -1,3 +1,4 @@
+import { pedirTexto } from '@/components/v2/Confirmacao';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -115,7 +116,7 @@ export default function MinhaContaPage() {
       // Sem CPF/CNPJ válido salvo o Asaas não gera — antes aqui não tinha onde digitar
       if (data?.precisa_documento) {
         if (cpfCnpj) toast.error(data.error);
-        const doc = window.prompt('Para gerar o Pix, digite o CPF ou CNPJ do responsável (só números):');
+        const doc = await pedirTexto({ titulo: 'CPF ou CNPJ do responsável', descricao: 'Precisa para gerar o Pix da mensalidade.', placeholder: 'Só números', numerico: true, obrigatorio: true, verbo: 'Gerar Pix' });
         const limpo = (doc || '').replace(/\D/g, '');
         if (limpo.length === 11 || limpo.length === 14) {
           setGenerating(false);

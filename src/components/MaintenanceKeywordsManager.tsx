@@ -1,3 +1,4 @@
+import { confirmar } from '@/components/v2/Confirmacao';
 import { matchesSearch } from '@/lib/textSearch';
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -53,7 +54,7 @@ export function MaintenanceKeywordsManager() {
 
   const handleSave = async () => {
     if (!formData.keyword?.trim()) {
-      alert('Palavra-chave é obrigatória');
+      toast.error('Palavra-chave é obrigatória');
       return;
     }
 
@@ -75,7 +76,7 @@ export function MaintenanceKeywordsManager() {
 
   const handleAdd = async () => {
     if (!formData.keyword?.trim()) {
-      alert('Palavra-chave é obrigatória');
+      toast.error('Palavra-chave é obrigatória');
       return;
     }
 
@@ -108,7 +109,7 @@ export function MaintenanceKeywordsManager() {
   };
 
   const handleDelete = async (keywordId: string, keywordName: string) => {
-    if (!confirm(`Tem certeza que deseja excluir a palavra-chave "${keywordName}"?\n\nIsso irá remover a palavra-chave mas NÃO os lembretes já criados.`)) {
+    if (!(await confirmar({ titulo: `Excluir a palavra-chave "${keywordName}"?`, descricao: 'Os lembretes que já foram criados continuam.', verbo: 'Excluir', perigo: true }))) {
       return;
     }
 

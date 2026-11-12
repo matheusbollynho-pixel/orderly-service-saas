@@ -1,3 +1,4 @@
+import { confirmar } from '@/components/v2/Confirmacao';
 import { matchesSearch } from '@/lib/textSearch';
 import { useState, useRef, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -462,7 +463,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
         return;
       }
     }
-    if (!window.confirm(`Finalizar nota de R$ ${total.toFixed(2)}? Esta ação lançará no caixa e dará baixa no estoque.`)) return;
+    if (!(await confirmar({ titulo: `Finalizar a nota de R$ ${total.toFixed(2)}?`, descricao: 'O valor entra no caixa e as peças saem do estoque.', verbo: 'Finalizar nota' }))) return;
     await saveTotals(discPct);
     await finalizeOrder(order.id);
   };

@@ -1,3 +1,4 @@
+import { confirmar } from '@/components/v2/Confirmacao';
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -115,8 +116,8 @@ export function WhatsappConexao({ bloqueadoPlano = false, onUpgrade }: { bloquea
           variant="outline"
           size="sm"
           disabled={desconectar.isPending}
-          onClick={() => {
-            if (confirm('Desconectar o WhatsApp? As mensagens automáticas param de sair até você conectar de novo.')) desconectar.mutate();
+          onClick={async () => {
+            if (await confirmar({ titulo: 'Desconectar o WhatsApp?', descricao: 'As mensagens automáticas param de sair até você conectar de novo.', verbo: 'Desconectar', perigo: true })) desconectar.mutate();
           }}
         >
           Desconectar

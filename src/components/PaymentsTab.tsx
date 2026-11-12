@@ -285,8 +285,8 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
                               {p.notes ? <p className="text-xs text-muted-foreground">Obs: {p.notes}</p> : null}
                             </div>
                             <div className="flex gap-1">
-                              <Button variant="ghost" size="sm" className="h-8 px-2 text-xs text-muted-foreground" onClick={() => {
-                                const motivo = pedirMotivoEstorno(`o pagamento de R$ ${Number(p.amount || 0).toFixed(2)}`);
+                              <Button variant="ghost" size="sm" className="h-8 px-2 text-xs text-muted-foreground" onClick={async () => {
+                                const motivo = await pedirMotivoEstorno(`o pagamento de R$ ${Number(p.amount || 0).toFixed(2)}`);
                                 if (motivo) onDeletePayment(p.id, motivo);
                               }}>
                                 <Undo2 className="h-4 w-4 mr-1" /> Estornar

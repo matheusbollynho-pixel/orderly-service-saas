@@ -1,3 +1,4 @@
+import { toast } from 'sonner';
 import { useEffect, useState } from 'react';
 import { useStore } from '@/contexts/StoreContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -200,10 +201,10 @@ export default function AfterSalesPage() {
       }
 
       await loadMaintenanceReminders();
-      alert(`✅ Lembretes gerados: ${createdCount}`);
+      toast.success(`Lembretes gerados: ${createdCount}`);
     } catch (error) {
       console.error('Erro ao reprocessar lembretes:', error);
-      alert('❌ Erro ao reprocessar lembretes');
+      toast.error('Erro ao reprocessar lembretes');
     } finally {
       setBackfillLoading(false);
     }
@@ -419,7 +420,7 @@ export default function AfterSalesPage() {
       console.log('📊 Aniversários encontrados:', birthdays.length);
       
       if (birthdays.length === 0) {
-        alert('❌ Nenhum aniversário encontrado para hoje');
+        toast.error('Nenhum aniversário encontrado para hoje');
         setSendingId(null);
         return;
       }
@@ -437,11 +438,11 @@ export default function AfterSalesPage() {
         }
       }
 
-      alert(`✅ ${sucessos} mensagem(ns) enviada(s) com sucesso!`);
+      toast.success(`${sucessos} mensagem(ns) enviada(s) com sucesso!`);
       await loadData();
     } catch (error) {
       console.error('❌ Erro no teste:', error);
-      alert('❌ Erro ao testar. Verifique o console (F12)');
+      toast.error('Erro ao testar. Verifique o console (F12)');
     } finally {
       setSendingId(null);
     }
