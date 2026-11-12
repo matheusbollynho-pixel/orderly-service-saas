@@ -58,7 +58,7 @@ export function FormPrecoManual({ itemId, cot, onFim }: { itemId: string; cot: C
       <Input placeholder="Marca (opcional)" value={marca} onChange={(e) => setMarca(e.target.value)} />
       {internet && (
         <>
-          <Input placeholder="Frete pro CEP da loja" inputMode="decimal" value={frete} onChange={(e) => setFrete(e.target.value)} />
+          <Input placeholder="Frete até a loja (R$)" inputMode="decimal" value={frete} onChange={(e) => setFrete(e.target.value)} />
           <Input placeholder="Link do anúncio (opcional)" value={link} onChange={(e) => setLink(e.target.value)} />
         </>
       )}
