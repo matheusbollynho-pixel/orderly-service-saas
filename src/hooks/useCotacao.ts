@@ -413,19 +413,24 @@ export function useCotacao() {
     onError,
   });
 
-  const adicionarPrecoInternet = useMutation({
-    mutationFn: async (p: { item_id: string; loja_internet: string; preco: number; frete: number | null; marca: string | null; link: string | null }) => {
+  const adicionarPrecoManual = useMutation({
+    mutationFn: async (p: {
+      item_id: string; representante_id: string | null; loja_internet: string | null;
+      preco: number; frete: number | null; marca: string | null; link: string | null; obs: string | null;
+    }) => {
+      const { obs, ...campos } = p;
       const { error } = await db.from('cotacao_precos').insert({
-        ...p,
+        ...campos,
         store_id: storeId,
-        fonte: 'internet',
+        fonte: p.representante_id ? 'representante' : 'internet',
         situacao: 'cotado',
         preco_por: 'unidade',
+        motivo: obs,
         confirmado: true,
       });
       if (error) throw error;
     },
-    onSuccess: () => { invalidar(); toast.success('Preço da internet adicionado'); },
+    onSuccess: () => { invalidar(); toast.success('Preço adicionado'); },
     onError,
   });
 
@@ -487,7 +492,7 @@ export function useCotacao() {
     excluirRepresentante,
     lerResposta,
     atualizarPreco,
-    adicionarPrecoInternet,
+    adicionarPrecoManual,
     excluirPreco,
     adicionarRegra,
     excluirRegra,

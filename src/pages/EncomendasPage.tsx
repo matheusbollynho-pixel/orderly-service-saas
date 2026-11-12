@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useClients, type Client, type Motorcycle } from '@/hooks/useClients';
 import { matchesSearch } from '@/lib/textSearch';
+import { FormPrecoManual } from '@/components/cotacao/FormPrecoManual';
 import {
   useCotacao, brl, diasAtras, enviarWhats, mensagemCotacao, mensagemLink, urlLink, resumoEntrega, ordenarOpcoes, proximaEntregaGratis,
   type CotacaoPreco,
@@ -521,10 +522,12 @@ function DialogInformar({ e, modeloInicial, enc, cot, onFechar }: {
           <div className="rounded-md border p-2 space-y-1 text-xs">
             {verCusto && (custo
               ? <p>Loja paga: <b>{brl(custo.preco)}</b>{custo.marca ? ` · ${custo.marca}` : ''}{rep ? ` · ${rep.nome}` : ''}</p>
-              : <p>Loja paga: <b>ainda não sabemos</b>. Nenhum representante respondeu com preço dessa peça. Use "Pedir preço agora" ou digite o preço pro cliente mesmo assim.</p>)}
+              : <p>Loja paga: <b>ainda não sabemos</b>. Se algum representante já te passou o preço (telefone, pessoalmente), coloque abaixo.</p>)}
             {rep && <p className="text-muted-foreground">{resumoEntrega(rep).join(' · ')}</p>}
             {ultimo && <p className="text-muted-foreground">Última vez cobrado: {brl(ultimo.preco_venda)} ({new Date(ultimo.created_at).toLocaleDateString('pt-BR')})</p>}
           </div>
+
+          {!custo && e.cotacao_item_id && <FormPrecoManual itemId={e.cotacao_item_id} cot={cot} />}
 
           <div className="grid grid-cols-2 gap-2">
             <div>

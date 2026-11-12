@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { matchesSearch, normalizeSearch } from '@/lib/textSearch';
+import { FormPrecoManual } from '@/components/cotacao/FormPrecoManual';
 import {
   useCotacao, brl, diasAtras, resumoEntrega, enviarWhats, mensagemCotacao, mensagemLink, urlLink, linksInternet, ordenarOpcoes,
   type CotacaoItem, type CotacaoPreco, type Representante, type Situacao,
@@ -220,7 +221,7 @@ function ItemFalta({ item, cot }: { item: CotacaoItem; cot: Cot }) {
                 <a href={links.shopee} target="_blank" rel="noreferrer"><Search className="h-4 w-4 mr-1" /> Shopee</a>
               </Button>
               <Button size="sm" variant="outline" onClick={() => setInternet((v) => !v)}>
-                <Plus className="h-4 w-4 mr-1" /> Preço da internet
+                <Plus className="h-4 w-4 mr-1" /> Adicionar preço (telefone, internet...)
               </Button>
               <Button size="sm" variant="ghost" onClick={() => { setTexto(item.texto); setQtd(String(item.quantidade)); setEditando(true); }}>
                 <Pencil className="h-4 w-4 mr-1" /> Editar
@@ -233,7 +234,7 @@ function ItemFalta({ item, cot }: { item: CotacaoItem; cot: Cot }) {
                 <Trash2 className="h-4 w-4" />
               </Button>
             </div>
-            {internet && <FormInternet item={item} cot={cot} onFim={() => setInternet(false)} />}
+            {internet && <FormPrecoManual itemId={item.id} cot={cot} onFim={() => setInternet(false)} />}
           </div>
         )}
       </CardContent>
@@ -294,49 +295,12 @@ function OpcaoPreco({ p, item, cot, escolhido }: { p: CotacaoPreco; item: Cotaca
             <Undo2 className="h-4 w-4 mr-1" /> Desfazer escolha
           </Button>
         )}
-        {p.fonte === 'internet' && (
+        {!p.resposta_id && ( // digitado à mão (telefone ou internet): dá pra apagar
           <Button size="sm" variant="ghost" className="text-destructive" onClick={() => cot.excluirPreco.mutate(p.id)}>
             <Trash2 className="h-4 w-4" />
           </Button>
         )}
       </div>
-    </div>
-  );
-}
-
-function FormInternet({ item, cot, onFim }: { item: CotacaoItem; cot: Cot; onFim: () => void }) {
-  const [loja, setLoja] = useState('Mercado Livre');
-  const [preco, setPreco] = useState('');
-  const [frete, setFrete] = useState('');
-  const [marca, setMarca] = useState('');
-  const [link, setLink] = useState('');
-  const num = (v: string) => (v.trim() ? Number(v.replace(/\./g, '').replace(',', '.')) : null);
-
-  const salvar = () => {
-    const p = num(preco);
-    if (p == null || Number.isNaN(p)) return toast.error('Informe o preço');
-    const f = num(frete);
-    cot.adicionarPrecoInternet.mutate(
-      { item_id: item.id, loja_internet: loja, preco: p, frete: f != null && !Number.isNaN(f) ? f : null, marca: marca.trim() || null, link: link.trim() || null },
-      { onSuccess: onFim },
-    );
-  };
-
-  return (
-    <div className="grid grid-cols-2 gap-2 rounded-md border p-2">
-      <Select value={loja} onValueChange={setLoja}>
-        <SelectTrigger><SelectValue /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value="Mercado Livre">Mercado Livre</SelectItem>
-          <SelectItem value="Shopee">Shopee</SelectItem>
-          <SelectItem value="Outro site">Outro site</SelectItem>
-        </SelectContent>
-      </Select>
-      <Input placeholder="Marca (opcional)" value={marca} onChange={(e) => setMarca(e.target.value)} />
-      <Input placeholder="Preço (ex: 89,90)" inputMode="decimal" value={preco} onChange={(e) => setPreco(e.target.value)} />
-      <Input placeholder="Frete pro CEP da loja" inputMode="decimal" value={frete} onChange={(e) => setFrete(e.target.value)} />
-      <Input className="col-span-2" placeholder="Link do anúncio (opcional)" value={link} onChange={(e) => setLink(e.target.value)} />
-      <Button size="sm" className="col-span-2" onClick={salvar} disabled={cot.adicionarPrecoInternet.isPending}>Salvar preço</Button>
     </div>
   );
 }
