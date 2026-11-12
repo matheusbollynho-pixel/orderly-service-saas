@@ -117,8 +117,10 @@ describe('dataEntregaExtra / textoData (van paga da Osia)', () => {
     const tarde = new Date(2026, 10, 12, 13, 0);
     expect(textoData(dataEntregaExtra(osia, tarde)!, tarde)).toBe('amanhã');
   });
-  it('grátis: sexta (13/11)', async () => {
+  it('grátis: de quinta, a sexta é "amanhã"; de terça, "sexta (13/11)"', async () => {
     const { textoData } = await import('@/hooks/useCotacao');
-    expect(textoData(proximaEntregaGratis(osia, madrugada)!, madrugada)).toBe('sexta (13/11)');
+    expect(textoData(proximaEntregaGratis(osia, madrugada)!, madrugada)).toBe('amanhã');
+    const terca = new Date(2026, 10, 10, 9, 0);
+    expect(textoData(proximaEntregaGratis(osia, terca)!, terca)).toBe('sexta (13/11)');
   });
 });
