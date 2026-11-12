@@ -47,6 +47,37 @@ Deno.serve(async (req: Request) => {
 
     console.log('✅ Requisição POST recebida');
 
+    // ── Autenticação (12/11/2026) ─────────────────────────────────────────────
+    // Antes qualquer um (sem login) mandava mensagem pelo WhatsApp de QUALQUER
+    // loja só passando o store_id no corpo. Agora:
+    //  - usuário logado: só pela loja dele (store_id vem do login, não do corpo)
+    //  - uso interno: só com a service role key
+    const json401 = (msg: string, status = 401) => new Response(JSON.stringify({ error: msg }), {
+      status,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    });
+    const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const authAdmin = createClient(Deno.env.get('SUPABASE_URL')!, SERVICE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '').trim();
+    if (!token) return json401('Não autorizado');
+    const interno = token === SERVICE_KEY;
+    let lojaDoUsuario: string | null = null;
+    if (!interno) {
+      const { data: userData } = await authAdmin.auth.getUser(token);
+      if (!userData?.user) return json401('Não autorizado');
+      const { data: membro } = await authAdmin
+        .from('store_members')
+        .select('store_id')
+        .eq('user_id', userData.user.id)
+        .eq('active', true)
+        .limit(1)
+        .maybeSingle();
+      if (!membro?.store_id) return json401('Usuário sem loja', 403);
+      lojaDoUsuario = membro.store_id;
+    }
+
     // Parse do corpo JSON
     const payload: RequestBody | null = await req.json().catch(() => null);
     if (!payload || !payload.to || (!payload.message && !payload.fileUrl && !payload.fileBase64)) {
@@ -54,6 +85,12 @@ Deno.serve(async (req: Request) => {
         status: 400,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
       });
+    }
+
+    if (!interno) {
+      // Usuário nunca escolhe a loja: é sempre a dele (e nunca o número do sistema)
+      if (payload.store_id && payload.store_id !== lojaDoUsuario) return json401('Loja não permitida', 403);
+      payload.store_id = lojaDoUsuario!;
     }
 
     console.log('✅ Payload válido para:', payload.to);

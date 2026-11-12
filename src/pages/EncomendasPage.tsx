@@ -15,6 +15,7 @@ import {
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { useStore } from '@/contexts/StoreContext';
 import { useClients, type Client, type Motorcycle } from '@/hooks/useClients';
 import { matchesSearch } from '@/lib/textSearch';
 import {
@@ -43,7 +44,7 @@ function custoDaCotacao(e: Encomenda, cot: Cot): CotacaoPreco | null {
     .find((p) => p.situacao === 'cotado' && p.preco != null) ?? null;
 }
 
-type Filtro = 'ativas' | 'finalizadas' | StatusEncomenda;
+type Filtro = 'ativas' | StatusEncomenda;
 
 const CHAVE_VER_CUSTO = 'encomendas_ver_custo';
 
@@ -70,7 +71,8 @@ const CARTOES: { id: Filtro; label: string; icon: typeof Check; status: StatusEn
   { id: 'aprovado', label: 'Falta pedir', icon: ShoppingCart, status: ['aprovado'], cor: 'text-purple-500' },
   { id: 'pedido_feito', label: 'Já pedido', icon: Truck, status: ['pedido_feito'], cor: 'text-orange-500' },
   { id: 'chegou', label: 'Chegou', icon: PackageCheck, status: ['chegou'], cor: 'text-green-500' },
-  { id: 'finalizadas', label: 'Finalizadas', icon: CheckCircle2, status: ['entregue', 'desistiu'] },
+  { id: 'entregue', label: 'Entregues', icon: CheckCircle2, status: ['entregue'] },
+  { id: 'desistiu', label: 'Desistiu', icon: Ban, status: ['desistiu'], cor: 'text-red-500' },
 ];
 
 function Cartao({ label, valor, icon: Icon, ativo, cor, onClick }: {
@@ -122,7 +124,7 @@ export default function EncomendasPage() {
       {nova && <NovaEncomenda enc={enc} cot={cot} onFim={() => setNova(false)} />}
 
       <div className="bg-neutral-900 rounded-[8px] p-3 md:p-4">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 md:gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 md:gap-3">
           {CARTOES.map((c) => (
             <Cartao key={c.id} label={c.label} icon={c.icon} cor={c.cor} ativo={filtro === c.id}
               valor={enc.encomendas.filter((e) => c.status.includes(e.status)).length}
@@ -340,9 +342,11 @@ function NovaEncomenda({ enc, cot, onFim }: { enc: Enc; cot: Cot; onFim: () => v
 
 function CardEncomenda({ e, enc, cot }: { e: Encomenda; enc: Enc; cot: Cot }) {
   const [verCusto] = useVerCusto();
+  const { isOwner } = useStore();
   const [informar, setInformar] = useState<ModeloMensagem | null>(null);
   const [pedir, setPedir] = useState(false);
   const [caixa, setCaixa] = useState<'receber' | 'entregar' | 'devolver' | null>(null);
+  const [desistir, setDesistir] = useState(false);
   const s = STATUS_ENCOMENDA[e.status];
   const pago = Number(e.pago_adiantado || 0);
   const custo = custoDaCotacao(e, cot);
@@ -381,6 +385,9 @@ function CardEncomenda({ e, enc, cot }: { e: Encomenda; enc: Enc; cot: Cot }) {
           </p>
         )}
         {e.observacao && <p className="text-xs text-muted-foreground">Obs: {e.observacao}</p>}
+        {e.status === 'desistiu' && (
+          <p className="text-xs text-red-600">Motivo da desistência: {e.motivo_desistencia || 'não informado'}</p>
+        )}
 
         {ATIVOS.includes(e.status) && (
           <div className="flex flex-wrap gap-2 pt-1">
@@ -418,11 +425,7 @@ function CardEncomenda({ e, enc, cot }: { e: Encomenda; enc: Enc; cot: Cot }) {
               <Button size="sm" variant="ghost" onClick={() => setInformar('livre')}><MessageCircle className="h-4 w-4 mr-1" /> Mensagem</Button>
             )}
             <Button size="sm" variant="ghost" className="text-destructive"
-              onClick={() => {
-                if (!confirm(`${e.cliente_nome} desistiu da encomenda?`)) return;
-                mudar('desistiu');
-                if (pago > 0) setCaixa('devolver');
-              }}>
+              onClick={() => setDesistir(true)}>
               <Ban className="h-4 w-4 mr-1" /> Desistiu
             </Button>
           </div>
@@ -430,16 +433,25 @@ function CardEncomenda({ e, enc, cot }: { e: Encomenda; enc: Enc; cot: Cot }) {
         {!ATIVOS.includes(e.status) && (
           <div className="flex gap-2">
             <Button size="sm" variant="ghost" onClick={() => mudar('aguardando_cotacao')}>Reabrir</Button>
-            <Button size="sm" variant="ghost" className="text-destructive"
-              onClick={() => { if (confirm('Excluir essa encomenda de vez?')) enc.excluir.mutate(e); }}>
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            {/* Só o dono exclui (o banco também bloqueia pra funcionário) */}
+            {isOwner && (
+              <Button size="sm" variant="ghost" className="text-destructive" title="Excluir (só o dono)"
+                onClick={() => { if (confirm('Excluir essa encomenda de vez?')) enc.excluir.mutate(e); }}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         )}
       </CardContent>
       {informar && <DialogInformar e={e} modeloInicial={informar} enc={enc} cot={cot} onFechar={() => setInformar(null)} />}
       {pedir && <DialogPedirPreco e={e} cot={cot} onFechar={() => setPedir(false)} />}
       {caixa && <DialogCaixa e={e} modo={caixa} enc={enc} onFechar={() => setCaixa(null)} />}
+      {desistir && (
+        <DialogDesistir e={e} enc={enc} onFechar={(desistiu) => {
+          setDesistir(false);
+          if (desistiu && pago > 0) setCaixa('devolver');
+        }} />
+      )}
     </Card>
   );
 }
@@ -679,6 +691,49 @@ function DialogCaixa({ e, modo, enc, onFechar }: {
             </Button>
           )}
           {modo === 'devolver' && <Button variant="ghost" className="w-full" onClick={onFechar}>Não devolveu</Button>}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ------------------------------------------------------------------ Desistência
+
+const MOTIVOS = ['Achou mais barato', 'Demorou demais', 'Comprou em outro lugar', 'Não precisa mais', 'Não respondeu mais', 'Outro'];
+
+function DialogDesistir({ e, enc, onFechar }: { e: Encomenda; enc: Enc; onFechar: (desistiu: boolean) => void }) {
+  const [motivo, setMotivo] = useState('');
+  const [detalhe, setDetalhe] = useState('');
+  const ocupado = enc.mudarStatus.isPending || enc.atualizar.isPending;
+
+  const confirmar = async () => {
+    if (!motivo) return toast.error('Escolha o motivo');
+    const texto = [motivo, detalhe.trim()].filter(Boolean).join(': ');
+    try {
+      await enc.atualizar.mutateAsync({ id: e.id, motivo_desistencia: texto });
+      await enc.mudarStatus.mutateAsync({ e, status: 'desistiu' });
+      onFechar(true);
+    } catch {
+      // toast já mostrado
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onFechar(false)}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>{e.cliente_nome} desistiu?</DialogTitle></DialogHeader>
+        <div className="space-y-3 text-sm">
+          <Label>Motivo</Label>
+          <div className="grid grid-cols-2 gap-2">
+            {MOTIVOS.map((m) => (
+              <Button key={m} size="sm" type="button" variant={motivo === m ? 'default' : 'outline'} onClick={() => setMotivo(m)}>{m}</Button>
+            ))}
+          </div>
+          <Input value={detalhe} onChange={(ev) => setDetalhe(ev.target.value)} placeholder="Detalhe (opcional)" />
+          <Button className="w-full" variant="destructive" onClick={confirmar} disabled={ocupado}>
+            <Ban className="h-4 w-4 mr-1" /> Confirmar desistência
+          </Button>
+          <Button className="w-full" variant="ghost" onClick={() => onFechar(false)}>Voltar</Button>
         </div>
       </DialogContent>
     </Dialog>

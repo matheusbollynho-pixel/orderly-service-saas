@@ -31,6 +31,7 @@ export interface Encomenda {
   prazo_texto: string | null;
   pago_adiantado: number;
   observacao: string | null;
+  motivo_desistencia: string | null;
   avisado_em: string | null;
   aprovado_em: string | null;
   pedido_em: string | null;
@@ -269,8 +270,10 @@ export function useEncomendas() {
 
   const excluir = useMutation({
     mutationFn: async (e: Encomenda) => {
-      const { error } = await db.from('encomendas').delete().eq('id', e.id);
+      const { data, error } = await db.from('encomendas').delete().eq('id', e.id).select('id');
       if (error) throw error;
+      // O banco só deixa o dono apagar: se nada foi apagado, avisa em vez de fingir que deu certo
+      if (!data || data.length === 0) throw new Error('Só o dono da loja pode excluir encomendas.');
       if (e.cotacao_item_id) {
         await db.from('cotacao_itens').delete().eq('id', e.cotacao_item_id).eq('status', 'pendente');
       }
