@@ -4,7 +4,7 @@
 // Atualizado: 23/01/2026 - Suporte a envio de documentos PDF
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { logWhatsAppSend } from '../_shared/whatsapp.ts';
+import { logWhatsAppSend, normalizeBrPhone, telefoneDeEnfeite } from '../_shared/whatsapp.ts';
 
 interface RequestBody {
   to: string;           // número destino, ex: "5511999999999"
@@ -91,6 +91,16 @@ Deno.serve(async (req: Request) => {
       // Usuário nunca escolhe a loja: é sempre a dele (e nunca o número do sistema)
       if (payload.store_id && payload.store_id !== lojaDoUsuario) return json401('Loja não permitida', 403);
       payload.store_id = lojaDoUsuario!;
+    }
+
+    // Telefone de enfeite ("00000000000", "9999999999") ou curto: nem tenta enviar
+    // (a UazAPI devolvia "not on WhatsApp" e aparecia como erro no painel).
+    const numero = normalizeBrPhone(String(payload.to));
+    if (numero.length < 12 || telefoneDeEnfeite(numero)) {
+      return new Response(JSON.stringify({ success: false, error: 'Cliente sem telefone válido. Envio cancelado.' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      });
     }
 
     console.log('✅ Payload válido para:', payload.to);

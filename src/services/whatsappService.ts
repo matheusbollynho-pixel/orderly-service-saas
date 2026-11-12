@@ -16,10 +16,12 @@ function getSupabase() {
 function formatPhone(raw: string): string | null {
   const digits = raw.replace(/\D/g, '');
   // Precisa ter código do país (55) + DDD + número
-  if (digits.length < 12) {
-    return digits.length >= 10 ? `55${digits}` : null;
-  }
-  return digits;
+  const numero = digits.length < 12 ? (digits.length >= 10 ? `55${digits}` : null) : digits;
+  if (!numero) return null;
+  // Telefone de enfeite que a equipe digita quando o cliente não tem ("00000000000", "9999999999")
+  const local = numero.startsWith('55') ? numero.slice(2) : numero;
+  if (local.startsWith('0') || /^(\d)\1+$/.test(local)) return null;
+  return numero;
 }
 function sanitizeFileName(fileName: string): string {
   const safe = fileName

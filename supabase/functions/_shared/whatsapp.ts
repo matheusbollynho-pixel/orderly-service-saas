@@ -80,8 +80,18 @@ function resolveConfig(storeConfig?: StoreWhatsAppConfig, allowGlobalFallback = 
 
 // Barra antes de chamar a UazAPI: número vazio/curto ou texto vazio voltava
 // como "Missing required fields" (400) e aparecia como falha no relatório.
+/**
+ * Número de enfeite que a equipe digita quando o cliente não tem telefone
+ * ("00000000000", "9999999999", "00000099999"...). Nenhum DDD começa com 0 e
+ * ninguém tem número com o mesmo dígito repetido.
+ */
+export function telefoneDeEnfeite(formattedPhone: string): boolean {
+  const local = formattedPhone.startsWith('55') ? formattedPhone.slice(2) : formattedPhone;
+  return local.startsWith('0') || /^(\d)\1+$/.test(local);
+}
+
 function validarEnvio(formattedPhone: string, conteudo?: string) {
-  if (!formattedPhone || formattedPhone.length < 12) {
+  if (!formattedPhone || formattedPhone.length < 12 || telefoneDeEnfeite(formattedPhone)) {
     throw new Error(`Envio cancelado: cliente sem telefone válido (${formattedPhone || 'vazio'}).`);
   }
   if (conteudo !== undefined && !conteudo.trim()) {
@@ -173,6 +183,7 @@ export async function sendWhatsAppLocation(
 ) {
   const cfg = resolveConfig(storeConfig, context?.allowGlobalFallback === true);
   const formattedPhone = normalizeBrPhone(phone);
+  validarEnvio(formattedPhone);
 
   if (cfg.provider === 'uazapi') {
     if (!cfg.base) throw new Error('UazAPI: instance_url não configurada para esta loja');
