@@ -257,10 +257,31 @@ export function useCotacao() {
     },
   });
 
+  // Produtos do estoque no mínimo ou abaixo (só os que têm mínimo definido)
+  const estoqueBaixo = useQuery({
+    queryKey: ['cotacao', 'estoque-baixo'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('inventory_products')
+        .select('id, code, name, brand, stock_current, stock_minimum, stock_maximum')
+        .eq('active', true)
+        .gt('stock_minimum', 0)
+        .limit(2000);
+      if (error) throw error;
+      return (data ?? [])
+        .filter((p) => Number(p.stock_current) <= Number(p.stock_minimum))
+        .map((p) => ({
+          ...p,
+          // Sugestão: completa até o máximo; sem máximo, até 2x o mínimo
+          sugerido: Math.max(1, Math.ceil((p.stock_maximum ?? Number(p.stock_minimum) * 2) - Number(p.stock_current))),
+        }));
+    },
+  });
+
   const onError = (e: Error) => toast.error(e.message);
 
   const adicionarItens = useMutation({
-    mutationFn: async (linhas: { texto: string; quantidade: number }[]) => {
+    mutationFn: async (linhas: { texto: string; quantidade: number; observacao?: string | null }[]) => {
       const { error } = await db.from('cotacao_itens').insert(linhas.map((l) => ({ ...l, store_id: storeId })));
       if (error) throw error;
     },
@@ -388,6 +409,7 @@ export function useCotacao() {
     precos: precos.data ?? [],
     respostas: respostas.data ?? [],
     dicionario: dicionario.data ?? [],
+    estoqueBaixo: estoqueBaixo.data ?? [],
     carregando: representantes.isLoading || itens.isLoading || precos.isLoading,
     adicionarItens,
     atualizarItem,

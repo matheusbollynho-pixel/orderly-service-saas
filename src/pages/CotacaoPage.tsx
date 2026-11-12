@@ -107,6 +107,8 @@ function AbaFaltas({ cot }: { cot: Cot }) {
         </CardContent>
       </Card>
 
+      <PuxarDoEstoque cot={cot} pendentes={todosPendentes} />
+
       {todosPendentes.length > 5 && (
         <div className="relative">
           <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -148,6 +150,61 @@ function AbaFaltas({ cot }: { cot: Cot }) {
         </div>
       )}
     </div>
+  );
+}
+
+function PuxarDoEstoque({ cot, pendentes }: { cot: Cot; pendentes: CotacaoItem[] }) {
+  const [aberto, setAberto] = useState(false);
+  const [desmarcados, setDesmarcados] = useState<Set<string>>(new Set());
+  // Esconde o que já está na lista de faltas (mesmo nome, com ou sem acento)
+  const naLista = new Set(pendentes.map((i) => normalizeSearch(i.texto).replace(/\s+/g, ' ')));
+  const produtos = cot.estoqueBaixo.filter((p) => !naLista.has(normalizeSearch(p.name).replace(/\s+/g, ' ')));
+  if (produtos.length === 0) return null;
+  const escolhidos = produtos.filter((p) => !desmarcados.has(p.id));
+
+  const adicionar = () => {
+    if (!escolhidos.length) return;
+    cot.adicionarItens.mutate(
+      escolhidos.map((p) => ({
+        texto: p.name,
+        quantidade: p.sugerido,
+        observacao: `Estoque: tem ${Number(p.stock_current)}, mínimo ${Number(p.stock_minimum)}${p.code ? ` · cód ${p.code}` : ''}`,
+      })),
+      { onSuccess: () => { setAberto(false); setDesmarcados(new Set()); } },
+    );
+  };
+
+  return (
+    <Card className="border-yellow-500/40">
+      <CardContent className="p-3 space-y-2 text-sm">
+        <button className="w-full flex items-center justify-between text-left" onClick={() => setAberto((v) => !v)}>
+          <span className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-yellow-600" />
+            <b>{produtos.length} produto(s) do estoque no mínimo</b>
+          </span>
+          {aberto ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </button>
+        {aberto && (
+          <>
+            {produtos.map((p) => (
+              <label key={p.id} className="flex items-center gap-2">
+                <Checkbox checked={!desmarcados.has(p.id)} onCheckedChange={() => {
+                  const n = new Set(desmarcados);
+                  if (n.has(p.id)) n.delete(p.id); else n.add(p.id);
+                  setDesmarcados(n);
+                }} />
+                <span className="flex-1">{p.name}{p.brand ? ` · ${p.brand}` : ''}</span>
+                <span className="text-xs text-muted-foreground">tem {Number(p.stock_current)} / mín {Number(p.stock_minimum)} → pedir {p.sugerido}</span>
+              </label>
+            ))}
+            <Button size="sm" onClick={adicionar} disabled={!escolhidos.length || cot.adicionarItens.isPending}>
+              <Plus className="h-4 w-4 mr-1" /> Adicionar {escolhidos.length} na lista de faltas
+            </Button>
+            <p className="text-xs text-muted-foreground">A quantidade dá pra mudar depois em "Editar". Só aparece produto com estoque mínimo cadastrado.</p>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
