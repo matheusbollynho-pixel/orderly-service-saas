@@ -12,6 +12,7 @@ import { LoginPage } from "./pages/LoginPage";
 import AfterSalesPage from "./pages/AfterSalesPage";
 import { CashFlowPage } from "./pages/CashFlowPage";
 import PublicSatisfactionPage from "./pages/PublicSatisfactionPage";
+import CotarLinkPage from "./pages/CotarLinkPage";
 import PublicStoreSatisfactionPage from "./pages/PublicStoreSatisfactionPage";
 import PublicSatisfactionFeedPage from "./pages/PublicSatisfactionFeedPage";
 import { PrintOrderPage } from "./pages/PrintOrderPage";
@@ -49,6 +50,16 @@ function AppRoutes() {
   const location = useLocation();
   const isPublicSatisfaction = location.pathname.startsWith('/avaliar/');
   const isPublicFeed = location.pathname.startsWith('/avaliacoes/');
+  const isPublicCotacao = location.pathname.startsWith('/cotar/');
+
+  if (isPublicCotacao) {
+    // Link de cotação que o representante abre sem login
+    return (
+      <Routes>
+        <Route path="/cotar/:token" element={<CotarLinkPage />} />
+      </Routes>
+    );
+  }
 
   if (isPublicFeed) {
     return (

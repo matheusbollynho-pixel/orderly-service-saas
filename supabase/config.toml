@@ -82,3 +82,6 @@ verify_jwt = false
 
 [functions.check-overdue-subscriptions]
 verify_jwt = false
+
+[functions.cotacao-link]
+verify_jwt = false

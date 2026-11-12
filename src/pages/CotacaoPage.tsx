@@ -17,7 +17,7 @@ import {
 import { toast } from 'sonner';
 import { matchesSearch, normalizeSearch } from '@/lib/textSearch';
 import {
-  useCotacao, brl, diasAtras, resumoEntrega, linkWhats, mensagemCotacao, linksInternet, ordenarOpcoes,
+  useCotacao, brl, diasAtras, resumoEntrega, linkWhats, mensagemCotacao, mensagemLink, urlLink, linksInternet, ordenarOpcoes,
   type CotacaoItem, type CotacaoPreco, type Representante, type Situacao,
 } from '@/hooks/useCotacao';
 
@@ -273,7 +273,7 @@ function OpcaoPreco({ p, item, cot, escolhido }: { p: CotacaoPreco; item: Cotaca
         </span>
       </div>
       {p.texto_original && <p className="text-xs text-muted-foreground">"{p.texto_original}"</p>}
-      {p.motivo && p.situacao !== 'cotado' && <p className="text-xs">{p.motivo}</p>}
+      {p.motivo && (p.situacao !== 'cotado' || !p.texto_original) && <p className="text-xs">{p.motivo}</p>}
       {p.link && <a className="text-xs underline" href={p.link} target="_blank" rel="noreferrer">ver anúncio</a>}
       <div className="flex flex-wrap gap-2 pt-1">
         {p.situacao === 'duvida' && (
@@ -347,11 +347,20 @@ function AbaPedir({ cot }: { cot: Cot }) {
   const pendentes = cot.itens.filter((i) => i.status === 'pendente' && !i.pedido_preco_id);
   const reps = [...cot.representantes.filter((r) => r.ativo)].sort((a, b) => (a.prazo_dias ?? 99) - (b.prazo_dias ?? 99));
   const [desmarcados, setDesmarcados] = useState<Set<string>>(new Set());
-  const [repsMarcados, setRepsMarcados] = useState<Set<string>>(new Set());
-  const [mensagemEditada, setMensagemEditada] = useState<string | null>(null);
-
   const selecionados = pendentes.filter((i) => !desmarcados.has(i.id));
-  const mensagem = mensagemEditada ?? mensagemCotacao(selecionados);
+  const mensagem = mensagemCotacao(selecionados);
+
+  const enviarLink = async (r: Representante) => {
+    // Abre a aba já no clique (senão o navegador bloqueia o pop-up depois do await)
+    const aba = window.open('', '_blank');
+    try {
+      const link = await cot.criarLink.mutateAsync({ representante_id: r.id, itens: selecionados.map((i) => i.id) });
+      const url = linkWhats(r.whatsapp, mensagemLink(urlLink(link.token)));
+      if (aba) aba.location.href = url; else window.open(url, '_blank');
+    } catch {
+      aba?.close();
+    }
+  };
 
   const toggle = (set: Set<string>, id: string, fn: (s: Set<string>) => void) => {
     const n = new Set(set);
@@ -367,12 +376,12 @@ function AbaPedir({ cot }: { cot: Cot }) {
         <CardContent className="p-4 space-y-2">
           <div className="flex items-center justify-between">
             <Label>Peças ({selecionados.length} de {pendentes.length})</Label>
-            <Button size="sm" variant="ghost" onClick={() => { setDesmarcados(new Set()); setMensagemEditada(null); }}>Marcar todas</Button>
+            <Button size="sm" variant="ghost" onClick={() => setDesmarcados(new Set())}>Marcar todas</Button>
           </div>
           {pendentes.map((i) => (
             <label key={i.id} className="flex items-center gap-2 text-sm">
               <Checkbox checked={!desmarcados.has(i.id)}
-                onCheckedChange={() => { toggle(desmarcados, i.id, setDesmarcados); setMensagemEditada(null); }} />
+                onCheckedChange={() => toggle(desmarcados, i.id, setDesmarcados)} />
               {i.texto}{Number(i.quantidade) !== 1 ? ` (${Number(i.quantidade)})` : ''}
             </label>
           ))}
@@ -380,40 +389,35 @@ function AbaPedir({ cot }: { cot: Cot }) {
       </Card>
 
       <Card>
-        <CardContent className="p-4 space-y-2">
-          <Label>Mensagem (pode editar antes de enviar)</Label>
-          <Textarea rows={8} value={mensagem} onChange={(e) => setMensagemEditada(e.target.value)} />
-        </CardContent>
-      </Card>
-
-      <Card>
         <CardContent className="p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <Label>Pra quem perguntar? (mais rápido primeiro)</Label>
-            <Button size="sm" variant="ghost" onClick={() => setRepsMarcados(new Set(reps.map((r) => r.id)))}>Marcar todos</Button>
-          </div>
+          <Label>Pra quem pedir? (mais rápido primeiro)</Label>
           {reps.length === 0 && <p className="text-sm text-muted-foreground">Cadastre os representantes na aba "Representantes".</p>}
-          {reps.map((r) => (
-            <div key={r.id} className="flex items-start justify-between gap-2 border-b pb-2">
-              <label className="flex items-start gap-2 text-sm">
-                <Checkbox className="mt-0.5" checked={repsMarcados.has(r.id)} onCheckedChange={() => toggle(repsMarcados, r.id, setRepsMarcados)} />
-                <span>
+          {reps.map((r) => {
+            const ultimo = cot.links.find((l) => l.representante_id === r.id);
+            return (
+              <div key={r.id} className="flex items-start justify-between gap-2 border-b pb-2 text-sm">
+                <div>
                   <b>{r.nome}</b>
-                  {r.tem_tabela && <span className="text-xs text-muted-foreground"> · envia tabela{r.tabela_atualizada_em ? ` (${diasAtras(r.tabela_atualizada_em)})` : ''}</span>}
                   <span className="block text-xs text-muted-foreground">{resumoEntrega(r).join(' · ') || 'Entrega não cadastrada'}</span>
-                </span>
-              </label>
-              {repsMarcados.has(r.id) && (
-                <Button size="sm" asChild disabled={!selecionados.length}>
-                  <a href={linkWhats(r.whatsapp, mensagem)} target="_blank" rel="noreferrer">
-                    <MessageCircle className="h-4 w-4 mr-1" /> WhatsApp
+                  {ultimo && (
+                    <span className={`block text-xs ${ultimo.respondido_em ? 'text-green-600' : 'text-yellow-600'}`}>
+                      {ultimo.respondido_em ? `✓ Respondeu ${diasAtras(ultimo.respondido_em)}` : `Link enviado ${diasAtras(ultimo.created_at)}, aguardando`}
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <Button size="sm" disabled={!selecionados.length || cot.criarLink.isPending} onClick={() => enviarLink(r)}>
+                    <MessageCircle className="h-4 w-4 mr-1" /> Enviar link
+                  </Button>
+                  <a className="text-xs underline text-muted-foreground" href={linkWhats(r.whatsapp, mensagem)} target="_blank" rel="noreferrer">
+                    ou só mensagem
                   </a>
-                </Button>
-              )}
-            </div>
-          ))}
+                </div>
+              </div>
+            );
+          })}
           <p className="text-xs text-muted-foreground">
-            Quando a resposta chegar, insira na aba "Inserir resposta / tabela". Representante que envia tabela: insira a tabela lá (foto, PDF ou texto), sem precisar mandar mensagem.
+            O representante abre o link, marca "tenho / não tenho / não trabalho" e o valor. A resposta aparece sozinha na aba Faltas.
           </p>
         </CardContent>
       </Card>

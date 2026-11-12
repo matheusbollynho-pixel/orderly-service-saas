@@ -73,6 +73,27 @@ export interface CotacaoResposta {
   created_at: string;
 }
 
+export interface CotacaoLink {
+  id: string;
+  representante_id: string;
+  token: string;
+  itens: string[];
+  expira_em: string;
+  respondido_em: string | null;
+  created_at: string;
+}
+
+export function urlLink(token: string) {
+  return `${window.location.origin}/cotar/${token}`;
+}
+
+export function mensagemLink(url: string) {
+  return `Bom dia! Preciso de algumas peças. Consegue me passar preço e prazo por esse link? É rápido, é só marcar:
+${url}
+
+Se preferir, pode responder aqui mesmo.`;
+}
+
 export interface RegraDicionario {
   id: string;
   regra: string;
@@ -234,6 +255,8 @@ export function useCotacao() {
       if (error) throw error;
       return (data ?? []) as CotacaoPreco[];
     },
+    // Respostas pelo link chegam sozinhas
+    refetchInterval: 30_000,
   });
 
   const respostas = useQuery({
@@ -271,6 +294,23 @@ export function useCotacao() {
       if (error) throw error;
       return Object.fromEntries((data ?? []).map((p) => [p.id, { atual: Number(p.stock_current), minimo: Number(p.stock_minimum) }])) as Record<string, { atual: number; minimo: number }>;
     },
+  });
+
+  const links = useQuery({
+    queryKey: ['cotacao', 'links'],
+    queryFn: async () => {
+      const desde = new Date(Date.now() - 30 * 86_400_000).toISOString();
+      const { data, error } = await db
+        .from('cotacao_links')
+        .select('id, representante_id, token, itens, expira_em, respondido_em, created_at')
+        .gte('created_at', desde)
+        .order('created_at', { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      return (data ?? []) as CotacaoLink[];
+    },
+    // Resposta do representante chega por fora: confere a cada 30s
+    refetchInterval: 30_000,
   });
 
   const onError = (e: Error) => toast.error(e.message);
@@ -380,6 +420,20 @@ export function useCotacao() {
     onError,
   });
 
+  const criarLink = useMutation({
+    mutationFn: async (p: { representante_id: string; itens: string[] }) => {
+      const { data, error } = await db
+        .from('cotacao_links')
+        .insert({ ...p, store_id: storeId })
+        .select('id, representante_id, token, itens, expira_em, respondido_em, created_at')
+        .single();
+      if (error) throw error;
+      return data as CotacaoLink;
+    },
+    onSuccess: invalidar,
+    onError,
+  });
+
   const adicionarRegra = useMutation({
     mutationFn: async (regra: string) => {
       const { error } = await db.from('cotacao_dicionario').insert({ regra, store_id: storeId });
@@ -405,6 +459,8 @@ export function useCotacao() {
     respostas: respostas.data ?? [],
     dicionario: dicionario.data ?? [],
     estoque: estoque.data ?? {},
+    links: links.data ?? [],
+    criarLink,
     carregando: representantes.isLoading || itens.isLoading || precos.isLoading,
     adicionarItens,
     atualizarItem,
