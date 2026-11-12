@@ -857,7 +857,6 @@ function QuadroFrete({ custo, cot, itemId, freteTxt, onFrete }: {
     return pp?.representante_id === rep.id;
   })());
   const contaEssa = itemId && !escolhidas.some((i) => i.id === itemId) ? 1 : 0;
-  const nPecas = escolhidas.length + contaEssa;
   const somaPedido = escolhidas.reduce((s, i) => {
     const pp = cot.precos.find((x) => x.id === i.pedido_preco_id);
     return s + (pp?.preco ?? 0) * Number(i.quantidade);
@@ -866,7 +865,6 @@ function QuadroFrete({ custo, cot, itemId, freteTxt, onFrete }: {
   const gratis = proximaEntregaGratis(rep);
   const dataGratis = gratis ? `${['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'][gratis.getDay()]} ${String(gratis.getDate()).padStart(2, '0')}/${String(gratis.getMonth() + 1).padStart(2, '0')}` : null;
   const nomeExtra = rep.entrega_extra ? { van: 'van', onibus: 'ônibus', transportadora: 'transportadora', outro: 'entrega' }[rep.entrega_extra] : null;
-  const porPeca = rep.frete_extra_valor != null && nPecas > 0 ? rep.frete_extra_valor / nPecas : null;
   const faltaMinimo = rep.pedido_minimo != null ? rep.pedido_minimo - somaPedido : null;
 
   return (
@@ -879,23 +877,13 @@ function QuadroFrete({ custo, cot, itemId, freteTxt, onFrete }: {
       )}
       {nomeExtra && (
         <p>• {dataGratis || rep.pedido_minimo != null ? 'Antes disso / abaixo do mínimo' : 'Entrega'}: {nomeExtra}{' '}
-          {rep.frete_extra_valor != null
-            ? <><b>{brl(rep.frete_extra_valor)}</b>{nPecas > 1 ? <> · {nPecas} peças escolhidas com ele = <b>{brl(porPeca)}</b> por peça</> : null}</>
-            : '(valor varia, pergunte)'}
+          {rep.frete_extra_valor != null ? <b>{brl(rep.frete_extra_valor)}</b> : '(valor varia, pergunte)'}
         </p>
       )}
       {!dataGratis && rep.pedido_minimo == null && !nomeExtra && <p className="text-muted-foreground">Entrega não cadastrada no representante.</p>}
       <div className="flex flex-wrap gap-2 items-center pt-1">
-        <span>Frete dessa peça:</span>
-        {(dataGratis || (faltaMinimo != null && faltaMinimo <= 0)) && (
-          <Button size="sm" variant="outline" className="h-7" onClick={() => onFrete('')}>Grátis{dataGratis ? ` (esperar ${dataGratis})` : ''}</Button>
-        )}
-        {porPeca != null && (
-          <Button size="sm" variant="outline" className="h-7" onClick={() => onFrete(fmt(porPeca))}>
-            {nomeExtra} {nPecas > 1 ? 'dividido' : ''}: {brl(porPeca)}
-          </Button>
-        )}
-        <Input className="h-7 w-28" inputMode="decimal" placeholder="R$" value={freteTxt} onChange={(ev) => onFrete(ev.target.value)} />
+        <span>Frete dessa peça (R$):</span>
+        <Input className="h-7 w-28" inputMode="decimal" placeholder="0,00" value={freteTxt} onChange={(ev) => onFrete(ev.target.value)} />
       </div>
     </div>
   );
