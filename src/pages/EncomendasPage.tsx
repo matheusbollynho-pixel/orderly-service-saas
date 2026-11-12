@@ -378,7 +378,7 @@ function CardEncomenda({ e, enc, cot }: { e: Encomenda; enc: Enc; cot: Cot }) {
         </div>
         {verCusto && (
           <p className="text-xs text-muted-foreground border-l-2 border-yellow-500/50 pl-2">
-            Custo: {custo ? <b className="text-foreground">{brl(custo.preco)}</b> : 'aguardando cotação'}{custo?.marca ? ` (${custo.marca})` : ''}
+            Loja paga: {custo ? <b className="text-foreground">{brl(custo.preco)}</b> : 'nenhum representante respondeu ainda'}{custo?.marca ? ` (${custo.marca})` : ''}
             {custo?.preco && e.preco_venda ? ` · Margem ${Math.round(((e.preco_venda - custo.preco) / custo.preco) * 100)}%` : ''}
           </p>
         )}
@@ -519,7 +519,9 @@ function DialogInformar({ e, modeloInicial, enc, cot, onFechar }: {
           </div>
 
           <div className="rounded-md border p-2 space-y-1 text-xs">
-            {verCusto && <p>Custo: <b>{custo ? brl(custo.preco) : 'sem cotação ainda'}</b>{custo?.marca ? ` · ${custo.marca}` : ''}{rep ? ` · ${rep.nome}` : ''}</p>}
+            {verCusto && (custo
+              ? <p>Loja paga: <b>{brl(custo.preco)}</b>{custo.marca ? ` · ${custo.marca}` : ''}{rep ? ` · ${rep.nome}` : ''}</p>
+              : <p>Loja paga: <b>ainda não sabemos</b>. Nenhum representante respondeu com preço dessa peça. Use "Pedir preço agora" ou digite o preço pro cliente mesmo assim.</p>)}
             {rep && <p className="text-muted-foreground">{resumoEntrega(rep).join(' · ')}</p>}
             {ultimo && <p className="text-muted-foreground">Última vez cobrado: {brl(ultimo.preco_venda)} ({new Date(ultimo.created_at).toLocaleDateString('pt-BR')})</p>}
           </div>
