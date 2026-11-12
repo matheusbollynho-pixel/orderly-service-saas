@@ -93,6 +93,8 @@ export interface ServiceOrder {
   signature_data: string | null;
   first_signature_data?: string | null;
   conclusion_date?: string | null;
+  /** Aviso de "moto pronta" já resolvido (enviado ou dispensado). */
+  aviso_retirada_enviado_em?: string | null;
   terms_accepted?: boolean; // Se aceitou os termos da OS
   delivery_terms_accepted?: boolean;
   delivery_signature_data?: string | null;

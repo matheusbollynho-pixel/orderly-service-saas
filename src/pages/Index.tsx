@@ -29,6 +29,7 @@ import QuadroOficinaPage from './QuadroOficinaPage';
 import AgendaPage from './AgendaPage';
 import FiadosPage from './FiadosPage';
 import { AgendaAlertModal } from '@/components/AgendaAlertModal';
+import { AvisoMotoProntaDialog } from '@/components/AvisoMotoProntaDialog';
 import { useInventory } from '@/hooks/useInventory';
 import { BottomNav } from '@/components/BottomNav';
 import { EmptyState } from '@/components/EmptyState';
@@ -45,6 +46,7 @@ export default function Index() {
   const { permissions } = useStore();
   const canAccessCashFlow = permissions.caixa;
   const canAccessReports = permissions.relatorios;
+  const [avisoPronta, setAvisoPronta] = useState<ServiceOrder | null>(null);
   const { settings: storeSettings } = useStoreSettings();
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [selectedOrder, setSelectedOrder] = useState<ServiceOrder | null>(null);
@@ -282,6 +284,10 @@ Retirada: ${retiradaInfo}`;
 
   const handleStatusChange = (status: OrderStatus) => {
     if (selectedOrder) {
+      // Virou Concluída agora: pergunta se avisa o cliente que está pronta (Concluída e Entregue não avisa)
+      if (status === 'concluida' && selectedOrder.status !== 'concluida' && !selectedOrder.aviso_retirada_enviado_em) {
+        setAvisoPronta({ ...selectedOrder, status });
+      }
       const updatePayload: any = { id: selectedOrder.id, status };
       if (status === 'concluida' || status === 'concluida_entregue') {
         updatePayload.conclusion_date = new Date().toISOString();
@@ -877,6 +883,17 @@ Retirada: ${retiradaInfo}`;
       )}
 
       <AgendaAlertModal onGoToAgenda={() => setCurrentView('agenda')} />
+      {avisoPronta && (
+        <AvisoMotoProntaDialog
+          order={avisoPronta}
+          empresa={storeSettings?.company_name || ''}
+          onFechar={() => {
+            const marcada = { aviso_retirada_enviado_em: new Date().toISOString() };
+            setSelectedOrder(prev => prev && prev.id === avisoPronta.id ? { ...prev, ...marcada } : prev);
+            setAvisoPronta(null);
+          }}
+        />
+      )}
     </div>
   );
 }
