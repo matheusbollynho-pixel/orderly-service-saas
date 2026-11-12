@@ -153,9 +153,14 @@ export default function ConfigToolsPage() {
   }, [settings, initialized]);
 
   function handleAlterarParaAberta(osId: string) {
-    const sanitizedId = osId.trim();
-    if (!sanitizedId || !updateOrder || typeof updateOrder !== 'function') return;
-    updateOrder({ id: sanitizedId, status: 'aberta' });
+    // Aceita colar com texto junto ("ID da OS: 800cd4b9-..."): pega só o código.
+    const sanitizedId = osId.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0]?.toLowerCase();
+    if (!sanitizedId) {
+      toast.error('Não achei um ID de OS válido. Copie o ID que aparece no fim da OS.');
+      return;
+    }
+    if (!updateOrder || typeof updateOrder !== 'function') return;
+    updateOrder({ id: sanitizedId, status: 'aberta' }, { onSuccess: () => { setRemoveOsId(''); toast.success('OS voltou para "Aberta".'); } });
   }
 
   function handleSave() {
