@@ -46,7 +46,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Wrench, Search, Settings, Plus, Zap, ShoppingCart } from 'lucide-react';
+import { Wrench, Search, Settings, Plus, Zap, ShoppingCart, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { getMaintenanceKeywords, findKeywordInText, rescheduleMaintenanceReminder } from '@/services/maintenanceReminderService';
 
@@ -574,6 +574,42 @@ Retirada: ${retiradaInfo}`;
     const abas = ABAS[area];
     return !!abas && abas.filter((v) => acessoDe(v) !== 'sem_permissao').every((v) => acessoDe(v) === 'plano');
   };
+  // ---- v2: voltar. Cada tela entra no histórico do navegador, então o "voltar" do celular
+  // volta para a tela anterior em vez de fechar o sistema.
+  const vindoDoVoltar = useRef(false);
+  const primeiraTela = useRef(true);
+  const profundidade = useRef(0);
+  const selectedOrderRef = useRef<ServiceOrder | null>(null);
+  selectedOrderRef.current = selectedOrder;
+  useEffect(() => {
+    if (primeiraTela.current) {
+      primeiraTela.current = false;
+      window.history.replaceState({ ...(window.history.state || {}), v2: currentView }, '');
+      return;
+    }
+    if (vindoDoVoltar.current) { vindoDoVoltar.current = false; return; }
+    window.history.pushState({ v2: currentView }, '');
+    profundidade.current += 1;
+  }, [currentView]);
+  useEffect(() => {
+    const aoVoltar = (e: PopStateEvent) => {
+      let v = (e.state as { v2?: View } | null)?.v2;
+      if (!v) return;
+      if ((v === 'details' || v === 'materials') && !selectedOrderRef.current) v = 'orders';
+      vindoDoVoltar.current = true;
+      profundidade.current = Math.max(0, profundidade.current - 1);
+      setCurrentView(v);
+    };
+    window.addEventListener('popstate', aoVoltar);
+    return () => window.removeEventListener('popstate', aoVoltar);
+  }, []);
+  const voltar = () => {
+    if (profundidade.current > 0) window.history.back();
+    else if (currentView !== 'dashboard') setCurrentView('dashboard');
+  };
+  // Telas que já têm o próprio botão de voltar
+  const temVoltarProprio = ['dashboard', 'details', 'materials', 'express', 'new'].includes(currentView);
+
   const trocarMenu = (novo: boolean) => { salvarMenu(novo); setMenuNovo(novo); if (!novo && currentView === 'mais') setCurrentView('dashboard'); };
   const abasDaArea = menuNovo ? ABAS[areaAtual] : undefined;
   const mostrarAbas = !!abasDaArea && abasDaArea.includes(currentView);
@@ -656,6 +692,12 @@ Retirada: ${retiradaInfo}`;
 
       {/* Main Content */}
       <main className="container max-w-lg md:max-w-3xl lg:max-w-6xl mx-auto px-4 py-5">
+        {!temVoltarProprio && (
+          <button type="button" onClick={voltar}
+            className="mb-3 -ml-1 flex h-10 items-center gap-1 rounded-lg px-1 text-sm font-medium text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="h-5 w-5" /> Voltar
+          </button>
+        )}
         {mostrarAbas && (
           <AbasArea
             abas={abasDaArea!}
@@ -824,7 +866,7 @@ Retirada: ${retiradaInfo}`;
 
         {currentView === 'express' && (
           <ExpressCadastroPage 
-            onBack={() => setCurrentView('dashboard')} 
+            onBack={voltar} 
             onOrderCreated={async (orderId) => {
               // Buscar a OS criada e redirecionar para detalhes
               let createdOrder = orders.find(o => o.id === orderId);
