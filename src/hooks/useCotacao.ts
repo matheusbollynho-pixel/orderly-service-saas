@@ -38,10 +38,11 @@ export interface CotacaoItem {
   id: string;
   texto: string;
   quantidade: number;
-  status: 'pendente' | 'pedido' | 'cancelado';
+  status: 'pendente' | 'pedido' | 'recebido' | 'cancelado';
   observacao: string | null;
   pedido_preco_id: string | null;
   pedido_em: string | null;
+  recebido_em: string | null;
   produto_id: string | null;
   created_at: string;
 }
@@ -150,9 +151,18 @@ export function proximaEntregaGratis(rep: Representante, agora = new Date()): Da
 /** Quando chega pela entrega paga (van/ônibus/transportadora), respeitando o horário de corte. */
 export function dataEntregaExtra(rep: Representante, agora = new Date()): Date | null {
   if (!rep.entrega_extra || rep.prazo_dias == null) return null;
-  const extra = rep.prazo_dias === 0 && passouDoCorte(agora, rep.horario_corte) ? 1 : rep.prazo_dias;
+  return somarDiasEntrega(agora, rep.prazo_dias === 0 && passouDoCorte(agora, rep.horario_corte) ? 1 : rep.prazo_dias);
+}
+
+/** Soma dias de entrega pulando DOMINGO (sábado conta). 0 = hoje (ou segunda, se hoje é domingo). */
+export function somarDiasEntrega(agora: Date, dias: number): Date {
   const d = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
-  d.setDate(d.getDate() + extra);
+  let faltam = dias;
+  while (faltam > 0) {
+    d.setDate(d.getDate() + 1);
+    if (d.getDay() !== 0) faltam--;
+  }
+  if (d.getDay() === 0) d.setDate(d.getDate() + 1);
   return d;
 }
 
@@ -177,11 +187,10 @@ export function resumoEntrega(rep: Representante, agora = new Date()): string[] 
   if (rep.entrega_extra) {
     const nome = { van: 'Van', onibus: 'Ônibus', transportadora: 'Transportadora', outro: 'Outro' }[rep.entrega_extra];
     let quando = '';
-    if (rep.prazo_dias != null) {
-      const d = new Date(agora);
-      const extra = rep.prazo_dias === 0 && passouDoCorte(agora, rep.horario_corte) ? 1 : rep.prazo_dias;
-      d.setDate(d.getDate() + extra);
-      quando = extra === 0 ? ' chega hoje' : ` chega ${dataCurta(d)}`;
+    const d = dataEntregaExtra(rep, agora);
+    if (d) {
+      const hoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
+      quando = d.getTime() === hoje.getTime() ? ' chega hoje' : ` chega ${dataCurta(d)}`;
     }
     linhas.push(`${nome}:${quando} ${rep.frete_extra_valor != null ? `+ ${brl(rep.frete_extra_valor)}` : '(frete a combinar)'}`);
   }
@@ -420,6 +429,49 @@ export function useCotacao() {
     onError,
   });
 
+  /** Marca peças como PEDIDAS (encomendas ligadas avançam sozinhas pelo gatilho do banco). */
+  const marcarPedido = useMutation({
+    mutationFn: async (ids: string[]) => {
+      if (!ids.length) return;
+      const { error } = await db.from('cotacao_itens')
+        .update({ status: 'pedido', pedido_em: new Date().toISOString() })
+        .in('id', ids).eq('status', 'pendente');
+      if (error) throw error;
+    },
+    onSuccess: () => { invalidar(); toast.success('Marcado como pedido. Está em "A caminho".'); },
+    onError,
+  });
+
+  /**
+   * Peça CHEGOU: marca recebida (encomenda do cliente vai pra "chegou" sozinha)
+   * e, se veio do estoque, dá entrada no estoque.
+   */
+  const receberItem = useMutation({
+    mutationFn: async (p: { item: CotacaoItem; quantidade: number; darEntrada: boolean; custoUnit: number | null }) => {
+      const { error } = await db.from('cotacao_itens')
+        .update({ status: 'recebido', recebido_em: new Date().toISOString() })
+        .eq('id', p.item.id);
+      if (error) throw error;
+      if (p.darEntrada && p.item.produto_id && p.quantidade > 0) {
+        const { error: e2 } = await db.from('inventory_movements').insert({
+          store_id: storeId,
+          product_id: p.item.produto_id,
+          type: 'entrada_manual',
+          quantity: p.quantidade,
+          unit_cost: p.custoUnit,
+          notes: 'Chegou da cotação',
+        });
+        if (e2) throw e2;
+      }
+    },
+    onSuccess: (_d, p) => {
+      invalidar();
+      qc.invalidateQueries({ queryKey: ['inventory-products'] });
+      toast.success(p.darEntrada && p.item.produto_id ? 'Chegou! Entrada no estoque feita.' : 'Chegou!');
+    },
+    onError,
+  });
+
   const lerResposta = useMutation({
     mutationFn: async (payload: {
       representante_id: string | null;
@@ -529,6 +581,8 @@ export function useCotacao() {
     salvarRepresentante,
     excluirRepresentante,
     lerResposta,
+    marcarPedido,
+    receberItem,
     atualizarPreco,
     adicionarPrecoManual,
     excluirPreco,

@@ -124,3 +124,13 @@ describe('dataEntregaExtra / textoData (van paga da Osia)', () => {
     expect(textoData(proximaEntregaGratis(osia, terca)!, terca)).toBe('sexta (13/11)');
   });
 });
+
+describe('prazo em dias pula domingo (sábado conta)', () => {
+  it('quinta + 3 dias = segunda; sexta + 1 = sábado; sábado + 1 = segunda', async () => {
+    const { somarDiasEntrega } = await import('@/hooks/useCotacao');
+    expect(somarDiasEntrega(new Date(2026, 10, 12, 9), 3).getDate()).toBe(16); // qui 12 -> seg 16
+    expect(somarDiasEntrega(new Date(2026, 10, 13, 9), 1).getDate()).toBe(14); // sex 13 -> sáb 14
+    expect(somarDiasEntrega(new Date(2026, 10, 14, 9), 1).getDate()).toBe(16); // sáb 14 -> seg 16
+    expect(somarDiasEntrega(new Date(2026, 10, 15, 9), 0).getDate()).toBe(16); // domingo "hoje" -> segunda
+  });
+});

@@ -202,6 +202,9 @@ export function useEncomendas() {
         if (status === 'pedido_feito') {
           await db.from('cotacao_itens').update({ status: 'pedido', pedido_em: agora }).eq('id', e.cotacao_item_id).eq('status', 'pendente');
         }
+        if (status === 'chegou') {
+          await db.from('cotacao_itens').update({ status: 'recebido', recebido_em: agora }).eq('id', e.cotacao_item_id).in('status', ['pendente', 'pedido']);
+        }
         if (status === 'desistiu') {
           // Ainda não foi pedida: tira da lista de faltas. Já pedida: a peça fica pra loja.
           await db.from('cotacao_itens').update({ status: 'cancelado' }).eq('id', e.cotacao_item_id).eq('status', 'pendente');

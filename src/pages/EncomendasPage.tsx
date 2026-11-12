@@ -356,6 +356,7 @@ function CardEncomenda({ e, enc, cot }: { e: Encomenda; enc: Enc; cot: Cot }) {
   const [caixa, setCaixa] = useState<'receber' | 'entregar' | 'devolver' | null>(null);
   const [desistir, setDesistir] = useState(false);
   const [verCotacoes, setVerCotacoes] = useState(false);
+  const [fazerPedido, setFazerPedido] = useState(false);
   const s = STATUS_ENCOMENDA[e.status];
   const pago = Number(e.pago_adiantado || 0);
   const custo = custoDaCotacao(e, cot);
@@ -432,7 +433,7 @@ function CardEncomenda({ e, enc, cot }: { e: Encomenda; enc: Enc; cot: Cot }) {
               </>
             )}
             {e.status === 'aprovado' && (
-              <Button size="sm" onClick={() => mudar('pedido_feito')}><Truck className="h-4 w-4 mr-1" /> Pedido feito</Button>
+              <Button size="sm" onClick={() => setFazerPedido(true)}><Truck className="h-4 w-4 mr-1" /> Fazer pedido</Button>
             )}
             {e.status === 'pedido_feito' && (
               <>
@@ -468,6 +469,7 @@ function CardEncomenda({ e, enc, cot }: { e: Encomenda; enc: Enc; cot: Cot }) {
       {informar && <DialogInformar e={e} modeloInicial={informar} enc={enc} cot={cot} onFechar={() => setInformar(null)} />}
       {pedir && <DialogPedirPreco e={e} cot={cot} onFechar={() => setPedir(false)} />}
       {caixa && <DialogCaixa e={e} modo={caixa} enc={enc} onFechar={() => setCaixa(null)} />}
+      {fazerPedido && <DialogFazerPedido e={e} enc={enc} cot={cot} onFechar={() => setFazerPedido(false)} />}
       {desistir && (
         <DialogDesistir e={e} enc={enc} onFechar={(desistiu) => {
           setDesistir(false);
@@ -909,5 +911,80 @@ function QuadroFrete({ custo, cot, itemId, freteTxt, onFrete }: {
         <Input className="h-7 w-28" inputMode="decimal" placeholder="0,00" value={freteTxt} onChange={(ev) => onFrete(ev.target.value)} />
       </div>
     </div>
+  );
+}
+
+// ------------------------------------------------------------------ Fazer pedido (a partir da encomenda)
+
+function DialogFazerPedido({ e, enc, cot, onFechar }: { e: Encomenda; enc: Enc; cot: Cot; onFechar: () => void }) {
+  const [verCusto] = useVerCusto();
+  const custo = custoDaCotacao(e, cot);
+  const rep = custo?.representante_id ? cot.representantes.find((r) => r.id === custo.representante_id) ?? null : null;
+  const ocupado = enc.mudarStatus.isPending || cot.marcarPedido.isPending;
+
+  // Outras peças já escolhidas com o MESMO representante e ainda não pedidas: dá pra mandar tudo junto
+  const esperandoCliente = new Set(enc.encomendas
+    .filter((x) => x.cotacao_item_id && (x.status === 'aguardando_cotacao' || x.status === 'cliente_avisado'))
+    .map((x) => x.cotacao_item_id as string));
+  const outras = rep ? cot.itens.filter((i) => i.id !== e.cotacao_item_id && i.status === 'pendente' && i.pedido_preco_id &&
+    !esperandoCliente.has(i.id) &&
+    cot.precos.find((x) => x.id === i.pedido_preco_id)?.representante_id === rep.id) : [];
+  const linha = (texto: string, qtd: number, marca: string | null | undefined) =>
+    `- ${texto}${Number(qtd) !== 1 ? ` (${Number(qtd)})` : ''}${marca ? ` - ${marca}` : ''}`;
+  const mensagem = (juntas: boolean) => {
+    const linhas = [linha(e.peca, e.quantidade, custo?.marca)];
+    if (juntas) for (const i of outras) linhas.push(linha(i.texto, i.quantidade, cot.precos.find((x) => x.id === i.pedido_preco_id)?.marca));
+    return `Bom dia! Pode me mandar:\n\n${linhas.join('\n')}\n\nObrigado!`;
+  };
+
+  const marcar = async (juntas: boolean) => {
+    await enc.mudarStatus.mutateAsync({ e, status: 'pedido_feito' });
+    if (juntas && outras.length) await cot.marcarPedido.mutateAsync(outras.map((i) => i.id));
+  };
+  const enviar = async (juntas: boolean) => {
+    try {
+      await enviarWhats(rep!.whatsapp, mensagem(juntas));
+      await marcar(juntas);
+      onFechar();
+    } catch { /* toast já mostrado */ }
+  };
+  const soMarcar = async () => {
+    try { await marcar(false); onFechar(); } catch { /* toast já mostrado */ }
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onFechar()}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogHeader><DialogTitle>Fazer pedido: {e.peca}</DialogTitle></DialogHeader>
+        <div className="space-y-3 text-sm">
+          {e.cotacao_item_id && (
+            <div className="space-y-1">
+              <Label>{custo ? 'Opção escolhida' : 'Escolha de quem vai pedir'}</Label>
+              <ListaCotacoes itemId={e.cotacao_item_id} cot={cot} verPreco={verCusto} escolhidoId={custo?.id ?? null}
+                onEscolher={(p) => cot.atualizarItem.mutate({ id: e.cotacao_item_id!, pedido_preco_id: p.id })} />
+            </div>
+          )}
+
+          {!custo && <p className="text-xs text-yellow-600">Escolha uma opção acima pra pedir. Se combinou por telefone, use "Já pedi".</p>}
+
+          {custo && rep && (
+            <>
+              <Button className="w-full" onClick={() => enviar(false)} disabled={ocupado}>
+                <MessageCircle className="h-4 w-4 mr-1" /> Enviar pedido pro {rep.nome} (WhatsApp)
+              </Button>
+              {outras.length > 0 && (
+                <Button className="w-full" variant="outline" onClick={() => enviar(true)} disabled={ocupado}>
+                  <MessageCircle className="h-4 w-4 mr-1" /> Mandar junto com mais {outras.length} peça(s) escolhida(s) com ele
+                </Button>
+              )}
+            </>
+          )}
+          <Button className="w-full" variant="outline" onClick={soMarcar} disabled={ocupado}>
+            <Check className="h-4 w-4 mr-1" /> {custo?.fonte === 'internet' ? 'Já comprei' : 'Já pedi (telefone / pessoalmente)'}
+          </Button>
+          <p className="text-xs text-muted-foreground">Depois de pedido, a peça aparece em Cotação → "4. A caminho" e na encomenda como "Já pedido".</p>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -17,6 +17,7 @@ import {
 import { toast } from 'sonner';
 import { matchesSearch, normalizeSearch } from '@/lib/textSearch';
 import { FormPrecoManual } from '@/components/cotacao/FormPrecoManual';
+import { useEncomendas } from '@/hooks/useEncomendas';
 import {
   useCotacao, brl, diasAtras, resumoEntrega, enviarWhats, mensagemCotacao, mensagemLink, urlLink, linksInternet, ordenarOpcoes,
   type CotacaoItem, type CotacaoPreco, type Representante, type Situacao,
@@ -42,28 +43,37 @@ export default function CotacaoPage() {
   const cot = useCotacao();
   const [aba, setAba] = useState('faltas');
   const aEnviar = cot.itens.filter((i) => i.status === 'pendente' && i.pedido_preco_id).length;
+  const aCaminho = cot.itens.filter((i) => i.status === 'pedido').length;
+  const [verIA, setVerIA] = useState(false);
 
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-semibold">Cotação de Peças</h2>
       <Tabs value={aba} onValueChange={setAba}>
         <TabsList className="w-full flex flex-wrap h-auto gap-1">
-          <TabsTrigger value="faltas">Faltas</TabsTrigger>
-          <TabsTrigger value="pedir">Pedir preço</TabsTrigger>
-          <TabsTrigger value="resposta">Inserir resposta / tabela</TabsTrigger>
-          <TabsTrigger value="pedidos">Fazer pedido{aEnviar ? ` (${aEnviar})` : ''}</TabsTrigger>
+          <TabsTrigger value="faltas">1. Faltas</TabsTrigger>
+          <TabsTrigger value="pedir">2. Pedir preço</TabsTrigger>
+          <TabsTrigger value="pedidos">3. Fazer pedido{aEnviar ? ` (${aEnviar})` : ''}</TabsTrigger>
+          <TabsTrigger value="caminho">4. A caminho{aCaminho ? ` (${aCaminho})` : ''}</TabsTrigger>
           <TabsTrigger value="reps">Representantes</TabsTrigger>
-          <TabsTrigger value="dicionario">Dicionário</TabsTrigger>
         </TabsList>
         <TabsContent value="faltas"><AbaFaltas cot={cot} /></TabsContent>
-        <TabsContent value="pedir"><AbaPedir cot={cot} /></TabsContent>
-        {/* forceMount: não perde o representante/texto/arquivo ao trocar de aba */}
-        <TabsContent value="resposta" forceMount className="data-[state=inactive]:hidden">
-          <AbaResposta cot={cot} irParaFaltas={() => setAba('faltas')} />
+        {/* forceMount: não perde o que foi preenchido (resposta/arquivo) ao trocar de aba */}
+        <TabsContent value="pedir" forceMount className="data-[state=inactive]:hidden">
+          <AbaPedir cot={cot} />
+          <Card className="mt-4">
+            <CardContent className="p-3 space-y-2">
+              <button type="button" className="w-full text-left text-sm flex items-center justify-between" onClick={() => setVerIA((v) => !v)}>
+                <span>📷 O representante respondeu por <b>foto, PDF ou texto</b> no WhatsApp? Ler com IA</span>
+                {verIA ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+              {verIA && <AbaResposta cot={cot} irParaFaltas={() => setAba('faltas')} />}
+            </CardContent>
+          </Card>
         </TabsContent>
         <TabsContent value="pedidos"><AbaPedidos cot={cot} /></TabsContent>
+        <TabsContent value="caminho"><AbaACaminho cot={cot} /></TabsContent>
         <TabsContent value="reps"><AbaRepresentantes cot={cot} /></TabsContent>
-        <TabsContent value="dicionario"><AbaDicionario cot={cot} /></TabsContent>
       </Tabs>
     </div>
   );
@@ -77,7 +87,7 @@ function AbaFaltas({ cot }: { cot: Cot }) {
   const [busca, setBusca] = useState('');
   const todosPendentes = cot.itens.filter((i) => i.status === 'pendente');
   const pendentes = todosPendentes.filter((i) => matchesSearch(busca, i.texto));
-  const outros = cot.itens.filter((i) => i.status !== 'pendente' && matchesSearch(busca, i.texto)).reverse();
+  const outros = cot.itens.filter((i) => (i.status === 'recebido' || i.status === 'cancelado') && matchesSearch(busca, i.texto)).reverse();
 
   const adicionar = () => {
     // Mesma peça com ou sem acento/maiúscula ("camara" = "Câmara") não entra duas vezes
@@ -127,7 +137,7 @@ function AbaFaltas({ cot }: { cot: Cot }) {
         <div className="pt-2">
           <Button variant="ghost" size="sm" onClick={() => setVerPedidos((v) => !v)}>
             {verPedidos ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
-            Já pedidos / cancelados ({outros.length})
+            Histórico: chegaram / não precisou ({outros.length})
           </Button>
           {verPedidos && outros.map((item) => {
             const escolhido = cot.precos.find((p) => p.id === item.pedido_preco_id);
@@ -135,14 +145,17 @@ function AbaFaltas({ cot }: { cot: Cot }) {
               <div key={item.id} className="flex items-center justify-between gap-2 py-2 border-b text-sm">
                 <div>
                   <span className={item.status === 'cancelado' ? 'line-through text-muted-foreground' : ''}>{item.texto}</span>
+                  <span className="text-xs text-muted-foreground"> · {item.status === 'recebido' ? `chegou ${item.recebido_em ? diasAtras(item.recebido_em) : ''}` : 'não precisou'}</span>
                   {escolhido && (
                     <span className="text-muted-foreground"> · {nomeFonte(escolhido, cot.representantes)} {escolhido.marca ?? ''} {brl(escolhido.preco)}</span>
                   )}
                 </div>
-                <Button variant="ghost" size="sm" title="Voltar pra lista de faltas"
-                  onClick={() => cot.atualizarItem.mutate({ id: item.id, status: 'pendente', pedido_em: null, pedido_preco_id: null })}>
-                  <Undo2 className="h-4 w-4" />
-                </Button>
+                {item.status === 'cancelado' && (
+                  <Button variant="ghost" size="sm" title="Voltar pra lista de faltas"
+                    onClick={() => cot.atualizarItem.mutate({ id: item.id, status: 'pendente', pedido_em: null, pedido_preco_id: null })}>
+                    <Undo2 className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             );
           })}
@@ -553,7 +566,14 @@ function AbaResposta({ cot, irParaFaltas }: { cot: Cot; irParaFaltas: () => void
 // ------------------------------------------------------------------ Fazer pedido
 
 function AbaPedidos({ cot }: { cot: Cot }) {
-  const escolhidos = cot.itens.filter((i) => i.status === 'pendente' && i.pedido_preco_id);
+  const { encomendas } = useEncomendas();
+  // Peça de encomenda só vai pra pedido depois que o CLIENTE aprovou
+  const esperandoCliente = new Set(encomendas
+    .filter((e) => e.cotacao_item_id && (e.status === 'aguardando_cotacao' || e.status === 'cliente_avisado'))
+    .map((e) => e.cotacao_item_id as string));
+  const todosEscolhidos = cot.itens.filter((i) => i.status === 'pendente' && i.pedido_preco_id);
+  const escolhidos = todosEscolhidos.filter((i) => !esperandoCliente.has(i.id));
+  const segurados = todosEscolhidos.filter((i) => esperandoCliente.has(i.id));
   const grupos = new Map<string, { nome: string; rep: Representante | null; itens: { item: CotacaoItem; preco: CotacaoPreco }[] }>();
 
   for (const item of escolhidos) {
@@ -565,19 +585,34 @@ function AbaPedidos({ cot }: { cot: Cot }) {
     grupos.get(chave)!.itens.push({ item, preco });
   }
 
+  const aviso = segurados.length > 0 && (
+    <p className="text-xs text-yellow-600">
+      Esperando o cliente aprovar (não aparecem aqui ainda): {segurados.map((i) => i.texto).join(', ')}
+    </p>
+  );
+
   if (grupos.size === 0) {
-    return <p className="text-sm text-muted-foreground mt-3">Nenhuma peça escolhida. Na aba Faltas, abra a peça e clique em "Escolher essa".</p>;
+    return (
+      <div className="space-y-2 mt-3">
+        <p className="text-sm text-muted-foreground">Nenhuma peça escolhida pra pedir. Na aba "1. Faltas", abra a peça e clique em "Escolher essa".</p>
+        {aviso}
+      </div>
+    );
   }
 
   return (
     <div className="space-y-4 mt-3">
+      {aviso}
       {[...grupos.entries()].map(([chave, g]) => {
         const total = g.itens.reduce((s, { item, preco }) => s + (preco.preco ?? 0) * Number(item.quantidade), 0);
         const falta = g.rep?.pedido_minimo != null ? g.rep.pedido_minimo - total : null;
         const msg = `Bom dia! Pode me mandar:\n\n${g.itens.map(({ item, preco }) =>
           `- ${item.texto}${Number(item.quantidade) !== 1 ? ` (${Number(item.quantidade)})` : ''}${preco.marca ? ` - ${preco.marca}` : ''}`).join('\n')}\n\nObrigado!`;
-        const marcarPedido = () => g.itens.forEach(({ item }) =>
-          cot.atualizarItem.mutate({ id: item.id, status: 'pedido', pedido_em: new Date().toISOString() }));
+        const ids = g.itens.map(({ item }) => item.id);
+        const enviarEMarcar = async () => {
+          await enviarWhats(g.rep!.whatsapp, msg);
+          cot.marcarPedido.mutate(ids);
+        };
 
         return (
           <Card key={chave}>
@@ -602,16 +637,105 @@ function AbaPedidos({ cot }: { cot: Cot }) {
               ))}
               <div className="flex flex-wrap gap-2 pt-1">
                 {g.rep && (
-                  <Button size="sm" onClick={() => enviarWhats(g.rep!.whatsapp, msg)}>
-                    <MessageCircle className="h-4 w-4 mr-1" /> Enviar pedido
+                  <Button size="sm" onClick={enviarEMarcar} disabled={cot.marcarPedido.isPending}>
+                    <MessageCircle className="h-4 w-4 mr-1" /> Enviar pedido pelo WhatsApp
                   </Button>
                 )}
-                <Button size="sm" variant="outline" onClick={marcarPedido}><Check className="h-4 w-4 mr-1" /> Marcar como pedido</Button>
+                <Button size="sm" variant="outline" onClick={() => cot.marcarPedido.mutate(ids)} disabled={cot.marcarPedido.isPending}>
+                  <Check className="h-4 w-4 mr-1" /> {g.rep ? 'Já pedi (telefone / pessoalmente)' : 'Já comprei'}
+                </Button>
               </div>
             </CardContent>
           </Card>
         );
       })}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ A caminho
+
+function AbaACaminho({ cot }: { cot: Cot }) {
+  const pedidos = cot.itens.filter((i) => i.status === 'pedido');
+  const grupos = new Map<string, { nome: string; rep: Representante | null; itens: { item: CotacaoItem; preco: CotacaoPreco | null }[] }>();
+  for (const item of pedidos) {
+    const preco = cot.precos.find((p) => p.id === item.pedido_preco_id) ?? null;
+    const chave = preco ? (preco.fonte === 'internet' ? `internet:${preco.loja_internet ?? ''}` : preco.representante_id ?? 'sem') : 'sem';
+    const rep = preco ? cot.representantes.find((r) => r.id === preco.representante_id) ?? null : null;
+    if (!grupos.has(chave)) grupos.set(chave, { nome: preco ? nomeFonte(preco, cot.representantes) : 'Fornecedor não informado', rep, itens: [] });
+    grupos.get(chave)!.itens.push({ item, preco });
+  }
+
+  if (grupos.size === 0) {
+    return <p className="text-sm text-muted-foreground mt-3">Nada a caminho. Quando você fizer um pedido, a peça aparece aqui até chegar.</p>;
+  }
+
+  return (
+    <div className="space-y-4 mt-3">
+      {[...grupos.entries()].map(([chave, g]) => (
+        <Card key={chave}>
+          <CardContent className="p-4 space-y-2">
+            <b>{g.nome}</b>
+            {g.rep && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <Truck className="h-3 w-3" /> {resumoEntrega(g.rep).join(' · ') || 'Entrega não cadastrada'}
+              </p>
+            )}
+            {g.itens.map(({ item, preco }) => <ItemACaminho key={item.id} item={item} preco={preco} cot={cot} />)}
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function ItemACaminho({ item, preco, cot }: { item: CotacaoItem; preco: CotacaoPreco | null; cot: Cot }) {
+  const [abrir, setAbrir] = useState(false);
+  const [qtd, setQtd] = useState(String(Number(item.quantidade)));
+  const [darEntrada, setDarEntrada] = useState(true);
+  const qtdN = Number(qtd.replace(',', '.'));
+
+  const confirmar = () => {
+    if (item.produto_id && darEntrada && !(qtdN > 0)) return toast.error('Informe quantas chegaram');
+    cot.receberItem.mutate(
+      { item, quantidade: qtdN, darEntrada: !!item.produto_id && darEntrada, custoUnit: preco?.preco ?? null },
+      { onSuccess: () => setAbrir(false) },
+    );
+  };
+
+  return (
+    <div className="border-t pt-2 text-sm space-y-1">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p>{item.texto}{Number(item.quantidade) !== 1 ? ` · Qtd: ${Number(item.quantidade)}` : ''}{preco?.marca ? ` · ${preco.marca}` : ''}</p>
+          <p className="text-xs text-muted-foreground">
+            Pedido {item.pedido_em ? diasAtras(item.pedido_em) : ''}{preco?.preco != null ? ` · ${brl(preco.preco)}` : ''}
+            {item.observacao ? ` · ${item.observacao}` : ''}
+          </p>
+        </div>
+        {!abrir && (
+          <Button size="sm" onClick={() => (item.produto_id ? setAbrir(true) : confirmar())} disabled={cot.receberItem.isPending}>
+            <Check className="h-4 w-4 mr-1" /> Chegou
+          </Button>
+        )}
+      </div>
+      {abrir && (
+        <div className="rounded-md border p-2 space-y-2">
+          <label className="flex items-center gap-2">
+            <Checkbox checked={darEntrada} onCheckedChange={(v) => setDarEntrada(!!v)} /> Dar entrada no estoque
+          </label>
+          {darEntrada && (
+            <div className="flex items-center gap-2">
+              <span>Quantas chegaram?</span>
+              <Input className="w-24 h-8" inputMode="decimal" value={qtd} onChange={(e) => setQtd(e.target.value)} />
+            </div>
+          )}
+          <div className="flex gap-2">
+            <Button size="sm" onClick={confirmar} disabled={cot.receberItem.isPending}>Confirmar</Button>
+            <Button size="sm" variant="ghost" onClick={() => setAbrir(false)}>Voltar</Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -626,6 +750,7 @@ const VAZIO: Partial<Representante> = {
 
 function AbaRepresentantes({ cot }: { cot: Cot }) {
   const [form, setForm] = useState<Partial<Representante> | null>(null);
+  const [verDic, setVerDic] = useState(false);
 
   return (
     <div className="space-y-3 mt-3">
@@ -653,6 +778,16 @@ function AbaRepresentantes({ cot }: { cot: Cot }) {
         </Card>
       ))}
       {form && <FormRepresentante inicial={form} cot={cot} onFechar={() => setForm(null)} />}
+
+      <Card>
+        <CardContent className="p-3 space-y-2">
+          <button type="button" className="w-full text-left text-sm flex items-center justify-between" onClick={() => setVerDic((v) => !v)}>
+            <span className="flex items-center gap-1"><BookOpen className="h-4 w-4" /> Dicionário da IA (o jeito que a loja chama as peças)</span>
+            {verDic ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+          {verDic && <AbaDicionario cot={cot} />}
+        </CardContent>
+      </Card>
     </div>
   );
 }
