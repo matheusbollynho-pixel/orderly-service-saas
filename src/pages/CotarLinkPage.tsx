@@ -3,20 +3,26 @@ import { useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Check, Loader2, PackageX, Ban } from 'lucide-react';
+import { Check, Loader2, PackageX, Ban, Plus, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // Página pública: o representante abre o link (sem login) e responde peça por peça.
+// Uma peça pode ter VÁRIAS marcas (cada uma com valor próprio).
 
 type Opcao = 'tenho' | 'nao_tenho' | 'nao_trabalho';
 interface Item { id: string; texto: string; quantidade: number }
-interface Resp { opcao: Opcao | null; preco: string; marca: string; obs: string }
+interface Marca { preco: string; marca: string; obs: string }
+interface Resp { opcao: Opcao | null; marcas: Marca[]; obs: string }
 
 const URL_FN = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cotacao-link`;
 const HEADERS = {
   'Content-Type': 'application/json',
   apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
 };
+
+const marcaVazia = (): Marca => ({ preco: '', marca: '', obs: '' });
+const respVazia = (): Resp => ({ opcao: null, marcas: [marcaVazia()], obs: '' });
+const valor = (v: string) => Number(v.replace(/\./g, '').replace(',', '.'));
 
 export default function CotarLinkPage() {
   const { token = '' } = useParams();
@@ -42,15 +48,20 @@ export default function CotarLinkPage() {
         setLoja(d.loja); setRep(d.representante); setItens(d.itens); setVencido(d.vencido);
         setPrazo(d.prazo ?? '');
         const ini: Record<string, Resp> = {};
-        for (const it of d.itens as Item[]) ini[it.id] = { opcao: null, preco: '', marca: '', obs: '' };
+        for (const it of d.itens as Item[]) ini[it.id] = respVazia();
+        // Resposta anterior (o rep pode voltar e corrigir): várias linhas "cotado" = várias marcas
         for (const p of d.respostas as { item_id: string; situacao: string; preco: number | null; marca: string | null; motivo: string | null }[]) {
           if (!ini[p.item_id]) continue;
           if (p.situacao === 'cotado') {
-            ini[p.item_id] = { opcao: 'tenho', preco: p.preco != null ? String(p.preco).replace('.', ',') : '', marca: p.marca ?? '', obs: p.motivo ?? '' };
+            const m = { preco: p.preco != null ? String(p.preco).replace('.', ',') : '', marca: p.marca ?? '', obs: p.motivo ?? '' };
+            const atual = ini[p.item_id];
+            ini[p.item_id] = atual.opcao === 'tenho'
+              ? { ...atual, marcas: [...atual.marcas, m] }
+              : { opcao: 'tenho', marcas: [m], obs: '' };
           } else {
             const trab = (p.motivo ?? '').startsWith('Não trabalha');
             const extra = (p.motivo ?? '').split(': ').slice(1).join(': ');
-            ini[p.item_id] = { opcao: trab ? 'nao_trabalho' : 'nao_tenho', preco: '', marca: '', obs: extra };
+            ini[p.item_id] = { opcao: trab ? 'nao_trabalho' : 'nao_tenho', marcas: [marcaVazia()], obs: extra };
           }
         }
         setResp(ini);
@@ -63,33 +74,36 @@ export default function CotarLinkPage() {
   }, [token]);
 
   const set = (id: string, campo: Partial<Resp>) => setResp((r) => ({ ...r, [id]: { ...r[id], ...campo } }));
+  const setMarca = (id: string, i: number, campo: Partial<Marca>) =>
+    setResp((r) => ({ ...r, [id]: { ...r[id], marcas: r[id].marcas.map((m, j) => (j === i ? { ...m, ...campo } : m)) } }));
+  const addMarca = (id: string) => setResp((r) => ({ ...r, [id]: { ...r[id], marcas: [...r[id].marcas, marcaVazia()] } }));
+  const delMarca = (id: string, i: number) => setResp((r) => ({ ...r, [id]: { ...r[id], marcas: r[id].marcas.filter((_, j) => j !== i) } }));
   const respondidas = Object.values(resp).filter((r) => r.opcao).length;
 
   const enviar = async () => {
     setAviso(null);
-    const faltaValor = itens.find((it) => resp[it.id]?.opcao === 'tenho' && !(Number(resp[it.id].preco.replace(/\./g, '').replace(',', '.')) > 0));
-    if (faltaValor) return setAviso(`Coloque o valor de "${faltaValor.texto}".`);
+    for (const it of itens) {
+      const r = resp[it.id];
+      if (r?.opcao !== 'tenho') continue;
+      const preenchidas = r.marcas.filter((m) => m.preco.trim() || m.marca.trim());
+      if (preenchidas.length === 0 || preenchidas.some((m) => !(valor(m.preco) > 0))) {
+        return setAviso(`Coloque o valor de "${it.texto}".`);
+      }
+    }
     if (respondidas === 0) return setAviso('Responda pelo menos uma peça.');
     setEnviando(true);
     try {
-      const r = await fetch(URL_FN, {
-        method: 'POST',
-        headers: HEADERS,
-        body: JSON.stringify({
-          token,
-          prazo,
-          obs,
-          itens: itens.filter((it) => resp[it.id]?.opcao).map((it) => ({
-            item_id: it.id,
-            opcao: resp[it.id].opcao,
-            preco: resp[it.id].opcao === 'tenho' ? Number(resp[it.id].preco.replace(/\./g, '').replace(',', '.')) : null,
-            marca: resp[it.id].marca,
-            obs: resp[it.id].obs,
-          })),
-        }),
+      const linhas = itens.flatMap((it): Record<string, unknown>[] => {
+        const r = resp[it.id];
+        if (!r?.opcao) return [];
+        if (r.opcao !== 'tenho') return [{ item_id: it.id, opcao: r.opcao, obs: r.obs }];
+        return r.marcas
+          .filter((m) => m.preco.trim())
+          .map((m) => ({ item_id: it.id, opcao: 'tenho', preco: valor(m.preco), marca: m.marca, obs: m.obs }));
       });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Erro ao enviar.');
+      const res = await fetch(URL_FN, { method: 'POST', headers: HEADERS, body: JSON.stringify({ token, prazo, obs, itens: linhas }) });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || 'Erro ao enviar.');
       setEnviado(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) {
@@ -107,7 +121,7 @@ export default function CotarLinkPage() {
       <div className="max-w-lg mx-auto p-4 space-y-4 pb-24">
         <div>
           <h1 className="text-xl font-bold">{loja}</h1>
-          <p className="text-sm text-muted-foreground">Cotação{rep ? ` para ${rep}` : ''}: marque o que tem e o valor de cada peça.</p>
+          <p className="text-sm text-muted-foreground">Cotação{rep ? ` para ${rep}` : ''}: marque o que tem e o valor de cada peça. Se tiver mais de uma marca, toque em "+ outra marca".</p>
         </div>
 
         {vencido && <p className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm">Esse link venceu. Peça um novo pra loja.</p>}
@@ -118,7 +132,7 @@ export default function CotarLinkPage() {
         )}
 
         {itens.map((it) => {
-          const r = resp[it.id] ?? { opcao: null, preco: '', marca: '', obs: '' };
+          const r = resp[it.id] ?? respVazia();
           const botao = (op: Opcao, label: string, Icon: typeof Check) => (
             <button type="button" disabled={vencido}
               onClick={() => set(it.id, { opcao: r.opcao === op ? null : op })}
@@ -137,13 +151,30 @@ export default function CotarLinkPage() {
                 {botao('nao_tenho', 'Não tenho', PackageX)}
                 {botao('nao_trabalho', 'Não trabalho', Ban)}
               </div>
+
               {r.opcao === 'tenho' && (
-                <div className="grid grid-cols-2 gap-2">
-                  <Input inputMode="decimal" placeholder="Valor (R$)" value={r.preco} onChange={(e) => set(it.id, { preco: e.target.value })} />
-                  <Input placeholder="Marca" value={r.marca} onChange={(e) => set(it.id, { marca: e.target.value })} />
+                <div className="space-y-2">
+                  {r.marcas.map((m, i) => (
+                    <div key={i} className={cn('space-y-2', r.marcas.length > 1 && 'rounded-md border p-2')}>
+                      <div className="flex gap-2">
+                        <Input className="flex-1" placeholder="Marca" value={m.marca} onChange={(e) => setMarca(it.id, i, { marca: e.target.value })} />
+                        <Input className="w-32" inputMode="decimal" placeholder="Valor (R$)" value={m.preco} onChange={(e) => setMarca(it.id, i, { preco: e.target.value })} />
+                        {r.marcas.length > 1 && (
+                          <button type="button" className="px-2 text-muted-foreground" onClick={() => delMarca(it.id, i)} aria-label="Tirar essa marca">
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                      <Input placeholder="Observação (opcional)" value={m.obs} onChange={(e) => setMarca(it.id, i, { obs: e.target.value })} />
+                    </div>
+                  ))}
+                  <button type="button" className="text-sm text-primary flex items-center gap-1" onClick={() => addMarca(it.id)}>
+                    <Plus className="h-4 w-4" /> outra marca
+                  </button>
                 </div>
               )}
-              {r.opcao && (
+
+              {r.opcao && r.opcao !== 'tenho' && (
                 <Input placeholder="Observação (opcional)" value={r.obs} onChange={(e) => set(it.id, { obs: e.target.value })} />
               )}
             </div>

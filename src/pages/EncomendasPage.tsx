@@ -502,6 +502,26 @@ function DialogInformar({ e, modeloInicial, enc, cot, onFechar }: {
     }
   };
 
+  // Valor já combinado pessoalmente (balcão, telefone): salva e pula pra "Falta pedir", sem mandar mensagem
+  const jaCombinei = async () => {
+    const campos: Partial<Encomenda> & { id: string } = {
+      id: e.id,
+      preco_venda: precoN != null && !Number.isNaN(precoN) ? precoN : e.preco_venda,
+      prazo_texto: prazo.trim() || null,
+      custo: custo?.preco ?? e.custo,
+    };
+    try {
+      await enc.atualizar.mutateAsync(campos);
+      if (e.status === 'aguardando_cotacao' || e.status === 'cliente_avisado') {
+        await enc.mudarStatus.mutateAsync({ e: { ...e, ...campos } as Encomenda, status: 'aprovado' });
+      }
+      toast.success('Salvo. Foi pra "Falta pedir".');
+      onFechar();
+    } catch {
+      // toast já mostrado
+    }
+  };
+
   return (
     <Dialog open onOpenChange={(o) => !o && onFechar()}>
       <DialogContent className="max-h-[90vh] overflow-y-auto">
@@ -567,6 +587,11 @@ function DialogInformar({ e, modeloInicial, enc, cot, onFechar }: {
           <Button className="w-full" onClick={enviar} disabled={enc.atualizar.isPending || enc.mudarStatus.isPending}>
             <MessageCircle className="h-4 w-4 mr-1" /> Salvar e enviar
           </Button>
+          {(e.status === 'aguardando_cotacao' || e.status === 'cliente_avisado') && (
+            <Button className="w-full" variant="outline" onClick={jaCombinei} disabled={enc.atualizar.isPending || enc.mudarStatus.isPending}>
+              <Check className="h-4 w-4 mr-1" /> Já combinei com o cliente (não enviar)
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>
