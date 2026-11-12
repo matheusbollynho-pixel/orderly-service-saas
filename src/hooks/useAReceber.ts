@@ -4,6 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useStore } from '@/contexts/StoreContext';
 import { saldoOS, saldoFiado } from '@/lib/saldoOS';
+import { QR_PLACEHOLDER } from '@/lib/etapaOS';
 import type { ServiceOrder } from '@/types/service-order';
 
 export interface OSAReceber { os: ServiceOrder; falta: number }
@@ -29,12 +30,14 @@ export function useAReceber(ativo = true) {
         db.from('service_orders')
           .select('*, checklist_items(*), materials(*), payments(*)')
           .eq('status', 'concluida')
+          .neq('equipment', QR_PLACEHOLDER)
           .order('updated_at', { ascending: false })
           .limit(500),
         // Entregues sem quitar: só dos últimos 4 meses (as antigas são centenas)
         db.from('service_orders')
           .select('*, checklist_items(*), materials(*), payments(*)')
           .eq('status', 'concluida_entregue')
+          .neq('equipment', QR_PLACEHOLDER)
           .gte('updated_at', quatroMeses)
           .order('updated_at', { ascending: false })
           .limit(400),
@@ -97,7 +100,7 @@ export function useContagemOS() {
     refetchOnMount: 'always', // abriu a tela = número atualizado (ex.: depois de receber)
     queryFn: async () => {
       const contar = async (status: string) => {
-        const { count, error } = await db.from('service_orders').select('id', { count: 'exact', head: true }).eq('status', status);
+        const { count, error } = await db.from('service_orders').select('id', { count: 'exact', head: true }).eq('status', status).neq('equipment', QR_PLACEHOLDER);
         if (error) throw error;
         return count ?? 0;
       };

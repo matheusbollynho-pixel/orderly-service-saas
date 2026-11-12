@@ -27,15 +27,17 @@ const urgenciaDe = (prev?: string | null): Urgencia => {
 const ORDEM_URG: Urgencia[] = ['atrasada', 'hoje', 'sem_previsao', 'ok'];
 const FILTROS: (Etapa | 'todas')[] = ['todas', 'fila', 'servico', 'peca', 'pronta'];
 
-export default function QuadroOficinaPage({ onSelectOrder, onPronta }: {
+export default function QuadroOficinaPage({ onSelectOrder, onPronta, filtroInicial }: {
   onSelectOrder: (order: ServiceOrder) => void;
   /** Moto ficou pronta: abre "Avisar o cliente?" (com o desfazer junto). */
   onPronta?: (nova: ServiceOrder, desfazer: () => Promise<boolean>) => void;
+  /** Veio de um número do Início: já abre filtrado. */
+  filtroInicial?: Etapa | 'todas';
 }) {
   const { data: ativas = [], isLoading, isError, refetch } = useOficinaAtivas();
   const { mechanics } = useMechanics();
   const { mudar, desfazer } = useMudarEtapa();
-  const [filtro, setFiltro] = useState<Etapa | 'todas'>('todas');
+  const [filtro, setFiltro] = useState<Etapa | 'todas'>(filtroInicial ?? 'todas');
   const [busca, setBusca] = useState('');
   const [escolherMecanico, setEscolherMecanico] = useState<{ os: ServiceOrder; destino: Exclude<Etapa, 'entregue'> } | null>(null);
   const [mexendo, setMexendo] = useState<string | null>(null);

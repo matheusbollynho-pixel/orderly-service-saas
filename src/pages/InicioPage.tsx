@@ -6,9 +6,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useAppointments } from '@/hooks/useAppointments';
 import { useCashFlow } from '@/hooks/useCashFlow';
-import { useAReceber, useContagemOS } from '@/hooks/useAReceber';
+import { useAReceber } from '@/hooks/useAReceber';
+import { useOficinaAtivas } from '@/hooks/useOficina';
+import { etapaDe, type Etapa } from '@/lib/etapaOS';
 import type { Acesso, View } from '@/lib/navegacao';
-import type { OrderStatus, ServiceOrder } from '@/types/service-order';
+import type { ServiceOrder } from '@/types/service-order';
 
 export const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const hojeISO = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Fortaleza' }).format(new Date());
@@ -28,12 +30,12 @@ function Bloco({ titulo, icone: Icone, acao, onClick, children }: {
   );
 }
 
-export default function InicioPage({ orders, carregando, acessoDe, goTo, filtrarOrdens, abrirReceber, recentes }: {
+export default function InicioPage({ orders, carregando, acessoDe, goTo, abrirOficina, abrirReceber, recentes }: {
   orders: ServiceOrder[];
   carregando: boolean;
   acessoDe: (v: View) => Acesso;
   goTo: (v: View) => void;
-  filtrarOrdens: (s: OrderStatus) => void;
+  abrirOficina: (etapa: Etapa) => void;
   abrirReceber: () => void;
   recentes?: React.ReactNode;
 }) {
@@ -50,13 +52,13 @@ export default function InicioPage({ orders, carregando, acessoDe, goTo, filtrar
   const [verCaixa, setVerCaixa] = useState(false);
   useEffect(() => () => setVerCaixa(false), []);
 
-  const { data: contagem } = useContagemOS();
-  // Conta no banco; enquanto carrega, usa as OS que a tela já tem
-  const conta = (s: OrderStatus) => contagem?.[s] ?? orders.filter((o) => o.status === s).length;
-  const etapas: { s: OrderStatus; nome: string; cor: string }[] = [
-    { s: 'aberta', nome: 'Abertas', cor: 'text-foreground' },
-    { s: 'em_andamento', nome: 'Em serviço', cor: 'text-amber-500' },
-    { s: 'concluida', nome: 'Prontas', cor: 'text-green-500' },
+  // Mesma conta do Quadro (etapa da moto), com TODAS as ativas do banco
+  const { data: ativas, isLoading: carregandoAtivas } = useOficinaAtivas();
+  const conta = (e: Etapa) => (ativas ?? orders.filter((o) => o.status !== 'concluida_entregue')).filter((o) => etapaDe(o) === e).length;
+  const etapas: { s: Etapa; nome: string; cor: string }[] = [
+    { s: 'fila', nome: 'Na fila', cor: 'text-foreground' },
+    { s: 'servico', nome: 'Em serviço', cor: 'text-blue-500' },
+    { s: 'pronta', nome: 'Prontas', cor: 'text-green-500' },
   ];
   const agendaHoje = appointments.filter((a) => a.status !== 'cancelado');
   const fiadosVencidos = aReceber?.fiados.filter((f) => f.vencido) ?? [];
@@ -73,11 +75,11 @@ export default function InicioPage({ orders, carregando, acessoDe, goTo, filtrar
       </div>
 
       {/* Motos por etapa */}
-      <Bloco titulo="Na oficina" icone={CalendarDays} acao="Ordens" onClick={() => goTo('orders')}>
-        {carregando ? <Skeleton className="h-16" /> : (
+      <Bloco titulo="Na oficina" icone={CalendarDays} acao="Quadro" onClick={() => goTo('quadro')}>
+        {carregando && carregandoAtivas ? <Skeleton className="h-16" /> : (
           <div className="grid grid-cols-3 gap-2">
             {etapas.map(({ s, nome, cor }) => (
-              <button key={s} type="button" onClick={() => filtrarOrdens(s)}
+              <button key={s} type="button" onClick={() => abrirOficina(s)}
                 className="flex min-h-[64px] flex-col items-center justify-center rounded-lg bg-muted/40 hover:bg-muted/70">
                 <span className={cn('font-display text-2xl font-bold tabular-nums', cor)}>{conta(s)}</span>
                 <span className="text-xs text-muted-foreground">{nome}</span>

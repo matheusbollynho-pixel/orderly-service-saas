@@ -3,6 +3,9 @@
 // Não muda o banco: usa os mesmos valores de status / status_oficina de hoje.
 import type { OrderStatus, StatusOficina } from '@/types/service-order';
 
+/** OS criada pelo sistema de avaliação por QR (não é moto de verdade): fica fora das telas da oficina. */
+export const QR_PLACEHOLDER = '__QR_WALKIN_PLACEHOLDER__';
+
 export type Etapa = 'fila' | 'servico' | 'peca' | 'pronta' | 'entregue';
 
 export const ETAPAS: Record<Etapa, { nome: string; cor: string; fundo: string }> = {

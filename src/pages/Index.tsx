@@ -70,6 +70,7 @@ export default function Index() {
   const canAccessReports = permissions.relatorios;
   const [avisoPronta, setAvisoPronta] = useState<ServiceOrder | null>(null);
   // Quando a moto ficou pronta pelo Quadro, a janela do aviso também oferece Desfazer
+  const [filtroQuadro, setFiltroQuadro] = useState<import('@/lib/etapaOS').Etapa | 'todas'>('todas');
   const [desfazerPronta, setDesfazerPronta] = useState<(() => Promise<boolean>) | null>(null);
   const { settings: storeSettings } = useStoreSettings();
   const [currentView, setCurrentView] = useState<View>(() => lerTelaInicial(permissions));
@@ -707,7 +708,7 @@ Retirada: ${retiradaInfo}`;
             abas={abasDaArea!}
             atual={currentView}
             acessoDe={acessoDe}
-            onAba={goTo}
+            onAba={(v) => { if (v === 'quadro') setFiltroQuadro('todas'); goTo(v); }}
             acoes={currentView === 'orders' && (acessoDe('new') === 'ok' || acessoDe('express') === 'ok') ? (
               <>
                 {acessoDe('new') === 'ok' && <Button className="flex-1 h-11" onClick={() => goTo('new')}><Plus className="h-4 w-4" /> Nova OS</Button>}
@@ -734,7 +735,7 @@ Retirada: ${retiradaInfo}`;
             carregando={isLoading}
             acessoDe={acessoDe}
             goTo={goTo}
-            filtrarOrdens={(s) => { setStatusFilter(s); goTo('orders'); }}
+            abrirOficina={(etapa) => { setFiltroQuadro(etapa); goTo('quadro'); }}
             abrirReceber={() => setCurrentView('receber')}
             recentes={orders.length > 0 ? (
               <div>
@@ -872,6 +873,8 @@ Retirada: ${retiradaInfo}`;
 
         {currentView === 'quadro' && (
           <QuadroOficinaPage
+            key={filtroQuadro}
+            filtroInicial={filtroQuadro}
             onSelectOrder={(order) => {
               setSelectedOrder(order);
               setCurrentView('details');

@@ -6,7 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useStore } from '@/contexts/StoreContext';
-import { patchPara, type Etapa } from '@/lib/etapaOS';
+import { patchPara, QR_PLACEHOLDER, type Etapa } from '@/lib/etapaOS';
 import type { ServiceOrder } from '@/types/service-order';
 
 const db = supabase as unknown as SupabaseClient;
@@ -22,6 +22,7 @@ export function useOficinaAtivas() {
       const { data, error } = await db.from('service_orders')
         .select('*, checklist_items(*), materials(*), payments(*)')
         .in('status', ['aberta', 'em_andamento', 'concluida'])
+        .neq('equipment', QR_PLACEHOLDER)
         .order('entry_date', { ascending: true })
         .limit(1000);
       if (error) throw error;
