@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useClients, type Client, type Motorcycle } from '@/hooks/useClients';
+import { BuscaCliente } from '@/components/v2/BuscaCliente';
 import { matchesSearch } from '@/lib/textSearch';
 import { FormPrecoManual } from '@/components/cotacao/FormPrecoManual';
 import { ListaCotacoes } from '@/components/cotacao/ListaCotacoes';
@@ -159,10 +160,8 @@ export default function EncomendasPage() {
 // ------------------------------------------------------------------ Nova encomenda
 
 function NovaEncomenda({ enc, cot, onFim }: { enc: Enc; cot: Cot; onFim: () => void }) {
-  const { searchClientByName, searchClientByPhone, getClientMotorcycles, upsertClient } = useClients();
+  const { searchClientByPhone, getClientMotorcycles, upsertClient } = useClients();
   const [busca, setBusca] = useState('');
-  const [resultados, setResultados] = useState<Client[]>([]);
-  const [buscando, setBuscando] = useState(false);
   const [cliente, setCliente] = useState<Client | null>(null);
   const [nome, setNome] = useState('');
   const [whats, setWhats] = useState('');
@@ -177,39 +176,17 @@ function NovaEncomenda({ enc, cot, onFim }: { enc: Enc; cot: Cot; onFim: () => v
   const [obs, setObs] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [pedirAgora, setPedirAgora] = useState<Encomenda | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout>>();
 
-  useEffect(() => {
-    if (cliente) return;
-    clearTimeout(timer.current);
-    const q = busca.trim();
-    const digitos = q.replace(/\D/g, '');
-    if (q.length < 2) { setResultados([]); return; }
-    timer.current = setTimeout(async () => {
-      setBuscando(true);
-      try {
-        if (digitos.length >= 8 && digitos.length === q.replace(/[\s()+-]/g, '').length) {
-          const c = await searchClientByPhone(digitos);
-          setResultados(c ? [c] : []);
-        } else {
-          setResultados(await searchClientByName(q));
-        }
-      } finally {
-        setBuscando(false);
-      }
-    }, 350);
-    return () => clearTimeout(timer.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [busca, cliente]);
 
-  const escolherCliente = async (c: Client) => {
+  const escolherCliente = async (c: Client, motoPreferida?: string) => {
     setCliente(c);
     setNome(c.name);
     setWhats(c.whatsapp || c.phone || '');
-    setResultados([]);
     const ms = await getClientMotorcycles(c.id);
     setMotos(ms);
-    if (ms.length === 1) { setMotoId(ms[0].id); setMoto(descMoto(ms[0])); }
+    // Achou pela placa: já deixa essa moto escolhida
+    const escolhida = ms.find((m) => m.id === motoPreferida) ?? (ms.length === 1 ? ms[0] : undefined);
+    if (escolhida) { setMotoId(escolhida.id); setMoto(descMoto(escolhida)); }
     const { data } = await supabase
       .from('service_orders')
       .select('id, equipment, entry_date')
@@ -276,21 +253,13 @@ function NovaEncomenda({ enc, cot, onFim }: { enc: Enc; cot: Cot; onFim: () => v
             </div>
           ) : (
             <>
-              <Input value={busca} onChange={(e) => { setBusca(e.target.value); setNome(e.target.value); }}
-                placeholder="Nome ou telefone (busca na base de clientes)" />
-              {buscando && <p className="text-xs text-muted-foreground mt-1">Buscando...</p>}
-              {resultados.length > 0 && (
-                <div className="rounded-md border mt-1 divide-y">
-                  {resultados.map((c) => (
-                    <button key={c.id} className="w-full text-left p-2 hover:bg-muted" onClick={() => escolherCliente(c)}>
-                      <b>{c.name}</b> <span className="text-muted-foreground">{c.whatsapp || c.phone || ''}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              {busca.trim().length >= 2 && !buscando && resultados.length === 0 && (
-                <p className="text-xs text-muted-foreground mt-1">Cliente novo: preencha o WhatsApp abaixo que ele entra na base.</p>
-              )}
+              {/* v2: busca única (nome, telefone, CPF ou placa) */}
+              <BuscaCliente
+                valor={busca}
+                onChange={(t) => { setBusca(t); setNome(t); }}
+                onEscolher={(c, motoId) => escolherCliente(c, motoId)}
+                avisoNovo="Cliente novo: preencha o WhatsApp abaixo que ele entra na base."
+              />
             </>
           )}
         </div>

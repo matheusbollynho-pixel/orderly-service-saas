@@ -1,4 +1,5 @@
 import { confirmar } from '@/components/v2/Confirmacao';
+import { BuscaCliente } from '@/components/v2/BuscaCliente';
 import { matchesSearch } from '@/lib/textSearch';
 import { useState, useRef, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -777,14 +778,26 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
             </div>
             <div className="flex-1 max-w-xs">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Cliente</label>
-              <Input
-                placeholder="Nome do cliente (opcional)"
-                value={editClientName}
-                onChange={e => setEditClientName(e.target.value)}
-                onBlur={handleBlurClient}
-                disabled={!isEditable}
-                className="mt-1 h-8 text-sm bg-background"
-              />
+              {isEditable ? (
+                // v2: busca única. Escolher preenche nome, CPF, telefone e endereço da nota.
+                <BuscaCliente
+                  className="mt-1"
+                  valor={editClientName}
+                  onChange={setEditClientName}
+                  onBlur={handleBlurClient}
+                  placeholder="Opcional: nome, telefone ou placa"
+                  onEscolher={async (c) => {
+                    const tel = c.whatsapp || c.phone || '';
+                    setEditClientName(c.name);
+                    setEditClientCpf(c.cpf || '');
+                    setEditClientPhone(tel);
+                    setEditClientAddress(c.endereco || '');
+                    await updateOrder({ id: order.id, client_name: c.name, client_cpf: c.cpf || null, client_phone: tel || null, client_address: c.endereco || null });
+                  }}
+                />
+              ) : (
+                <Input value={editClientName} disabled className="mt-1 h-8 text-sm bg-background" />
+              )}
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">

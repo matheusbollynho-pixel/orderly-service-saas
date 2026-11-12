@@ -1,4 +1,3 @@
-import { matchesSearch } from '@/lib/textSearch';
 import { useState, useMemo } from 'react';
 import {
   startOfWeek, endOfWeek, addWeeks, subWeeks,
@@ -13,6 +12,7 @@ import {
   formatApptTime, shiftFromTime, apptWhenLabel,
 } from '@/hooks/useAppointments';
 import { useClients } from '@/hooks/useClients';
+import { BuscaCliente } from '@/components/v2/BuscaCliente';
 import { useMechanics } from '@/hooks/useMechanics';
 import { useStoreSettings } from '@/hooks/useStoreSettings';
 import { LimitesAgendaCard } from '@/components/ajustes/AjustesRapidos';
@@ -137,7 +137,7 @@ export default function AgendaPage({ onConvertToOS }: AgendaPageProps = {}) {
   const { appointments, isLoading, createAppointment, updateAppointment, deleteAppointment, isCreating } = useAppointments(startDate, endDate);
   // Todos os agendamentos — para o dashboard
   const { appointments: allAppointments } = useAppointments();
-  const { clients, searchClientByPhone } = useClients();
+  const { searchClientByPhone } = useClients();
   const storeSettingsHook = useStoreSettings();
   const storeSettings = storeSettingsHook.settings;
   const { mechanics } = useMechanics();
@@ -149,13 +149,6 @@ export default function AgendaPage({ onConvertToOS }: AgendaPageProps = {}) {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [clientSearch, setClientSearch] = useState('');
 
-  const filteredClients = useMemo(() => {
-    if (!clientSearch) return [];
-    const q = clientSearch.toLowerCase();
-    return clients.filter(c =>
-      matchesSearch(q, c.name, c.phone)
-    ).slice(0, 5);
-  }, [clients, clientSearch]);
 
   // Horário cheio (já tem o máximo de agendamentos configurado pra esse horário) — só aviso, o dono decide
   const maxPorHorario = storeSettings?.max_por_horario ?? 1;
@@ -588,38 +581,19 @@ export default function AgendaPage({ onConvertToOS }: AgendaPageProps = {}) {
             {/* Busca de cliente */}
             <div className="space-y-1">
               <Label className="text-xs">Cliente</Label>
-              <Input
-                placeholder="Nome ou telefone do cliente..."
-                value={clientSearch}
-                onChange={e => {
-                  setClientSearch(e.target.value);
-                  setForm(f => ({ ...f, client_name: e.target.value, client_id: '' }));
+              {/* v2: busca única (nome, telefone, CPF ou placa). Antes a busca por nome não achava ninguém. */}
+              <BuscaCliente
+                valor={clientSearch}
+                onChange={(texto) => {
+                  setClientSearch(texto);
+                  setForm(f => ({ ...f, client_name: texto, client_id: '' }));
                 }}
-                className="h-9 text-sm"
+                onEscolher={(c) => {
+                  setClientSearch(c.name);
+                  setForm(f => ({ ...f, client_name: c.name, client_phone: c.whatsapp || c.phone || '', client_id: c.id }));
+                }}
+                avisoNovo="Cliente novo: preencha o telefone abaixo."
               />
-              {filteredClients.length > 0 && (
-                <div className="rounded-lg border border-border bg-card shadow-md overflow-hidden">
-                  {filteredClients.map(c => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors border-b last:border-0"
-                      onClick={() => {
-                        setClientSearch(c.name);
-                        setForm(f => ({
-                          ...f,
-                          client_name: c.name,
-                          client_phone: c.phone ?? '',
-                          client_id: c.id,
-                        }));
-                      }}
-                    >
-                      <span className="font-medium">{c.name}</span>
-                      {c.phone && <span className="text-muted-foreground ml-2 text-xs">{c.phone}</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
 
             {/* Telefone */}
