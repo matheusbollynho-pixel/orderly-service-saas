@@ -1,3 +1,4 @@
+import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import { useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -49,6 +50,8 @@ export default function CotacaoPage() {
   const aEnviar = cot.itens.filter((i) => i.status === 'pendente' && i.pedido_preco_id && !segurados.has(i.id)).length;
   const aCaminho = cot.itens.filter((i) => i.status === 'pedido').length;
   const [verIA, setVerIA] = useState(false);
+  // Ler resposta com IA só em plano com IA (Premium/Enterprise). Os outros usam link e preço manual.
+  const temIA = usePlanFeatures().canAccess('ia-atendimento');
 
   return (
     <div className="space-y-4">
@@ -65,7 +68,7 @@ export default function CotacaoPage() {
         {/* forceMount: não perde o que foi preenchido (resposta/arquivo) ao trocar de aba */}
         <TabsContent value="pedir" forceMount className="data-[state=inactive]:hidden">
           <AbaPedir cot={cot} />
-          <Card className="mt-4">
+          {temIA && <Card className="mt-4">
             <CardContent className="p-3 space-y-2">
               <button type="button" className="w-full text-left text-sm flex items-center justify-between" onClick={() => setVerIA((v) => !v)}>
                 <span>📷 O representante respondeu por <b>foto, PDF ou texto</b> no WhatsApp? Ler com IA</span>
@@ -73,7 +76,7 @@ export default function CotacaoPage() {
               </button>
               {verIA && <AbaResposta cot={cot} irParaFaltas={() => setAba('faltas')} />}
             </CardContent>
-          </Card>
+          </Card>}
         </TabsContent>
         <TabsContent value="pedidos"><AbaPedidos cot={cot} /></TabsContent>
         <TabsContent value="caminho"><AbaACaminho cot={cot} /></TabsContent>
@@ -753,6 +756,7 @@ const VAZIO: Partial<Representante> = {
 };
 
 function AbaRepresentantes({ cot }: { cot: Cot }) {
+  const temIA = usePlanFeatures().canAccess('ia-atendimento');
   const [form, setForm] = useState<Partial<Representante> | null>(null);
   const [verDic, setVerDic] = useState(false);
 
@@ -783,7 +787,7 @@ function AbaRepresentantes({ cot }: { cot: Cot }) {
       ))}
       {form && <FormRepresentante inicial={form} cot={cot} onFechar={() => setForm(null)} />}
 
-      <Card>
+      {temIA && <Card>
         <CardContent className="p-3 space-y-2">
           <button type="button" className="w-full text-left text-sm flex items-center justify-between" onClick={() => setVerDic((v) => !v)}>
             <span className="flex items-center gap-1"><BookOpen className="h-4 w-4" /> Dicionário da IA (o jeito que a loja chama as peças)</span>
@@ -791,7 +795,7 @@ function AbaRepresentantes({ cot }: { cot: Cot }) {
           </button>
           {verDic && <AbaDicionario cot={cot} />}
         </CardContent>
-      </Card>
+      </Card>}
     </div>
   );
 }

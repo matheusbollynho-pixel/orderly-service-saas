@@ -9,10 +9,10 @@ export const UPGRADE_LINKS = {
 
 // Funcionalidades por plano
 const PLAN_FEATURES: Record<string, string[]> = {
-  trial: ['dashboard', 'new', 'express', 'orders', 'agenda', 'quadro', 'mechanics', 'fluxo-caixa', 'balcao', 'reports', 'boletos', 'fiados', 'estoque', 'pos-venda', 'satisfacao'],
+  trial: ['dashboard', 'new', 'express', 'orders', 'agenda', 'quadro', 'mechanics', 'fluxo-caixa', 'balcao', 'reports', 'boletos', 'fiados', 'estoque', 'pos-venda', 'satisfacao', 'cotacao', 'encomendas'],
   basic: ['dashboard', 'new', 'express', 'orders', 'agenda', 'quadro', 'mechanics'],
-  pro: ['dashboard', 'new', 'express', 'orders', 'agenda', 'quadro', 'mechanics', 'fluxo-caixa', 'balcao', 'reports', 'boletos', 'fiados', 'estoque', 'pos-venda', 'satisfacao'],
-  premium: ['dashboard', 'new', 'express', 'orders', 'agenda', 'quadro', 'mechanics', 'fluxo-caixa', 'balcao', 'reports', 'boletos', 'fiados', 'estoque', 'pos-venda', 'satisfacao', 'ia-atendimento'],
+  pro: ['dashboard', 'new', 'express', 'orders', 'agenda', 'quadro', 'mechanics', 'fluxo-caixa', 'balcao', 'reports', 'boletos', 'fiados', 'estoque', 'pos-venda', 'satisfacao', 'cotacao', 'encomendas'],
+  premium: ['dashboard', 'new', 'express', 'orders', 'agenda', 'quadro', 'mechanics', 'fluxo-caixa', 'balcao', 'reports', 'boletos', 'fiados', 'estoque', 'pos-venda', 'satisfacao', 'ia-atendimento', 'cotacao', 'encomendas'],
   enterprise: ['dashboard', 'new', 'express', 'orders', 'agenda', 'quadro', 'mechanics', 'fluxo-caixa', 'balcao', 'reports', 'boletos', 'fiados', 'estoque', 'pos-venda', 'satisfacao', 'ia-atendimento', 'cotacao', 'encomendas'],
 };
 
@@ -27,6 +27,8 @@ export const REQUIRED_PLAN: Record<string, 'pro' | 'premium'> = {
   'pos-venda': 'pro',
   'satisfacao': 'pro',
   'ia-atendimento': 'premium',
+  'cotacao': 'pro',
+  'encomendas': 'pro',
 };
 
 export function usePlanFeatures() {
