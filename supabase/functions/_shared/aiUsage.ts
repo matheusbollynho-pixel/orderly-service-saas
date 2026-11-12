@@ -5,6 +5,8 @@
 // Atualizar se a Anthropic mudar o preço ou se outro modelo passar a ser usado.
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   'claude-haiku-4-5-20251001': { input: 1 / 1_000_000, output: 5 / 1_000_000 },
+  // Preço até 100K tokens de entrada por chamada (acima disso: 0,50 / 2,50 por milhão).
+  'claude-haiku-5-5': { input: 0.1 / 1_000_000, output: 0.5 / 1_000_000 },
 }
 
 // Cotação aproximada USD -> BRL, só pra exibir o gasto em reais.

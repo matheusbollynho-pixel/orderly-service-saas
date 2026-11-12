@@ -1,4 +1,4 @@
-import { LayoutDashboard, Plus, ClipboardList, ChartBar, Users, LogOut, Heart, Wallet, Bolt, Circle, Star, Package, ShoppingCart, Gauge, CalendarDays, FileText, HandCoins, Lock, Bot } from 'lucide-react';
+import { LayoutDashboard, Plus, ClipboardList, ChartBar, Users, LogOut, Heart, Wallet, Bolt, Circle, Star, Package, ShoppingCart, Gauge, CalendarDays, FileText, HandCoins, Lock, Bot, Tags } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { useStore } from '@/contexts/StoreContext';
@@ -7,7 +7,7 @@ import { UpgradeModal } from '@/components/UpgradeModal';
 import { toast } from 'sonner';
 import { useState } from 'react';
 
-type View = 'dashboard' | 'new' | 'express' | 'orders' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa' | 'satisfacao' | 'estoque' | 'balcao' | 'quadro' | 'agenda' | 'boletos' | 'fiados' | 'ia-atendimento';
+type View = 'dashboard' | 'new' | 'express' | 'orders' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa' | 'satisfacao' | 'estoque' | 'balcao' | 'quadro' | 'agenda' | 'boletos' | 'fiados' | 'ia-atendimento' | 'cotacao';
 
 interface BottomNavProps {
   activeView: View;
@@ -52,6 +52,8 @@ export function BottomNav({ activeView, onViewChange, isAdmin }: BottomNavProps)
     { id: 'boletos' as const, label: 'Boletos', icon: FileText, show: permissions.boletos },
     { id: 'fiados' as const, label: 'Fiados', icon: HandCoins, show: permissions.fiados },
     { id: 'estoque' as const, label: 'Estoque', icon: Package, show: permissions.estoque },
+    // Cotação de peças: em teste, só aparece pra quem tem a feature (enterprise / custom_features)
+    { id: 'cotacao' as const, label: 'Cotação', icon: Tags, show: permissions.estoque && canAccess('cotacao') },
     { id: 'mechanics' as const, label: 'Equipe', icon: Users, show: permissions.equipe },
     { id: 'pos-venda' as const, label: 'Pós-Venda', icon: Heart, show: permissions.pos_venda },
     { id: 'satisfacao' as const, label: 'Satisfação', icon: Star, show: permissions.satisfacao },
