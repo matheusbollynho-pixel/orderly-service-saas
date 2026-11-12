@@ -24,6 +24,7 @@ import { supabase } from '@/integrations/supabase/client';
 import SatisfactionDashboardPage from './SatisfactionDashboardPage';
 import InventoryPage from './InventoryPage';
 import CotacaoPage from './CotacaoPage';
+import EncomendasPage from './EncomendasPage';
 import VendaBalcaoPage from './VendaBalcaoPage';
 import QuadroOficinaPage from './QuadroOficinaPage';
 import AgendaPage from './AgendaPage';
@@ -38,7 +39,7 @@ import { Wrench, Search, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { getMaintenanceKeywords, findKeywordInText, rescheduleMaintenanceReminder } from '@/services/maintenanceReminderService';
 
-type View = 'dashboard' | 'new' | 'express' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa' | 'satisfacao' | 'estoque' | 'balcao' | 'quadro' | 'agenda' | 'mensagens' | 'boletos' | 'fiados' | 'cotacao';
+type View = 'dashboard' | 'new' | 'express' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa' | 'satisfacao' | 'estoque' | 'balcao' | 'quadro' | 'agenda' | 'mensagens' | 'boletos' | 'fiados' | 'cotacao' | 'encomendas';
 
 export default function Index() {
   const { isAdmin } = useAuth();
@@ -669,6 +670,8 @@ Retirada: ${retiradaInfo}`;
         {currentView === 'fiados' && <FiadosPage />}
 
         {currentView === 'cotacao' && <CotacaoPage />}
+
+        {currentView === 'encomendas' && <EncomendasPage />}
 
         {currentView === 'fluxo-caixa' && (
           <CashFlowPage

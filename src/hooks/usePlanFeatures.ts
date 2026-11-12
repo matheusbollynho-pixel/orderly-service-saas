@@ -13,7 +13,7 @@ const PLAN_FEATURES: Record<string, string[]> = {
   basic: ['dashboard', 'new', 'express', 'orders', 'agenda', 'quadro', 'mechanics'],
   pro: ['dashboard', 'new', 'express', 'orders', 'agenda', 'quadro', 'mechanics', 'fluxo-caixa', 'balcao', 'reports', 'boletos', 'fiados', 'estoque', 'pos-venda', 'satisfacao'],
   premium: ['dashboard', 'new', 'express', 'orders', 'agenda', 'quadro', 'mechanics', 'fluxo-caixa', 'balcao', 'reports', 'boletos', 'fiados', 'estoque', 'pos-venda', 'satisfacao', 'ia-atendimento'],
-  enterprise: ['dashboard', 'new', 'express', 'orders', 'agenda', 'quadro', 'mechanics', 'fluxo-caixa', 'balcao', 'reports', 'boletos', 'fiados', 'estoque', 'pos-venda', 'satisfacao', 'ia-atendimento', 'cotacao'],
+  enterprise: ['dashboard', 'new', 'express', 'orders', 'agenda', 'quadro', 'mechanics', 'fluxo-caixa', 'balcao', 'reports', 'boletos', 'fiados', 'estoque', 'pos-venda', 'satisfacao', 'ia-atendimento', 'cotacao', 'encomendas'],
 };
 
 // Qual plano é necessário para cada feature

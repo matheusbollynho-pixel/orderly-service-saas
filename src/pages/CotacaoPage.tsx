@@ -187,6 +187,7 @@ function ItemFalta({ item, cot }: { item: CotacaoItem; cot: Cot }) {
                 {item.texto}
                 {Number(item.quantidade) !== 1 && <span className="text-muted-foreground"> × {Number(item.quantidade)}</span>}
               </p>
+              {item.observacao && <p className="text-xs text-primary">{item.observacao}</p>}
               <div className="flex flex-wrap gap-2 mt-1 text-xs text-muted-foreground">
                 {escolhido
                   ? <span className="text-primary font-medium">Escolhido: {nomeFonte(escolhido, cot.representantes)} {escolhido.marca ?? ''} {brl(escolhido.preco)} · vá em "Fazer pedido"</span>

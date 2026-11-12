@@ -189,7 +189,11 @@ export function ordenarOpcoes(opcoes: CotacaoPreco[]) {
 export function useCotacao() {
   const qc = useQueryClient();
   const { storeId } = useStore();
-  const invalidar = () => qc.invalidateQueries({ queryKey: ['cotacao'] });
+  const invalidar = () => {
+    qc.invalidateQueries({ queryKey: ['cotacao'] });
+    // Pedido/escolha na cotação mexe na encomenda ligada (gatilho no banco)
+    qc.invalidateQueries({ queryKey: ['encomendas'] });
+  };
 
   const representantes = useQuery({
     queryKey: ['cotacao', 'representantes'],
