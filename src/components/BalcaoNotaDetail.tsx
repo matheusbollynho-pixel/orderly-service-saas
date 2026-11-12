@@ -1403,7 +1403,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
           <div className="space-y-4 py-1">
             <p className="text-sm text-muted-foreground">
               {order.status === 'finalizada'
-                ? 'O estoque será revertido e o lançamento no caixa removido.'
+                ? 'O estoque será revertido e o valor estornado no caixa (fica registrado com o motivo).'
                 : 'Esta ação não pode ser desfeita.'}
             </p>
 
