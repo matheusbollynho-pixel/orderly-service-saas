@@ -297,7 +297,7 @@ function CardEncomenda({ e, enc, cot }: { e: Encomenda; enc: Enc; cot: Cot }) {
           <span className="text-xs text-muted-foreground ml-auto">{diasAtras(e.created_at)}</span>
         </div>
         <p>
-          {e.peca}{Number(e.quantidade) !== 1 ? ` × ${Number(e.quantidade)}` : ''}
+          {e.peca}{Number(e.quantidade) !== 1 ? ` · Qtd: ${Number(e.quantidade)}` : ''}
           {e.moto && <span className="text-muted-foreground"> · {e.moto}</span>}
         </p>
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
@@ -514,7 +514,7 @@ function DialogPedirPreco({ e, cot, onFechar }: { e: Encomenda; cot: Cot; onFech
               </Button>
             </div>
           ))}
-          <p className="text-xs text-muted-foreground">A resposta você cola em Cotação → Colar resposta, como sempre.</p>
+          <p className="text-xs text-muted-foreground">Quando responder, insira em Cotação → Inserir resposta / tabela, como sempre.</p>
           <Button variant="outline" className="w-full" onClick={onFechar}>Fechar</Button>
         </div>
       </DialogContent>

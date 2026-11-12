@@ -49,7 +49,7 @@ export default function CotacaoPage() {
         <TabsList className="w-full flex flex-wrap h-auto gap-1">
           <TabsTrigger value="faltas">Faltas</TabsTrigger>
           <TabsTrigger value="pedir">Pedir preço</TabsTrigger>
-          <TabsTrigger value="resposta">Colar resposta</TabsTrigger>
+          <TabsTrigger value="resposta">Inserir resposta / tabela</TabsTrigger>
           <TabsTrigger value="pedidos">Fazer pedido{aEnviar ? ` (${aEnviar})` : ''}</TabsTrigger>
           <TabsTrigger value="reps">Representantes</TabsTrigger>
           <TabsTrigger value="dicionario">Dicionário</TabsTrigger>
@@ -107,8 +107,6 @@ function AbaFaltas({ cot }: { cot: Cot }) {
         </CardContent>
       </Card>
 
-      <PuxarDoEstoque cot={cot} pendentes={todosPendentes} />
-
       {todosPendentes.length > 5 && (
         <div className="relative">
           <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -153,61 +151,6 @@ function AbaFaltas({ cot }: { cot: Cot }) {
   );
 }
 
-function PuxarDoEstoque({ cot, pendentes }: { cot: Cot; pendentes: CotacaoItem[] }) {
-  const [aberto, setAberto] = useState(false);
-  const [desmarcados, setDesmarcados] = useState<Set<string>>(new Set());
-  // Esconde o que já está na lista de faltas (mesmo nome, com ou sem acento)
-  const naLista = new Set(pendentes.map((i) => normalizeSearch(i.texto).replace(/\s+/g, ' ')));
-  const produtos = cot.estoqueBaixo.filter((p) => !naLista.has(normalizeSearch(p.name).replace(/\s+/g, ' ')));
-  if (produtos.length === 0) return null;
-  const escolhidos = produtos.filter((p) => !desmarcados.has(p.id));
-
-  const adicionar = () => {
-    if (!escolhidos.length) return;
-    cot.adicionarItens.mutate(
-      escolhidos.map((p) => ({
-        texto: p.name,
-        quantidade: p.sugerido,
-        observacao: `Estoque: tem ${Number(p.stock_current)}, mínimo ${Number(p.stock_minimum)}${p.code ? ` · cód ${p.code}` : ''}`,
-      })),
-      { onSuccess: () => { setAberto(false); setDesmarcados(new Set()); } },
-    );
-  };
-
-  return (
-    <Card className="border-yellow-500/40">
-      <CardContent className="p-3 space-y-2 text-sm">
-        <button className="w-full flex items-center justify-between text-left" onClick={() => setAberto((v) => !v)}>
-          <span className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-yellow-600" />
-            <b>{produtos.length} produto(s) do estoque no mínimo</b>
-          </span>
-          {aberto ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-        </button>
-        {aberto && (
-          <>
-            {produtos.map((p) => (
-              <label key={p.id} className="flex items-center gap-2">
-                <Checkbox checked={!desmarcados.has(p.id)} onCheckedChange={() => {
-                  const n = new Set(desmarcados);
-                  if (n.has(p.id)) n.delete(p.id); else n.add(p.id);
-                  setDesmarcados(n);
-                }} />
-                <span className="flex-1">{p.name}{p.brand ? ` · ${p.brand}` : ''}</span>
-                <span className="text-xs text-muted-foreground">tem {Number(p.stock_current)} / mín {Number(p.stock_minimum)} → pedir {p.sugerido}</span>
-              </label>
-            ))}
-            <Button size="sm" onClick={adicionar} disabled={!escolhidos.length || cot.adicionarItens.isPending}>
-              <Plus className="h-4 w-4 mr-1" /> Adicionar {escolhidos.length} na lista de faltas
-            </Button>
-            <p className="text-xs text-muted-foreground">A quantidade dá pra mudar depois em "Editar". Só aparece produto com estoque mínimo cadastrado.</p>
-          </>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
 function ItemFalta({ item, cot }: { item: CotacaoItem; cot: Cot }) {
   const [aberto, setAberto] = useState(false);
   const [editando, setEditando] = useState(false);
@@ -242,9 +185,14 @@ function ItemFalta({ item, cot }: { item: CotacaoItem; cot: Cot }) {
             <div className="min-w-0">
               <p className="font-medium">
                 {item.texto}
-                {Number(item.quantidade) !== 1 && <span className="text-muted-foreground"> × {Number(item.quantidade)}</span>}
+                {Number(item.quantidade) !== 1 && <span className="text-muted-foreground"> · Qtd: {Number(item.quantidade)}</span>}
               </p>
-              {item.observacao && <p className="text-xs text-primary">{item.observacao}</p>}
+              {item.observacao && !(item.produto_id && item.observacao.startsWith('Estoque:')) && (
+                <p className="text-xs text-primary">{item.observacao}</p>
+              )}
+              {item.produto_id && cot.estoque[item.produto_id] && (
+                <p className="text-xs text-yellow-600">Estoque agora: tem {cot.estoque[item.produto_id].atual} · mínimo {cot.estoque[item.produto_id].minimo}</p>
+              )}
               <div className="flex flex-wrap gap-2 mt-1 text-xs text-muted-foreground">
                 {escolhido
                   ? <span className="text-primary font-medium">Escolhido: {nomeFonte(escolhido, cot.representantes)} {escolhido.marca ?? ''} {brl(escolhido.preco)} · vá em "Fazer pedido"</span>
@@ -451,7 +399,7 @@ function AbaPedir({ cot }: { cot: Cot }) {
                 <Checkbox className="mt-0.5" checked={repsMarcados.has(r.id)} onCheckedChange={() => toggle(repsMarcados, r.id, setRepsMarcados)} />
                 <span>
                   <b>{r.nome}</b>
-                  {r.tem_tabela && <span className="text-xs text-muted-foreground"> · tem tabela{r.tabela_atualizada_em ? ` (${diasAtras(r.tabela_atualizada_em)})` : ''}</span>}
+                  {r.tem_tabela && <span className="text-xs text-muted-foreground"> · envia tabela{r.tabela_atualizada_em ? ` (${diasAtras(r.tabela_atualizada_em)})` : ''}</span>}
                   <span className="block text-xs text-muted-foreground">{resumoEntrega(r).join(' · ') || 'Entrega não cadastrada'}</span>
                 </span>
               </label>
@@ -465,7 +413,7 @@ function AbaPedir({ cot }: { cot: Cot }) {
             </div>
           ))}
           <p className="text-xs text-muted-foreground">
-            Quando a resposta chegar, cole na aba "Colar resposta". Representante que tem tabela: cole a tabela lá, sem precisar mandar mensagem.
+            Quando a resposta chegar, insira na aba "Inserir resposta / tabela". Representante que envia tabela: insira a tabela lá (foto, PDF ou texto), sem precisar mandar mensagem.
           </p>
         </CardContent>
       </Card>
@@ -547,13 +495,13 @@ function AbaResposta({ cot, irParaFaltas }: { cot: Cot; irParaFaltas: () => void
             </Select>
           </div>
           <div>
-            <Label>Resposta (cole o texto do WhatsApp)</Label>
+            <Label>Resposta ou tabela do representante (cole o texto, ou anexe a foto/PDF abaixo)</Label>
             <Textarea rows={8} value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="kit transmissao pop110 riffel 89,90..." />
           </div>
           <div className="flex items-center gap-2">
             <Button size="sm" variant="outline" asChild>
               <label className="cursor-pointer">
-                <Paperclip className="h-4 w-4 mr-1" /> {arquivo ? 'Trocar arquivo' : 'Anexar foto ou PDF'}
+                <Paperclip className="h-4 w-4 mr-1" /> {arquivo ? 'Trocar arquivo' : 'Anexar foto ou PDF da tabela'}
                 <input type="file" accept="image/*,application/pdf" className="hidden"
                   onChange={(e) => setArquivo(e.target.files?.[0] ?? null)} />
               </label>
@@ -675,7 +623,7 @@ function AbaPedidos({ cot }: { cot: Cot }) {
               )}
               {g.itens.map(({ item, preco }) => (
                 <div key={item.id} className="text-sm flex justify-between gap-2">
-                  <span>{item.texto}{Number(item.quantidade) !== 1 ? ` × ${Number(item.quantidade)}` : ''}{preco.marca ? ` · ${preco.marca}` : ''}</span>
+                  <span>{item.texto}{Number(item.quantidade) !== 1 ? ` · Qtd: ${Number(item.quantidade)}` : ''}{preco.marca ? ` · ${preco.marca}` : ''}</span>
                   <span>{brl(preco.preco)}</span>
                 </div>
               ))}
@@ -719,7 +667,7 @@ function AbaRepresentantes({ cot }: { cot: Cot }) {
               {!r.ativo && <Badge variant="outline" className="ml-2">Inativo</Badge>}
               <p className="text-xs text-muted-foreground">{r.whatsapp || 'Sem WhatsApp'}</p>
               <p className="text-xs text-muted-foreground">{resumoEntrega(r).join(' · ') || 'Entrega não cadastrada'}</p>
-              {r.tem_tabela && <p className="text-xs text-muted-foreground">Tabela: {r.tabela_atualizada_em ? diasAtras(r.tabela_atualizada_em) : 'sem data'}</p>}
+              {r.tem_tabela && <p className="text-xs text-muted-foreground">Última tabela recebida: {r.tabela_atualizada_em ? diasAtras(r.tabela_atualizada_em) : 'sem data'}</p>}
             </div>
             <div className="flex">
               <Button size="icon" variant="ghost" onClick={() => setForm({ ...r })}><Pencil className="h-4 w-4" /></Button>
@@ -815,8 +763,8 @@ function FormRepresentante({ inicial, cot, onFechar }: { inicial: Partial<Repres
             <Input inputMode="decimal" placeholder="Frete fixo R$ (vazio = varia)" value={f.frete_extra_valor ?? ''} onChange={(e) => set('frete_extra_valor', num(e.target.value))} />
           </div>
 
-          <p className="font-medium pt-2">Tabela de preços</p>
-          <label className="flex items-center gap-2"><Switch checked={!!f.tem_tabela} onCheckedChange={(v) => set('tem_tabela', v)} /> Manda tabela</label>
+          <p className="font-medium pt-2">Tabela de preços que ele envia</p>
+          <label className="flex items-center gap-2"><Switch checked={!!f.tem_tabela} onCheckedChange={(v) => set('tem_tabela', v)} /> Esse representante envia tabela de preço pra loja</label>
           {f.tem_tabela && (
             <div><Label>Última tabela recebida em</Label><Input type="date" value={f.tabela_atualizada_em ?? ''} onChange={(e) => set('tabela_atualizada_em', e.target.value)} /></div>
           )}

@@ -40,6 +40,7 @@ export interface CotacaoItem {
   observacao: string | null;
   pedido_preco_id: string | null;
   pedido_em: string | null;
+  produto_id: string | null;
   created_at: string;
 }
 
@@ -257,24 +258,18 @@ export function useCotacao() {
     },
   });
 
-  // Produtos do estoque no mínimo ou abaixo (só os que têm mínimo definido)
-  const estoqueBaixo = useQuery({
-    queryKey: ['cotacao', 'estoque-baixo'],
+  // Estoque atual dos produtos que estão na lista (entraram sozinhos ao chegar no mínimo)
+  const idsProdutos = [...new Set((itens.data ?? []).filter((i) => i.status === 'pendente' && i.produto_id).map((i) => i.produto_id as string))];
+  const estoque = useQuery({
+    queryKey: ['cotacao', 'estoque', idsProdutos.join(',')],
+    enabled: idsProdutos.length > 0,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('inventory_products')
-        .select('id, code, name, brand, stock_current, stock_minimum, stock_maximum')
-        .eq('active', true)
-        .gt('stock_minimum', 0)
-        .limit(2000);
+        .select('id, stock_current, stock_minimum')
+        .in('id', idsProdutos);
       if (error) throw error;
-      return (data ?? [])
-        .filter((p) => Number(p.stock_current) <= Number(p.stock_minimum))
-        .map((p) => ({
-          ...p,
-          // Sugestão: completa até o máximo; sem máximo, até 2x o mínimo
-          sugerido: Math.max(1, Math.ceil((p.stock_maximum ?? Number(p.stock_minimum) * 2) - Number(p.stock_current))),
-        }));
+      return Object.fromEntries((data ?? []).map((p) => [p.id, { atual: Number(p.stock_current), minimo: Number(p.stock_minimum) }])) as Record<string, { atual: number; minimo: number }>;
     },
   });
 
@@ -409,7 +404,7 @@ export function useCotacao() {
     precos: precos.data ?? [],
     respostas: respostas.data ?? [],
     dicionario: dicionario.data ?? [],
-    estoqueBaixo: estoqueBaixo.data ?? [],
+    estoque: estoque.data ?? {},
     carregando: representantes.isLoading || itens.isLoading || precos.isLoading,
     adicionarItens,
     atualizarItem,
