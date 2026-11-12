@@ -268,20 +268,6 @@ export function useEncomendas() {
     onError,
   });
 
-  const excluir = useMutation({
-    mutationFn: async (e: Encomenda) => {
-      const { data, error } = await db.from('encomendas').delete().eq('id', e.id).select('id');
-      if (error) throw error;
-      // O banco só deixa o dono apagar: se nada foi apagado, avisa em vez de fingir que deu certo
-      if (!data || data.length === 0) throw new Error('Só o dono da loja pode excluir encomendas.');
-      if (e.cotacao_item_id) {
-        await db.from('cotacao_itens').delete().eq('id', e.cotacao_item_id).eq('status', 'pendente');
-      }
-    },
-    onSuccess: () => { invalidar(); toast.success('Encomenda excluída'); },
-    onError,
-  });
-
   return {
     encomendas: lista.data ?? [],
     carregando: lista.isLoading,
@@ -290,6 +276,5 @@ export function useEncomendas() {
     mudarStatus,
     receber,
     devolver,
-    excluir,
   };
 }

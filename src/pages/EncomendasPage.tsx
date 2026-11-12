@@ -9,13 +9,12 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
-  Plus, X, Search, MessageCircle, Check, Truck, PackageCheck, Ban, Trash2, Loader2, Zap, Bot, Wrench,
+  Plus, X, Search, MessageCircle, Check, Truck, PackageCheck, Ban, Loader2, Zap, Bot, Wrench,
   ClipboardList, ShoppingCart, CheckCircle2, Wallet, Eye, EyeOff,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { useStore } from '@/contexts/StoreContext';
 import { useClients, type Client, type Motorcycle } from '@/hooks/useClients';
 import { matchesSearch } from '@/lib/textSearch';
 import {
@@ -342,7 +341,6 @@ function NovaEncomenda({ enc, cot, onFim }: { enc: Enc; cot: Cot; onFim: () => v
 
 function CardEncomenda({ e, enc, cot }: { e: Encomenda; enc: Enc; cot: Cot }) {
   const [verCusto] = useVerCusto();
-  const { isOwner } = useStore();
   const [informar, setInformar] = useState<ModeloMensagem | null>(null);
   const [pedir, setPedir] = useState(false);
   const [caixa, setCaixa] = useState<'receber' | 'entregar' | 'devolver' | null>(null);
@@ -433,13 +431,7 @@ function CardEncomenda({ e, enc, cot }: { e: Encomenda; enc: Enc; cot: Cot }) {
         {!ATIVOS.includes(e.status) && (
           <div className="flex gap-2">
             <Button size="sm" variant="ghost" onClick={() => mudar('aguardando_cotacao')}>Reabrir</Button>
-            {/* Só o dono exclui (o banco também bloqueia pra funcionário) */}
-            {isOwner && (
-              <Button size="sm" variant="ghost" className="text-destructive" title="Excluir (só o dono)"
-                onClick={() => { if (confirm('Excluir essa encomenda de vez?')) enc.excluir.mutate(e); }}>
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            )}
+            {/* Encomenda não se apaga: fica o histórico (o banco também não deixa) */}
           </div>
         )}
       </CardContent>
