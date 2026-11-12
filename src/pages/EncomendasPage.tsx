@@ -471,6 +471,7 @@ function DialogInformar({ e, modeloInicial, enc, cot, onFechar }: {
   const [prazo, setPrazo] = useState(prazoSugerido);
   const [incluirValor, setIncluirValor] = useState(false);
   const [texto, setTexto] = useState<string | null>(null);
+  const [anotar, setAnotar] = useState(false);
 
   const num = (v: string) => (v.trim() ? Number(v.replace(/\./g, '').replace(',', '.')) : null);
   const precoN = num(preco);
@@ -519,15 +520,20 @@ function DialogInformar({ e, modeloInicial, enc, cot, onFechar }: {
             </Select>
           </div>
 
-          <div className="rounded-md border p-2 space-y-1 text-xs">
-            {verCusto && (custo
-              ? <p>Loja paga: <b>{brl(custo.preco)}</b>{custo.marca ? ` · ${custo.marca}` : ''}{rep ? ` · ${rep.nome}` : ''}</p>
-              : <p>Loja paga: <b>ainda não sabemos</b>. Se algum representante já te passou o preço (telefone, pessoalmente), coloque abaixo.</p>)}
-            {rep && <p className="text-muted-foreground">{resumoEntrega(rep).join(' · ')}</p>}
-            {ultimo && <p className="text-muted-foreground">Última vez cobrado: {brl(ultimo.preco_venda)} ({new Date(ultimo.created_at).toLocaleDateString('pt-BR')})</p>}
-          </div>
+          {/* Só mostra o quadro se tiver algo útil: o que a loja paga (olhinho aberto), entrega ou último preço */}
+          {((verCusto && custo) || rep || ultimo) && (
+            <div className="rounded-md border p-2 space-y-1 text-xs">
+              {verCusto && custo && <p>Loja paga: <b>{brl(custo.preco)}</b>{custo.marca ? ` · ${custo.marca}` : ''}{rep ? ` · ${rep.nome}` : ''}</p>}
+              {rep && <p className="text-muted-foreground">{resumoEntrega(rep).join(' · ')}</p>}
+              {ultimo && <p className="text-muted-foreground">Última vez cobrado desse cliente/peça: {brl(ultimo.preco_venda)} ({new Date(ultimo.created_at).toLocaleDateString('pt-BR')})</p>}
+            </div>
+          )}
 
-          {!custo && e.cotacao_item_id && <FormPrecoManual itemId={e.cotacao_item_id} cot={cot} />}
+          {!custo && e.cotacao_item_id && (
+            anotar
+              ? <FormPrecoManual itemId={e.cotacao_item_id} cot={cot} onFim={() => setAnotar(false)} />
+              : <button type="button" className="text-xs underline text-muted-foreground" onClick={() => setAnotar(true)}>+ Anotar quanto a loja paga</button>
+          )}
 
           <div className="grid grid-cols-2 gap-2">
             <div>
