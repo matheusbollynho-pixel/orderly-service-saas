@@ -341,7 +341,8 @@ export function useServiceOrders() {
       toast.success('Ordem de serviço excluída!');
     },
     onError: (error) => {
-      toast.error('Erro ao excluir ordem de serviço');
+      const msg = (error as { message?: string })?.message ?? '';
+      toast.error(msg.includes('Estorne') ? msg : 'Erro ao excluir ordem de serviço');
       console.error(error);
     },
   });

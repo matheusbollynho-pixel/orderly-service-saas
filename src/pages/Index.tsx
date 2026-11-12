@@ -370,9 +370,13 @@ Retirada: ${retiradaInfo}`;
 
   const handleDeleteOrder = () => {
     if (selectedOrder) {
-      deleteOrder(selectedOrder.id);
-      setSelectedOrder(null);
-      setCurrentView('orders');
+      // Só sai da tela se o banco deixou excluir (OS com pagamento é bloqueada).
+      deleteOrder(selectedOrder.id, {
+        onSuccess: () => {
+          setSelectedOrder(null);
+          setCurrentView('orders');
+        },
+      });
     }
   };
 
