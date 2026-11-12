@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useStore } from '@/contexts/StoreContext';
+import { sendWhatsAppText } from '@/services/whatsappService';
 
 // As tabelas da cotação ainda não estão no types.ts gerado.
 const db = supabase as unknown as SupabaseClient;
@@ -179,6 +180,23 @@ export function normalizarWhats(tel: string | null | undefined) {
 export function linkWhats(tel: string | null | undefined, texto: string) {
   const n = normalizarWhats(tel);
   return n ? `https://wa.me/${n}?text=${encodeURIComponent(texto)}` : `https://wa.me/?text=${encodeURIComponent(texto)}`;
+}
+
+/**
+ * Manda direto pelo WhatsApp da loja (API). Sem número, ou se a loja não tiver
+ * WhatsApp conectado, abre o WhatsApp Web com a mensagem pronta.
+ * Retorna true se foi enviado direto.
+ */
+export async function enviarWhats(tel: string | null | undefined, texto: string): Promise<boolean> {
+  const n = normalizarWhats(tel);
+  if (!n) {
+    window.open(linkWhats(null, texto), '_blank');
+    toast.info('Sem WhatsApp cadastrado: escolha o contato na janela que abriu.');
+    return false;
+  }
+  const ok = await sendWhatsAppText({ phone: n, text: texto });
+  if (ok) toast.success('Enviado pelo WhatsApp da loja');
+  return ok;
 }
 
 export function mensagemCotacao(itens: Pick<CotacaoItem, 'texto' | 'quantidade'>[]) {

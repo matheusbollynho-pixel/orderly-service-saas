@@ -54,6 +54,18 @@ export const ATIVOS: StatusEncomenda[] = ['aguardando_cotacao', 'cliente_avisado
 
 export type ModeloMensagem = 'orcamento' | 'ja_pedi' | 'chegou' | 'livre';
 
+export type FormaPagamento = 'dinheiro' | 'pix' | 'cartao_credito' | 'cartao_debito';
+export const FORMAS_PAGAMENTO: { value: FormaPagamento; label: string }[] = [
+  { value: 'pix', label: 'PIX' },
+  { value: 'dinheiro', label: 'Dinheiro' },
+  { value: 'cartao_debito', label: 'Cartão débito' },
+  { value: 'cartao_credito', label: 'Cartão crédito' },
+];
+
+// Data do caixa no fuso da loja (igual ao balcão)
+const hojeISO = () =>
+  new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Fortaleza' }).split('/').reverse().join('-');
+
 export function totalEncomenda(e: Pick<Encomenda, 'preco_venda' | 'quantidade'>) {
   return e.preco_venda != null ? Math.round(e.preco_venda * Number(e.quantidade) * 100) / 100 : null;
 }
@@ -204,6 +216,57 @@ export function useEncomendas() {
     onError,
   });
 
+  /** Recebe dinheiro do cliente: lança ENTRADA no caixa e soma no que já foi pago. */
+  const receber = useMutation({
+    mutationFn: async ({ e, valor, metodo, entregar }: { e: Encomenda; valor: number; metodo: FormaPagamento; entregar?: boolean }) => {
+      if (!(valor > 0)) throw new Error('Valor inválido');
+      const jaPago = Number(e.pago_adiantado || 0);
+      const total = totalEncomenda(e);
+      const tipo = jaPago === 0 && total != null && valor < total ? 'sinal' : jaPago > 0 ? 'restante' : 'pagamento';
+      const { error: e1 } = await db.from('cash_flow').insert({
+        store_id: storeId,
+        type: 'entrada',
+        amount: Math.round(valor * 100) / 100,
+        description: `Encomenda - ${e.cliente_nome} - ${e.peca}`,
+        category: 'Encomenda',
+        payment_method: metodo,
+        date: hojeISO(),
+        notes: tipo === 'sinal' ? 'Sinal (adiantado)' : tipo === 'restante' ? 'Restante na retirada' : null,
+        encomenda_id: e.id,
+      });
+      if (e1) throw e1;
+      const campos: Record<string, unknown> = { pago_adiantado: Math.round((jaPago + valor) * 100) / 100 };
+      if (entregar) Object.assign(campos, { status: 'entregue', entregue_em: new Date().toISOString() });
+      const { error: e2 } = await db.from('encomendas').update(campos).eq('id', e.id);
+      if (e2) throw e2;
+    },
+    onSuccess: (_d, { entregar }) => { invalidar(); toast.success(entregar ? 'Recebido e entregue. Lançado no caixa.' : 'Recebido. Lançado no caixa.'); },
+    onError,
+  });
+
+  /** Cliente desistiu depois de pagar: lança SAÍDA (devolução) no caixa. */
+  const devolver = useMutation({
+    mutationFn: async ({ e, valor, metodo }: { e: Encomenda; valor: number; metodo: FormaPagamento }) => {
+      if (!(valor > 0)) throw new Error('Valor inválido');
+      const { error: e1 } = await db.from('cash_flow').insert({
+        store_id: storeId,
+        type: 'saida',
+        amount: Math.round(valor * 100) / 100,
+        description: `Devolução encomenda - ${e.cliente_nome} - ${e.peca}`,
+        category: 'Encomenda (devolução)',
+        payment_method: metodo,
+        date: hojeISO(),
+        encomenda_id: e.id,
+      });
+      if (e1) throw e1;
+      const novo = Math.max(0, Number(e.pago_adiantado || 0) - valor);
+      const { error: e2 } = await db.from('encomendas').update({ pago_adiantado: Math.round(novo * 100) / 100 }).eq('id', e.id);
+      if (e2) throw e2;
+    },
+    onSuccess: () => { invalidar(); toast.success('Devolução lançada no caixa.'); },
+    onError,
+  });
+
   const excluir = useMutation({
     mutationFn: async (e: Encomenda) => {
       const { error } = await db.from('encomendas').delete().eq('id', e.id);
@@ -222,6 +285,8 @@ export function useEncomendas() {
     criar,
     atualizar,
     mudarStatus,
+    receber,
+    devolver,
     excluir,
   };
 }

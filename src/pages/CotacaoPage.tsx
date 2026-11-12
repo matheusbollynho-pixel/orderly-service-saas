@@ -17,7 +17,7 @@ import {
 import { toast } from 'sonner';
 import { matchesSearch, normalizeSearch } from '@/lib/textSearch';
 import {
-  useCotacao, brl, diasAtras, resumoEntrega, linkWhats, mensagemCotacao, mensagemLink, urlLink, linksInternet, ordenarOpcoes,
+  useCotacao, brl, diasAtras, resumoEntrega, enviarWhats, mensagemCotacao, mensagemLink, urlLink, linksInternet, ordenarOpcoes,
   type CotacaoItem, type CotacaoPreco, type Representante, type Situacao,
 } from '@/hooks/useCotacao';
 
@@ -350,15 +350,17 @@ function AbaPedir({ cot }: { cot: Cot }) {
   const selecionados = pendentes.filter((i) => !desmarcados.has(i.id));
   const mensagem = mensagemCotacao(selecionados);
 
+  const [enviando, setEnviando] = useState<string | null>(null);
+
   const enviarLink = async (r: Representante) => {
-    // Abre a aba já no clique (senão o navegador bloqueia o pop-up depois do await)
-    const aba = window.open('', '_blank');
+    setEnviando(r.id);
     try {
       const link = await cot.criarLink.mutateAsync({ representante_id: r.id, itens: selecionados.map((i) => i.id) });
-      const url = linkWhats(r.whatsapp, mensagemLink(urlLink(link.token)));
-      if (aba) aba.location.href = url; else window.open(url, '_blank');
+      await enviarWhats(r.whatsapp, mensagemLink(urlLink(link.token)));
     } catch {
-      aba?.close();
+      // erro já mostrado
+    } finally {
+      setEnviando(null);
     }
   };
 
@@ -406,12 +408,13 @@ function AbaPedir({ cot }: { cot: Cot }) {
                   )}
                 </div>
                 <div className="flex flex-col items-end gap-1">
-                  <Button size="sm" disabled={!selecionados.length || cot.criarLink.isPending} onClick={() => enviarLink(r)}>
-                    <MessageCircle className="h-4 w-4 mr-1" /> Enviar link
+                  <Button size="sm" disabled={!selecionados.length || enviando !== null} onClick={() => enviarLink(r)}>
+                    {enviando === r.id ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <MessageCircle className="h-4 w-4 mr-1" />} Enviar link
                   </Button>
-                  <a className="text-xs underline text-muted-foreground" href={linkWhats(r.whatsapp, mensagem)} target="_blank" rel="noreferrer">
+                  <button className="text-xs underline text-muted-foreground" disabled={!selecionados.length}
+                    onClick={() => enviarWhats(r.whatsapp, mensagem)}>
                     ou só mensagem
-                  </a>
+                  </button>
                 </div>
               </div>
             );
@@ -633,8 +636,8 @@ function AbaPedidos({ cot }: { cot: Cot }) {
               ))}
               <div className="flex flex-wrap gap-2 pt-1">
                 {g.rep && (
-                  <Button size="sm" asChild>
-                    <a href={linkWhats(g.rep.whatsapp, msg)} target="_blank" rel="noreferrer"><MessageCircle className="h-4 w-4 mr-1" /> Enviar pedido</a>
+                  <Button size="sm" onClick={() => enviarWhats(g.rep!.whatsapp, msg)}>
+                    <MessageCircle className="h-4 w-4 mr-1" /> Enviar pedido
                   </Button>
                 )}
                 <Button size="sm" variant="outline" onClick={marcarPedido}><Check className="h-4 w-4 mr-1" /> Marcar como pedido</Button>

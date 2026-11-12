@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   Plus, X, Search, MessageCircle, Check, Truck, PackageCheck, Ban, Trash2, Loader2, Zap, Bot, Wrench,
-  ClipboardList, ShoppingCart, CheckCircle2,
+  ClipboardList, ShoppingCart, CheckCircle2, Wallet, Eye, EyeOff,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -18,12 +18,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { useClients, type Client, type Motorcycle } from '@/hooks/useClients';
 import { matchesSearch } from '@/lib/textSearch';
 import {
-  useCotacao, brl, diasAtras, linkWhats, mensagemCotacao, resumoEntrega, ordenarOpcoes, proximaEntregaGratis,
+  useCotacao, brl, diasAtras, enviarWhats, mensagemCotacao, mensagemLink, urlLink, resumoEntrega, ordenarOpcoes, proximaEntregaGratis,
   type CotacaoPreco,
 } from '@/hooks/useCotacao';
 import {
   useEncomendas, STATUS_ENCOMENDA, ATIVOS, mensagemCliente, saldoEncomenda, totalEncomenda, ultimoPrecoCobrado,
-  type Encomenda, type ModeloMensagem, type StatusEncomenda,
+  FORMAS_PAGAMENTO, type Encomenda, type ModeloMensagem, type StatusEncomenda, type FormaPagamento,
 } from '@/hooks/useEncomendas';
 
 type Enc = ReturnType<typeof useEncomendas>;
@@ -44,6 +44,23 @@ function custoDaCotacao(e: Encomenda, cot: Cot): CotacaoPreco | null {
 }
 
 type Filtro = 'ativas' | 'finalizadas' | StatusEncomenda;
+
+const CHAVE_VER_CUSTO = 'encomendas_ver_custo';
+
+function useVerCusto(): [boolean, (v: boolean) => void] {
+  const ler = () => { try { return localStorage.getItem(CHAVE_VER_CUSTO) === '1'; } catch { return false; } };
+  const [ver, setVer] = useState(ler);
+  useEffect(() => {
+    const h = () => setVer(ler());
+    window.addEventListener('ver-custo', h);
+    return () => window.removeEventListener('ver-custo', h);
+  }, []);
+  const mudar = (v: boolean) => {
+    try { localStorage.setItem(CHAVE_VER_CUSTO, v ? '1' : '0'); } catch { /* sem storage */ }
+    window.dispatchEvent(new Event('ver-custo'));
+  };
+  return [ver, mudar];
+}
 
 // Cartões do topo (mesmo estilo do Dashboard do início). Clicar filtra a lista.
 const CARTOES: { id: Filtro; label: string; icon: typeof Check; status: StatusEncomenda[]; cor?: string }[] = [
@@ -81,6 +98,7 @@ export default function EncomendasPage() {
   const [nova, setNova] = useState(false);
   const [filtro, setFiltro] = useState<Filtro>('ativas');
   const [busca, setBusca] = useState('');
+  const [verCusto, setVerCusto] = useVerCusto();
 
   const atual = CARTOES.find((c) => c.id === filtro) ?? CARTOES[0];
   const lista = enc.encomendas
@@ -91,9 +109,14 @@ export default function EncomendasPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Encomendas de clientes</h2>
-        <Button size="sm" onClick={() => setNova((v) => !v)}>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={() => setVerCusto(!verCusto)} title={verCusto ? 'Esconder custo' : 'Mostrar custo'}>
+            {verCusto ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </Button>
+          <Button size="sm" onClick={() => setNova((v) => !v)}>
           {nova ? <><X className="h-4 w-4 mr-1" /> Fechar</> : <><Plus className="h-4 w-4 mr-1" /> Nova encomenda</>}
-        </Button>
+          </Button>
+        </div>
       </div>
 
       {nova && <NovaEncomenda enc={enc} cot={cot} onFim={() => setNova(false)} />}
@@ -316,9 +339,12 @@ function NovaEncomenda({ enc, cot, onFim }: { enc: Enc; cot: Cot; onFim: () => v
 // ------------------------------------------------------------------ Card
 
 function CardEncomenda({ e, enc, cot }: { e: Encomenda; enc: Enc; cot: Cot }) {
+  const [verCusto] = useVerCusto();
   const [informar, setInformar] = useState<ModeloMensagem | null>(null);
   const [pedir, setPedir] = useState(false);
+  const [caixa, setCaixa] = useState<'receber' | 'entregar' | 'devolver' | null>(null);
   const s = STATUS_ENCOMENDA[e.status];
+  const pago = Number(e.pago_adiantado || 0);
   const custo = custoDaCotacao(e, cot);
   const total = totalEncomenda(e);
   const saldo = saldoEncomenda(e);
@@ -339,12 +365,21 @@ function CardEncomenda({ e, enc, cot }: { e: Encomenda; enc: Enc; cot: Cot }) {
           {e.peca}{Number(e.quantidade) !== 1 ? ` · Qtd: ${Number(e.quantidade)}` : ''}
           {e.moto && <span className="text-muted-foreground"> · {e.moto}</span>}
         </p>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-          <span>Custo: {custo ? <b className="text-foreground">{brl(custo.preco)}</b> : 'aguardando cotação'}{custo?.marca ? ` (${custo.marca})` : ''}</span>
-          {total != null && <span>Cliente: <b className="text-foreground">{brl(total)}</b></span>}
-          {Number(e.pago_adiantado) > 0 && ATIVOS.includes(e.status) && <span>Adiantado: {brl(Number(e.pago_adiantado))} · Falta: <b className="text-foreground">{brl(saldo)}</b></span>}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          {total == null && <span>Valor: <b className="text-foreground">a definir</b></span>}
+          {total != null && <span>Valor total: <b className="text-foreground">{brl(total)}</b></span>}
+          {total != null && pago > 0 && <span>Entrada: <b className="text-foreground">{brl(pago)}</b></span>}
+          {total != null && (saldo
+            ? <span>Resta pagar: <b className="text-foreground">{brl(saldo)}</b></span>
+            : <span className="text-green-600 font-medium">Pago ✓</span>)}
           {e.prazo_texto && <span>Prazo: {e.prazo_texto}</span>}
         </div>
+        {verCusto && (
+          <p className="text-xs text-muted-foreground border-l-2 border-yellow-500/50 pl-2">
+            Custo: {custo ? <b className="text-foreground">{brl(custo.preco)}</b> : 'aguardando cotação'}{custo?.marca ? ` (${custo.marca})` : ''}
+            {custo?.preco && e.preco_venda ? ` · Margem ${Math.round(((e.preco_venda - custo.preco) / custo.preco) * 100)}%` : ''}
+          </p>
+        )}
         {e.observacao && <p className="text-xs text-muted-foreground">Obs: {e.observacao}</p>}
 
         {ATIVOS.includes(e.status) && (
@@ -373,14 +408,21 @@ function CardEncomenda({ e, enc, cot }: { e: Encomenda; enc: Enc; cot: Cot }) {
             {e.status === 'chegou' && (
               <>
                 <Button size="sm" onClick={() => setInformar('chegou')}><MessageCircle className="h-4 w-4 mr-1" /> Avisar que chegou</Button>
-                <Button size="sm" variant="outline" onClick={() => mudar('entregue')}><Check className="h-4 w-4 mr-1" /> Entregue</Button>
+                <Button size="sm" variant="outline" onClick={() => (saldo ? setCaixa('entregar') : mudar('entregue'))}><Check className="h-4 w-4 mr-1" /> Entregue</Button>
               </>
+            )}
+            {total != null && !!saldo && e.status !== 'chegou' && (
+              <Button size="sm" variant="outline" onClick={() => setCaixa('receber')}><Wallet className="h-4 w-4 mr-1" /> Receber</Button>
             )}
             {e.status !== 'aguardando_cotacao' && e.status !== 'cliente_avisado' && e.status !== 'chegou' && (
               <Button size="sm" variant="ghost" onClick={() => setInformar('livre')}><MessageCircle className="h-4 w-4 mr-1" /> Mensagem</Button>
             )}
             <Button size="sm" variant="ghost" className="text-destructive"
-              onClick={() => { if (confirm(`${e.cliente_nome} desistiu da encomenda?`)) mudar('desistiu'); }}>
+              onClick={() => {
+                if (!confirm(`${e.cliente_nome} desistiu da encomenda?`)) return;
+                mudar('desistiu');
+                if (pago > 0) setCaixa('devolver');
+              }}>
               <Ban className="h-4 w-4 mr-1" /> Desistiu
             </Button>
           </div>
@@ -397,6 +439,7 @@ function CardEncomenda({ e, enc, cot }: { e: Encomenda; enc: Enc; cot: Cot }) {
       </CardContent>
       {informar && <DialogInformar e={e} modeloInicial={informar} enc={enc} cot={cot} onFechar={() => setInformar(null)} />}
       {pedir && <DialogPedirPreco e={e} cot={cot} onFechar={() => setPedir(false)} />}
+      {caixa && <DialogCaixa e={e} modo={caixa} enc={enc} onFechar={() => setCaixa(null)} />}
     </Card>
   );
 }
@@ -406,6 +449,7 @@ function CardEncomenda({ e, enc, cot }: { e: Encomenda; enc: Enc; cot: Cot }) {
 function DialogInformar({ e, modeloInicial, enc, cot, onFechar }: {
   e: Encomenda; modeloInicial: ModeloMensagem; enc: Enc; cot: Cot; onFechar: () => void;
 }) {
+  const [verCusto] = useVerCusto();
   const custo = custoDaCotacao(e, cot);
   const rep = custo?.representante_id ? cot.representantes.find((r) => r.id === custo.representante_id) : null;
   const prazoSugerido = useMemo(() => {
@@ -420,16 +464,13 @@ function DialogInformar({ e, modeloInicial, enc, cot, onFechar }: {
   const [modelo, setModelo] = useState<ModeloMensagem>(modeloInicial);
   const [preco, setPreco] = useState(e.preco_venda != null ? String(e.preco_venda).replace('.', ',') : '');
   const [prazo, setPrazo] = useState(prazoSugerido);
-  const [adiant, setAdiant] = useState<'nada' | 'metade' | 'tudo' | 'outro'>(
-    Number(e.pago_adiantado) > 0 ? 'outro' : 'nada');
-  const [adiantOutro, setAdiantOutro] = useState(Number(e.pago_adiantado) > 0 ? String(e.pago_adiantado).replace('.', ',') : '');
   const [incluirValor, setIncluirValor] = useState(false);
   const [texto, setTexto] = useState<string | null>(null);
 
   const num = (v: string) => (v.trim() ? Number(v.replace(/\./g, '').replace(',', '.')) : null);
   const precoN = num(preco);
   const totalN = precoN != null ? precoN * Number(e.quantidade) : null;
-  const pago = adiant === 'nada' ? 0 : adiant === 'metade' ? (totalN ?? 0) / 2 : adiant === 'tudo' ? (totalN ?? 0) : (num(adiantOutro) ?? 0);
+  const pago = Number(e.pago_adiantado || 0);
   const margem = precoN != null && custo?.preco ? Math.round(((precoN - custo.preco) / custo.preco) * 100) : null;
 
   const rascunho = { ...e, preco_venda: precoN, prazo_texto: prazo, pago_adiantado: Math.round(pago * 100) / 100 };
@@ -441,7 +482,6 @@ function DialogInformar({ e, modeloInicial, enc, cot, onFechar }: {
       id: e.id,
       preco_venda: precoN != null && !Number.isNaN(precoN) ? precoN : e.preco_venda,
       prazo_texto: prazo.trim() || null,
-      pago_adiantado: Math.round(pago * 100) / 100,
       custo: custo?.preco ?? e.custo,
     };
     try {
@@ -449,7 +489,7 @@ function DialogInformar({ e, modeloInicial, enc, cot, onFechar }: {
       const atualizada = { ...e, ...campos } as Encomenda;
       if (modelo === 'orcamento' && e.status === 'aguardando_cotacao') await enc.mudarStatus.mutateAsync({ e: atualizada, status: 'cliente_avisado' });
       if (modelo === 'ja_pedi' && ['aguardando_cotacao', 'cliente_avisado', 'aprovado'].includes(e.status)) await enc.mudarStatus.mutateAsync({ e: atualizada, status: 'pedido_feito' });
-      window.open(linkWhats(e.cliente_whatsapp, mensagem), '_blank');
+      await enviarWhats(e.cliente_whatsapp, mensagem);
       onFechar();
     } catch {
       // toast já mostrado
@@ -475,7 +515,7 @@ function DialogInformar({ e, modeloInicial, enc, cot, onFechar }: {
           </div>
 
           <div className="rounded-md border p-2 space-y-1 text-xs">
-            <p>Custo: <b>{custo ? brl(custo.preco) : 'sem cotação ainda'}</b>{custo?.marca ? ` · ${custo.marca}` : ''}{rep ? ` · ${rep.nome}` : ''}</p>
+            {verCusto && <p>Custo: <b>{custo ? brl(custo.preco) : 'sem cotação ainda'}</b>{custo?.marca ? ` · ${custo.marca}` : ''}{rep ? ` · ${rep.nome}` : ''}</p>}
             {rep && <p className="text-muted-foreground">{resumoEntrega(rep).join(' · ')}</p>}
             {ultimo && <p className="text-muted-foreground">Última vez cobrado: {brl(ultimo.preco_venda)} ({new Date(ultimo.created_at).toLocaleDateString('pt-BR')})</p>}
           </div>
@@ -484,7 +524,7 @@ function DialogInformar({ e, modeloInicial, enc, cot, onFechar }: {
             <div>
               <Label>Preço pro cliente (unidade)</Label>
               <Input inputMode="decimal" value={preco} onChange={(ev) => { setPreco(ev.target.value); setTexto(null); }} placeholder="150,00" />
-              {margem != null && <p className={`text-xs mt-1 ${margem < 0 ? 'text-red-600' : 'text-muted-foreground'}`}>Margem: {margem}%</p>}
+              {verCusto && margem != null && <p className={`text-xs mt-1 ${margem < 0 ? 'text-red-600' : 'text-muted-foreground'}`}>Margem: {margem}%</p>}
             </div>
             <div>
               <Label>Prazo</Label>
@@ -492,22 +532,11 @@ function DialogInformar({ e, modeloInicial, enc, cot, onFechar }: {
             </div>
           </div>
 
-          <div>
-            <Label>Pago adiantado</Label>
-            <div className="flex gap-2">
-              <Select value={adiant} onValueChange={(v) => { setAdiant(v as typeof adiant); setTexto(null); }}>
-                <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="nada">Nada</SelectItem>
-                  <SelectItem value="metade">50%</SelectItem>
-                  <SelectItem value="tudo">Tudo</SelectItem>
-                  <SelectItem value="outro">Outro valor</SelectItem>
-                </SelectContent>
-              </Select>
-              {adiant === 'outro' && <Input inputMode="decimal" value={adiantOutro} onChange={(ev) => { setAdiantOutro(ev.target.value); setTexto(null); }} placeholder="R$" />}
-            </div>
-            {totalN != null && <p className="text-xs text-muted-foreground mt-1">Total {brl(totalN)} · adiantado {brl(pago)} · falta {brl(Math.max(0, totalN - pago))}</p>}
-          </div>
+          {totalN != null && (
+            <p className="text-xs text-muted-foreground">
+              Valor total {brl(totalN)} · Entrada {brl(pago)} · Resta pagar {brl(Math.max(0, totalN - pago))}. Pra receber entrada, use o botão "Receber" (entra no caixa).
+            </p>
+          )}
 
           {modelo === 'chegou' && (
             <label className="flex items-center gap-2">
@@ -519,9 +548,9 @@ function DialogInformar({ e, modeloInicial, enc, cot, onFechar }: {
             <Label>Mensagem (pode editar)</Label>
             <Textarea rows={4} value={mensagem} onChange={(ev) => setTexto(ev.target.value)} />
           </div>
-          {!e.cliente_whatsapp && <p className="text-xs text-yellow-600">Cliente sem WhatsApp: vai abrir o WhatsApp pra você escolher o contato.</p>}
+          {!e.cliente_whatsapp && <p className="text-xs text-yellow-600">Cliente sem WhatsApp cadastrado: vai abrir o WhatsApp pra você escolher o contato.</p>}
           <Button className="w-full" onClick={enviar} disabled={enc.atualizar.isPending || enc.mudarStatus.isPending}>
-            <MessageCircle className="h-4 w-4 mr-1" /> Salvar e abrir WhatsApp
+            <MessageCircle className="h-4 w-4 mr-1" /> Salvar e enviar
           </Button>
         </div>
       </DialogContent>
@@ -533,28 +562,123 @@ function DialogInformar({ e, modeloInicial, enc, cot, onFechar }: {
 
 function DialogPedirPreco({ e, cot, onFechar }: { e: Encomenda; cot: Cot; onFechar: () => void }) {
   const reps = [...cot.representantes.filter((r) => r.ativo)].sort((a, b) => (a.prazo_dias ?? 99) - (b.prazo_dias ?? 99));
-  const [msg, setMsg] = useState(mensagemCotacao([{ texto: e.peca, quantidade: e.quantidade }]));
+  const [enviando, setEnviando] = useState<string | null>(null);
+
+  const enviarLink = async (repId: string, tel: string | null) => {
+    if (!e.cotacao_item_id) return toast.error('Essa encomenda não está ligada à cotação');
+    setEnviando(repId);
+    try {
+      const link = await cot.criarLink.mutateAsync({ representante_id: repId, itens: [e.cotacao_item_id] });
+      await enviarWhats(tel, mensagemLink(urlLink(link.token)));
+    } catch {
+      // toast já mostrado
+    } finally {
+      setEnviando(null);
+    }
+  };
+
   return (
     <Dialog open onOpenChange={(o) => !o && onFechar()}>
       <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Pedir preço agora: {e.peca}</DialogTitle></DialogHeader>
         <div className="space-y-3 text-sm">
-          <Textarea rows={5} value={msg} onChange={(ev) => setMsg(ev.target.value)} />
-          <p className="text-xs text-muted-foreground">Mais rápido primeiro. Pergunte pra quem quiser; se não tiver, pergunte aos próximos.</p>
+          <p className="text-xs text-muted-foreground">Mais rápido primeiro. O representante recebe um link só com essa peça e a resposta aparece sozinha.</p>
           {reps.length === 0 && <p className="text-muted-foreground">Cadastre representantes na Cotação.</p>}
-          {reps.map((r) => (
-            <div key={r.id} className="flex items-center justify-between gap-2 border-b pb-2">
-              <div>
-                <b>{r.nome}</b>
-                <p className="text-xs text-muted-foreground">{resumoEntrega(r).join(' · ') || 'Entrega não cadastrada'}</p>
+          {reps.map((r) => {
+            const ultimo = cot.links.find((l) => l.representante_id === r.id && !!e.cotacao_item_id && l.itens.includes(e.cotacao_item_id));
+            return (
+              <div key={r.id} className="flex items-center justify-between gap-2 border-b pb-2">
+                <div>
+                  <b>{r.nome}</b>
+                  <p className="text-xs text-muted-foreground">{resumoEntrega(r).join(' · ') || 'Entrega não cadastrada'}</p>
+                  {ultimo && (
+                    <p className={`text-xs ${ultimo.respondido_em ? 'text-green-600' : 'text-yellow-600'}`}>
+                      {ultimo.respondido_em ? `✓ Respondeu ${diasAtras(ultimo.respondido_em)}` : 'Link enviado, aguardando'}
+                    </p>
+                  )}
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <Button size="sm" disabled={enviando !== null} onClick={() => enviarLink(r.id, r.whatsapp)}>
+                    {enviando === r.id ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <MessageCircle className="h-4 w-4 mr-1" />} Enviar link
+                  </Button>
+                  <button className="text-xs underline text-muted-foreground"
+                    onClick={() => enviarWhats(r.whatsapp, mensagemCotacao([{ texto: e.peca, quantidade: e.quantidade }]))}>
+                    ou só mensagem
+                  </button>
+                </div>
               </div>
-              <Button size="sm" asChild>
-                <a href={linkWhats(r.whatsapp, msg)} target="_blank" rel="noreferrer"><MessageCircle className="h-4 w-4 mr-1" /> WhatsApp</a>
-              </Button>
-            </div>
-          ))}
-          <p className="text-xs text-muted-foreground">Quando responder, insira em Cotação → Inserir resposta / tabela, como sempre.</p>
+            );
+          })}
           <Button variant="outline" className="w-full" onClick={onFechar}>Fechar</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ------------------------------------------------------------------ Caixa (receber / entregar / devolver)
+
+function DialogCaixa({ e, modo, enc, onFechar }: {
+  e: Encomenda; modo: 'receber' | 'entregar' | 'devolver'; enc: Enc; onFechar: () => void;
+}) {
+  const total = totalEncomenda(e);
+  const pago = Number(e.pago_adiantado || 0);
+  const saldo = saldoEncomenda(e) ?? 0;
+  const sugerido = modo === 'devolver' ? pago : modo === 'entregar' ? saldo : (pago === 0 && total ? total / 2 : saldo);
+  const [valor, setValor] = useState(sugerido ? sugerido.toFixed(2).replace('.', ',') : '');
+  const [metodo, setMetodo] = useState<FormaPagamento>('pix');
+  const valorN = Number(valor.replace(/\./g, '').replace(',', '.'));
+  const ocupado = enc.receber.isPending || enc.devolver.isPending || enc.mudarStatus.isPending;
+
+  const confirmar = async () => {
+    if (!(valorN > 0)) return toast.error('Informe o valor');
+    try {
+      if (modo === 'devolver') await enc.devolver.mutateAsync({ e, valor: valorN, metodo });
+      else await enc.receber.mutateAsync({ e, valor: valorN, metodo, entregar: modo === 'entregar' });
+      onFechar();
+    } catch {
+      // toast já mostrado
+    }
+  };
+
+  const titulo = modo === 'devolver' ? `Devolver pra ${e.cliente_nome}?` : modo === 'entregar' ? `Entregar pra ${e.cliente_nome}` : `Receber de ${e.cliente_nome}`;
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onFechar()}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>{titulo}</DialogTitle></DialogHeader>
+        <div className="space-y-3 text-sm">
+          <p className="text-xs text-muted-foreground">
+            {total != null ? `Valor total ${brl(total)} · Entrada ${brl(pago)} · Resta pagar ${brl(saldo)}` : `Já pago ${brl(pago)}`}
+          </p>
+          {modo === 'devolver' && <p className="text-xs">O cliente já tinha pago {brl(pago)}. Se devolveu o dinheiro, lance a saída no caixa.</p>}
+          {modo !== 'devolver' && pago === 0 && total != null && (
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => setValor((total / 2).toFixed(2).replace('.', ','))}>50% (entrada)</Button>
+              <Button size="sm" variant="outline" onClick={() => setValor(total.toFixed(2).replace('.', ','))}>Tudo</Button>
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            <div><Label>Valor (R$)</Label><Input inputMode="decimal" value={valor} onChange={(ev) => setValor(ev.target.value)} /></div>
+            <div>
+              <Label>Forma</Label>
+              <Select value={metodo} onValueChange={(v) => setMetodo(v as FormaPagamento)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{FORMAS_PAGAMENTO.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          </div>
+          <Button className="w-full" onClick={confirmar} disabled={ocupado}>
+            <Wallet className="h-4 w-4 mr-1" />
+            {modo === 'devolver' ? 'Lançar devolução no caixa' : modo === 'entregar' ? 'Receber, lançar no caixa e entregar' : 'Receber e lançar no caixa'}
+          </Button>
+          {modo === 'entregar' && (
+            <Button variant="outline" className="w-full" disabled={ocupado}
+              onClick={async () => { await enc.mudarStatus.mutateAsync({ e, status: 'entregue' }); onFechar(); }}>
+              Entregar sem receber agora
+            </Button>
+          )}
+          {modo === 'devolver' && <Button variant="ghost" className="w-full" onClick={onFechar}>Não devolveu</Button>}
         </div>
       </DialogContent>
     </Dialog>
