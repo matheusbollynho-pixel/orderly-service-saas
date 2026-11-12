@@ -4,13 +4,12 @@ import { useVehicleLabel } from '@/hooks/useVehicleLabel';
 import { useServiceOrders } from '@/hooks/useServiceOrders';
 import { useAuth } from '@/hooks/useAuth';
 import { useStore } from '@/contexts/StoreContext';
-import { MaintenanceKeywordsManager } from '@/components/MaintenanceKeywordsManager';
 import { useStoreSettings, StoreSettings, DEFAULT_INSPECTION_TERMS_TEXT, DEFAULT_DELIVERY_TERMS_TEXT } from '@/hooks/useStoreSettings';
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import { UpgradeModal } from '@/components/UpgradeModal';
 import { WhatsappConexao } from '@/components/WhatsappConexao';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Settings, Zap, MessageSquare, CalendarCheck, Star, Cake, ShoppingCart, Store, Bot, Users, CreditCard, Send, Loader2, Lock, ArrowLeft } from 'lucide-react';
+import { Settings, Wallet, MessageSquare, CalendarCheck, Star, Cake, ShoppingCart, Store, Bot, Users, CreditCard, Send, Loader2, Lock, ArrowLeft } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -77,14 +76,13 @@ export default function ConfigToolsPage() {
   const { user } = useAuth();
   const { isOwner, role, loading: storeLoading } = useStore();
   const isRestrictedUser = !!user && role !== null && role !== 'owner';
-  const { VEHICLE_CAP, VEHICLES_CAP } = useVehicleLabel();
+  const { VEHICLE_CAP } = useVehicleLabel();
   const { canAccess, getUpgradeLink, getRequiredPlan } = usePlanFeatures();
   const iaLocked = !canAccess('ia-atendimento');
   const [showIaUpgrade, setShowIaUpgrade] = useState(false);
   const [showWppUpgrade, setShowWppUpgrade] = useState(false);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [showKeywords, setShowKeywords] = useState(false);
   const [removeOsId, setRemoveOsId] = useState('');
   const { settings, loading: loadingSettings, saving, saveSettings } = useStoreSettings();
   const [companyName, setCompanyName] = useState('');
@@ -93,12 +91,8 @@ export default function ConfigToolsPage() {
   const [storeCnpj, setStoreCnpj] = useState('');
   const [storeInstagram, setStoreInstagram] = useState('');
   const [storeOwner, setStoreOwner] = useState('');
-  const [maxAgendamentosDia, setMaxAgendamentosDia] = useState(10);
-  const [maxPorHorario, setMaxPorHorario] = useState(1);
   const [aiEnabled, setAiEnabled] = useState(true);
   const [aiNotes, setAiNotes] = useState('');
-  const [boletoNotifyPhone1, setBoletoNotifyPhone1] = useState('');
-  const [boletoNotifyPhone2, setBoletoNotifyPhone2] = useState('');
   const [asaasApiKey, setAsaasApiKey] = useState('');
   const [instagramUrl, setInstagramUrl] = useState('');
   const [googleMapsUrl, setGoogleMapsUrl] = useState('');
@@ -129,12 +123,8 @@ export default function ConfigToolsPage() {
       setStoreCnpj(settings.store_cnpj || '');
       setStoreInstagram(settings.store_instagram || '');
       setStoreOwner(settings.store_owner || '');
-      setMaxAgendamentosDia(settings.max_agendamentos_dia ?? 10);
-      setMaxPorHorario(settings.max_por_horario ?? 1);
       setAiEnabled(settings.ai_enabled ?? true);
       setAiNotes(settings.ai_notes || '');
-      setBoletoNotifyPhone1((settings as any).boleto_notify_phone_1 || '');
-      setBoletoNotifyPhone2((settings as any).boleto_notify_phone_2 || '');
       setAsaasApiKey((settings as any).asaas_api_key || '');
       setInstagramUrl(settings.instagram_url || '');
       setGoogleMapsUrl(settings.google_maps_url || '');
@@ -171,13 +161,8 @@ export default function ConfigToolsPage() {
       store_cnpj: storeCnpj,
       store_instagram: storeInstagram,
       store_owner: storeOwner,
-      max_agendamentos_dia: maxAgendamentosDia,
-      max_por_horario: maxPorHorario,
       ai_enabled: aiEnabled,
       ai_notes: aiNotes,
-      boleto_notify_phone_1: boletoNotifyPhone1 || null,
-      boleto_notify_phone_2: boletoNotifyPhone2 || null,
-      asaas_api_key: asaasApiKey || null,
       instagram_url: instagramUrl || null,
       google_maps_url: googleMapsUrl || null,
       opening_hours: openingHours || null,
@@ -254,6 +239,9 @@ export default function ConfigToolsPage() {
           <TabsTrigger value="ia" className="flex-1 flex items-center gap-2">
             <Bot size={15} /> IA
           </TabsTrigger>
+          <TabsTrigger value="cobranca" className="flex-1 flex items-center gap-2">
+            <Wallet size={15} /> Cobrança online
+          </TabsTrigger>
           <TabsTrigger value="ferramentas" className="flex-1 flex items-center gap-2">
             <Settings size={15} /> Ferramentas
           </TabsTrigger>
@@ -323,77 +311,6 @@ export default function ConfigToolsPage() {
                 <p className="text-xs text-neutral-500">Usado pela IA para informar clientes sobre pagamento</p>
               </div>
 
-              {/* WhatsApp alertas internos */}
-              <div className="border border-white/10 rounded-lg p-3 space-y-3 bg-black/20">
-                <p className="text-xs text-neutral-400 font-semibold uppercase tracking-wide">WhatsApp — Alertas Internos (Boletos)</p>
-                <div className="space-y-1">
-                  <label className="text-xs text-neutral-400 font-medium">Dono / Responsável</label>
-                  <input
-                    type="text"
-                    value={boletoNotifyPhone1}
-                    onChange={e => setBoletoNotifyPhone1(e.target.value)}
-                    placeholder="Ex: 75988388629"
-                    className="w-full p-2 border border-white/20 rounded text-sm bg-black/30 text-neutral-200"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-neutral-400 font-medium">Financeiro</label>
-                  <input
-                    type="text"
-                    value={boletoNotifyPhone2}
-                    onChange={e => setBoletoNotifyPhone2(e.target.value)}
-                    placeholder="Ex: 75988243412"
-                    className="w-full p-2 border border-white/20 rounded text-sm bg-black/30 text-neutral-200"
-                  />
-                </div>
-                <p className="text-xs text-neutral-500">Números que recebem alertas de boletos via WhatsApp. Apenas dígitos, com DDD.</p>
-              </div>
-
-              {/* Asaas - Integração de Pagamentos */}
-              <div className="border border-white/10 rounded-lg p-3 space-y-3 bg-black/20">
-                <p className="text-xs text-neutral-400 font-semibold uppercase tracking-wide">Asaas — Cobranças (PIX / Boleto)</p>
-                <div className="space-y-1">
-                  <label className="text-xs text-neutral-400 font-medium">API Key</label>
-                  <input
-                    type="password"
-                    value={asaasApiKey}
-                    onChange={e => setAsaasApiKey(e.target.value)}
-                    placeholder="$aact_..."
-                    className="w-full p-2 border border-white/20 rounded text-sm bg-black/30 text-neutral-200"
-                  />
-                </div>
-                <p className="text-xs text-neutral-500">Chave de API do Asaas para gerar links de cobrança via PIX e boleto. Encontre em Minha Conta → Integrações no painel Asaas.</p>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs text-neutral-400 font-medium">Capacidade máxima de {VEHICLES_CAP.toLowerCase()} por dia</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={maxAgendamentosDia}
-                  onChange={e => setMaxAgendamentosDia(Number(e.target.value) || 1)}
-                  placeholder="Ex: 10"
-                  title={`Capacidade máxima de ${VEHICLES_CAP.toLowerCase()} por dia`}
-                  className="w-full p-2 border border-white/20 rounded text-sm bg-black/30 text-neutral-200"
-                />
-                <p className="text-xs text-neutral-500">Máximo de agendamentos aceitos por dia (distribuídos entre manhã e tarde)</p>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs text-neutral-400 font-medium">{VEHICLES_CAP} no mesmo horário</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={20}
-                  value={maxPorHorario}
-                  onChange={e => setMaxPorHorario(Math.max(1, Number(e.target.value) || 1))}
-                  placeholder="Ex: 1"
-                  title={`${VEHICLES_CAP} aceitos no mesmo horário`}
-                  className="w-full p-2 border border-white/20 rounded text-sm bg-black/30 text-neutral-200"
-                />
-                <p className="text-xs text-neutral-500">Quantos agendamentos aceitar no mesmo horário (ex: 14:30). Use o número de mecânicos que recebem ao mesmo tempo. A IA respeita esse limite.</p>
-              </div>
               {/* Termos de Assinatura (Inspeção e Entrega) */}
               <div className="border border-white/10 rounded-lg p-3 space-y-3 bg-black/20">
                 <p className="text-xs text-neutral-400 font-semibold uppercase tracking-wide">Termos de Assinatura (OS)</p>
@@ -569,6 +486,28 @@ export default function ConfigToolsPage() {
           )}
         </TabsContent>
 
+        {/* ABA COBRANÇA ONLINE (Asaas) */}
+        <TabsContent value="cobranca" className="space-y-4">
+          <div className="border border-white/10 rounded-lg p-3 space-y-3 bg-black/20">
+            <p className="text-sm font-semibold text-neutral-200">Asaas: link de cobrança (PIX / boleto / cartão)</p>
+            <div className="space-y-1">
+              <label className="text-xs text-neutral-400 font-medium">Chave de API do Asaas</label>
+              <input
+                type="password"
+                value={asaasApiKey}
+                onChange={e => setAsaasApiKey(e.target.value)}
+                placeholder="$aact_..."
+                className="w-full p-2 border border-white/20 rounded text-sm bg-black/30 text-neutral-200"
+              />
+            </div>
+            <p className="text-xs text-neutral-500">Usada nos botões de cobrança online da OS, do Balcão e do Fiado. Encontre no painel do Asaas em Minha Conta → Integrações.</p>
+            <Button className="w-full" disabled={saving}
+              onClick={() => saveSettings({ asaas_api_key: asaasApiKey || null } as Partial<StoreSettings>)}>
+              {saving ? 'Salvando...' : 'Salvar chave'}
+            </Button>
+          </div>
+        </TabsContent>
+
         {/* ABA FERRAMENTAS */}
         <TabsContent value="ferramentas" className="space-y-6">
           <div className="w-full flex flex-col gap-2">
@@ -593,20 +532,6 @@ export default function ConfigToolsPage() {
             </Button>
           </div>
 
-          <div>
-            {!showKeywords ? (
-              <Button variant="outline" className="w-full mb-2" onClick={() => setShowKeywords(true)}>
-                <Zap size={18} /> Mostrar gerenciador de keywords
-              </Button>
-            ) : (
-              <>
-                <Button variant="outline" className="w-full mb-2" onClick={() => setShowKeywords(false)}>
-                  Ocultar gerenciador de keywords
-                </Button>
-                <MaintenanceKeywordsManager />
-              </>
-            )}
-          </div>
         </TabsContent>
 
         {/* ABA MENSAGENS */}

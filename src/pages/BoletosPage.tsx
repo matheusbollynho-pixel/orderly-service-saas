@@ -14,6 +14,7 @@ import { Plus, Trash2, CheckCircle2, RotateCcw, X, AlertTriangle, Clock, Calenda
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { AlertasBoletoCard } from '@/components/ajustes/AjustesRapidos';
 
 const CATEGORIAS: { value: BoletoCategoria; label: string }[] = [
   { value: 'fornecedor', label: 'Fornecedor' },
@@ -253,6 +254,8 @@ export function BoletosPage() {
           {showForm ? <><X className="h-4 w-4 mr-1" /> Cancelar</> : <><Plus className="h-4 w-4 mr-1" /> Novo Boleto</>}
         </Button>
       </div>
+
+      <AlertasBoletoCard />
 
       {/* Alertas */}
       {(counts.vencidos > 0 || counts.vence_hoje > 0) && (

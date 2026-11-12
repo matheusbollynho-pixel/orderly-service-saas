@@ -38,24 +38,6 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Client[]>([]);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-  // Campo de seleção de atendente
-  const renderAtendenteSelect = () => (
-    <div className="mb-4">
-      <Label htmlFor="atendente">Responsável pelo atendimento *</Label>
-      <Select value={atendimentoId} onValueChange={setAtendimentoId} required>
-        <SelectTrigger id="atendente">
-          <SelectValue placeholder="Selecione o atendente" />
-        </SelectTrigger>
-        <SelectContent>
-          {teamMembers.map((member) => (
-            <SelectItem key={member.id} value={member.id}>
-              {member.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  );
   const [clientMotorcycles, setClientMotorcycles] = useState<Motorcycle[]>([]);
   const [createQuickOrder, setCreateQuickOrder] = useState(true);
   const [client, setClient] = useState({
@@ -81,10 +63,6 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
   const isValidCPF = (value: string) =>
     !/[a-zA-Z]/.test(value) && value.replace(/\D/g, '').length === 11;
   const toNoonISOStringFromToday = () => {
-    if (!atendimentoId.trim()) {
-      toast.error('Atendente é obrigatório');
-      return;
-    }
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0, 0).toISOString();
   };

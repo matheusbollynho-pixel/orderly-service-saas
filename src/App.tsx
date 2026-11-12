@@ -4,7 +4,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { AdminMenu } from "@/components/AdminMenu";
 import { ThemeProvider } from "@/hooks/useTheme";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
@@ -16,7 +15,6 @@ import CotarLinkPage from "./pages/CotarLinkPage";
 import PublicStoreSatisfactionPage from "./pages/PublicStoreSatisfactionPage";
 import PublicSatisfactionFeedPage from "./pages/PublicSatisfactionFeedPage";
 import { PrintOrderPage } from "./pages/PrintOrderPage";
-import { DebugOrderPage } from "./pages/DebugOrderPage";
 import ConfigToolsPage from "./pages/ConfigToolsPage";
 import CollaboratorsPage from "./pages/CollaboratorsPage";
 import SuperAdminPage from "./pages/SuperAdminPage";
@@ -82,7 +80,6 @@ function AppRoutes() {
 
   return (
     <>
-      <AdminMenu />
       <AuthenticatedApp />
     </>
   );
@@ -145,7 +142,6 @@ function AuthenticatedApp() {
           <Route path="/colaboradores" element={<CollaboratorsPage />} />
           <Route path="/pos-venda" element={<AfterSalesPage />} />
           <Route path="/fluxo-caixa" element={<CashFlowPage />} />
-          <Route path="/debug-os/:id" element={<DebugOrderPage />} />
           <Route path="/print/:id" element={<PrintOrderPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

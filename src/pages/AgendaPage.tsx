@@ -15,6 +15,7 @@ import {
 import { useClients } from '@/hooks/useClients';
 import { useMechanics } from '@/hooks/useMechanics';
 import { useStoreSettings } from '@/hooks/useStoreSettings';
+import { LimitesAgendaCard } from '@/components/ajustes/AjustesRapidos';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -137,7 +138,8 @@ export default function AgendaPage({ onConvertToOS }: AgendaPageProps = {}) {
   // Todos os agendamentos — para o dashboard
   const { appointments: allAppointments } = useAppointments();
   const { clients, searchClientByPhone } = useClients();
-  const { settings: storeSettings } = useStoreSettings();
+  const storeSettingsHook = useStoreSettings();
+  const storeSettings = storeSettingsHook.settings;
   const { mechanics } = useMechanics();
 
   const [pageView, setPageView] = useState<'calendario' | 'dashboard'>('dashboard');
@@ -282,6 +284,8 @@ export default function AgendaPage({ onConvertToOS }: AgendaPageProps = {}) {
             </Button>
           </div>
         </div>
+
+        <div className="mb-3"><LimitesAgendaCard hook={storeSettingsHook} /></div>
 
         {/* Sub-header conforme a view */}
         {pageView === 'calendario' && (

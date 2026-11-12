@@ -15,7 +15,6 @@ import { MaterialsPage } from './MaterialsPage';
 import { ReportsPage } from './ReportsPage';
 import { MechanicsPage } from './MechanicsPage';
 import AfterSalesPage from './AfterSalesPage';
-import MessagesConfigPage from './MessagesConfigPage';
 import { useStoreSettings } from '@/hooks/useStoreSettings';
 import { CashFlowPage } from './CashFlowPage';
 import { BoletosPage } from './BoletosPage';
@@ -39,7 +38,7 @@ import { Wrench, Search, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { getMaintenanceKeywords, findKeywordInText, rescheduleMaintenanceReminder } from '@/services/maintenanceReminderService';
 
-type View = 'dashboard' | 'new' | 'express' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa' | 'satisfacao' | 'estoque' | 'balcao' | 'quadro' | 'agenda' | 'mensagens' | 'boletos' | 'fiados' | 'cotacao' | 'encomendas';
+type View = 'dashboard' | 'new' | 'express' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa' | 'satisfacao' | 'estoque' | 'balcao' | 'quadro' | 'agenda' | 'boletos' | 'fiados' | 'cotacao' | 'encomendas';
 
 export default function Index() {
   const { isAdmin } = useAuth();
@@ -663,10 +662,6 @@ Retirada: ${retiradaInfo}`;
 
         {currentView === 'pos-venda' && (
           <AfterSalesPage />
-        )}
-
-        {currentView === 'mensagens' && (
-          <MessagesConfigPage />
         )}
 
         {currentView === 'boletos' && <BoletosPage />}

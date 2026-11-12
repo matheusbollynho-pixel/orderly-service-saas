@@ -1,4 +1,4 @@
-import { LayoutDashboard, Plus, ClipboardList, ChartBar, Users, LogOut, Heart, Wallet, Bolt, Circle, Star, Package, ShoppingCart, Gauge, CalendarDays, FileText, HandCoins, Lock, Bot, Tags, PackageSearch } from 'lucide-react';
+import { LayoutDashboard, Plus, ClipboardList, ChartBar, Users, LogOut, Heart, Wallet, Bolt, Circle, Star, Package, ShoppingCart, Gauge, CalendarDays, FileText, HandCoins, Lock, Tags, PackageSearch } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { useStore } from '@/contexts/StoreContext';
@@ -7,7 +7,7 @@ import { UpgradeModal } from '@/components/UpgradeModal';
 import { toast } from 'sonner';
 import { useState } from 'react';
 
-type View = 'dashboard' | 'new' | 'express' | 'orders' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa' | 'satisfacao' | 'estoque' | 'balcao' | 'quadro' | 'agenda' | 'boletos' | 'fiados' | 'ia-atendimento' | 'cotacao' | 'encomendas';
+type View = 'dashboard' | 'new' | 'express' | 'orders' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa' | 'satisfacao' | 'estoque' | 'balcao' | 'quadro' | 'agenda' | 'boletos' | 'fiados' | 'cotacao' | 'encomendas';
 
 interface BottomNavProps {
   activeView: View;
@@ -58,7 +58,6 @@ export function BottomNav({ activeView, onViewChange, isAdmin }: BottomNavProps)
     { id: 'mechanics' as const, label: 'Equipe', icon: Users, show: permissions.equipe },
     { id: 'pos-venda' as const, label: 'Pós-Venda', icon: Heart, show: permissions.pos_venda },
     { id: 'satisfacao' as const, label: 'Satisfação', icon: Star, show: permissions.satisfacao },
-    { id: 'ia-atendimento' as const, label: 'IA 24h', icon: Bot, show: true },
   ].filter(item => item.show);
 
   return (
