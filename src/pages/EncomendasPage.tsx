@@ -486,20 +486,29 @@ function DialogInformar({ e, modeloInicial, enc, cot, onFechar }: {
   const custo = custoDaCotacao(e, cot);
   const opcoes = opcoesDaCotacao(e, cot);
   const rep = custo?.representante_id ? cot.representantes.find((r) => r.id === custo.representante_id) : null;
-  const prazoSugerido = useMemo(() => {
-    if (e.prazo_texto) return e.prazo_texto;
+  // Prazo sugerido, nessa ordem: o que o representante RESPONDEU pra opção escolhida;
+  // senão o prazo do cadastro dele (estimado); senão vazio.
+  const prazoDaResposta = custo?.resposta_id ? cot.respostas.find((r) => r.id === custo.resposta_id)?.prazo_entrega ?? '' : '';
+  const prazoDoCadastro = useMemo(() => {
     if (!rep) return '';
     const d = proximaEntregaGratis(rep);
     if (d) return `${['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'][d.getDay()]} (${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')})`;
-    return rep.prazo_dias != null ? `em ${rep.prazo_dias} dia(s)` : '';
-  }, [e.prazo_texto, rep]);
+    return rep.prazo_dias != null ? `em ${rep.prazo_dias} ${rep.prazo_dias === 1 ? 'dia' : 'dias'}` : '';
+  }, [rep]);
+  const prazoSugerido = prazoDaResposta || prazoDoCadastro;
+  const prazoEstimado = !prazoDaResposta && !!prazoDoCadastro;
   const ultimo = ultimoPrecoCobrado(enc.encomendas, e);
 
   const [modelo, setModelo] = useState<ModeloMensagem>(modeloInicial);
   const [preco, setPreco] = useState(e.preco_venda != null ? String(e.preco_venda).replace('.', ',') : '');
-  const [prazo, setPrazo] = useState(prazoSugerido);
+  const [prazo, setPrazo] = useState(e.prazo_texto || prazoSugerido);
+  // Já tinha prazo salvo ou a pessoa digitou: não mexe mais. Senão acompanha a opção escolhida.
+  const [prazoManual, setPrazoManual] = useState(!!e.prazo_texto);
   const [incluirValor, setIncluirValor] = useState(false);
   const [texto, setTexto] = useState<string | null>(null);
+  useEffect(() => {
+    if (!prazoManual) { setPrazo(prazoSugerido); setTexto(null); }
+  }, [prazoSugerido, prazoManual]);
   const [anotar, setAnotar] = useState(false);
 
   const num = (v: string) => (v.trim() ? Number(v.replace(/\./g, '').replace(',', '.')) : null);
@@ -601,7 +610,9 @@ function DialogInformar({ e, modeloInicial, enc, cot, onFechar }: {
             </div>
             <div>
               <Label>Prazo</Label>
-              <Input value={prazo} onChange={(ev) => { setPrazo(ev.target.value); setTexto(null); }} placeholder="sexta (13/11)" />
+              <Input value={prazo} onChange={(ev) => { setPrazo(ev.target.value); setPrazoManual(true); setTexto(null); }} placeholder="ex: sexta, amanhã" />
+              {!prazoManual && prazoEstimado && <p className="text-xs text-yellow-600 mt-1">O representante não disse o prazo: estimado pelo cadastro dele.</p>}
+              {!prazoManual && !prazo && custo && <p className="text-xs text-yellow-600 mt-1">Sem prazo: pergunte ao representante.</p>}
             </div>
           </div>
 
