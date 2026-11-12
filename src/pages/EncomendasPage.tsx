@@ -18,6 +18,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useClients, type Client, type Motorcycle } from '@/hooks/useClients';
 import { matchesSearch } from '@/lib/textSearch';
 import { FormPrecoManual } from '@/components/cotacao/FormPrecoManual';
+import { ListaCotacoes } from '@/components/cotacao/ListaCotacoes';
 import {
   useCotacao, brl, diasAtras, enviarWhats, mensagemCotacao, mensagemLink, urlLink, resumoEntrega, ordenarOpcoes, proximaEntregaGratis,
   type CotacaoPreco,
@@ -353,6 +354,7 @@ function CardEncomenda({ e, enc, cot }: { e: Encomenda; enc: Enc; cot: Cot }) {
   const [pedir, setPedir] = useState(false);
   const [caixa, setCaixa] = useState<'receber' | 'entregar' | 'devolver' | null>(null);
   const [desistir, setDesistir] = useState(false);
+  const [verCotacoes, setVerCotacoes] = useState(false);
   const s = STATUS_ENCOMENDA[e.status];
   const pago = Number(e.pago_adiantado || 0);
   const custo = custoDaCotacao(e, cot);
@@ -396,6 +398,20 @@ function CardEncomenda({ e, enc, cot }: { e: Encomenda; enc: Enc; cot: Cot }) {
           </p>
         )}
         {e.observacao && <p className="text-xs text-muted-foreground">Obs: {e.observacao}</p>}
+        {e.cotacao_item_id && (
+          <div>
+            <button type="button" className="text-xs underline text-primary" onClick={() => setVerCotacoes((v) => !v)}>
+              {verCotacoes ? 'Esconder cotações' : `Ver cotações dos representantes${opcoes.length ? ` (${opcoes.length} com preço)` : ''}`}
+            </button>
+            {verCotacoes && (
+              <div className="mt-2">
+                <ListaCotacoes itemId={e.cotacao_item_id} cot={cot} verPreco={verCusto}
+                  escolhidoId={custo?.id ?? null}
+                  onEscolher={ATIVOS.includes(e.status) ? (p) => cot.atualizarItem.mutate({ id: e.cotacao_item_id!, pedido_preco_id: p.id }) : undefined} />
+              </div>
+            )}
+          </div>
+        )}
         {e.status === 'desistiu' && (
           <p className="text-xs text-red-600">Motivo da desistência: {e.motivo_desistencia || 'não informado'}</p>
         )}
@@ -562,24 +578,12 @@ function DialogInformar({ e, modeloInicial, enc, cot, onFechar }: {
             </div>
           )}
 
-          {opcoes.length > 0 && (
+          {e.cotacao_item_id && (
             <div className="space-y-1">
-              <Label>Qual opção o cliente vai levar?</Label>
-              {opcoes.map((p) => {
-                const escolhida = custo?.id === p.id;
-                return (
-                  <button key={p.id} type="button"
-                    onClick={() => e.cotacao_item_id && cot.atualizarItem.mutate({ id: e.cotacao_item_id, pedido_preco_id: p.id })}
-                    className={`w-full text-left rounded-md border px-3 py-2 text-sm flex items-center justify-between gap-2 ${escolhida ? 'border-primary bg-primary/10' : ''}`}>
-                    <span>
-                      {escolhida && <Check className="h-4 w-4 inline mr-1 text-primary" />}
-                      <b>{p.marca || 'Sem marca'}</b> <span className="text-muted-foreground">· {nomeFornecedor(p, cot)}</span>
-                    </span>
-                    {verCusto && <span className="text-muted-foreground">{brl(p.preco)}</span>}
-                  </button>
-                );
-              })}
-              {!custo && <p className="text-xs text-yellow-600">Toque na opção que o cliente escolher.</p>}
+              <Label>Cotações: qual opção o cliente vai levar?</Label>
+              <ListaCotacoes itemId={e.cotacao_item_id} cot={cot} verPreco={verCusto} escolhidoId={custo?.id ?? null}
+                onEscolher={(p) => cot.atualizarItem.mutate({ id: e.cotacao_item_id!, pedido_preco_id: p.id })} />
+              {opcoes.length > 0 && !custo && <p className="text-xs text-yellow-600">Toque na opção que o cliente escolher.</p>}
             </div>
           )}
 

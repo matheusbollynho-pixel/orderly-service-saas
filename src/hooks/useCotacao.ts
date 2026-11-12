@@ -304,7 +304,7 @@ export function useCotacao() {
         .from('cotacao_respostas')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(50);
+        .limit(300); // prazo de cada resposta aparece nas cotações
       if (error) throw error;
       return (data ?? []) as CotacaoResposta[];
     },

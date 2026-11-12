@@ -246,6 +246,7 @@ function OpcaoPreco({ p, item, cot, escolhido }: { p: CotacaoPreco; item: Cotaca
   const s = SITUACAO[p.situacao];
   const velho = Date.now() - new Date(p.created_at).getTime() > 30 * 86_400_000;
   const fonte = nomeFonte(p, cot.representantes);
+  const prazo = cot.respostas.find((r) => r.id === p.resposta_id)?.prazo_entrega ?? null;
 
   const confirmar = () => {
     cot.atualizarPreco.mutate({ id: p.id, situacao: 'cotado', confirmado: true });
@@ -269,6 +270,7 @@ function OpcaoPreco({ p, item, cot, escolhido }: { p: CotacaoPreco; item: Cotaca
         {p.marca && <span>{p.marca}</span>}
         {p.preco != null && <b>{brl(p.preco)}{PRECO_POR[p.preco_por]}</b>}
         {p.frete != null && <span className="text-muted-foreground">+ frete {brl(p.frete)}</span>}
+        {prazo && <span className="text-xs text-muted-foreground">Prazo: {prazo}</span>}
         <span className={`text-xs ${velho ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}>
           {diasAtras(p.created_at)}{velho ? ' (preço antigo)' : ''}
         </span>
