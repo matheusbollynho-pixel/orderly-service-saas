@@ -1,4 +1,4 @@
-import { LayoutDashboard, Plus, ClipboardList, ChartBar, Users, LogOut, Heart, Wallet, Bolt, Circle, Star, Package, ShoppingCart, Gauge, CalendarDays, FileText, HandCoins, Lock, Tags, PackageSearch } from 'lucide-react';
+import { LayoutDashboard, Plus, ClipboardList, ChartBar, Users, LogOut, Heart, Wallet, Bolt, Circle, Star, Package, ShoppingCart, Gauge, CalendarDays, FileText, HandCoins, Lock, Tags, PackageSearch, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { useStore } from '@/contexts/StoreContext';
@@ -13,9 +13,10 @@ interface BottomNavProps {
   activeView: View;
   onViewChange: (view: View) => void;
   isAdmin?: boolean;
+  onMenuNovo?: () => void;
 }
 
-export function BottomNav({ activeView, onViewChange, isAdmin }: BottomNavProps) {
+export function BottomNav({ activeView, onViewChange, isAdmin, onMenuNovo }: BottomNavProps) {
   const { signOut } = useAuth();
   const { permissions } = useStore();
   const { canAccess, getUpgradeLink, getRequiredPlan } = usePlanFeatures();
@@ -74,6 +75,13 @@ export function BottomNav({ activeView, onViewChange, isAdmin }: BottomNavProps)
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-neutral-900 text-white backdrop-blur-md supports-[backdrop-filter]:bg-neutral-900/95">
         <div className="overflow-x-auto scrollbar-hide pt-1 pb-safe">
           <div className="flex items-center justify-around md:justify-around gap-2 px-2 min-w-max md:min-w-0">
+            {onMenuNovo && (
+              <button onClick={onMenuNovo}
+                className="appearance-none border-0 bg-transparent flex flex-col items-center gap-1 px-3 py-1.5 rounded-lg text-primary flex-shrink-0">
+                <div className="p-3 rounded-xl bg-primary/15"><Sparkles className="h-9 w-9" /></div>
+                <span className="text-[11px] font-semibold whitespace-nowrap">Menu novo</span>
+              </button>
+            )}
             {allNavItems.map((item) => {
               const Icon = item.icon ?? Circle;
               const isActive = activeView === item.id;

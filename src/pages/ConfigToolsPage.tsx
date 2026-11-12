@@ -228,30 +228,31 @@ export default function ConfigToolsPage() {
         </h1>
       </div>
 
-      <Tabs defaultValue={searchParams.get('aba') === 'mensagens' ? 'mensagens' : 'loja'}>
-        <TabsList className="w-full mb-6">
-          <TabsTrigger value="loja" className="flex-1 flex items-center gap-2">
+      <Tabs defaultValue={['mensagens', 'ia', 'cobranca', 'ferramentas'].includes(searchParams.get('aba') || '') ? searchParams.get('aba')! : 'loja'}>
+        {/* Celular: as abas rolam para o lado; PC: cabem inteiras */}
+        <TabsList className="w-full mb-6 justify-start overflow-x-auto overflow-y-hidden scrollbar-hide">
+          <TabsTrigger value="loja" className="flex-1 shrink-0 flex items-center gap-2">
             <Store size={15} /> Loja
           </TabsTrigger>
-          <TabsTrigger value="mensagens" className="flex-1 flex items-center gap-2">
+          <TabsTrigger value="mensagens" className="flex-1 shrink-0 flex items-center gap-2">
             <MessageSquare size={15} /> Mensagens
           </TabsTrigger>
-          <TabsTrigger value="ia" className="flex-1 flex items-center gap-2">
+          <TabsTrigger value="ia" className="flex-1 shrink-0 flex items-center gap-2">
             <Bot size={15} /> IA
           </TabsTrigger>
-          <TabsTrigger value="cobranca" className="flex-1 flex items-center gap-2">
+          <TabsTrigger value="cobranca" className="flex-1 shrink-0 flex items-center gap-2">
             <Wallet size={15} /> Cobrança online
           </TabsTrigger>
-          <TabsTrigger value="ferramentas" className="flex-1 flex items-center gap-2">
+          <TabsTrigger value="ferramentas" className="flex-1 shrink-0 flex items-center gap-2">
             <Settings size={15} /> Ferramentas
           </TabsTrigger>
           {isOwner && (
-            <TabsTrigger value="colaboradores" className="flex-1 flex items-center gap-2" onClick={() => navigate('/colaboradores')}>
+            <TabsTrigger value="colaboradores" className="flex-1 shrink-0 flex items-center gap-2" onClick={() => navigate('/colaboradores')}>
               <Users size={15} /> Equipe
             </TabsTrigger>
           )}
           {isOwner && (
-            <TabsTrigger value="minha-conta" className="flex-1 flex items-center gap-2" onClick={() => navigate('/minha-conta')}>
+            <TabsTrigger value="minha-conta" className="flex-1 shrink-0 flex items-center gap-2" onClick={() => navigate('/minha-conta')}>
               <CreditCard size={15} /> Assinatura
             </TabsTrigger>
           )}

@@ -30,25 +30,45 @@ import AgendaPage from './AgendaPage';
 import FiadosPage from './FiadosPage';
 import { AgendaAlertModal } from '@/components/AgendaAlertModal';
 import { AvisoMotoProntaDialog } from '@/components/AvisoMotoProntaDialog';
+import { NavPrincipal } from '@/components/v2/NavPrincipal';
+import { AbasArea } from '@/components/v2/AbasArea';
+import { UpgradeModal } from '@/components/UpgradeModal';
+import MaisPage from './MaisPage';
+import { usePlanFeatures } from '@/hooks/usePlanFeatures';
+import { useNavigate } from 'react-router-dom';
+import {
+  TELAS, ABAS, acesso, telaDaArea, areaVisivel, lerTelaInicial, salvarTelaInicial, usarMenuNovo, salvarMenu,
+  type View, type Area, type TelaInicial,
+} from '@/lib/navegacao';
 import { useInventory } from '@/hooks/useInventory';
 import { BottomNav } from '@/components/BottomNav';
 import { EmptyState } from '@/components/EmptyState';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
-import { Wrench, Search, Settings } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Wrench, Search, Settings, Plus, Zap, ShoppingCart } from 'lucide-react';
 import { toast } from 'sonner';
 import { getMaintenanceKeywords, findKeywordInText, rescheduleMaintenanceReminder } from '@/services/maintenanceReminderService';
 
-type View = 'dashboard' | 'new' | 'express' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics' | 'pos-venda' | 'fluxo-caixa' | 'satisfacao' | 'estoque' | 'balcao' | 'quadro' | 'agenda' | 'boletos' | 'fiados' | 'cotacao' | 'encomendas';
+
 
 export default function Index() {
-  const { isAdmin } = useAuth();
-  const { permissions } = useStore();
+  const { isAdmin, signOut } = useAuth();
+  const { permissions, isOwner } = useStore();
+  const { canAccess, getUpgradeLink, getRequiredPlan } = usePlanFeatures();
+  const navigate = useNavigate();
+  // v2: menu novo (5 áreas) é o padrão; o antigo fica como opção neste aparelho
+  const [menuNovo, setMenuNovo] = useState<boolean>(() => usarMenuNovo());
+  const [telaInicial, setTelaInicialState] = useState<TelaInicial>(() => {
+    const v = lerTelaInicial(permissions);
+    return v === 'orders' || v === 'quadro' ? v : 'dashboard';
+  });
+  const [upgrade, setUpgrade] = useState<{ feature: string; requiredPlan: string; upgradeLink: string } | null>(null);
   const canAccessCashFlow = permissions.caixa;
   const canAccessReports = permissions.relatorios;
   const [avisoPronta, setAvisoPronta] = useState<ServiceOrder | null>(null);
   const { settings: storeSettings } = useStoreSettings();
-  const [currentView, setCurrentView] = useState<View>('dashboard');
+  const [currentView, setCurrentView] = useState<View>(() => lerTelaInicial(permissions));
   const [selectedOrder, setSelectedOrder] = useState<ServiceOrder | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<OrderStatus | null>(null);
@@ -533,6 +553,31 @@ Retirada: ${retiradaInfo}`;
 
   const navView = currentView === 'details' || currentView === 'materials' ? 'orders' : currentView as string;
 
+  // ---- v2: porta única de navegação (confere permissão e plano antes de abrir)
+  const acessoDe = (v: View) => acesso(v, permissions, canAccess);
+  const goTo = (v: View) => {
+    const a = acessoDe(v);
+    if (a === 'sem_permissao') { toast.error('Você não tem acesso a esta tela.'); return; }
+    if (a === 'plano') {
+      const recurso = TELAS[v].recurso!;
+      setUpgrade({ feature: TELAS[v].nome, requiredPlan: getRequiredPlan(recurso), upgradeLink: getUpgradeLink(recurso) });
+      return;
+    }
+    setCurrentView(v);
+  };
+  const areaAtual: Area = TELAS[currentView].area;
+  const abrirArea = (area: Area) => {
+    const v = telaDaArea(area, permissions, canAccess);
+    if (v) goTo(v);
+  };
+  const areaBloqueada = (area: Area) => {
+    const abas = ABAS[area];
+    return !!abas && abas.filter((v) => acessoDe(v) !== 'sem_permissao').every((v) => acessoDe(v) === 'plano');
+  };
+  const trocarMenu = (novo: boolean) => { salvarMenu(novo); setMenuNovo(novo); if (!novo && currentView === 'mais') setCurrentView('dashboard'); };
+  const abasDaArea = menuNovo ? ABAS[areaAtual] : undefined;
+  const mostrarAbas = !!abasDaArea && abasDaArea.includes(currentView);
+
   // Filtrar ordens por busca
   // Busca no banco quando query não está nos 200 resultados em memória
   useEffect(() => {
@@ -611,12 +656,45 @@ Retirada: ${retiradaInfo}`;
 
       {/* Main Content */}
       <main className="container max-w-lg md:max-w-3xl lg:max-w-6xl mx-auto px-4 py-5">
+        {mostrarAbas && (
+          <AbasArea
+            abas={abasDaArea!}
+            atual={currentView}
+            acessoDe={acessoDe}
+            onAba={goTo}
+            acoes={currentView === 'orders' && (acessoDe('new') === 'ok' || acessoDe('express') === 'ok') ? (
+              <>
+                {acessoDe('new') === 'ok' && <Button className="flex-1 h-11" onClick={() => goTo('new')}><Plus className="h-4 w-4" /> Nova OS</Button>}
+                {acessoDe('express') === 'ok' && <Button variant="outline" className="flex-1 h-11" onClick={() => goTo('express')}><Zap className="h-4 w-4" /> Express</Button>}
+              </>
+            ) : undefined}
+          />
+        )}
+        {currentView === 'mais' && (
+          <MaisPage
+            acessoDe={acessoDe}
+            goTo={goTo}
+            abrirRota={(rota) => navigate(rota)}
+            isOwner={isOwner}
+            telaInicial={telaInicial}
+            setTelaInicial={(t) => { salvarTelaInicial(t); setTelaInicialState(t); toast.success('Este aparelho vai abrir nessa tela.'); }}
+            onMenuAntigo={() => trocarMenu(false)}
+            onSair={async () => { await signOut(); toast.success('Saiu do sistema'); }}
+          />
+        )}
         {currentView === 'dashboard' && (
           <div className="space-y-5 animate-fade-in">
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-foreground">Dashboard</h2>
               </div>
+              {menuNovo && (
+                <div className="mb-4 grid grid-cols-3 gap-2">
+                  {acessoDe('new') === 'ok' && <Button className="h-14 flex-col gap-1 text-sm" onClick={() => goTo('new')}><Plus className="h-5 w-5" />Nova OS</Button>}
+                  {acessoDe('express') === 'ok' && <Button variant="outline" className="h-14 flex-col gap-1 text-sm" onClick={() => goTo('express')}><Zap className="h-5 w-5" />Express</Button>}
+                  {acessoDe('balcao') !== 'sem_permissao' && <Button variant="outline" className="h-14 flex-col gap-1 text-sm" onClick={() => goTo('balcao')}><ShoppingCart className="h-5 w-5" />Vender</Button>}
+                </div>
+              )}
               {isLoading ? (
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   {[...Array(4)].map((_, i) => (
@@ -878,14 +956,25 @@ Retirada: ${retiradaInfo}`;
 
       {/* Bottom Navigation */}
       {currentView !== 'details' && currentView !== 'materials' && (
-        <BottomNav
-          activeView={navView}
-          onViewChange={(view) => setCurrentView(view)}
-          isAdmin={isAdmin}
-        />
+        menuNovo ? (
+          <NavPrincipal
+            ativa={areaAtual}
+            visivel={(area) => areaVisivel(area, permissions, canAccess)}
+            bloqueada={areaBloqueada}
+            onArea={(area) => area === 'mais' ? setCurrentView('mais') : abrirArea(area)}
+          />
+        ) : (
+          <BottomNav
+            activeView={navView}
+            onViewChange={(view) => setCurrentView(view)}
+            isAdmin={isAdmin}
+            onMenuNovo={() => trocarMenu(true)}
+          />
+        )
       )}
 
       <AgendaAlertModal onGoToAgenda={() => setCurrentView('agenda')} />
+      {upgrade && <UpgradeModal {...upgrade} onClose={() => setUpgrade(null)} />}
       {avisoPronta && (
         <AvisoMotoProntaDialog
           order={avisoPronta}

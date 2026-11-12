@@ -199,13 +199,14 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder }: ReportsPageProps
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'resumo' | 'detalhado' | 'itens' | 'pagamentos' | 'balcao' | 'estoque')} className="w-full">
-        <TabsList className="grid grid-cols-6 w-full">
-          <TabsTrigger value="resumo">Resumo</TabsTrigger>
-          <TabsTrigger value="detalhado">Mecânicos</TabsTrigger>
-          <TabsTrigger value="itens">Peças</TabsTrigger>
-          <TabsTrigger value="balcao">Balcão</TabsTrigger>
-          <TabsTrigger value="pagamentos">Pagtos</TabsTrigger>
-          <TabsTrigger value="estoque">Estoque</TabsTrigger>
+        {/* Celular: as abas rolam para o lado; PC: cabem inteiras */}
+        <TabsList className="w-full justify-start overflow-x-auto overflow-y-hidden scrollbar-hide">
+          <TabsTrigger value="resumo" className="flex-1 shrink-0">Resumo</TabsTrigger>
+          <TabsTrigger value="detalhado" className="flex-1 shrink-0">Mecânicos</TabsTrigger>
+          <TabsTrigger value="itens" className="flex-1 shrink-0">Peças</TabsTrigger>
+          <TabsTrigger value="balcao" className="flex-1 shrink-0">Balcão</TabsTrigger>
+          <TabsTrigger value="pagamentos" className="flex-1 shrink-0">Pagtos</TabsTrigger>
+          <TabsTrigger value="estoque" className="flex-1 shrink-0">Estoque</TabsTrigger>
         </TabsList>
 
         <TabsContent value="resumo" className="space-y-5">
