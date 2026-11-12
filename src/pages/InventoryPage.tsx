@@ -31,7 +31,6 @@ import {
   ArrowLeftRight,
   AlertTriangle,
   Edit2,
-  Trash2,
   Sparkles,
   Loader2,
   Lock,
@@ -566,10 +565,8 @@ export default function InventoryPage() {
     isLoadingProducts,
     createProduct,
     updateProduct,
-    deleteProduct,
     isCreatingProduct,
     isUpdatingProduct,
-    isDeletingProduct,
     movements,
     isLoadingMovements,
     createMovement,
@@ -589,9 +586,6 @@ export default function InventoryPage() {
   // Movement dialog
   const [movOpen, setMovOpen] = useState(false);
   const [movProduct, setMovProduct] = useState<InventoryProduct | null>(null);
-
-  // Delete confirm
-  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Filtered products
   const filteredProducts = useMemo(() => {
@@ -653,11 +647,6 @@ export default function InventoryPage() {
     } else {
       createProduct(formData, { onSuccess: () => setFormOpen(false) });
     }
-  };
-
-  const handleDeleteProduct = (id: string) => {
-    setDeletingId(id);
-    deleteProduct(id, { onSettled: () => setDeletingId(null) });
   };
 
   const handleOpenMovement = (p: InventoryProduct) => {
@@ -791,15 +780,6 @@ export default function InventoryPage() {
                           onClick={() => handleOpenEdit(p)}
                         >
                           <Edit2 className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                          onClick={() => handleDeleteProduct(p.id)}
-                          disabled={deletingId === p.id || isDeletingProduct}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
                     </div>

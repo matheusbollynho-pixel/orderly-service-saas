@@ -71,26 +71,8 @@ export function useInventory() {
     },
   });
 
-  const deleteProductMutation = useMutation({
-    mutationFn: async (id: string) => {
-      // Remove referência em materials (OS) sem deletar o material
-      await supabase.from('materials').update({ product_id: null }).eq('product_id', id);
-      // Deleta movimentações vinculadas
-      await supabase.from('inventory_movements').delete().eq('product_id', id);
-      const { error } = await supabase
-        .from('inventory_products')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
-      toast.success('Produto removido!');
-    },
-    onError: (error: Error) => {
-      toast.error(`Erro ao remover produto: ${error.message}`);
-    },
-  });
+  // Produto NÃO é excluído (nem o histórico): quem não vende mais vira "Inativo"/"Descontinuado".
+  // O banco também bloqueia DELETE (migration 20261112009).
 
   // ── MOVIMENTAÇÕES ─────────────────────────────────────────────
   const movementsQuery = useQuery({
@@ -135,10 +117,8 @@ export function useInventory() {
     isLoadingProducts: productsQuery.isLoading,
     createProduct: createProductMutation.mutate,
     updateProduct: updateProductMutation.mutate,
-    deleteProduct: deleteProductMutation.mutate,
     isCreatingProduct: createProductMutation.isPending,
     isUpdatingProduct: updateProductMutation.isPending,
-    isDeletingProduct: deleteProductMutation.isPending,
 
     // Movimentações
     movements: movementsQuery.data ?? [],

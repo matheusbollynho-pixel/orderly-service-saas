@@ -6,14 +6,25 @@ export const normalizeSearch = (value: string | null | undefined): string =>
     .toLowerCase()
     .trim();
 
-// true se algum dos campos contém o termo (sem acento/maiúscula). Termo vazio casa tudo.
+// Só letras e números: "20W-50" -> "20w50", "CG 160" -> "cg160".
+const compact = (value: string): string => value.replace(/[^a-z0-9]/g, '');
+
+// Busca por PALAVRAS, em qualquer ordem, sem acento/maiúscula: "oleo 20w50" encontra
+// "Óleo lubrificante 20W-50". Cada palavra digitada tem que aparecer em algum dos campos
+// (ignorando espaço, ponto e traço: "cg160" acha "CG 160"). Termo vazio casa tudo.
 export const matchesSearch = (
   query: string | null | undefined,
   ...fields: Array<string | null | undefined>
 ): boolean => {
   const q = normalizeSearch(query);
   if (!q) return true;
-  return fields.some((f) => normalizeSearch(f).includes(q));
+  const texto = fields.map((f) => normalizeSearch(f)).join(' ');
+  const textoCompacto = compact(texto);
+  return q.split(/\s+/).every((palavra) => {
+    if (texto.includes(palavra)) return true;
+    const p = compact(palavra);
+    return p.length > 0 && textoCompacto.includes(p);
+  });
 };
 
 // Padrão regex (para o filtro `imatch` do Supabase/PostgREST) que casa o termo
