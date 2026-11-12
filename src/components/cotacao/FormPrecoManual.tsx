@@ -54,7 +54,7 @@ export function FormPrecoManual({ itemId, cot, onFim }: { itemId: string; cot: C
           </SelectContent>
         </Select>
       </div>
-      <Input placeholder="Preço (ex: 89,90)" inputMode="decimal" value={preco} onChange={(e) => setPreco(e.target.value)} />
+      <Input placeholder={internet ? "Preço no site (R$)" : "Quanto ele cobra da loja (R$)"} inputMode="decimal" value={preco} onChange={(e) => setPreco(e.target.value)} />
       <Input placeholder="Marca (opcional)" value={marca} onChange={(e) => setMarca(e.target.value)} />
       {internet && (
         <>
