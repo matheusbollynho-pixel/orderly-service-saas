@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -234,6 +235,25 @@ export function useCotacao() {
     // Pedido/escolha na cotação mexe na encomenda ligada (gatilho no banco)
     qc.invalidateQueries({ queryKey: ['encomendas'] });
   };
+
+  // Tempo real: representante respondeu o link (ou outro funcionário mexeu) -> tela atualiza na hora.
+  // Os refetchInterval de 30s continuam como reserva se a conexão cair.
+  useEffect(() => {
+    if (!storeId) return;
+    const atualizar = () => {
+      qc.invalidateQueries({ queryKey: ['cotacao'] });
+      qc.invalidateQueries({ queryKey: ['encomendas'] });
+    };
+    const filtro = `store_id=eq.${storeId}`;
+    const canal = supabase
+      .channel(`cotacao-${storeId}-${Math.random().toString(36).slice(2)}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cotacao_precos', filter: filtro }, atualizar)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cotacao_links', filter: filtro }, atualizar)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cotacao_itens', filter: filtro }, atualizar)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'encomendas', filter: filtro }, atualizar)
+      .subscribe();
+    return () => { supabase.removeChannel(canal); };
+  }, [storeId, qc]);
 
   const representantes = useQuery({
     queryKey: ['cotacao', 'representantes'],
