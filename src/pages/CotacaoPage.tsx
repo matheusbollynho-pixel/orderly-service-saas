@@ -26,7 +26,7 @@ import {
 type Cot = ReturnType<typeof useCotacao>;
 
 const SITUACAO: Record<Situacao, { label: string; cls: string }> = {
-  cotado: { label: 'Cotado', cls: 'bg-green-500/15 text-green-600 border-green-500/30' },
+  cotado: { label: 'Tem', cls: 'bg-green-500/15 text-green-600 border-green-500/30' },
   duvida: { label: 'Dúvida', cls: 'bg-yellow-500/15 text-yellow-600 border-yellow-500/30' },
   nao_tem: { label: 'Não tem', cls: 'bg-muted text-muted-foreground border-border' },
   nao_serve: { label: 'Não serve', cls: 'bg-red-500/15 text-red-600 border-red-500/30' },
@@ -42,7 +42,11 @@ function nomeFonte(p: CotacaoPreco, reps: Representante[]) {
 export default function CotacaoPage() {
   const cot = useCotacao();
   const [aba, setAba] = useState('faltas');
-  const aEnviar = cot.itens.filter((i) => i.status === 'pendente' && i.pedido_preco_id).length;
+  const { encomendas } = useEncomendas();
+  const segurados = new Set(encomendas
+    .filter((e) => e.cotacao_item_id && (e.status === 'aguardando_cotacao' || e.status === 'cliente_avisado'))
+    .map((e) => e.cotacao_item_id as string));
+  const aEnviar = cot.itens.filter((i) => i.status === 'pendente' && i.pedido_preco_id && !segurados.has(i.id)).length;
   const aCaminho = cot.itens.filter((i) => i.status === 'pedido').length;
   const [verIA, setVerIA] = useState(false);
 
@@ -279,7 +283,7 @@ function OpcaoPreco({ p, item, cot, escolhido }: { p: CotacaoPreco; item: Cotaca
     <div className={`rounded-md border p-2 text-sm space-y-1 ${escolhido ? 'border-primary bg-primary/5' : ''}`}>
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-medium">{fonte}</span>
-        <span className={`text-xs px-2 py-0.5 rounded-full border ${s.cls}`}>{p.confirmado && p.situacao === 'cotado' ? 'Confirmado' : s.label}</span>
+        <span className={`text-xs px-2 py-0.5 rounded-full border ${s.cls}`}>{s.label}</span>
         {p.marca && <span>{p.marca}</span>}
         {p.preco != null && <b>{brl(p.preco)}{PRECO_POR[p.preco_por]}</b>}
         {p.frete != null && <span className="text-muted-foreground">+ frete {brl(p.frete)}</span>}

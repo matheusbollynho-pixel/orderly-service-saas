@@ -362,6 +362,9 @@ function CardEncomenda({ e, enc, cot }: { e: Encomenda; enc: Enc; cot: Cot }) {
   const custo = custoDaCotacao(e, cot);
   const opcoes = opcoesDaCotacao(e, cot);
   const total = totalEncomenda(e);
+  // e.custo (salvo no "Informar cliente") = peça + frete; a diferença é o frete
+  const freteSalvo = custo?.preco != null && e.custo != null && e.custo > custo.preco ? Math.round((e.custo - custo.preco) * 100) / 100 : 0;
+  const custoReal = custo?.preco != null ? custo.preco + freteSalvo : null;
   const saldo = saldoEncomenda(e);
   const mudar = (status: StatusEncomenda) => enc.mudarStatus.mutate({ e, status });
 
@@ -383,7 +386,7 @@ function CardEncomenda({ e, enc, cot }: { e: Encomenda; enc: Enc; cot: Cot }) {
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
           {total == null && <span>Valor: <b className="text-foreground">a definir</b></span>}
           {total != null && <span>Valor total: <b className="text-foreground">{brl(total)}</b></span>}
-          {total != null && pago > 0 && <span>Entrada: <b className="text-foreground">{brl(pago)}</b></span>}
+          {total != null && pago > 0 && !!saldo && <span>Entrada: <b className="text-foreground">{brl(pago)}</b></span>}
           {total != null && (saldo
             ? <span>Resta pagar: <b className="text-foreground">{brl(saldo)}</b></span>
             : <span className="text-green-600 font-medium">Pago ✓</span>)}
@@ -392,11 +395,11 @@ function CardEncomenda({ e, enc, cot }: { e: Encomenda; enc: Enc; cot: Cot }) {
         {verCusto && (
           <p className="text-xs text-muted-foreground border-l-2 border-yellow-500/50 pl-2">
             {custo
-              ? <>Loja paga: <b className="text-foreground">{brl(custo.preco)}</b>{custo.marca ? ` (${custo.marca})` : ''}</>
+              ? <>Loja paga: <b className="text-foreground">{brl(custo.preco)}</b>{custo.marca ? ` (${custo.marca})` : ''}{freteSalvo > 0 ? <> + frete <b className="text-foreground">{brl(freteSalvo)}</b></> : null}</>
               : opcoes.length
                 ? <>{opcoes.length} opç{opcoes.length > 1 ? 'ões' : 'ão'} de fornecedor: escolha em "Informar cliente"</>
                 : 'Loja paga: nenhum representante respondeu ainda'}
-            {custo?.preco && e.preco_venda ? ` · Margem ${Math.round(((e.preco_venda - custo.preco) / custo.preco) * 100)}%` : ''}
+            {custoReal && e.preco_venda ? ` · Lucro ${brl(Number(totalEncomenda(e)) - custoReal * Number(e.quantidade))} (${Math.round(((e.preco_venda - custoReal) / custoReal) * 100)}%)` : ''}
           </p>
         )}
         {e.observacao && <p className="text-xs text-muted-foreground">Obs: {e.observacao}</p>}
@@ -586,10 +589,9 @@ function DialogInformar({ e, modeloInicial, enc, cot, onFechar }: {
           </div>
 
           {/* Só mostra o quadro se tiver algo útil: o que a loja paga (olhinho aberto), entrega ou último preço */}
-          {((verCusto && custo) || rep || ultimo) && (
+          {((verCusto && custo) || ultimo) && (
             <div className="rounded-md border p-2 space-y-1 text-xs">
               {verCusto && custo && <p>Loja paga: <b>{brl(custo.preco)}</b>{custo.marca ? ` · ${custo.marca}` : ''}{rep ? ` · ${rep.nome}` : ''}</p>}
-              {rep && <p className="text-muted-foreground">{resumoEntrega(rep).join(' · ')}</p>}
               {ultimo && <p className="text-muted-foreground">Última vez cobrado desse cliente/peça: {brl(ultimo.preco_venda)} ({new Date(ultimo.created_at).toLocaleDateString('pt-BR')})</p>}
             </div>
           )}
