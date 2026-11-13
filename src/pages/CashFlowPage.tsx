@@ -1,4 +1,5 @@
 import { pedirMotivoEstorno } from '@/lib/estorno';
+import { BotaoVale, ValesAbertos } from '@/components/caixa/Vales';
 import { matchesSearch } from '@/lib/textSearch';
 import { useState, useEffect, useRef } from 'react';
 import { useCashFlow, useCashFlowPeriod } from '@/hooks/useCashFlow';
@@ -601,6 +602,7 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder }: CashFlowPag
               <Eye className="h-4 w-4" />
             )}
           </Button>
+          {activePeriod === 'day' && <BotaoVale />}
           {activePeriod === 'day' && (
             <Button onClick={() => setShowForm(!showForm)} size="sm">
               <Plus className="h-4 w-4 mr-2" />
@@ -609,6 +611,8 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder }: CashFlowPag
           )}
         </div>
       </div>
+
+      <ValesAbertos ocultar={hideValues} />
 
       {/* Layout igual ao anexo: linha com Status, OS Aberta por e Mecânico; Data de Entrada embaixo */}
       {/* Bloco removido: cabeçalho da OS não pertence ao fluxo de caixa */}
