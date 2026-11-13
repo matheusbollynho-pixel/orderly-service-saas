@@ -2,7 +2,7 @@ import { pedirTexto } from '@/components/v2/Confirmacao';
 import { pedirMotivoEstorno } from '@/lib/estorno';
 import { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ServiceOrder, OrderStatus, STATUS_LABELS, PaymentMethod, Material, StatusOficina, STATUS_OFICINA_OPTIONS_LIST } from '@/types/service-order';
+import { ServiceOrder, OrderStatus, STATUS_LABELS, PaymentMethod, Material, StatusOficina } from '@/types/service-order';
 import { StatusBadge } from './StatusBadge';
 import { Checklist } from './Checklist';
 import { SignaturePad } from './SignaturePad';
@@ -1198,6 +1198,11 @@ const renderDeliverySection = () => {
                 value={order.status}
                 onValueChange={(value) => {
                   if (order.status === 'concluida_entregue') return; // Bloqueia alteração
+                  // Só entrega quitada: paga tudo ou o resto vai pro Fiado (o banco também bloqueia)
+                  if (value === 'concluida_entregue' && totalOS - totalSettled > 0.01) {
+                    toast.error(`Falta R$ ${(totalOS - totalSettled).toFixed(2).replace('.', ',')} nesta OS. Receba tudo ou mande o restante pro Fiado antes de marcar Concluída e Entregue.`, { duration: 7000 });
+                    return;
+                  }
                   // Permite selecionar 'concluida_entregue' só após assinatura de entrega
                   if (value === 'concluida_entregue' && !deliverySignatureData && !isExpress) {
                     toast.error('É necessário coletar a assinatura de entrega do veículo antes de marcar como Concluída e Pago.');
@@ -1210,11 +1215,13 @@ const renderDeliverySection = () => {
                     return;
                   }
 
+                  // v2: o status da OS manda na Oficina. Aberta = Na fila; Em andamento = Em serviço
+                  // (já vem preenchido; "Esperando peça" se escolhe embaixo); Concluída = Pronta.
+                  if (value === 'aberta' && order.status !== 'aberta') {
+                    onUpdateOrder?.({ id: order.id, status_oficina: 'aguardando_inspecao' });
+                  }
                   if (value === 'em_andamento' && order.status !== 'em_andamento') {
-                    // Sincroniza para Em Serviço, mas só se ainda não tiver um status de oficina definido
-                    if (!order.status_oficina || order.status_oficina === 'aguardando_inspecao') {
-                      onUpdateOrder?.({ id: order.id, status_oficina: 'em_servico' });
-                    }
+                    onUpdateOrder?.({ id: order.id, status_oficina: 'em_servico' });
                   }
 
                   if (value === 'concluida' && order.status !== 'concluida') {
@@ -1232,10 +1239,8 @@ const renderDeliverySection = () => {
                     setExitDate(today);
                     dispatchExitDateUpdate(today);
                     setShowExitDateEditor(false);
-                    // Sincroniza status da oficina
-                    if (order.status_oficina !== 'servico_concluido') {
-                      onUpdateOrder?.({ id: order.id, status_oficina: 'servico_concluido' });
-                    }
+                    // Oficina: Pronta
+                    onUpdateOrder?.({ id: order.id, status_oficina: 'pronta_para_buscar' });
                   }
 
                   if (value !== 'concluida') {
@@ -1374,44 +1379,25 @@ const renderDeliverySection = () => {
               />
             </div>
 
-            {/* Status da Oficina */}
-            <div className="flex items-center justify-between gap-3">
-              <Label className="text-sm font-medium text-foreground whitespace-nowrap">Status</Label>
-              <Select
-                value={order.status_oficina ?? ''}
-                onValueChange={(v) => {
-                  const novoStatus = v as StatusOficina;
-                  onUpdateOrder?.({ id: order.id, status_oficina: novoStatus });
-                  // Sincroniza status da OS
-                  if (novoStatus === 'servico_concluido' && order.status !== 'concluida' && order.status !== 'concluida_entregue') {
-                    const servicosSemMecanico = (order.materials || []).filter(m => m.is_service === true && !m.mechanic_id);
-                    if (servicosSemMecanico.length > 0) {
-                      if (order.mechanic_id) {
-                        servicosSemMecanico.forEach(m => onUpdateMaterial?.(m.id, 'mechanic_id', order.mechanic_id!));
-                      } else {
-                        toast.error(`Existem ${servicosSemMecanico.length} serviço(s) sem mecânico atribuído:\n${servicosSemMecanico.map(m => `• ${m.descricao}`).join('\n')}\n\nAtribua um mecânico à OS ou a cada serviço antes de concluir.`);
-                        return;
-                      }
-                    }
-                    const today = formatDateToInput(new Date().toISOString());
-                    setExitDate(today);
-                    dispatchExitDateUpdate(today);
-                    onStatusChange('concluida');
-                  }
-                }}
-              >
-                <SelectTrigger className="w-[200px] h-8 text-sm">
-                  <SelectValue placeholder="Definir..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {STATUS_OFICINA_OPTIONS_LIST.map(opt => (
-                    <SelectItem key={opt.value} value={opt.value} className="text-sm">
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* v2: situação dentro de "Em andamento" (o resto vem do status da OS) */}
+            {order.status === 'em_andamento' && (
+              <div className="flex items-center justify-between gap-3">
+                <Label className="text-sm font-medium text-foreground whitespace-nowrap">Situação</Label>
+                <Select
+                  value={order.status_oficina === 'aguardando_peca' ? 'aguardando_peca' : 'em_servico'}
+                  onValueChange={(v) => onUpdateOrder?.({ id: order.id, status_oficina: v as StatusOficina })}
+                  disabled={isUpdating}
+                >
+                  <SelectTrigger className="w-[200px] h-10 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="em_servico" className="text-sm">Em serviço</SelectItem>
+                    <SelectItem value="aguardando_peca" className="text-sm">Esperando peça</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
