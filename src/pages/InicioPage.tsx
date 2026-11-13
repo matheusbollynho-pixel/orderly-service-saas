@@ -1,12 +1,9 @@
 // v2: Início. O que importa no dia, com um toque para agir. Celular primeiro.
-import { useEffect, useState } from 'react';
-import { CalendarDays, ChevronRight, Eye, EyeOff, HandCoins, Plus, ShoppingCart, Wallet, Zap } from 'lucide-react';
+import { CalendarDays, ChevronRight, HandCoins, Plus, ShoppingCart, Wallet, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useAppointments } from '@/hooks/useAppointments';
-import { useCashFlow } from '@/hooks/useCashFlow';
-import { useAReceber } from '@/hooks/useAReceber';
 import { useOficinaAtivas } from '@/hooks/useOficina';
 import { etapaDe, type Etapa } from '@/lib/etapaOS';
 import type { Acesso, View } from '@/lib/navegacao';
@@ -40,17 +37,11 @@ export default function InicioPage({ orders, carregando, acessoDe, goTo, abrirOf
   recentes?: React.ReactNode;
 }) {
   const hoje = hojeISO();
-  const podeCaixa = acessoDe('fluxo-caixa') === 'ok';
   const podeAgenda = acessoDe('agenda') === 'ok';
-  const podeReceber = podeCaixa || acessoDe('fiados') === 'ok';
+  const podeReceber = acessoDe('fluxo-caixa') === 'ok' || acessoDe('fiados') === 'ok';
 
   const { appointments, isLoading: carregandoAgenda } = useAppointments(hoje, hoje);
-  const { summary } = useCashFlow(hoje);
-  const { data: aReceber } = useAReceber(podeReceber);
 
-  // Olho do caixa: começa escondido e volta a esconder ao sair do Início (tela pode estar virada pro cliente)
-  const [verCaixa, setVerCaixa] = useState(false);
-  useEffect(() => () => setVerCaixa(false), []);
 
   // Mesma conta do Quadro (etapa da moto), com TODAS as ativas do banco
   const { data: ativas, isLoading: carregandoAtivas } = useOficinaAtivas();
@@ -61,8 +52,6 @@ export default function InicioPage({ orders, carregando, acessoDe, goTo, abrirOf
     { s: 'pronta', nome: 'Prontas', cor: 'text-green-500' },
   ];
   const agendaHoje = appointments.filter((a) => a.status !== 'cancelado');
-  const fiadosVencidos = aReceber?.fiados.filter((f) => f.vencido) ?? [];
-  const totalProntas = aReceber?.prontas.reduce((s, x) => s + x.falta, 0) ?? 0;
 
   return (
     <div className="space-y-4">
@@ -88,37 +77,6 @@ export default function InicioPage({ orders, carregando, acessoDe, goTo, abrirOf
           </div>
         )}
       </Bloco>
-
-      {/* A receber */}
-      {podeReceber && (
-        <Bloco titulo="A receber" icone={HandCoins} acao="Ver tudo" onClick={abrirReceber}>
-          {!aReceber ? <Skeleton className="h-12" /> : (
-            <div className="space-y-1 text-sm">
-              <p className="flex justify-between"><span>Prontas esperando pagar</span><span className="font-semibold tabular-nums">{aReceber.prontas.length} · {verCaixa ? brl(totalProntas) : 'R$ •••'}</span></p>
-              <p className={cn('flex justify-between', fiadosVencidos.length && 'text-red-500')}><span>Fiados vencidos</span><span className="font-semibold tabular-nums">{fiadosVencidos.length}</span></p>
-              <p className="flex justify-between"><span>Notas de balcão abertas</span><span className="font-semibold tabular-nums">{aReceber.notas.length}</span></p>
-            </div>
-          )}
-        </Bloco>
-      )}
-
-      {/* Caixa de hoje (com olho) */}
-      {podeCaixa && (
-        <Bloco titulo="Caixa de hoje" icone={Wallet} acao="Abrir caixa" onClick={() => goTo('fluxo-caixa')}>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-muted-foreground">Entrou hoje</p>
-              <p className="font-display text-3xl font-bold tabular-nums text-green-500">
-                {verCaixa ? brl(Number(summary?.total_entradas ?? 0)) : 'R$ •••••'}
-              </p>
-            </div>
-            <Button variant="outline" size="icon" className="h-12 w-12" aria-label={verCaixa ? 'Esconder valores' : 'Mostrar valores'}
-              onClick={() => setVerCaixa((v) => !v)}>
-              {verCaixa ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-            </Button>
-          </div>
-        </Bloco>
-      )}
 
       {/* Agenda de hoje */}
       {podeAgenda && (
