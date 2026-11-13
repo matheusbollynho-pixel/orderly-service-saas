@@ -1,5 +1,6 @@
 import { pedirTexto } from '@/components/v2/Confirmacao';
 import { pedirMotivoEstorno } from '@/lib/estorno';
+import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ServiceOrder, OrderStatus, STATUS_LABELS, PaymentMethod, Material, StatusOficina } from '@/types/service-order';
@@ -312,6 +313,7 @@ export function OrderDetails({
     setEditedPhone(order.client_phone || '');
     setIsEditingPhone(false);
   };
+  const { canAccess: canAccessPlano } = usePlanFeatures();
   const [paymentForm, setPaymentForm] = useState<{ amount: string; discount_amount: string; method: PaymentMethod; notes: string; finalized_by_staff_id: string }>(() => ({
     amount: '',
     discount_amount: '',
@@ -503,12 +505,14 @@ export function OrderDetails({
     .map((id) => teamMembers.find((m) => m.id === id)?.name || 'Colaborador removido')
     .join(', ');
   const totalSettled = totalPaid + totalDiscount;
+  const temFiado = canAccessPlano('fiados');
   const pending = Math.max(totalOS - totalSettled, 0);
   const methodOptions: Array<{ value: PaymentMethod; label: string }> = [
     { value: 'dinheiro', label: 'Dinheiro' },
     { value: 'pix', label: 'Pix' },
     { value: 'cartao', label: 'Cartão' },
-    { value: 'fiado', label: 'Fiado' },
+    // Fiado só pra plano que tem a tela de Fiado
+    ...(temFiado ? [{ value: 'fiado' as PaymentMethod, label: 'Fiado' }] : []),
   ];
 
   const handleCobrarAsaas = async (billingType: 'PIX' | 'BOLETO' | 'UNDEFINED' | 'CREDIT_CARD', installments = 1) => {
@@ -1200,7 +1204,7 @@ const renderDeliverySection = () => {
                   if (order.status === 'concluida_entregue') return; // Bloqueia alteração
                   // Só entrega quitada: paga tudo ou o resto vai pro Fiado (o banco também bloqueia)
                   if (value === 'concluida_entregue' && totalOS - totalSettled > 0.01) {
-                    toast.error(`Falta R$ ${(totalOS - totalSettled).toFixed(2).replace('.', ',')} nesta OS. Receba tudo ou mande o restante pro Fiado antes de marcar Concluída e Entregue.`, { duration: 7000 });
+                    toast.error(`Falta R$ ${(totalOS - totalSettled).toFixed(2).replace('.', ',')} nesta OS. ${temFiado ? 'Receba tudo ou mande o restante pro Fiado' : 'Receba tudo'} antes de marcar Concluída e Entregue.`, { duration: 7000 });
                     return;
                   }
                   // Permite selecionar 'concluida_entregue' só após assinatura de entrega

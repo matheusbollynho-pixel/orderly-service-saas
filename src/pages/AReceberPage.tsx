@@ -15,7 +15,7 @@ const dataCurta = (iso: string | null) => (iso ? iso.slice(0, 10).split('-').rev
 
 export default function AReceberPage({ abrirOS, abrirFiados, abrirNota, mostrarFiados, mostrarNotas }: {
   abrirOS: (os: ServiceOrder) => void;
-  abrirFiados: () => void;
+  abrirFiados: (fiadoId?: string) => void;
   abrirNota: (id: string) => void;
   mostrarFiados: boolean;
   mostrarNotas: boolean;
@@ -85,7 +85,7 @@ export default function AReceberPage({ abrirOS, abrirFiados, abrirNota, mostrarF
           {fiados.map((f) => (
             <Linha key={f.id} titulo={f.cliente} v={f.falta} alerta={f.vencido}
               detalhe={f.vencimento ? `${f.vencido ? 'Venceu' : 'Vence'} ${dataCurta(f.vencimento)}` : 'Sem vencimento'}
-              onClick={abrirFiados} />
+              onClick={() => abrirFiados(f.id)} />
           ))}
         </Grupo>
       )}

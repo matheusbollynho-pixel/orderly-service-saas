@@ -70,10 +70,13 @@ export default function Index() {
   const canAccessReports = permissions.relatorios;
   const [avisoPronta, setAvisoPronta] = useState<ServiceOrder | null>(null);
   // Quando a moto ficou pronta pelo Quadro, a janela do aviso também oferece Desfazer
+  // Fiado clicado no "A receber": a tela de Fiado abre só nele
+  const [fiadoFoco, setFiadoFoco] = useState<string | undefined>();
   const [filtroQuadro, setFiltroQuadro] = useState<import('@/lib/etapaOS').Etapa | 'todas'>('todas');
   const [desfazerPronta, setDesfazerPronta] = useState<(() => Promise<boolean>) | null>(null);
   const { settings: storeSettings } = useStoreSettings();
   const [currentView, setCurrentView] = useState<View>(() => lerTelaInicial(permissions));
+  useEffect(() => { if (currentView !== 'fiados') setFiadoFoco(undefined); }, [currentView]);
   const [selectedOrder, setSelectedOrder] = useState<ServiceOrder | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<OrderStatus | null>(null);
@@ -752,7 +755,7 @@ Retirada: ${retiradaInfo}`;
         {currentView === 'receber' && (
           <AReceberPage
             abrirOS={(os) => { setSelectedOrder(os); setCurrentView('details'); }}
-            abrirFiados={() => goTo('fiados')}
+            abrirFiados={(id) => { setFiadoFoco(id); goTo('fiados'); }}
             abrirNota={(id) => { setInitialBalcaoOrderId(id); goTo('balcao'); }}
             mostrarFiados={acessoDe('fiados') === 'ok'}
             mostrarNotas={acessoDe('balcao') === 'ok'}
@@ -822,7 +825,7 @@ Retirada: ${retiradaInfo}`;
 
         {currentView === 'boletos' && <BoletosPage />}
 
-        {currentView === 'fiados' && <FiadosPage />}
+        {currentView === 'fiados' && <FiadosPage key={fiadoFoco ?? 'todos'} fiadoId={fiadoFoco} onVerTodos={() => setFiadoFoco(undefined)} />}
 
         {currentView === 'cotacao' && <CotacaoPage />}
 

@@ -1,5 +1,6 @@
 import { matchesSearch } from '@/lib/textSearch';
 import { useState, useMemo, useRef } from 'react';
+import { mesmoDevedor } from '@/lib/mesmoDevedor';
 import { useFiados, Fiado, FiadoItem, CreateFiadoInput } from '@/hooks/useFiados';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
 import { useInventory } from '@/hooks/useInventory';
@@ -99,7 +100,7 @@ function emptyItem(): EmptyItemRow {
   return { desc: '', qty: '1', value: '', inventory_product_id: undefined };
 }
 
-export default function FiadosPage() {
+export default function FiadosPage({ fiadoId, onVerTodos }: { fiadoId?: string; onVerTodos?: () => void } = {}) {
   const { fiados, loading, createFiado, addPayment, updateStatus, deleteFiado, sendReminder, createAsaasCharge, reload } = useFiados();
   const { members: teamMembers } = useTeamMembers();
   const { products: inventoryProducts } = useInventory();
@@ -182,6 +183,8 @@ export default function FiadosPage() {
 
   // ── Filtered list ──────────────────────────────────────────────
   const filtered = useMemo(() => {
+    // Veio de um clique no "A receber": mostra só esse fiado
+    if (fiadoId) return mesmoDevedor(fiados, fiadoId);
     let list = fiados;
 
     if (activeTab === 'pendente') list = list.filter(f => f.status === 'pendente');
@@ -198,7 +201,7 @@ export default function FiadosPage() {
     }
 
     return list;
-  }, [fiados, activeTab, searchQuery, today]);
+  }, [fiados, activeTab, searchQuery, today, fiadoId]);
 
   // ── Handlers ───────────────────────────────────────────────────
   const handleNewItemChange = (idx: number, field: keyof EmptyItemRow, value: string) => {
@@ -353,7 +356,7 @@ export default function FiadosPage() {
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+      <div className={`flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide ${fiadoId ? 'hidden' : ''}`}>
         {tabs.map(tab => (
           <button
             type="button"
@@ -370,13 +373,25 @@ export default function FiadosPage() {
         ))}
       </div>
 
+      {fiadoId && (
+        <div className="flex items-center justify-between gap-2 rounded-xl border border-primary/40 bg-primary/5 px-3 py-2">
+          <span className="min-w-0 text-sm">
+            <b className="block truncate">{fiados.find(f => f.id === fiadoId)?.client_name ?? '...'}</b>
+            {filtered.length > 1
+              ? <span className="text-amber-500 font-semibold">Tem {filtered.length} fiados em aberto · R$ {filtered.reduce((t, f) => t + calcBalance(f), 0).toFixed(2)}</span>
+              : <span className="text-muted-foreground">Só este fiado em aberto</span>}
+          </span>
+          <Button variant="outline" size="sm" className="h-9 shrink-0" onClick={onVerTodos}>Ver todos</Button>
+        </div>
+      )}
+
       {/* Search */}
-      <Input
+      {!fiadoId && <Input
         placeholder="Buscar por nome, telefone ou CPF..."
         value={searchQuery}
         onChange={e => setSearchQuery(e.target.value)}
         className="h-10"
-      />
+      />}
 
       {/* List */}
       {loading ? (
