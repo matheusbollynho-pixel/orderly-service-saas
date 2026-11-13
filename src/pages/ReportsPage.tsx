@@ -12,6 +12,7 @@ import { BalcaoCommissionReport } from './BalcaoCommissionReport';
 import { PaymentsTab } from '@/components/PaymentsTab';
 import { Switch } from '@/components/ui/switch';
 import ResumoV2 from '@/components/relatorios/ResumoV2';
+import ComissoesV2 from '@/components/relatorios/ComissoesV2';
 
 type Period = 'week' | 'month' | 'all';
 
@@ -199,6 +200,7 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder }: ReportsPageProps
         {/* Celular: as abas rolam para o lado; PC: cabem inteiras */}
         <TabsList className="w-full justify-start overflow-x-auto overflow-y-hidden scrollbar-hide">
           <TabsTrigger value="resumo" className="flex-1 shrink-0">Resumo</TabsTrigger>
+          <TabsTrigger value="comissoes" className="flex-1 shrink-0">Comissões</TabsTrigger>
           <TabsTrigger value="detalhado" className="flex-1 shrink-0">Mecânicos</TabsTrigger>
           <TabsTrigger value="itens" className="flex-1 shrink-0">Peças</TabsTrigger>
           <TabsTrigger value="balcao" className="flex-1 shrink-0">Balcão</TabsTrigger>
@@ -266,6 +268,8 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder }: ReportsPageProps
           </div>
           </>)}
         </TabsContent>
+
+        <TabsContent value="comissoes"><ComissoesV2 /></TabsContent>
 
         <TabsContent value="detalhado">
           <MechanicDetailReport onBack={() => setActiveTab('resumo')} onOpenOrder={onOpenOrder} />

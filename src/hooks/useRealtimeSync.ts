@@ -37,7 +37,8 @@ export function useRealtimeSync() {
       estoque: ['inventory-products', 'inventory-movements', 'cotacao'],
       boletos: ['boletos'],
       fiados: ['a-receber'],
-      vales: ['vales'],
+      vales: ['vales', 'comissoes'],
+      acertos: ['comissoes', 'vales'],
     };
     const invalidate = (...scopes: string[]) => {
       for (const sc of scopes) {
@@ -249,6 +250,7 @@ export function useRealtimeSync() {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'fiados' }, () => invalidate('fiados'))
         .on('postgres_changes', { event: '*', schema: 'public', table: 'fiado_payments' }, () => invalidate('fiados'))
         .on('postgres_changes', { event: '*', schema: 'public', table: 'vales' }, () => invalidate('vales'))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'acertos' }, () => invalidate('acertos'))
         .subscribe((status) => {
           if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
             invalidate('all');
