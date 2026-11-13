@@ -22,8 +22,6 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder }: ReportsPageProps
   const { orders, isLoading, createPayment, deletePayment, updatePayment } = useServiceOrders();
   const { mechanics } = useMechanics();
   const { products: inventoryProducts, isLoadingProducts } = useInventory();
-  console.log('Mecânicos carregados:', mechanics);
-  console.log('Ordens carregadas:', orders);
   const [period, setPeriod] = useState<Period>('month');
   const [activeTab, setActiveTab] = useState<'resumo' | 'detalhado' | 'itens' | 'pagamentos' | 'balcao' | 'estoque'>('resumo');
   const [itemsQuery, setItemsQuery] = useState('');
@@ -51,8 +49,6 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder }: ReportsPageProps
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
 
   const { totalGeral, porMecanico } = useMemo(() => {
-      console.log('Calculando porMecanico... mechanics:', mechanics);
-      console.log('Calculando porMecanico... orders:', orders);
     const mecMap = new Map(mechanics.map(m => [m.id, m]));
     let total = 0; // total geral (APENAS serviços)
     const porMec: Record<string, { name: string; receita: number; comissao: number; rate: number } > = {};
@@ -86,8 +82,6 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder }: ReportsPageProps
 
   // Resumo de peças (itens) por período
   const { totalPecas, pecasPorOS, pecasPorMecanico } = useMemo(() => {
-      console.log('Calculando pecasPorMecanico... mechanics:', mechanics);
-      console.log('Calculando pecasPorMecanico... orders:', orders);
     const mecMap = new Map(mechanics.map(m => [m.id, m]));
     let total = 0;
     const lista: Array<{ 

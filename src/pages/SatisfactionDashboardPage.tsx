@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar as DateCalendar } from '@/components/ui/calendar';
 import { useMechanics } from '@/hooks/useMechanics';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
-import { AlertTriangle, ChevronDown, Calendar as CalendarIcon } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Calendar as CalendarIcon, Star, Wrench, Mic } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -113,12 +113,6 @@ export default function SatisfactionDashboardPage() {
     const ratings = (ratingsData || []) as RatingRow[];
     setRows(ratings);
 
-    console.log('📊 [DASHBOARD] Avaliações respondidas recarregadas:', {
-      total: ratings.length,
-      comMechanico: ratings.filter(r => r.mechanic_id).length,
-      comAtendimento: ratings.filter(r => r.atendimento_id).length,
-    });
-
     // Buscar dados reais de todos os clientes ANTES do early return de orders
     const allClientIds = ratings
       .filter((r) => r.client_id)
@@ -169,7 +163,6 @@ export default function SatisfactionDashboardPage() {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'satisfaction_ratings' },
         () => {
-          console.log('📊 Mudança detectada em satisfaction_ratings, recarregando...');
           reloadData();
         }
       )
@@ -270,15 +263,7 @@ export default function SatisfactionDashboardPage() {
     const result = Array.from(map.entries())
       .map(([id, notes]) => ({ id, avg: average(notes), count: notes.length }))
       .sort((a, b) => b.avg - a.avg);
-    
-    console.log('🔧 [DASHBOARD] Mechanic Ranking:', {
-      total: result.length,
-      scored_count: scored.length,
-      com_mechanic_id: scored.filter(r => r.mechanic_id).length,
-      com_servico_rating: scored.filter(r => r.servico_rating).length,
-      resultado: result
-    });
-    
+
     return result;
   }, [scored]);
 
@@ -461,7 +446,7 @@ export default function SatisfactionDashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="glass-card border-border/50 bg-amber-500/10">
           <CardHeader><CardTitle className="text-sm text-foreground">Média Geral</CardTitle></CardHeader>
-          <CardContent><p className="text-2xl font-bold text-foreground">{metrics.avg.toFixed(2)} ⭐</p></CardContent>
+          <CardContent><p className="text-2xl font-bold text-foreground">{metrics.avg.toFixed(2)} <Star className="inline h-5 w-5 -mt-1 fill-yellow-400 text-yellow-400" /></p></CardContent>
         </Card>
         <Card className="glass-card border-border/50 bg-blue-500/10">
           <CardHeader><CardTitle className="text-sm text-foreground">NPS</CardTitle></CardHeader>
@@ -481,7 +466,7 @@ export default function SatisfactionDashboardPage() {
             {mechanicRanking.map((r, idx) => (
               <div key={r.id} className="flex items-center justify-between rounded-md border border-border/50 bg-muted/30 p-2 text-sm">
                 <span className="text-foreground">{idx + 1}. {mechanics.find((m) => m.id === r.id)?.name || 'Sem nome'}</span>
-                <span className="font-semibold text-foreground">{r.avg.toFixed(2)} ⭐ ({r.count})</span>
+                <span className="font-semibold text-foreground">{r.avg.toFixed(2)} <Star className="inline h-3.5 w-3.5 -mt-0.5 fill-yellow-400 text-yellow-400" /> ({r.count})</span>
               </div>
             ))}
           </CardContent>
@@ -494,7 +479,7 @@ export default function SatisfactionDashboardPage() {
             {atendimentoRanking.map((r, idx) => (
               <div key={r.id} className="flex items-center justify-between rounded-md border border-border/50 bg-muted/30 p-2 text-sm">
                 <span className="text-foreground">{idx + 1}. {members.find((m) => m.id === r.id)?.name || 'Sem nome'}</span>
-                <span className="font-semibold text-foreground">{r.avg.toFixed(2)} ⭐ ({r.count})</span>
+                <span className="font-semibold text-foreground">{r.avg.toFixed(2)} <Star className="inline h-3.5 w-3.5 -mt-0.5 fill-yellow-400 text-yellow-400" /> ({r.count})</span>
               </div>
             ))}
           </CardContent>
@@ -503,7 +488,7 @@ export default function SatisfactionDashboardPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card className="glass-card border-border/50">
-          <CardHeader><CardTitle className="text-foreground">🎉 Top Elogios</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-foreground">Top elogios</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {positiveTagRanking.length === 0 && <p className="text-sm text-muted-foreground">Sem elogios no período.</p>}
             {positiveTagRanking.map((t, idx) => (
@@ -524,7 +509,7 @@ export default function SatisfactionDashboardPage() {
         </Card>
 
         <Card className="glass-card border-border/50">
-          <CardHeader><CardTitle className="text-foreground">⚠️ Principais Críticas</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-foreground">Principais críticas</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {negativeTagRanking.length === 0 && <p className="text-sm text-muted-foreground">Sem críticas no período.</p>}
             {negativeTagRanking.map((t, idx) => (
@@ -549,9 +534,9 @@ export default function SatisfactionDashboardPage() {
         <CardHeader>
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <CardTitle className="text-foreground">
-              📋 Feed de Avaliações Detalhadas
-              {mechanicFilter !== 'all' && ` • 🔧 ${mechanics.find(m => m.id === mechanicFilter)?.name || 'Mecânico'}`}
-              {atendimentoFilter !== 'all' && ` • 🎤 ${members.find(m => m.id === atendimentoFilter)?.name || 'Atendente'}`}
+              Feed de avaliações detalhadas
+              {mechanicFilter !== 'all' && ` • Mecânico: ${mechanics.find(m => m.id === mechanicFilter)?.name || 'Mecânico'}`}
+              {atendimentoFilter !== 'all' && ` • Atendente: ${members.find(m => m.id === atendimentoFilter)?.name || 'Atendente'}`}
             </CardTitle>
             <p className="text-xs text-muted-foreground">
               Pesquisa enviada sozinha, aos poucos, em horário comercial
@@ -573,19 +558,19 @@ export default function SatisfactionDashboardPage() {
                   <div className="flex-1">
                     <p className="font-semibold text-sm text-foreground">{clientName}</p>
                     <p className="text-xs text-muted-foreground">
-                      📱 {clientPhone || '-'} | 📅 {new Date(r.responded_at || '').toLocaleDateString('pt-BR')}
+                      {clientPhone || '-'} · {new Date(r.responded_at || '').toLocaleDateString('pt-BR')}
                     </p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-bold text-foreground">
-                      ⭐ {r.atendimento_rating}/{r.servico_rating}
+                      <Star className="inline h-3.5 w-3.5 -mt-0.5 fill-yellow-400 text-yellow-400" /> {r.atendimento_rating}/{r.servico_rating}
                     </p>
                   </div>
                 </div>
 
                 <div className="flex flex-wrap gap-2 text-xs">
-                  {mechanic && <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-1 rounded">🔧 {mechanic.name}</span>}
-                  {atendente && <span className="bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-1 rounded">🎤 {atendente.name}</span>}
+                  {mechanic && <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-1 rounded inline-flex items-center gap-1"><Wrench className="h-3 w-3" />{mechanic.name}</span>}
+                  {atendente && <span className="bg-purple-500/20 text-purple-400 border border-purple-500/30 px-2 py-1 rounded inline-flex items-center gap-1"><Mic className="h-3 w-3" />{atendente.name}</span>}
                 </div>
 
                 {allRatingTags.length > 0 && (
@@ -622,11 +607,11 @@ export default function SatisfactionDashboardPage() {
                     </div>
                     <div>
                       <p className="font-semibold text-xs text-muted-foreground uppercase">Recomenda:</p>
-                      <p className="text-sm text-foreground">{r.recommends === true ? '✅ Sim' : r.recommends === false ? '❌ Não' : '⚪ Não respondeu'}</p>
+                      <p className="text-sm text-foreground">{r.recommends === true ? 'Sim' : r.recommends === false ? 'Não' : 'Não respondeu'}</p>
                     </div>
                     <div>
                       <p className="font-semibold text-xs text-muted-foreground uppercase">Status:</p>
-                      <p className="text-sm text-foreground">{r.status === 'resolvido' ? '✅ Resolvido' : '⏳ Pendente'}</p>
+                      <p className="text-sm text-foreground">{r.status === 'resolvido' ? 'Resolvido' : 'Pendente'}</p>
                     </div>
                   </div>
                 )}

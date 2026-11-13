@@ -317,7 +317,9 @@ Retirada: ${retiradaInfo}`;
         setAvisoPronta({ ...selectedOrder, status });
       }
       const updatePayload: any = { id: selectedOrder.id, status };
-      if (status === 'concluida' || status === 'concluida_entregue') {
+      // Concluída grava quando ficou pronta. Entregue não apaga essa data (só preenche se faltar);
+      // a data de entrega (exit_date) o banco grava sozinho ao virar entregue.
+      if (status === 'concluida' || (status === 'concluida_entregue' && !selectedOrder.conclusion_date)) {
         updatePayload.conclusion_date = new Date().toISOString();
       }
       updateOrder(updatePayload);

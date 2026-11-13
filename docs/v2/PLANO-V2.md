@@ -127,3 +127,25 @@ Com a casca padronizada, passar **função por função** e simplificar o fluxo 
 ## 7. Ideias para depois (só anotadas, não estão no plano)
 - **Gestão financeira para o dono** (pedido 12/11/2026): ajudar o proprietário com o que ensinam nos cursos de gestão financeira. Exemplos: recomendação de quanto comprar/gastar, separar custos fixos e variáveis, preço certo (margem), capital de giro, ponto de equilíbrio e pró-labore. Usa os dados que o sistema já tem (caixa, contas a pagar, estoque, vendas). Entra depois da v2 e do pente fino, passando pelo time de produto.
 - **IA 24h como vitrine** (dono, 12/11): o botão antigo existia para chamar quem está no teste (ou sem o plano com IA) a assinar, com cadeado e convite de upgrade. Para quem tinha o plano, abria tela vazia; por isso saiu na parte 1. **Refazer depois, chamando atenção:** sem o plano, uma vitrine do que a IA faz (atende no WhatsApp 24h, agenda, responde preço), com botão para assinar. Com o plano, um resumo do que a IA fez ("atendeu X clientes, marcou Y agendamentos"). Passa pelo time de produto.
+
+## Relatórios v2 (pente fino com o time, 13/11/2026)
+Detalhe em `docs/v2/rodadas/P-relatorios-final.md` (+ designer, dev, critico). Nota final do crítico: 8/10 com 3 ajustes, já incorporados abaixo.
+
+**Por que mexer:** os relatórios de OS só enxergam as últimas 200 OS e cada aba conta por uma data diferente (updated_at faz OS pular de mês); "Faturado" é só mão de obra; a comissão usa a % de hoje; Pagtos mexe em dinheiro; console.log a cada render.
+
+**4 abas, 1 período (comparando com o mesmo pedaço do mês anterior):**
+- **Resumo:** Vendeu -> Ficou a receber -> Entradas (= Caixa) -> Saídas (= Caixa) -> Saldo (sobrou) -> Pra pagar (contas + comissão + encomendas a pagar se houver campo) -> Atenção (estornos com quem/motivo, descontos, fiado vencido). **A conta tem que fechar na tela**: linha explicando a diferença Vendeu x Entradas (sinal recebido antes, desconto, vendas antigas).
+- **Comissões:** mecânicos + atendentes, produziu / a pagar / pago, [Marcar pago].
+- **Oficina:** motos paradas agora por etapa, top 10 serviços por mão de obra, OS por mecânico.
+- **Peças:** lucro das peças vendidas (peça sem custo fica FORA do lucro, com aviso), top 10 por lucro, valor do estoque, abaixo do mínimo.
+- Sai: Hoje, ticket médio, NPS/novos x voltaram (Satisfação vai pra Mais > Clientes > Avaliações), peças por mecânico. Pagtos vira lista só leitura e só sai quando a OS fizer o mesmo com os mesmos toques.
+
+**Regras:** fuso America/Bahia; dinheiro = data do caixa; venda de OS = exit_date (gatilho); nota = finalized_at; nunca updated_at; nomes iguais ao Caixa; aceite = outubro bate no centavo com Caixa > Mês. Contas no banco (RPC que confere loja e permissão), staleTime 5 min, sem recarga automática.
+**Permissões:** `relatorios` (Resumo/Oficina/Peças) e nova `comissoes`; desligadas pra colaborador; valores abrem escondidos (olho). "Minha comissão" só depois de confirmar o vínculo login-pessoa (Bandara usa login único).
+
+**Fatias:** 1 tirar console.log/emoji • 2 migration exit_date (24 OS entregues sem data hoje) • 3 RPC relatorio_resumo + Resumo novo atrás de chave • 4 barra de período + comparação; depois Pagtos • 5+7 JUNTAS: % de comissão guardada + aba Comissões + permissão + marcar pago lança no Caixa com opção [Já lancei à mão] • 6 Oficina e Peças • 8 toque "voltou na garantia" na OS (começa a juntar dado; relatório de retorno depois) • 9 Minha comissão.
+**Discordância resolvida:** crítico pediu comissão no Caixa junto com o marcar pago (designer/dev queriam depois): fica junto, com a trava "Já lancei à mão". Retorno de garantia: sem campo hoje; entra o toque na OS agora e o relatório quando houver dado.
+**Feito antes (13/11):** índices por OS em materials/payments/checklist_items (574 mi de leituras completas cada) e saldo_os fechada.
+**Semana de acerto (dono, 13/11):** a Bandara paga os mecânicos todo sábado, semana de domingo a sábado. Hoje a "Semana atual" começa na SEGUNDA (ReportsPage.tsx startOfWeek) e conta pela última edição: corrigir. A aba Comissões abre em [Esta semana] / [Semana passada] (dom-sáb); o dia do acerto vira configuração da loja (padrão sábado); "marcar pago" fecha a semana do mecânico de uma vez.
+**Filtro de período único (dono, 13/11):** mesmo componente no Caixa e nos Relatórios: [Dia] [Semana] [Mês] [Escolher datas] (de-até livre). [Semana] segue o "dia do acerto" da loja (Ajustes, padrão sábado; Bandara = dom-sáb; quem paga na sexta = sáb-sex). Hoje o Caixa tem semana fixa seg-sáb (useCashFlow.ts, domingo fica fora) e os Relatórios seg-hoje: os dois passam a usar o filtro novo.
+**Decisão do dono (13/11): comissão paga NÃO lança no Caixa.** Fica para a área de Financeiro (gestão financeira completa, depois). No Resumo: "Saldo (sobrou)" vira **"Saldo do caixa"** (Entradas - Saídas, igual ao Caixa) e logo abaixo, visível, **"Comissões pagas no período: R$ X"**. O "quanto sobrou de verdade" vai para o Financeiro. Fatia 7 sai do plano; a fatia 5 (Comissões + marcar pago) vai sozinha.
