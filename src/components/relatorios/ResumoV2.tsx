@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useRelatorioResumo, type ResumoDados } from '@/hooks/useRelatorioResumo';
-import { deIso, rotuloPeriodo } from '@/lib/periodo';
+import { deIso, problemaNoPeriodo, rotuloPeriodo } from '@/lib/periodo';
 import { BarraPeriodo, usePeriodo } from './BarraPeriodo';
 
 const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -62,7 +62,9 @@ export default function ResumoV2() {
         </Button>
       </div>
 
-      {isLoading ? (
+      {problemaNoPeriodo(atual) ? (
+        <p className="rounded-xl border border-border p-4 text-center text-sm text-muted-foreground">{problemaNoPeriodo(atual)}</p>
+      ) : isLoading ? (
         <div className="space-y-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
       ) : isError || !d ? (
         <div className="space-y-2 rounded-xl border border-border p-4 text-sm">

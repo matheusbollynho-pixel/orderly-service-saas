@@ -16,7 +16,7 @@ declare
   v_fim_mes date;
   r jsonb;
 begin
-  if p_ini is null or p_fim is null or p_fim < p_ini or p_fim - p_ini > 400 then
+  if p_ini is null or p_fim is null or p_fim < p_ini or p_fim - p_ini > 1100 then
     raise exception 'Periodo invalido';
   end if;
 

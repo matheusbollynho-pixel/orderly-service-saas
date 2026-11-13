@@ -66,3 +66,14 @@ export function rotuloPeriodo(p: Periodo): string {
   if (a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear()) return `${a.getDate()}–${b.getDate()}/${MESES[b.getMonth()]}`;
   return `${a.getDate()}/${MESES[a.getMonth()]}–${b.getDate()}/${MESES[b.getMonth()]}`;
 }
+
+/** Máximo de dias num período (o banco também confere). */
+export const MAX_DIAS_PERIODO = 1100;
+/** Período "Escolher" válido pra pedir ao banco? Senão devolve o motivo. */
+export function problemaNoPeriodo(p: Periodo): string | null {
+  const ok = (x: string) => /^\d{4}-\d{2}-\d{2}$/.test(x) && Number(x.slice(0, 4)) >= 2000;
+  if (!ok(p.ini) || !ok(p.fim)) return 'Escolha as duas datas.';
+  if (p.fim < p.ini) return 'A data final está antes da inicial.';
+  if (diasEntre(deIso(p.ini), deIso(p.fim)) > MAX_DIAS_PERIODO) return 'Escolha no máximo 3 anos.';
+  return null;
+}

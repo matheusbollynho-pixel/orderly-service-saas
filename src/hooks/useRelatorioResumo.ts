@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useStore } from '@/contexts/StoreContext';
-import type { Periodo } from '@/lib/periodo';
+import { problemaNoPeriodo, type Periodo } from '@/lib/periodo';
 
 const db = supabase as unknown as SupabaseClient;
 
@@ -39,7 +39,8 @@ export function useRelatorioResumo(p: Periodo | null) {
   const { storeId } = useStore();
   return useQuery({
     queryKey: ['relatorio-resumo', storeId, p?.ini, p?.fim],
-    enabled: !!storeId && !!p,
+    enabled: !!storeId && !!p && !problemaNoPeriodo(p),
+    retry: false,
     staleTime: 5 * 60_000,
     refetchOnWindowFocus: false,
     queryFn: async () => {

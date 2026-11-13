@@ -43,3 +43,16 @@ describe('periodo', () => {
     expect(rotuloPeriodo({ ini: '2026-11-13', fim: '2026-11-13' })).toBe('13/nov');
   });
 });
+
+import { problemaNoPeriodo } from '@/lib/periodo';
+describe('problemaNoPeriodo', () => {
+  it('aceita período normal e longo até 3 anos', () => {
+    expect(problemaNoPeriodo({ ini: '2025-09-01', fim: '2026-11-13' })).toBeNull();
+  });
+  it('recusa data pela metade, invertida ou longa demais', () => {
+    expect(problemaNoPeriodo({ ini: '0002-09-01', fim: '2026-11-13' })).toBe('Escolha as duas datas.');
+    expect(problemaNoPeriodo({ ini: '', fim: '2026-11-13' })).toBe('Escolha as duas datas.');
+    expect(problemaNoPeriodo({ ini: '2026-11-13', fim: '2026-11-01' })).toBe('A data final está antes da inicial.');
+    expect(problemaNoPeriodo({ ini: '2020-01-01', fim: '2026-11-13' })).toBe('Escolha no máximo 3 anos.');
+  });
+});
