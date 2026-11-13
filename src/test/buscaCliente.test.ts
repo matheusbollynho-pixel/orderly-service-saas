@@ -21,3 +21,17 @@ describe('tipoDaBusca (o que a pessoa digitou)', () => {
     expect(tipoDaBusca('Bandara')).toBe('nome');
   });
 });
+
+import { documentoDoCliente } from '@/components/v2/BuscaCliente';
+describe('documentoDoCliente', () => {
+  it('mostra o CPF formatado quando tem', () => {
+    expect(documentoDoCliente({ cpf: '12345678900', phone: '75988887777' })).toBe('CPF 123.456.789-00');
+  });
+  it('sem CPF, mostra o telefone (tira o 55)', () => {
+    expect(documentoDoCliente({ cpf: null, whatsapp: '5575988887777' })).toBe('Tel (75) 98888-7777');
+    expect(documentoDoCliente({ cpf: '', phone: '7533334444' })).toBe('Tel (75) 3333-4444');
+  });
+  it('sem nada, vazio', () => {
+    expect(documentoDoCliente({})).toBe('');
+  });
+});

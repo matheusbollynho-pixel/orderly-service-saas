@@ -61,7 +61,7 @@ export function useBalcao() {
       if (error) throw error;
       return (data ?? []) as BalcaoOrder[];
     },
-    refetchInterval: 10000,
+    refetchInterval: 60_000,
     staleTime: 5000,
   });
 

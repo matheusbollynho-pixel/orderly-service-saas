@@ -21,14 +21,22 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
-    const { email, store_id, permissions, owner_user_id } = await req.json()
-    if (!email || !store_id || !owner_user_id) return json({ error: 'email, store_id e owner_user_id obrigatórios' }, 400)
+    // Quem convida é quem está logado (token), nunca um id vindo no corpo do pedido
+    const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '')
+    const { data: auth } = token ? await supabase.auth.getUser(token) : { data: { user: null } }
+    const caller = auth?.user
+    if (!caller) return json({ error: 'Faça login de novo para convidar.' }, 401)
 
-    // Verifica se o owner_user_id é realmente owner da loja (via service role)
+    const body = await req.json()
+    const email = String(body.email ?? '').trim().toLowerCase()
+    const { store_id, permissions } = body
+    if (!email || !store_id) return json({ error: 'email e store_id obrigatórios' }, 400)
+
+    // Só o dono da loja convida
     const { data: member } = await supabase
       .from('store_members')
       .select('role')
-      .eq('user_id', owner_user_id)
+      .eq('user_id', caller.id)
       .eq('store_id', store_id)
       .eq('active', true)
       .maybeSingle()
@@ -53,9 +61,14 @@ Deno.serve(async (req) => {
     })
 
     if (inviteErr) {
-      // Usuário já cadastrado — busca o ID pelo email
-      const { data: existingUser } = await supabase.auth.admin.listUsers()
-      const found = existingUser?.users?.find((u: { email?: string }) => u.email === email)
+      // Usuário já cadastrado — busca o ID pelo email (todas as páginas)
+      let found: { id: string } | undefined
+      for (let page = 1; page <= 20 && !found; page++) {
+        const { data: lista } = await supabase.auth.admin.listUsers({ page, perPage: 1000 })
+        const users = lista?.users ?? []
+        found = users.find((u: { email?: string }) => (u.email ?? '').toLowerCase() === email)
+        if (users.length < 1000) break
+      }
       if (!found) throw inviteErr
       userId = found.id
     } else {
@@ -65,10 +78,17 @@ Deno.serve(async (req) => {
     // Verifica se já existe member para essa loja+email
     const { data: existing } = await supabase
       .from('store_members')
-      .select('id')
+      .select('id, active, role')
       .eq('store_id', store_id)
       .eq('user_id', userId!)
       .maybeSingle()
+
+    // Já foi colaborador e tinha sido removido: volta ativo
+    if (existing && !existing.active && existing.role !== 'owner') {
+      const { error: upErr } = await supabase.from('store_members')
+        .update({ active: true, email, permissions: permissions || {} }).eq('id', existing.id)
+      if (upErr) throw upErr
+    }
 
     if (!existing && userId) {
       const { error: insertErr } = await supabase.from('store_members').insert({

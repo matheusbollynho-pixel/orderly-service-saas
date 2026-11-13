@@ -10,7 +10,6 @@ export function useRealtimeSync() {
     let timer: ReturnType<typeof setTimeout> | null = null;
     let fallbackInterval: ReturnType<typeof setInterval> | null = null;
     let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
-    let lastInvalidateAt = 0;
     let currentChannel: ReturnType<typeof supabase.channel> | null = null;
 
     const isHiddenQrOrder = (row: Record<string, unknown>) => {
@@ -25,28 +24,41 @@ export function useRealtimeSync() {
       });
     };
 
-    const invalidate = (scope: 'orders' | 'cash' | 'all') => {
-      const now = Date.now();
-      if (now - lastInvalidateAt < 200) return;
-      lastInvalidateAt = now;
-
+    // Junta os avisos que chegam em sequência e atualiza cada lista uma vez só (antes um
+    // segundo aviso em menos de 200ms era descartado, ex.: pagamento + caixa).
+    const pendentes = new Set<string>();
+    const eventosJanela = new Set<string>();
+    const GRUPOS: Record<string, string[]> = {
+      orders: ['service-orders', 'oficina-ativas', 'a-receber', 'contagem-os'],
+      oficina: ['oficina-ativas', 'a-receber', 'contagem-os'],
+      cash: ['cash-flow', 'cash-flow-summary', 'cash-flow-period'],
+      balcao: ['balcao-orders', 'a-receber'],
+      agenda: ['appointments'],
+      estoque: ['inventory-products', 'inventory-movements', 'cotacao'],
+      boletos: ['boletos'],
+      fiados: ['a-receber'],
+    };
+    const invalidate = (...scopes: string[]) => {
+      for (const sc of scopes) {
+        if (sc === 'all') Object.keys(GRUPOS).forEach((g) => pendentes.add(g));
+        else pendentes.add(sc);
+      }
       if (timer) clearTimeout(timer);
-
       timer = setTimeout(() => {
-        if (scope === 'orders' || scope === 'all') {
-          queryClient.invalidateQueries({ queryKey: ['service-orders'] });
-        }
-
-        if (scope === 'cash' || scope === 'all') {
-          queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
-          queryClient.invalidateQueries({ queryKey: ['cash-flow-summary'] });
-          queryClient.invalidateQueries({ queryKey: ['cash-flow-period'] });
-        }
-      }, 300); // 300ms - rápido para sync entre dispositivos
+        const chaves = new Set<string>();
+        pendentes.forEach((g) => (GRUPOS[g] ?? []).forEach((k) => chaves.add(k)));
+        // Telas que não usam o cache (ex.: Fiado) escutam este aviso
+        if (pendentes.has('fiados')) eventosJanela.add('sync:fiados');
+        pendentes.clear();
+        chaves.forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
+        eventosJanela.forEach((e) => window.dispatchEvent(new Event(e)));
+        eventosJanela.clear();
+      }, 300); // rápido para sync entre aparelhos
     };
 
     const handleServiceOrdersChange = (payload: Record<string, unknown>) => {
       const eventType = payload?.eventType;
+      invalidate('oficina');
       const row = payload?.new;
       const oldRow = payload?.old;
 
@@ -76,6 +88,8 @@ export function useRealtimeSync() {
 
     const handleChecklistChange = (payload: Record<string, unknown>) => {
       const eventType = payload?.eventType;
+      // Apagado chega sem o id da OS: recarrega a lista inteira
+      invalidate(eventType === 'DELETE' ? 'orders' : 'oficina');
       const row = payload?.new;
       const oldRow = payload?.old;
       const orderId = row?.order_id || oldRow?.order_id;
@@ -115,6 +129,8 @@ export function useRealtimeSync() {
 
     const handleMaterialsChange = (payload: Record<string, unknown>) => {
       const eventType = payload?.eventType;
+      // Apagado chega sem o id da OS: recarrega a lista inteira
+      invalidate(eventType === 'DELETE' ? 'orders' : 'oficina');
       const row = payload?.new;
       const oldRow = payload?.old;
       const orderId = row?.order_id || oldRow?.order_id;
@@ -154,6 +170,8 @@ export function useRealtimeSync() {
 
     const handlePaymentsChange = (payload: Record<string, unknown>) => {
       const eventType = payload?.eventType;
+      // Apagado chega sem o id da OS: recarrega a lista inteira
+      invalidate(eventType === 'DELETE' ? 'orders' : 'oficina');
       const row = payload?.new;
       const oldRow = payload?.old;
       const orderId = row?.order_id || oldRow?.order_id;
@@ -201,12 +219,13 @@ export function useRealtimeSync() {
     window.addEventListener('focus', handleFocusSync);
     document.addEventListener('visibilitychange', handleVisibilitySync);
 
-    // Fallback para cenários em que websocket/realtime está instável
+    // Reserva caso o tempo real caia. Era a cada 15s em toda aba (até escondida) e
+    // recarregava a lista inteira de OS: virou o maior consumo do banco. Agora 5 min e só com a tela à vista.
     fallbackInterval = setInterval(() => {
-      if (navigator.onLine) {
+      if (navigator.onLine && document.visibilityState === 'visible') {
         invalidate('all');
       }
-    }, 15000);
+    }, 5 * 60 * 1000);
 
     const subscribe = () => {
       if (currentChannel) {
@@ -220,6 +239,14 @@ export function useRealtimeSync() {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'materials' }, (payload) => handleMaterialsChange(payload))
         .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, (payload) => handlePaymentsChange(payload))
         .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_flow' }, () => invalidate('cash'))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'balcao_orders' }, () => invalidate('balcao'))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'balcao_items' }, () => invalidate('balcao'))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, () => invalidate('agenda'))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_products' }, () => invalidate('estoque'))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_movements' }, () => invalidate('estoque'))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'boletos' }, () => invalidate('boletos'))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'fiados' }, () => invalidate('fiados'))
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'fiado_payments' }, () => invalidate('fiados'))
         .subscribe((status) => {
           if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
             invalidate('all');

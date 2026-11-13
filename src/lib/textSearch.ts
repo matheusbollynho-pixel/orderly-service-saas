@@ -45,6 +45,11 @@ export const accentPattern = (value: string | null | undefined): string =>
     .map((ch) => (ACCENT_CLASSES[ch] ? `[${ACCENT_CLASSES[ch]}]` : /[a-z0-9 ]/.test(ch) ? ch : '.'))
     .join('');
 
+// Nome que COMEÇA com o digitado (no começo do nome ou de um sobrenome):
+// "andre" acha ANDRE e JOSE ANDRE, mas não ALEXANDRE.
+export const inicioDePalavra = (value: string | null | undefined): string =>
+  `(^|[[:space:]])${accentPattern(String(value ?? '').trim())}`;
+
 // Termo para busca no banco (OS): placa e telefone ficam gravados só com letras/números,
 // então "ABC-1D23" vira "ABC1D23" e "(75) 98838-8629" vira "75988388629". Resto fica igual.
 export const termoBuscaBanco = (query: string): string => {

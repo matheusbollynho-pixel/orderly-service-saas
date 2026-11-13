@@ -6,7 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { Loader2, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
-import { accentPattern } from '@/lib/textSearch';
+import { inicioDePalavra, normalizeSearch } from '@/lib/textSearch';
 import { cn } from '@/lib/utils';
 import type { Client, Motorcycle } from '@/hooks/useClients';
 
@@ -47,18 +47,34 @@ export async function buscarClientes(termo: string): Promise<{ clientes: Cliente
     }
     return { clientes: [...vistos.values()], motoDaPlaca };
   }
-  let q = db.from('clients').select(`${CAMPOS_CLIENTE}, motorcycles(${CAMPOS_MOTO})`).limit(8);
+  let q = db.from('clients').select(`${CAMPOS_CLIENTE}, motorcycles(${CAMPOS_MOTO})`).limit(tipo === 'nome' ? 40 : 8);
   if (tipo === 'telefone') {
     q = q.or(`phone.ilike.%${compacto}%,whatsapp.ilike.%${compacto}%,cpf.ilike.%${compacto}%`);
   } else {
-    q = q.or(`name.imatch."${accentPattern(t)}",apelido.imatch."${accentPattern(t)}"`);
+    q = q.or(`name.imatch."${inicioDePalavra(t)}",apelido.imatch."${inicioDePalavra(t)}"`);
   }
   const { data, error } = await q.order('name');
   if (error) throw error;
-  return { clientes: (data ?? []) as unknown as ClienteEncontrado[] };
+  let clientes = (data ?? []) as unknown as ClienteEncontrado[];
+  if (tipo === 'nome') {
+    // Quem SE CHAMA assim vem antes de quem tem a palavra no meio do nome
+    const alvo = normalizeSearch(t);
+    const peso = (c: ClienteEncontrado) => (normalizeSearch(c.name).startsWith(alvo) ? 0 : normalizeSearch(c.apelido).startsWith(alvo) ? 1 : 2);
+    clientes = clientes.map((c, i) => ({ c, i })).sort((a, b) => peso(a.c) - peso(b.c) || a.i - b.i).map((x) => x.c).slice(0, 8);
+  }
+  return { clientes };
 }
 
-const final4 = (tel?: string | null) => { const d = (tel || '').replace(/\D/g, ''); return d ? `…${d.slice(-4)}` : ''; };
+/** Pra identificar o cliente (ex.: na nota): CPF se tiver; senão o telefone. */
+export function documentoDoCliente(c: { cpf?: string | null; whatsapp?: string | null; phone?: string | null }): string {
+  const cpf = (c.cpf || '').replace(/\D/g, '');
+  if (cpf.length === 11) return `CPF ${cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')}`;
+  if (cpf.length === 14) return `CNPJ ${cpf.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5')}`;
+  const tel = (c.whatsapp || c.phone || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '');
+  if (tel.length === 11) return `Tel (${tel.slice(0, 2)}) ${tel.slice(2, 7)}-${tel.slice(7)}`;
+  if (tel.length === 10) return `Tel (${tel.slice(0, 2)}) ${tel.slice(2, 6)}-${tel.slice(6)}`;
+  return tel ? `Tel ${tel}` : '';
+}
 
 export function BuscaCliente({ valor, onChange, onEscolher, onBlur, placeholder, avisoNovo, autoFocus, className }: {
   valor: string;
@@ -125,7 +141,7 @@ export function BuscaCliente({ valor, onChange, onEscolher, onBlur, placeholder,
               <span className="min-w-0">
                 <span className="block truncate font-medium">{c.name}</span>
                 <span className="block truncate text-xs text-muted-foreground">
-                  {[final4(c.whatsapp || c.phone), c.apelido].filter(Boolean).join(' · ') || 'sem telefone'}
+                  {[documentoDoCliente(c), c.apelido].filter(Boolean).join(' · ') || 'sem CPF e sem telefone'}
                 </span>
               </span>
               <span className="flex shrink-0 flex-wrap justify-end gap-1">

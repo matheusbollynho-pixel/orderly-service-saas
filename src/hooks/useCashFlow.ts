@@ -59,7 +59,7 @@ export function useCashFlow(selectedDate?: string) {
     },
     gcTime: 0,
     staleTime: 0,
-    refetchInterval: 4000,
+    refetchInterval: 60_000, // tempo real já atualiza na hora; isto é só reserva
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
   });
@@ -99,7 +99,7 @@ export function useCashFlow(selectedDate?: string) {
     },
     gcTime: 5 * 60 * 1000, // 5 minutos
     staleTime: 30 * 1000, // 30 segundos - sync entre dispositivos
-    refetchInterval: 20000, // 20 segundos - balanceado
+    refetchInterval: 60_000, // tempo real já atualiza na hora; isto é só reserva
     refetchOnWindowFocus: true, // Atualiza ao trocar de aba
     refetchOnReconnect: true,
   });
@@ -289,7 +289,7 @@ export function useCashFlowPeriod(period: 'week' | 'month', selectedMonth?: stri
     },
     staleTime: 30 * 1000, // 30 segundos - sync entre dispositivos
     gcTime: 5 * 60 * 1000, // 5 minutos
-    refetchInterval: 20000, // 20 segundos - balanceado
+    refetchInterval: 60_000, // tempo real já atualiza na hora; isto é só reserva
     refetchOnWindowFocus: true, // Atualiza ao trocar de aba
     refetchOnReconnect: true,
   });

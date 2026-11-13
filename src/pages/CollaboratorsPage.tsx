@@ -118,7 +118,7 @@ export default function CollaboratorsPage() {
     setInviting(true);
     try {
       const { error } = await supabase.functions.invoke('invite-collaborator', {
-        body: { email: inviteEmail.trim(), store_id: storeId, permissions: DEFAULT_PERMISSIONS, owner_user_id: user?.id },
+        body: { email: inviteEmail.trim(), store_id: storeId, permissions: DEFAULT_PERMISSIONS },
       });
       if (error) throw error;
       toast.success(`Convite enviado para ${inviteEmail}`);

@@ -94,7 +94,8 @@ export function useFiados() {
   useEffect(() => {
     const onFocus = () => load();
     window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
+    window.addEventListener('sync:fiados', onFocus); // mudança feita em outro aparelho (tempo real)
+    return () => { window.removeEventListener('focus', onFocus); window.removeEventListener('sync:fiados', onFocus); };
   }, [load]);
 
   const createFiado = async (input: CreateFiadoInput) => {
