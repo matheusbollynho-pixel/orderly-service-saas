@@ -10,6 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MechanicDetailReport } from './MechanicDetailReport';
 import { BalcaoCommissionReport } from './BalcaoCommissionReport';
 import { PaymentsTab } from '@/components/PaymentsTab';
+import { Switch } from '@/components/ui/switch';
+import ResumoV2 from '@/components/relatorios/ResumoV2';
 
 type Period = 'week' | 'month' | 'all';
 
@@ -19,6 +21,7 @@ interface ReportsPageProps {
 }
 
 export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder }: ReportsPageProps = {}) {
+  const [resumoNovo, setResumoNovo] = useState(() => { try { return localStorage.getItem('v2-resumo-novo') === '1'; } catch { return false; } });
   const { orders, isLoading, createPayment, deletePayment, updatePayment } = useServiceOrders();
   const { mechanics } = useMechanics();
   const { products: inventoryProducts, isLoadingProducts } = useInventory();
@@ -204,6 +207,12 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder }: ReportsPageProps
         </TabsList>
 
         <TabsContent value="resumo" className="space-y-5">
+          {/* v2: Resumo novo (contas no banco, todas as OS) — em teste até bater com o Caixa */}
+          <label className="flex items-center justify-between gap-3 rounded-xl border border-primary/40 bg-primary/5 px-3 py-2 text-sm">
+            <span><b>Resumo novo</b> <span className="text-muted-foreground">(em teste)</span></span>
+            <Switch checked={resumoNovo} onCheckedChange={(on) => { setResumoNovo(on); try { localStorage.setItem('v2-resumo-novo', on ? '1' : '0'); } catch { /* sem localStorage */ } }} />
+          </label>
+          {resumoNovo ? <ResumoV2 /> : (<>
           <div className="flex items-center justify-between">
             <div />
             <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>
@@ -255,6 +264,7 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder }: ReportsPageProps
               </div>
             )}
           </div>
+          </>)}
         </TabsContent>
 
         <TabsContent value="detalhado">
