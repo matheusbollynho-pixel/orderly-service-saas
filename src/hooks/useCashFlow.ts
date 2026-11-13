@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { CashFlow, CashFlowSummary, CashFlowPeriodSummary } from '@/types/service-order';
 import { toast } from 'sonner';
 import { useStore } from '@/contexts/StoreContext';
+import { semEstornosAnulados } from '@/lib/caixaEstorno';
 
 export function useCashFlow(selectedDate?: string) {
   const queryClient = useQueryClient();
@@ -80,10 +81,12 @@ export function useCashFlow(selectedDate?: string) {
       const entradas = entries.filter(e => e.type === 'entrada');
       const saidas = entries.filter(e => e.type === 'saida');
       const retiradas = entries.filter(e => e.type === 'retirada');
-      
-      const total_entradas = entradas.reduce((sum, e) => sum + e.amount, 0);
-      const total_saidas = saidas.reduce((sum, e) => sum + e.amount, 0);
-      const total_retiradas = retiradas.reduce((sum, e) => sum + e.amount, 0);
+      // Lançamento estornado + estorno no mesmo período se anulam: fora dos totais (as listas mostram tudo).
+      const contam = semEstornosAnulados(entries);
+
+      const total_entradas = contam.filter(e => e.type === 'entrada').reduce((sum, e) => sum + e.amount, 0);
+      const total_saidas = contam.filter(e => e.type === 'saida').reduce((sum, e) => sum + e.amount, 0);
+      const total_retiradas = contam.filter(e => e.type === 'retirada').reduce((sum, e) => sum + e.amount, 0);
       const saldo = total_entradas - total_saidas;
 
       return {
@@ -269,10 +272,12 @@ export function useCashFlowPeriod(period: 'week' | 'month', selectedMonth?: stri
       const entradas = entries.filter(e => e.type === 'entrada');
       const saidas = entries.filter(e => e.type === 'saida');
       const retiradas = entries.filter(e => e.type === 'retirada');
-      
-      const total_entradas = entradas.reduce((sum, e) => sum + e.amount, 0);
-      const total_saidas = saidas.reduce((sum, e) => sum + e.amount, 0);
-      const total_retiradas = retiradas.reduce((sum, e) => sum + e.amount, 0);
+      // Lançamento estornado + estorno no mesmo período se anulam: fora dos totais (as listas mostram tudo).
+      const contam = semEstornosAnulados(entries);
+
+      const total_entradas = contam.filter(e => e.type === 'entrada').reduce((sum, e) => sum + e.amount, 0);
+      const total_saidas = contam.filter(e => e.type === 'saida').reduce((sum, e) => sum + e.amount, 0);
+      const total_retiradas = contam.filter(e => e.type === 'retirada').reduce((sum, e) => sum + e.amount, 0);
       const saldo = total_entradas - total_saidas;
 
       return {

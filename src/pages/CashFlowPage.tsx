@@ -1,4 +1,5 @@
 import { pedirMotivoEstorno } from '@/lib/estorno';
+import { semEstornosAnulados } from '@/lib/caixaEstorno';
 import { BotaoVale, ValesAbertos } from '@/components/caixa/Vales';
 import { matchesSearch } from '@/lib/textSearch';
 import { useState, useEffect, useRef } from 'react';
@@ -298,9 +299,13 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder }: CashFlowPag
       );
     }
 
-    const entradas = transactions.filter(e => e.type === 'entrada');
-    const saidas = transactions.filter(e => e.type === 'saida');
-    const retiradas = transactions.filter(e => e.type === 'retirada');
+    // Lançamento estornado + estorno no mesmo período se anulam: não contam nos totais.
+    const validas = semEstornosAnulados(transactions);
+    const anulados = transactions.length - validas.length;
+    const valorAnulado = transactions.filter(e => e.estorno_de && !validas.includes(e)).reduce((sum, e) => sum + e.amount, 0);
+    const entradas = validas.filter(e => e.type === 'entrada');
+    const saidas = validas.filter(e => e.type === 'saida');
+    const retiradas = validas.filter(e => e.type === 'retirada');
 
     const total_entradas = entradas.reduce((sum, e) => sum + e.amount, 0);
     const total_saidas = saidas.reduce((sum, e) => sum + e.amount, 0);
@@ -308,6 +313,7 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder }: CashFlowPag
     const saldo = total_entradas - total_saidas;
 
     return (
+      <div className="space-y-1">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-6">
@@ -381,6 +387,13 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder }: CashFlowPag
           </CardContent>
         </Card>
       </div>
+      {anulados > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {anulados / 2 === 1 ? '1 lançamento estornado' : `${anulados / 2} lançamentos estornados`}
+          {hideValues ? '' : ` (${formatCurrency(valorAnulado)})`} não entram nos totais: o lançamento e o estorno se anulam.
+        </p>
+      )}
+      </div>
     );
   };
 
@@ -394,7 +407,7 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder }: CashFlowPag
       cartao: 0,
     };
 
-    transactions.forEach((entry) => {
+    semEstornosAnulados(transactions as unknown as CashFlow[]).forEach((entry) => {
       const method = (entry.payment_method || 'dinheiro') as keyof typeof paymentMethods;
       const amount = entry.amount || 0;
 
