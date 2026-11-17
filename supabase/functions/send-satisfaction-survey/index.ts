@@ -54,6 +54,12 @@ Deno.serve(async (req) => {
     'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   }
+  // Sem chamador legítimo hoje (gatilho de pagamento não existe mais; pesquisas
+  // saem pela send-satisfaction-bulk). Só com o segredo do cron (Vault).
+  const segredo = Deno.env.get('CRON_SECRET')
+  if (!segredo || req.headers.get('x-cron-secret') !== segredo) {
+    return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403 })
+  }
 
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders })
 

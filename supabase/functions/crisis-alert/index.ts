@@ -9,6 +9,11 @@ const supabase = createClient(
 Deno.serve(async (req) => {
   const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' }
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  // Só o gatilho notify_crisis_alert chama (manda x-cron-secret do Vault)
+  const segredo = Deno.env.get('CRON_SECRET')
+  if (!segredo || req.headers.get('x-cron-secret') !== segredo) {
+    return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers: corsHeaders })
+  }
 
   try {
     const payload = await req.json()
