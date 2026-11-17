@@ -27,15 +27,14 @@ Deno.serve(async (req) => {
     const { data: { user: caller }, error: callerErr } = await supabase.auth.getUser(callerToken)
     if (callerErr || !caller) return json({ error: 'Não autorizado' }, 401)
 
-    const { data: callerMeta } = await supabase
-      .from('store_settings')
-      .select('id')
-      .eq('id', '00000000-0000-0000-0000-000000000000') // placeholder
-      .limit(1)
-
-    // Verifica se o caller é super admin pelo metadata
-    const isSuperAdmin = caller.user_metadata?.role === 'super_admin' || caller.email === Deno.env.get('SUPER_ADMIN_EMAIL')
-    if (!isSuperAdmin) return json({ error: 'Acesso negado — apenas super admin' }, 403)
+    // Super admin = linha na tabela super_admins (mesma regra do painel /superadmin).
+    // NUNCA usar user_metadata: o próprio usuário edita via auth.updateUser().
+    const { data: superRow } = await supabase
+      .from('super_admins')
+      .select('user_id')
+      .eq('user_id', caller.id)
+      .maybeSingle()
+    if (!superRow) return json({ error: 'Acesso negado — apenas super admin' }, 403)
 
     const { email } = await req.json()
     if (!email) return json({ error: 'email obrigatório' }, 400)

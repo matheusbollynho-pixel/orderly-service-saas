@@ -31,11 +31,33 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json()
-    const {
-      company_name, store_phone, owner_name, owner_email, owner_password,
-      plan = 'basic', is_trial = false, due_date, amount,
-      whatsapp_instance_url, whatsapp_instance_token,
-    } = body
+
+    // Cadastro público (tela de login) não tem sessão. Só o super admin logado
+    // (linha em super_admins) pode escolher plano pago, valor, vencimento e WhatsApp.
+    // Qualquer outro chamador vira trial de 7 dias no plano básico.
+    let isSuperAdmin = false
+    const callerToken = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '').trim()
+    if (callerToken) {
+      const { data: { user: caller } } = await sb.auth.getUser(callerToken)
+      if (caller) {
+        const { data: superRow } = await sb
+          .from('super_admins')
+          .select('user_id')
+          .eq('user_id', caller.id)
+          .maybeSingle()
+        isSuperAdmin = !!superRow
+      }
+    }
+
+    const { company_name, store_phone, owner_name, owner_email, owner_password } = body
+    const PLANOS_VALIDOS = ['basic', 'pro', 'premium']
+    const planoPedido = PLANOS_VALIDOS.includes(body.plan) ? body.plan : 'basic'
+    const plan = isSuperAdmin ? planoPedido : 'basic'
+    const is_trial = isSuperAdmin ? Boolean(body.is_trial) : true
+    const due_date = isSuperAdmin ? body.due_date : undefined
+    const amount = isSuperAdmin ? body.amount : undefined
+    const whatsapp_instance_url = isSuperAdmin ? body.whatsapp_instance_url : undefined
+    const whatsapp_instance_token = isSuperAdmin ? body.whatsapp_instance_token : undefined
 
     if (!company_name || !owner_email || !owner_password) {
       return new Response(JSON.stringify({ error: 'company_name, owner_email e owner_password são obrigatórios' }), { status: 400, headers: corsHeaders })
