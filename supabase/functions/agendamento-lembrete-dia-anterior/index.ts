@@ -246,5 +246,10 @@ Deno.serve((req) => {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
   }
+  // Só o cron chama (segredo enviado por public.cron_http, lido do Vault)
+  const segredo = Deno.env.get('CRON_SECRET')
+  if (!segredo || req.headers.get('x-cron-secret') !== segredo) {
+    return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403 })
+  }
   return emSegundoPlano('agendamento-lembrete-dia-anterior', enviarLembretes);
 });

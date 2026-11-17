@@ -92,6 +92,11 @@ async function processarLoja(store: {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  // Só o cron chama (segredo enviado por public.cron_http, lido do Vault)
+  const segredo = Deno.env.get('CRON_SECRET')
+  if (!segredo || req.headers.get('x-cron-secret') !== segredo) {
+    return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403 })
+  }
 
   try {
     const { data: stores, error } = await supabase

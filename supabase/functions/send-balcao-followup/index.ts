@@ -100,6 +100,11 @@ async function rodada() {
 
 Deno.serve((req) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders })
+  // Só o cron chama (segredo enviado por public.cron_http, lido do Vault)
+  const segredo = Deno.env.get('CRON_SECRET')
+  if (!segredo || req.headers.get('x-cron-secret') !== segredo) {
+    return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403 })
+  }
   if (!dentroDoHorarioComercial()) {
     return new Response(JSON.stringify({ ok: true, fora_do_horario: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
