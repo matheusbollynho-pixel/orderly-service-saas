@@ -57,15 +57,21 @@ Deno.serve(async (req) => {
           return json({ success: false, message: 'Nome e telefone são obrigatórios' }, 400)
         }
 
-        // Buscar cliente por telefone ou nome
-        const storeIdForCheck = storeIdParam || null
-        const clientsQuery = supabase
+        // Busca o cliente pelo TELEFONE EXATO dentro da LOJA (mesma regra do
+        // create_walkin). Antes era "telefone OU nome contém", sem loja
+        // obrigatória e com texto do visitante colado no filtro: qualquer um
+        // achava a pesquisa pendente (e os dados da OS) de clientes de
+        // qualquer loja só mandando client_name=a.
+        const telefone = clientPhone.replace(/\D/g, '')
+        if (!storeIdParam || telefone.length < 10) {
+          return json({ success: true, pending_token: null })
+        }
+        const { data: clients } = await supabase
           .from('clients')
           .select('id')
-          .or(`phone.eq.${clientPhone},name.ilike.%${clientName}%`)
+          .eq('store_id', storeIdParam)
+          .eq('phone', telefone)
           .limit(1)
-        if (storeIdForCheck) clientsQuery.eq('store_id', storeIdForCheck)
-        const { data: clients } = await clientsQuery
 
         if (!clients || clients.length === 0) {
           return json({ success: true, pending_token: null })
@@ -299,7 +305,8 @@ Deno.serve(async (req) => {
         }
 
         // Gerar token único para walk-in
-        const publicToken = `walkin-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        // Token imprevisível (antes: hora + Math.random, adivinhável)
+        const publicToken = `walkin-${crypto.randomUUID().replace(/-/g, '')}`
         console.log('🎟️ Token gerado:', publicToken)
 
         const ratingData: Record<string, unknown> = {
