@@ -235,6 +235,25 @@ Deno.serve(async (req) => {
     const storeIdFromQuery = new URL(req.url).searchParams.get('store_id') || undefined;
     const resolvedStoreId = storeIdFromQuery || await resolveStoreIdFromBaseUrl(body.BaseUrl as string | undefined);
 
+    // Autenticidade do webhook: a UazAPI manda o token da instância no corpo
+    // (campo "token"; a doc dela manda validar isso no backend). Fase 1 = SÓ
+    // OBSERVA e anota no log; não bloqueia nada até confirmar com tráfego real.
+    {
+      const tokenRecebido = typeof body.token === 'string' ? body.token : '';
+      let webhookAuth = 'sem-token';
+      if (tokenRecebido) {
+        const { data: lojaTk } = await supabaseAdmin
+          .from('store_settings')
+          .select('whatsapp_instance_token')
+          .eq('id', resolvedStoreId)
+          .maybeSingle();
+        const tokenGlobal = Deno.env.get('UAZAPI_INSTANCE_TOKEN') || '';
+        webhookAuth = (tokenRecebido === lojaTk?.whatsapp_instance_token || (tokenGlobal && tokenRecebido === tokenGlobal))
+          ? 'ok' : 'token-diferente';
+      }
+      console.log(`🔐 webhook-auth=${webhookAuth} store=${resolvedStoreId} origem=${storeIdFromQuery ? 'query' : 'baseurl'}`);
+    }
+
     // Mensagem enviada pelo atendente → encaminhar para ia-atendimento pausar o bot
     if (fromMe) {
       const supabaseUrlFm = Deno.env.get('SUPABASE_URL') || '';

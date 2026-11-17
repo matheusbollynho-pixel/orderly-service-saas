@@ -221,6 +221,14 @@ Deno.serve(async (req) => {
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return new Response('ok', { status: 200 }); }
 
+  // Autenticidade do webhook (token da instância no corpo, ver doc UazAPI).
+  // Fase 1 = SÓ OBSERVA e anota no log; não bloqueia nada ainda.
+  {
+    const tokenRecebido = typeof body.token === 'string' ? body.token : '';
+    const webhookAuth = !tokenRecebido ? 'sem-token' : (UAZAPI_INSTANCE_TOKEN && tokenRecebido === UAZAPI_INSTANCE_TOKEN ? 'ok' : 'token-diferente');
+    console.log(`🔐 webhook-auth=${webhookAuth} (ia-vendas)`);
+  }
+
   console.log('BODY:', JSON.stringify(body).slice(0, 1000));
 
   const event = (body.event || body.EventType) as string || '';
