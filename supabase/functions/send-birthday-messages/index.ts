@@ -187,7 +187,12 @@ async function processarLoja(store: { id: string; company_name: string; whatsapp
   return { store_id: store.id, company: company_name, enviados }
 }
 
-Deno.serve(async (_req) => {
+Deno.serve(async (req) => {
+  // Só o cron chama (segredo enviado por public.cron_http, lido do Vault)
+  const segredo = Deno.env.get('CRON_SECRET')
+  if (!segredo || req.headers.get('x-cron-secret') !== segredo) {
+    return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403 })
+  }
   try {
     console.log('🎂 Verificando aniversariantes por loja...')
 
