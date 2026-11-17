@@ -28,14 +28,14 @@ function normalizeTags(input: Record<string, unknown>) {
   }
 }
 
+// QR antigo impresso da Bandara (os-bandara.vercel.app/avaliar/loja) não tem
+// ?store= no link. Antes caía na "primeira loja" do banco (sem ORDER BY =
+// arbitrária); agora cai fixo na Bandara, igual ao legado do webhook-whatsapp.
+// QR gerado pelo sistema (SatisfactionDashboardPage) sempre manda ?store=.
+const LEGACY_DEFAULT_STORE_ID = '9fd27114-97d1-48cd-ad09-1b057fa9c185'
+
 async function getStoreId(requestedStoreId?: string | null): Promise<string | null> {
-  if (requestedStoreId) return requestedStoreId
-  const { data } = await supabase
-    .from('store_settings')
-    .select('id')
-    .limit(1)
-    .maybeSingle()
-  return data?.id ?? null
+  return requestedStoreId || LEGACY_DEFAULT_STORE_ID
 }
 
 Deno.serve(async (req) => {
@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
       if (mode === 'check-pending') {
         const clientName = url.searchParams.get('client_name')
         const clientPhone = url.searchParams.get('client_phone')
-        const storeIdParam = url.searchParams.get('store_id')
+        const storeIdParam = url.searchParams.get('store_id') || LEGACY_DEFAULT_STORE_ID
 
         if (!clientName || !clientPhone) {
           return json({ success: false, message: 'Nome e telefone são obrigatórios' }, 400)
