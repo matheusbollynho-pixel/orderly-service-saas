@@ -100,7 +100,8 @@ Deno.serve(async (req) => {
     try { body = JSON.parse(bodyText); } catch { /* ignore */ }
 
     // Log completo para debug (sem corte)
-    console.log('📩 Webhook recebido FULL:', JSON.stringify(body));
+    // Nunca logar o token da instância (credencial que envia mensagem pela loja)
+    console.log('📩 Webhook recebido FULL:', JSON.stringify({ ...body, token: body.token ? '***' : undefined }));
 
     // Extrair dados da mensagem
     let phone: string | null = null;
@@ -236,22 +237,39 @@ Deno.serve(async (req) => {
     const resolvedStoreId = storeIdFromQuery || await resolveStoreIdFromBaseUrl(body.BaseUrl as string | undefined);
 
     // Autenticidade do webhook: a UazAPI manda o token da instância no corpo
-    // (campo "token"; a doc dela manda validar isso no backend). Fase 1 = SÓ
-    // OBSERVA e anota no log; não bloqueia nada até confirmar com tráfego real.
+    // (campo "token"; a doc dela manda validar isso no backend). Sem token
+    // válido = recusa, antes de qualquer processamento/IA/envio.
+    // Aceita: token da loja resolvida, token global (env) ou token de qualquer
+    // loja cadastrada (instância legítima com roteamento ainda por BaseUrl).
+    // Fase 1 (17/11) confirmou com mensagens reais: webhook-auth=ok.
     {
       const tokenRecebido = typeof body.token === 'string' ? body.token : '';
       let webhookAuth = 'sem-token';
       if (tokenRecebido) {
+        const tokenGlobal = Deno.env.get('UAZAPI_INSTANCE_TOKEN') || '';
         const { data: lojaTk } = await supabaseAdmin
           .from('store_settings')
           .select('whatsapp_instance_token')
           .eq('id', resolvedStoreId)
           .maybeSingle();
-        const tokenGlobal = Deno.env.get('UAZAPI_INSTANCE_TOKEN') || '';
-        webhookAuth = (tokenRecebido === lojaTk?.whatsapp_instance_token || (tokenGlobal && tokenRecebido === tokenGlobal))
-          ? 'ok' : 'token-diferente';
+        if (tokenRecebido === lojaTk?.whatsapp_instance_token || (tokenGlobal && tokenRecebido === tokenGlobal)) {
+          webhookAuth = 'ok';
+        } else {
+          const { data: outra } = await supabaseAdmin
+            .from('store_settings')
+            .select('id')
+            .eq('whatsapp_instance_token', tokenRecebido)
+            .limit(1);
+          webhookAuth = outra && outra.length ? 'ok-outra-loja' : 'token-diferente';
+        }
       }
       console.log(`🔐 webhook-auth=${webhookAuth} store=${resolvedStoreId} origem=${storeIdFromQuery ? 'query' : 'baseurl'}`);
+      if (webhookAuth !== 'ok' && webhookAuth !== 'ok-outra-loja') {
+        return new Response(JSON.stringify({ error: 'unauthorized' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     // Mensagem enviada pelo atendente → encaminhar para ia-atendimento pausar o bot

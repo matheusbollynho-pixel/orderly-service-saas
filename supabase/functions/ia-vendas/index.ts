@@ -229,7 +229,8 @@ Deno.serve(async (req) => {
     console.log(`🔐 webhook-auth=${webhookAuth} (ia-vendas)`);
   }
 
-  console.log('BODY:', JSON.stringify(body).slice(0, 1000));
+  // Nunca logar o token da instância
+  console.log('BODY:', JSON.stringify({ ...body, token: body.token ? '***' : undefined }).slice(0, 1000));
 
   const event = (body.event || body.EventType) as string || '';
   console.log('EVENT:', event);
