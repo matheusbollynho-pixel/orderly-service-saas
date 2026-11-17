@@ -35,6 +35,23 @@ Deno.serve(async (req) => {
     if (!storeId) {
       return new Response(JSON.stringify({ skipped: true, reason: 'Avaliação sem store_id' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
+
+    // Anti-abuso: no máximo MAX_ALERTAS_POR_HORA alertas por loja por hora.
+    // A avaliação pelo QR é pública; sem teto, notas baixas em série lotavam
+    // o WhatsApp do dono. As avaliações continuam salvas e visíveis no sistema.
+    const MAX_ALERTAS_POR_HORA = 3
+    const umaHoraAtras = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+    const { count: baixasNaHora } = await supabase
+      .from('satisfaction_ratings')
+      .select('id', { count: 'exact', head: true })
+      .eq('store_id', storeId)
+      .gte('responded_at', umaHoraAtras)
+      .or('atendimento_rating.lt.3,servico_rating.lt.3')
+    if ((baixasNaHora ?? 0) > MAX_ALERTAS_POR_HORA) {
+      console.warn(`🚫 crisis-alert: ${baixasNaHora} notas baixas na última hora na loja ${storeId} — teto de ${MAX_ALERTAS_POR_HORA} alertas atingido, não envia`)
+      return new Response(JSON.stringify({ skipped: true, reason: 'teto_por_hora' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
     const { data: settings } = await supabase
       .from('store_settings')
       .select('company_name, boleto_notify_phone_1, boleto_notify_phone_2, whatsapp_provider, whatsapp_instance_url, whatsapp_instance_token')

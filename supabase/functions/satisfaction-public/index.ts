@@ -14,6 +14,8 @@ const CORS_HEADERS = {
 }
 
 const QR_PLACEHOLDER_EQUIPMENT = '__QR_WALKIN_PLACEHOLDER__'
+// Teto de avaliações avulsas (QR público) por loja por hora — anti-abuso.
+const LIMITE_AVULSAS_POR_HORA = 20
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: CORS_HEADERS })
@@ -252,13 +254,33 @@ Deno.serve(async (req) => {
           return json({ success: false, message: 'Loja não encontrada' }, 500)
         }
 
+        // Anti-abuso (QR é público): telefone válido + teto de avaliações
+        // avulsas por loja/hora, ANTES de criar cliente. Sem isso qualquer um
+        // enchia o cadastro de clientes falsos e, com notas baixas, o WhatsApp
+        // do dono de alertas de crise.
+        const telefone = String(clientPhone).replace(/\D/g, '')
+        if (telefone.length < 10) {
+          return json({ success: false, message: 'Informe um WhatsApp válido, com DDD.' }, 400)
+        }
+        const umaHoraAtras = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+        const { count: avulsasNaHora } = await supabase
+          .from('satisfaction_ratings')
+          .select('id', { count: 'exact', head: true })
+          .eq('store_id', storeId)
+          .like('public_token', 'walkin-%')
+          .gte('created_at', umaHoraAtras)
+        if ((avulsasNaHora ?? 0) >= LIMITE_AVULSAS_POR_HORA) {
+          console.warn(`🚫 create_walkin: teto de ${LIMITE_AVULSAS_POR_HORA}/h atingido na loja ${storeId}`)
+          return json({ success: false, message: 'Muitas avaliações agora. Tente de novo daqui a pouco.' }, 429)
+        }
+
         // Buscar ou criar cliente
-        console.log('🔍 Buscando cliente por telefone:', clientPhone)
+        console.log('🔍 Buscando cliente por telefone:', telefone)
         let clientId = null
         const { data: existingClients, error: clientSearchError } = await supabase
           .from('clients')
           .select('id')
-          .eq('phone', clientPhone)
+          .eq('phone', telefone)
           .eq('store_id', storeId)
           .limit(1)
 
@@ -272,18 +294,37 @@ Deno.serve(async (req) => {
         if (existingClients && existingClients.length > 0) {
           clientId = existingClients[0].id
           console.log('✅ Cliente encontrado:', clientId)
+
+          // Mesmo telefone na mesma loja: 1 avaliação avulsa a cada 24h.
+          // Pendente → reaproveita; já respondida → não abre outra.
+          const umDiaAtras = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+          const { data: recente } = await supabase
+            .from('satisfaction_ratings')
+            .select('public_token, responded_at')
+            .eq('store_id', storeId)
+            .eq('client_id', clientId)
+            .like('public_token', 'walkin-%')
+            .gte('created_at', umDiaAtras)
+            .order('created_at', { ascending: false })
+            .limit(1)
+          if (recente && recente.length > 0) {
+            if (!recente[0].responded_at) {
+              return json({ success: true, token: recente[0].public_token, client_id: clientId })
+            }
+            return json({ success: false, message: 'Você já avaliou hoje. Obrigado pela sua opinião!' }, 429)
+          }
         } else {
           console.log('➕ Criando novo cliente...')
 
           // Gerar CPF fictício baseado no telefone (pegar últimos 11 dígitos ou completar com zeros)
-          const phoneCPF = clientPhone.padStart(11, '0').slice(-11);
+          const phoneCPF = telefone.padStart(11, '0').slice(-11);
 
           const { data: newClient, error: createClientError } = await supabase
             .from('clients')
             .insert({
               store_id: storeId,
               name: clientName,
-              phone: clientPhone,
+              phone: telefone,
               cpf: phoneCPF,
             })
             .select('id')
