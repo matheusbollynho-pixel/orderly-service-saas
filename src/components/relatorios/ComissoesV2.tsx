@@ -71,17 +71,24 @@ export default function ComissoesV2() {
             <div className="flex items-center justify-between gap-2 text-sm"><span className="text-muted-foreground">{nome}</span><span className={cn('tabular-nums', tom)}>{v(valor)}</span></div>
           );
           const comissao = a ? a.comissao : l.comissao, vales = a ? a.vales : l.vales, saldo = a ? a.saldo_anterior : l.saldo_anterior, aPagar = a ? a.a_pagar : l.a_pagar;
+          // Mecânico com % de peças: a comissão total = serviços + peças (mostra separado)
+          const taxaPecas = Number((a ? a.taxa_pecas : l.taxa_pecas) || 0), basePecas = Number((a ? a.base_pecas : l.base_pecas) || 0);
+          const comissaoPecas = Math.round(basePecas * taxaPecas) / 100;
+          const comissaoPrincipal = Math.round((comissao - comissaoPecas) * 100) / 100;
           return (
             <div key={`${l.tipo}${l.id}`} className={cn('rounded-xl border bg-card p-4', a ? 'border-green-500/40' : 'border-border')}>
               <div className="mb-2 flex items-start justify-between gap-2">
                 <div>
                   <p className="text-base font-bold leading-tight">{l.nome}</p>
-                  <p className="text-xs text-muted-foreground">{l.tipo === 'm' ? 'Mecânico' : 'Balcão'} · {a ? a.taxa : l.taxa}%</p>
+                  <p className="text-xs text-muted-foreground">
+                    {l.tipo === 'm' ? 'Mecânico' : 'Balcão'} · {a ? a.taxa : l.taxa}%{taxaPecas > 0 ? ` serviços · ${taxaPecas}% peças` : ''}
+                  </p>
                 </div>
                 {a && <span className="flex items-center gap-1 rounded-full border border-green-500/40 bg-green-500/10 px-2 py-1 text-xs font-semibold text-green-500"><CheckCircle2 className="h-3.5 w-3.5" />Pago {new Date(a.pago_em).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>}
               </div>
               <div className="space-y-1">
-                <Linha nome={`Comissão (${l.tipo === 'm' ? 'serviços' : 'vendas'} ${oculto ? '' : brl(a ? a.base : l.base)})`} valor={comissao} />
+                <Linha nome={`Comissão (${l.tipo === 'm' ? 'serviços' : 'vendas'} ${oculto ? '' : brl(a ? a.base : l.base)})`} valor={comissaoPrincipal} />
+                {taxaPecas > 0 && <Linha nome={`Comissão (peças ${oculto ? '' : brl(basePecas)})`} valor={comissaoPecas} />}
                 {!a && l.ja_pago > 0 && <p className="text-[11px] text-muted-foreground">Fora da conta: {v(l.ja_pago)} em serviços já marcados pagos antes.</p>}
                 {vales > 0 && <Linha nome={`Vales${!a && l.qtd_vales ? ` (${l.qtd_vales})` : ''}`} valor={-vales} tom="text-amber-500" />}
                 {saldo !== 0 && <Linha nome="Saldo da semana anterior" valor={saldo} tom="text-red-500" />}

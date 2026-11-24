@@ -13,15 +13,18 @@ import { Switch } from '@/components/ui/switch';
 import ResumoV2 from '@/components/relatorios/ResumoV2';
 import ComissoesV2 from '@/components/relatorios/ComissoesV2';
 import RelatoriosEstoque from '@/components/relatorios/RelatoriosEstoque';
+import Vencimentos from '@/components/relatorios/Vencimentos';
 
 type Period = 'week' | 'month' | 'all';
 
 interface ReportsPageProps {
   onOpenOrder?: (id: string) => void;
   onOpenBalcaoOrder?: (id: string) => void;
+  /** Abre o Caixa no dia do lançamento, já destacado. */
+  onOpenCaixa?: (data: string, id: string) => void;
 }
 
-export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder }: ReportsPageProps = {}) {
+export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder, onOpenCaixa }: ReportsPageProps = {}) {
   const [resumoNovo, setResumoNovo] = useState(() => { try { return localStorage.getItem('v2-resumo-novo') === '1'; } catch { return false; } });
   const { orders, isLoading, createPayment, deletePayment, updatePayment } = useServiceOrders();
   const { mechanics } = useMechanics();
@@ -180,6 +183,7 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder }: ReportsPageProps
           <TabsTrigger value="balcao" className="flex-1 shrink-0">Balcão</TabsTrigger>
           <TabsTrigger value="pagamentos" className="flex-1 shrink-0">Pagtos</TabsTrigger>
           <TabsTrigger value="estoque" className="flex-1 shrink-0">Estoque</TabsTrigger>
+          <TabsTrigger value="vencimentos" className="flex-1 shrink-0">Vencimentos</TabsTrigger>
         </TabsList>
 
         <TabsContent value="resumo" className="space-y-5">
@@ -188,7 +192,7 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder }: ReportsPageProps
             <span><b>Resumo novo</b> <span className="text-muted-foreground">(em teste)</span></span>
             <Switch checked={resumoNovo} onCheckedChange={(on) => { setResumoNovo(on); try { localStorage.setItem('v2-resumo-novo', on ? '1' : '0'); } catch { /* sem localStorage */ } }} />
           </label>
-          {resumoNovo ? <ResumoV2 /> : (<>
+          {resumoNovo ? <ResumoV2 onOpenCaixa={onOpenCaixa} /> : (<>
           <div className="flex items-center justify-between">
             <div />
             <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>
@@ -364,6 +368,8 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder }: ReportsPageProps
         <TabsContent value="estoque" className="space-y-5">
           <RelatoriosEstoque />
         </TabsContent>
+
+        <TabsContent value="vencimentos"><Vencimentos /></TabsContent>
 
       </Tabs>
     </div>

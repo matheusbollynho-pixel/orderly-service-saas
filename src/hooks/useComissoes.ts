@@ -12,10 +12,12 @@ const db = supabase as unknown as SupabaseClient;
 export interface Acerto {
   id: string; ini: string; fim: string; taxa: number; base: number; comissao: number; vales: number;
   saldo_anterior: number; a_pagar: number; pago_em: string;
+  taxa_pecas?: number; base_pecas?: number; // mecânico com comissão de peças
 }
 export interface LinhaComissao {
   tipo: 'm' | 's'; id: string; nome: string; taxa: number; base: number; comissao: number; ja_pago: number;
   vales: number; qtd_vales: number; saldo_anterior: number; a_pagar: number; acerto: Acerto | null;
+  taxa_pecas?: number; base_pecas?: number; // mecânico com comissão de peças
 }
 
 /** Dia em que a semana de acerto fecha (0=domingo … 6=sábado). Padrão sábado. */

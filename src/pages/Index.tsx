@@ -1,5 +1,5 @@
 import { matchesSearch, accentPattern, termoBuscaBanco } from '@/lib/textSearch';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useServiceOrders } from '@/hooks/useServiceOrders';
 import { useMechanics } from '@/hooks/useMechanics';
 import { useAuth } from '@/hooks/useAuth';
@@ -72,6 +72,8 @@ export default function Index() {
   // Quando a moto ficou pronta pelo Quadro, a janela do aviso também oferece Desfazer
   // Fiado clicado no "A receber": a tela de Fiado abre só nele
   const [fiadoFoco, setFiadoFoco] = useState<string | undefined>();
+  const [caixaFoco, setCaixaFoco] = useState<{ data: string; id: string } | undefined>();
+  const limparCaixaFoco = useCallback(() => setCaixaFoco(undefined), []);
   const [filtroQuadro, setFiltroQuadro] = useState<import('@/lib/etapaOS').Etapa | 'todas'>('todas');
   const [desfazerPronta, setDesfazerPronta] = useState<(() => Promise<boolean>) | null>(null);
   const { settings: storeSettings } = useStoreSettings();
@@ -817,6 +819,10 @@ Retirada: ${retiradaInfo}`;
               setInitialBalcaoOrderId(id);
               setCurrentView('balcao');
             }}
+            onOpenCaixa={canAccessCashFlow ? (data, id) => {
+              setCaixaFoco({ data, id });
+              setCurrentView('fluxo-caixa');
+            } : undefined}
           />
         )}
 
@@ -838,6 +844,8 @@ Retirada: ${retiradaInfo}`;
 
         {currentView === 'fluxo-caixa' && (
           <CashFlowPage
+            foco={caixaFoco}
+            onFocoUsado={limparCaixaFoco}
             onSelectOrder={(orderId) => {
               const order = orders.find(o => o.id === orderId);
               if (order) { setSelectedOrder(order); setCurrentView('details'); }

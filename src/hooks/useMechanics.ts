@@ -25,12 +25,14 @@ export function useMechanics() {
   }
 
   const createMechanic = useMutation({
-    mutationFn: async (payload: { name: string; commission_rate?: number; photo_url?: string | null }) => {
+    mutationFn: async (payload: { name: string; commission_rate?: number; commission_parts_rate?: number; photo_url?: string | null }) => {
       const { data, error } = await supabase
         .from('mechanics')
         .insert({
           name: payload.name,
           commission_rate: payload.commission_rate ?? 0,
+          // Só envia quando tem % de peças (loja que não usa continua igual)
+          ...(payload.commission_parts_rate ? { commission_parts_rate: payload.commission_parts_rate } : {}),
           photo_url: payload.photo_url ?? null,
           store_id: storeId!,
         })

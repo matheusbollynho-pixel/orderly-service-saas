@@ -100,10 +100,11 @@ export function MechanicDetailReport({ onBack, onOpenOrder }: MechanicDetailRepo
     staleTime: 30 * 1000,
   });
 
-  const { totalServicos, totalComissao, totalPecas } = useMemo(() => {
+  const { totalServicos, totalComissao, totalPecas, comissaoServicos, comissaoPecas } = useMemo(() => {
     let totalServicos = 0;
-    let totalComissao = 0;
     let totalPecas = 0;
+    let comissaoServicos = 0;
+    let comissaoPecas = 0;
 
     filteredOrders.forEach(o => {
       (o.materials || [])
@@ -118,16 +119,19 @@ export function MechanicDetailReport({ onBack, onOpenOrder }: MechanicDetailRepo
           if (material.is_service === true) {
             totalServicos += valor;
             if (selectedMechanic) {
-              totalComissao += valor * (selectedMechanic.commission_rate / 100);
+              comissaoServicos += valor * (selectedMechanic.commission_rate / 100);
             }
           } else {
             // É uma peça
             totalPecas += valor;
+            if (selectedMechanic) {
+              comissaoPecas += valor * (Number(selectedMechanic.commission_parts_rate || 0) / 100);
+            }
           }
         });
     });
 
-    return { totalServicos, totalComissao, totalPecas };
+    return { totalServicos, totalPecas, comissaoServicos, comissaoPecas, totalComissao: comissaoServicos + comissaoPecas };
   }, [filteredOrders, selectedMechanic, selectedMechanicId]);
 
   return (
@@ -238,7 +242,7 @@ export function MechanicDetailReport({ onBack, onOpenOrder }: MechanicDetailRepo
       {selectedMechanic && startDate && endDate && (
         <Card>
           <CardContent className="p-4 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div className="bg-blue-500/10 dark:bg-blue-500/20 p-4 rounded-lg border border-blue-500/20">
                 <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Total de OS</p>
                 <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{filteredOrders.length}</p>
@@ -247,12 +251,20 @@ export function MechanicDetailReport({ onBack, onOpenOrder }: MechanicDetailRepo
                 <p className="text-xs text-green-600 dark:text-green-400 font-medium">Faturado (Serviços)</p>
                 <p className="text-2xl font-bold text-green-900 dark:text-green-100">R$ {totalServicos.toFixed(2)}</p>
               </div>
+              <div className="bg-green-500/10 dark:bg-green-500/20 p-4 rounded-lg border border-green-500/20">
+                <p className="text-xs text-green-600 dark:text-green-400 font-medium">Comissão serviços ({selectedMechanic?.commission_rate ?? 0}%)</p>
+                <p className="text-2xl font-bold text-green-900 dark:text-green-100">R$ {comissaoServicos.toFixed(2)}</p>
+              </div>
               <div className="bg-purple-500/10 dark:bg-purple-500/20 p-4 rounded-lg border border-purple-500/20">
                 <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">Vendido (Peças)</p>
                 <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">R$ {totalPecas.toFixed(2)}</p>
               </div>
+              <div className="bg-purple-500/10 dark:bg-purple-500/20 p-4 rounded-lg border border-purple-500/20">
+                <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">Comissão peças ({Number(selectedMechanic?.commission_parts_rate || 0)}%)</p>
+                <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">R$ {comissaoPecas.toFixed(2)}</p>
+              </div>
               <div className="bg-orange-500/10 dark:bg-orange-500/20 p-4 rounded-lg border border-orange-500/20">
-                <p className="text-xs text-orange-600 dark:text-orange-400 font-medium">Comissão a Pagar</p>
+                <p className="text-xs text-orange-600 dark:text-orange-400 font-medium">Comissão total</p>
                 <p className="text-2xl font-bold text-orange-900 dark:text-orange-100">R$ {totalComissao.toFixed(2)}</p>
               </div>
             </div>
@@ -286,7 +298,13 @@ export function MechanicDetailReport({ onBack, onOpenOrder }: MechanicDetailRepo
                 const qtd = parseFloat(m.quantidade) || 0;
                 return acc + ((m.valor || 0) * qtd);
               }, 0);
-              const comissao = totalServicos * (selectedMechanic.commission_rate / 100);
+              const taxaPecas = Number(selectedMechanic.commission_parts_rate || 0);
+              const totalPecasOS = taxaPecas > 0
+                ? (order.materials || [])
+                    .filter(m => m.is_service !== true && (!m.mechanic_id || m.mechanic_id === selectedMechanicId))
+                    .reduce((acc, m) => acc + ((m.valor || 0) * (parseFloat(m.quantidade) || 0)), 0)
+                : 0;
+              const comissao = totalServicos * (selectedMechanic.commission_rate / 100) + totalPecasOS * (taxaPecas / 100);
 
               return (
                 <Card key={order.id} className={onOpenOrder ? 'cursor-pointer hover:bg-accent transition-colors' : ''} onClick={() => onOpenOrder?.(order.id)}>
@@ -307,6 +325,11 @@ export function MechanicDetailReport({ onBack, onOpenOrder }: MechanicDetailRepo
                       <div>
                         <p className="text-xs text-muted-foreground">Comissão</p>
                         <p className="font-semibold text-orange-600">R$ {comissao.toFixed(2)}</p>
+                        {totalPecasOS > 0 && (
+                          <p className="text-[11px] text-muted-foreground">
+                            serviços R$ {(totalServicos * (selectedMechanic.commission_rate / 100)).toFixed(2)} · peças R$ {(totalPecasOS * (taxaPecas / 100)).toFixed(2)} ({taxaPecas}% de R$ {totalPecasOS.toFixed(2)})
+                          </p>
+                        )}
                       </div>
                     </div>
 

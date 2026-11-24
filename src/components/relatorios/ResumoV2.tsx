@@ -2,7 +2,9 @@
 // Vendeu − Ficou a receber = Recebido dessas vendas; Entradas = soma das origens (igual ao Caixa);
 // Saldo do caixa = Entradas − Saídas (retirada fica fora, como no Caixa).
 import { useState } from 'react';
-import { AlertTriangle, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { EstornosLista } from './EstornosLista';
+import { SaidasLista } from './SaidasLista';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -24,12 +26,14 @@ export const ficouAReceber = (d: ResumoDados) => d.os.a_receber + d.notas.no_fia
 export const lancadoAMao = (d: ResumoDados) =>
   Math.max(Math.round((d.caixa.entradas - d.caixa.entradas_os - d.caixa.entradas_notas - d.caixa.entradas_fiado - d.caixa.entradas_estorno) * 100) / 100, 0);
 
-export default function ResumoV2() {
+export default function ResumoV2({ onOpenCaixa }: { onOpenCaixa?: (data: string, id: string) => void } = {}) {
   const per = usePeriodo('mes');
   const { atual, anterior } = per.escolhido;
   const { data: d, isLoading, isError, error, refetch } = useRelatorioResumo(atual);
   const { data: ant } = useRelatorioResumo(anterior);
   const [oculto, setOculto] = useState(true);
+  const [verEstornos, setVerEstornos] = useState(false);
+  const [verSaidas, setVerSaidas] = useState(false);
   const v = (n: number) => (oculto ? 'R$ ••••' : brl(n));
 
   const Bloco = ({ titulo, valor, comparar, tom, children }: { titulo: string; valor?: number; comparar?: number; tom?: string; children?: React.ReactNode }) => (
@@ -91,11 +95,25 @@ export default function ResumoV2() {
           </Bloco>
 
           <Bloco titulo="Saídas (igual ao Caixa)" valor={d.caixa.saidas} comparar={ant?.caixa.saidas}>
-            {d.caixa.retiradas > 0 && <p className="text-xs text-muted-foreground">Retiradas: {v(d.caixa.retiradas)} (ficam fora do saldo, como no Caixa)</p>}
+            <p className="text-xs text-muted-foreground">Só o que foi gasto (pagamentos, compras). Retirada não entra aqui.</p>
+            {d.caixa.saidas > 0 && (
+              <>
+                <button type="button" className="flex items-center gap-1 text-xs text-muted-foreground underline decoration-dotted underline-offset-2 hover:opacity-80" onClick={() => setVerSaidas((x) => !x)}>
+                  {verSaidas ? 'Esconder saídas' : 'Ver saídas'}
+                  <ChevronDown className={cn('h-3 w-3 transition-transform', verSaidas && 'rotate-180')} />
+                </button>
+                {verSaidas && <SaidasLista periodo={atual} valor={v} onAbrir={onOpenCaixa} />}
+              </>
+            )}
           </Bloco>
 
           <Bloco titulo="Saldo do caixa" valor={d.caixa.entradas - d.caixa.saidas} comparar={ant ? ant.caixa.entradas - ant.caixa.saidas : undefined}>
             <p className="text-xs text-muted-foreground">Entradas − Saídas. Não é lucro: comissão e custos ficam pra área de Financeiro.</p>
+            {d.caixa.retiradas > 0 && (
+              <p className="text-xs text-muted-foreground">
+                Retirado da gaveta: {v(d.caixa.retiradas)}. É dinheiro de vocês guardado fora do caixa, não é gasto, por isso não diminui este saldo.
+              </p>
+            )}
           </Bloco>
 
           <Bloco titulo="Pra pagar">
@@ -105,7 +123,18 @@ export default function ResumoV2() {
 
           {(d.caixa.estornos_qtd > 0 || d.descontos.os + d.descontos.notas > 0 || d.fiado_vencido.qtd > 0) && (
             <Bloco titulo="Atenção">
-              {d.caixa.estornos_qtd > 0 && <Linha nome={`${d.caixa.estornos_qtd} estorno${d.caixa.estornos_qtd === 1 ? '' : 's'}`} valor={d.caixa.estornos_valor} tom="text-red-500" />}
+              {d.caixa.estornos_qtd > 0 && (
+                <>
+                  <button type="button" className="flex w-full items-center justify-between gap-2 text-left hover:opacity-80" onClick={() => setVerEstornos((x) => !x)}>
+                    <span className="flex items-center gap-1 text-muted-foreground underline decoration-dotted underline-offset-2">
+                      {d.caixa.estornos_qtd} estorno{d.caixa.estornos_qtd === 1 ? '' : 's'} (ver motivo)
+                      <ChevronDown className={cn('h-3 w-3 transition-transform', verEstornos && 'rotate-180')} />
+                    </span>
+                    <span className="tabular-nums text-red-500">{v(d.caixa.estornos_valor)}</span>
+                  </button>
+                  {verEstornos && <EstornosLista periodo={atual} valor={v} onAbrir={onOpenCaixa} />}
+                </>
+              )}
               {d.descontos.os + d.descontos.notas > 0 && <Linha nome="Descontos dados" valor={d.descontos.os + d.descontos.notas} />}
               {d.fiado_vencido.qtd > 0 && <Linha nome={`Fiado vencido (${d.fiado_vencido.qtd})`} valor={d.fiado_vencido.valor} tom="text-red-500" />}
               <p className="flex items-center gap-1 pt-1 text-[11px] text-muted-foreground"><AlertTriangle className="h-3 w-3" />Fiado vencido é de hoje, não do período.</p>

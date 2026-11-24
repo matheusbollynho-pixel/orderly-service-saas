@@ -21,9 +21,12 @@ import { ptBR } from 'date-fns/locale';
 interface CashFlowPageProps {
   onSelectOrder?: (orderId: string) => void;
   onSelectBalcaoOrder?: (balcaoOrderId: string) => void;
+  /** Abrir já no dia deste lançamento (vindo dos Relatórios) e destacar ele. */
+  foco?: { data: string; id: string };
+  onFocoUsado?: () => void;
 }
 
-export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder }: CashFlowPageProps = {}) {
+export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder, foco, onFocoUsado }: CashFlowPageProps = {}) {
     // Estados para os campos do cabeçalho
     const [status, setStatus] = useState('aberta');
     const [osAbertaPor, setOsAbertaPor] = useState('Matheus');
@@ -57,7 +60,9 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder }: CashFlowPag
     return `${year}-${month}`;
   };
 
-  const [selectedDate, setSelectedDate] = useState<string>(getLocalDate());
+  const [selectedDate, setSelectedDate] = useState<string>(foco?.data || getLocalDate());
+  const [destaque, setDestaque] = useState<string | null>(null);
+  const focoPendente = useRef(foco?.id ?? null);
   const [selectedMonth, setSelectedMonth] = useState<string>(getLocalMonth());
   const [activePeriod, setActivePeriod] = useState<'day' | 'week' | 'month'>('day');
   const [showForm, setShowForm] = useState(false);
@@ -78,13 +83,27 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder }: CashFlowPag
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Quando volta para dia, sempre volta a hoje
+  // Quando volta para dia, sempre volta a hoje (menos na abertura vinda dos Relatórios)
+  const primeiraVez = useRef(true);
   useEffect(() => {
+    if (primeiraVez.current) { primeiraVez.current = false; if (foco) return; }
     if (activePeriod === 'day') {
       setSelectedDate(getLocalDate());
     }
   }, [activePeriod]);
   const { cashFlow, summary, isLoading, createEntry, estornarEntry, isEstornando, isCreating } = useCashFlow(selectedDate);
+
+  // Vindo dos Relatórios: rola até o lançamento e deixa ele destacado por uns segundos
+  useEffect(() => {
+    const id = focoPendente.current;
+    if (!id || isLoading || !cashFlow?.some((e) => e.id === id)) return;
+    focoPendente.current = null;
+    setDestaque(id);
+    requestAnimationFrame(() => document.getElementById(`lanc-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+    const t = setTimeout(() => setDestaque(null), 4000);
+    onFocoUsado?.();
+    return () => clearTimeout(t);
+  }, [cashFlow, isLoading, onFocoUsado]);
   const { products: inventoryProducts, createMovementAsync, isCreatingMovement } = useInventory();
   const { summary: weeklySummary, isLoading: weeklyLoading } = useCashFlowPeriod('week');
   const { summary: monthlySummary, isLoading: monthlyLoading } = useCashFlowPeriod('month', selectedMonth);
@@ -483,8 +502,9 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder }: CashFlowPag
           return (
           <Card
             key={entry.id}
+            id={`lanc-${entry.id}`}
             onClick={isNavigable ? handleCardClick : undefined}
-            className={`border-l-4 transition-colors ${
+            className={`border-l-4 transition-colors ${destaque === entry.id ? 'ring-2 ring-primary bg-primary/10 ' : ''}${
               entry.type === 'entrada'
                 ? 'border-l-green-500'
                 : entry.type === 'retirada'

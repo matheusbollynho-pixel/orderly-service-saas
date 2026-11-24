@@ -16,6 +16,7 @@ export function MechanicsPage() {
   const { members, isLoading: isLoadingMembers, createMember, updateMember, deleteMember } = useTeamMembers();
   const [name, setName] = useState('');
   const [commission, setCommission] = useState<number>(10);
+  const [commissionPecas, setCommissionPecas] = useState<number>(0);
   const [mechanicPhoto, setMechanicPhoto] = useState<string | null>(null);
   const [staffName, setStaffName] = useState('');
   const [staffRole, setStaffRole] = useState<'balconista' | 'dono' | 'outro'>('balconista');
@@ -72,16 +73,23 @@ export function MechanicsPage() {
           <Label>Nome</Label>
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: João" />
         </div>
-        <div className="space-y-2">
-          <Label>Comissão (%)</Label>
-          <Input type="number" step="0.01" value={commission} onChange={(e) => setCommission(parseFloat(e.target.value || '0'))} />
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-2">
+            <Label>Comissão serviços (%)</Label>
+            <Input type="number" step="0.01" value={commission} onChange={(e) => setCommission(parseFloat(e.target.value || '0'))} />
+          </div>
+          <div className="space-y-2">
+            <Label>Comissão peças (%)</Label>
+            <Input type="number" step="0.01" value={commissionPecas} onChange={(e) => setCommissionPecas(parseFloat(e.target.value || '0'))} />
+          </div>
         </div>
         <div className="flex items-end">
           <Button className="w-full" onClick={() => {
             if (!name.trim()) return;
-            createMechanic({ name: name.trim(), commission_rate: commission, photo_url: mechanicPhoto });
+            createMechanic({ name: name.trim(), commission_rate: commission, commission_parts_rate: commissionPecas, photo_url: mechanicPhoto });
             setName('');
             setCommission(10);
+            setCommissionPecas(0);
             setMechanicPhoto(null);
           }}>Cadastrar</Button>
         </div>
@@ -107,7 +115,10 @@ export function MechanicsPage() {
                   </Avatar>
                   <div>
                     <p className="font-medium">{m.name} {!m.active && <span className="text-xs text-muted-foreground">(Inativo)</span>}</p>
-                    <p className="text-sm text-muted-foreground">Comissão: {m.commission_rate}%</p>
+                    <p className="text-sm text-muted-foreground">
+                      Comissão: serviços {m.commission_rate}%
+                      {Number(m.commission_parts_rate || 0) > 0 && <> · peças {m.commission_parts_rate}%</>}
+                    </p>
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -124,7 +135,18 @@ export function MechanicsPage() {
                       if (!isNaN(val)) updateMechanic({ id: m.id, commission_rate: val });
                     }}
                   >
-                    Editar Comissão
+                    Comissão serviços
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      const novo = await pedirTexto({ titulo: `Comissão de peças de ${m.name}`, rotulo: 'Comissão sobre peças das OS dele (%) — 0 = sem comissão', valorInicial: String(m.commission_parts_rate ?? 0), numerico: true, obrigatorio: true, verbo: 'Salvar' });
+                      const val = novo ? parseFloat(novo.replace(',', '.')) : NaN;
+                      if (!isNaN(val)) updateMechanic({ id: m.id, commission_parts_rate: val });
+                    }}
+                  >
+                    Comissão peças
                   </Button>
                   <Button
                     variant="outline"

@@ -175,7 +175,8 @@ export interface BirthdayDiscount {
 export interface Mechanic {
   id: string;
   name: string;
-  commission_rate: number; // percent e.g., 10.00
+  commission_rate: number; // percent e.g., 10.00 — sobre SERVIÇOS
+  commission_parts_rate?: number | null; // % sobre PEÇAS das OS dele (0 = sem comissão de peças)
   photo_url?: string | null;
   active: boolean;
   created_at: string;
