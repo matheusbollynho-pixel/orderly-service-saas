@@ -28,6 +28,7 @@ export interface StoreSettings {
   payment_methods?: string | null;
   inspection_terms_text?: string | null;
   delivery_terms_text?: string | null;
+  usa_almoxarifado?: boolean;
   checklist_moto?: { label: string; type: 'yesno' | 'rating' | 'textarea' }[] | null;
   checklist_carro?: { label: string; type: 'yesno' | 'rating' | 'textarea' }[] | null;
 }

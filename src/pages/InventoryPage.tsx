@@ -39,6 +39,9 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useVehicleLabel } from '@/hooks/useVehicleLabel';
+import { useStoreSettings } from '@/hooks/useStoreSettings';
+import { useTeamMembers } from '@/hooks/useTeamMembers';
+import { useMechanics } from '@/hooks/useMechanics';
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import { UpgradeModal } from '@/components/UpgradeModal';
 
@@ -64,6 +67,9 @@ const MOV_LABELS: Record<string, string> = {
   saida_venda: 'Venda avulsa',
   ajuste: 'Ajuste',
   devolucao: 'Devolução',
+  saida_balcao: 'Venda balcão',
+  transf_para_almox: 'Loja → almoxarifado',
+  transf_para_loja: 'Almoxarifado → loja',
 };
 
 const MOV_COLORS: Record<string, string> = {
@@ -72,6 +78,25 @@ const MOV_COLORS: Record<string, string> = {
   saida_os: 'text-red-500',
   saida_venda: 'text-red-500',
   ajuste: 'text-blue-500',
+  saida_balcao: 'text-red-500',
+  transf_para_almox: 'text-blue-500',
+  transf_para_loja: 'text-blue-500',
+};
+
+// Campos novos do banco (almoxarifado e fiscais) ainda não estão nos tipos gerados.
+type ProdutoAlmox = { stock_almox?: number | null };
+const saldoAlmox = (p: unknown) => Number((p as ProdutoAlmox)?.stock_almox ?? 0);
+
+// Opções da janela Movimentar → tipo + local gravados na movimentação
+type OpcaoMov = 'entrada_manual' | 'saida_venda' | 'ajuste' | 'transf_para_almox' | 'transf_para_loja' | 'entrada_almox' | 'ajuste_almox';
+const MOV_DESTINO: Record<OpcaoMov, { type: string; local: 'loja' | 'almox' }> = {
+  entrada_manual: { type: 'entrada_manual', local: 'loja' },
+  saida_venda: { type: 'saida_venda', local: 'loja' },
+  ajuste: { type: 'ajuste', local: 'loja' },
+  transf_para_almox: { type: 'transf_para_almox', local: 'loja' },
+  transf_para_loja: { type: 'transf_para_loja', local: 'almox' },
+  entrada_almox: { type: 'entrada_manual', local: 'almox' },
+  ajuste_almox: { type: 'ajuste', local: 'almox' },
 };
 
 function fmtCurrency(v: number) {
@@ -129,13 +154,19 @@ interface ProductFormProps {
   product: InventoryProductInsert | (InventoryProduct & { id: string });
   isEditing: boolean;
   isSaving: boolean;
+  usaAlmox: boolean;
   onChange: (field: string, value: unknown) => void;
   onBulkChange: (fields: Record<string, unknown>) => void;
   onSave: () => void;
   onClose: () => void;
 }
 
-function ProductFormDialog({ open, product, isEditing, isSaving, onChange, onBulkChange, onSave, onClose }: ProductFormProps) {
+function ProductFormDialog({ open, product, isEditing, isSaving, usaAlmox, onChange, onBulkChange, onSave, onClose }: ProductFormProps) {
+  // Campos novos (almoxarifado e fiscais) ainda fora dos tipos gerados do banco
+  const extra = product as typeof product & {
+    stock_almox?: number | null; ncm?: string | null; cest?: string | null;
+    origem_fiscal?: number | null; csosn?: string | null; cfop?: string | null;
+  };
   const { VEHICLE_CAP } = useVehicleLabel();
   const { canAccess, getUpgradeLink, getRequiredPlan } = usePlanFeatures();
   const iaLocked = !canAccess('ia-atendimento');
@@ -384,7 +415,7 @@ function ProductFormDialog({ open, product, isEditing, isSaving, onChange, onBul
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Controle de estoque</h3>
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <Label>Estoque atual</Label>
+                <Label>{usaAlmox ? 'Estoque da loja' : 'Estoque atual'}</Label>
                 <Input type="number" min="0" step="0.001" value={product.stock_current ?? 0} onChange={(e) => onChange('stock_current', parseFloat(e.target.value) || 0)} />
               </div>
               <div>
@@ -414,6 +445,54 @@ function ProductFormDialog({ open, product, isEditing, isSaving, onChange, onBul
                     <SelectItem value="descontinuado">Descontinuado</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              {usaAlmox && (
+                <div>
+                  <Label>Estoque do almoxarifado</Label>
+                  <Input type="number" min="0" step="0.001" value={extra.stock_almox ?? 0} onChange={(e) => onChange('stock_almox', parseFloat(e.target.value) || 0)} />
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Dados fiscais (para a nota fiscal; o XML do fornecedor preenche) */}
+          <section>
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-1">Dados fiscais (opcional)</h3>
+            <p className="text-xs text-muted-foreground mb-3">Usados na nota fiscal. NCM, CEST e origem vêm na nota do fornecedor; CSOSN e CFOP o contador informa.</p>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Label>NCM</Label>
+                <Input inputMode="numeric" value={extra.ncm ?? ''} onChange={(e) => onChange('ncm', e.target.value.replace(/\D/g, '').slice(0, 8) || null)} placeholder="8 dígitos" />
+              </div>
+              <div>
+                <Label>CEST</Label>
+                <Input inputMode="numeric" value={extra.cest ?? ''} onChange={(e) => onChange('cest', e.target.value.replace(/\D/g, '').slice(0, 7) || null)} placeholder="7 dígitos" />
+              </div>
+              <div>
+                <Label>Origem</Label>
+                <Select value={extra.origem_fiscal != null ? String(extra.origem_fiscal) : 'nenhuma'} onValueChange={(v) => onChange('origem_fiscal', v === 'nenhuma' ? null : Number(v))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="nenhuma">Não informada</SelectItem>
+                    <SelectItem value="0">0 - Nacional</SelectItem>
+                    <SelectItem value="1">1 - Importado direto</SelectItem>
+                    <SelectItem value="2">2 - Importado no mercado interno</SelectItem>
+                    <SelectItem value="3">3 - Nacional, mais de 40% importado</SelectItem>
+                    <SelectItem value="4">4 - Nacional, processo básico</SelectItem>
+                    <SelectItem value="5">5 - Nacional, até 40% importado</SelectItem>
+                    <SelectItem value="6">6 - Importado direto, sem similar</SelectItem>
+                    <SelectItem value="7">7 - Importado interno, sem similar</SelectItem>
+                    <SelectItem value="8">8 - Nacional, mais de 70% importado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>CSOSN</Label>
+                <Input inputMode="numeric" value={extra.csosn ?? ''} onChange={(e) => onChange('csosn', e.target.value.replace(/\D/g, '').slice(0, 3) || null)} placeholder="Ex: 102" />
+              </div>
+              <div>
+                <Label>CFOP</Label>
+                <Input inputMode="numeric" value={extra.cfop ?? ''} onChange={(e) => onChange('cfop', e.target.value.replace(/\D/g, '').slice(0, 4) || null)} placeholder="Ex: 5102" />
               </div>
             </div>
           </section>
@@ -468,13 +547,16 @@ function ProductFormDialog({ open, product, isEditing, isSaving, onChange, onBul
 interface MovementDialogProps {
   open: boolean;
   product: InventoryProduct | null;
+  usaAlmox: boolean;
+  equipe: string[]; // nomes de atendentes + mecânicos/estofadores ativos
   isSaving: boolean;
   onSave: (movement: InventoryMovementInsert) => void;
   onClose: () => void;
 }
 
-function MovementDialog({ open, product, isSaving, onSave, onClose }: MovementDialogProps) {
-  const [type, setType] = useState<'entrada_manual' | 'ajuste' | 'saida_venda'>('entrada_manual');
+function MovementDialog({ open, product, usaAlmox, equipe, isSaving, onSave, onClose }: MovementDialogProps) {
+  const [type, setType] = useState<OpcaoMov>('entrada_manual');
+  const [quem, setQuem] = useState('');
   const [quantity, setQuantity] = useState('');
   const [unitCost, setUnitCost] = useState('');
   const [unitPrice, setUnitPrice] = useState('');
@@ -487,19 +569,39 @@ function MovementDialog({ open, product, isSaving, onSave, onClose }: MovementDi
       toast.error('Informe uma quantidade válida');
       return;
     }
+    // Igual à OS: se a loja tem equipe cadastrada, precisa dizer quem está fazendo
+    if (equipe.length > 0 && !quem) {
+      toast.error('Selecione quem está fazendo a movimentação.');
+      return;
+    }
+    // Transferência não pode tirar mais do que existe no lugar de origem
+    if (type === 'transf_para_almox' && qty > Number(product.stock_current)) {
+      toast.error(`Só tem ${product.stock_current} ${product.unit} na loja.`);
+      return;
+    }
+    if (type === 'transf_para_loja' && qty > saldoAlmox(product)) {
+      toast.error(`Só tem ${saldoAlmox(product)} ${product.unit} no almoxarifado.`);
+      return;
+    }
+    const destino = MOV_DESTINO[type];
+    // 'local' e os tipos de transferência ainda não estão nos tipos gerados do banco
     onSave({
       product_id: product.id,
-      type,
+      type: destino.type,
+      local: destino.local,
       quantity: qty,
       unit_cost: unitCost ? parseFloat(unitCost) : null,
       unit_price: unitPrice ? parseFloat(unitPrice) : null,
       notes: notes || null,
-    });
+      // Nome escolhido na lista; sem equipe, o banco grava o e-mail do login
+      ...(quem ? { feito_por: quem } : {}),
+    } as unknown as InventoryMovementInsert);
     setType('entrada_manual');
     setQuantity('');
     setUnitCost('');
     setUnitPrice('');
     setNotes('');
+    setQuem('');
   };
 
   if (!product) return null;
@@ -509,7 +611,10 @@ function MovementDialog({ open, product, isSaving, onSave, onClose }: MovementDi
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Registrar movimentação</DialogTitle>
-          <p className="text-sm text-muted-foreground">{product.name} — estoque atual: <strong>{product.stock_current} {product.unit}</strong></p>
+          <p className="text-sm text-muted-foreground">
+            {product.name} — {usaAlmox ? 'loja' : 'estoque atual'}: <strong>{product.stock_current} {product.unit}</strong>
+            {usaAlmox && <> · almoxarifado: <strong>{saldoAlmox(product)} {product.unit}</strong></>}
+          </p>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
@@ -520,15 +625,34 @@ function MovementDialog({ open, product, isSaving, onSave, onClose }: MovementDi
               <SelectContent>
                 <SelectItem value="entrada_manual">Entrada manual</SelectItem>
                 <SelectItem value="saida_venda">Venda avulsa</SelectItem>
-                <SelectItem value="ajuste">Ajuste (define valor absoluto)</SelectItem>
+                <SelectItem value="ajuste">{usaAlmox ? 'Ajuste da loja (define o saldo)' : 'Ajuste (define valor absoluto)'}</SelectItem>
+                {usaAlmox && (
+                  <>
+                    <SelectItem value="transf_para_almox">Transferir loja → almoxarifado</SelectItem>
+                    <SelectItem value="transf_para_loja">Transferir almoxarifado → loja</SelectItem>
+                    <SelectItem value="entrada_almox">Entrada no almoxarifado (sem passar pela loja)</SelectItem>
+                    <SelectItem value="ajuste_almox">Ajuste do almoxarifado (define o saldo)</SelectItem>
+                  </>
+                )}
               </SelectContent>
             </Select>
           </div>
+          {equipe.length > 0 && (
+            <div>
+              <Label>Quem está fazendo? *</Label>
+              <Select value={quem} onValueChange={setQuem}>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  {equipe.map((nome) => <SelectItem key={nome} value={nome}>{nome}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div>
             <Label>Quantidade ({product.unit})</Label>
             <Input type="number" min="0" step="0.001" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="0" />
           </div>
-          {type === 'entrada_manual' && (
+          {(type === 'entrada_manual' || type === 'entrada_almox') && (
             <div>
               <Label>Custo unitário (R$)</Label>
               <Input type="number" min="0" step="0.01" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} placeholder="Opcional" />
@@ -541,8 +665,8 @@ function MovementDialog({ open, product, isSaving, onSave, onClose }: MovementDi
             </div>
           )}
           <div>
-            <Label>Observação</Label>
-            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Opcional" />
+            <Label>{type.startsWith('transf_') ? 'Motivo' : 'Observação'}</Label>
+            <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={type.startsWith('transf_') ? 'Ex.: para a OS do Uno do João' : 'Opcional'} />
           </div>
         </div>
 
@@ -574,6 +698,18 @@ export default function InventoryPage() {
   } = useInventory();
 
   const { VEHICLE_CAP } = useVehicleLabel();
+  const { settings: lojaCfg } = useStoreSettings();
+  const usaAlmox = !!(lojaCfg as { usa_almoxarifado?: boolean } | null)?.usa_almoxarifado;
+  const { members: atendentes } = useTeamMembers();
+  const { mechanics } = useMechanics();
+  // Atendentes + mecânicos/estofadores ativos, sem repetir nome
+  const equipe = useMemo(() => {
+    const nomes = [
+      ...atendentes.filter((m) => m.active !== false).map((m) => m.name),
+      ...mechanics.filter((m) => m.active !== false).map((m) => m.name),
+    ].map((n) => (n || '').trim()).filter(Boolean);
+    return [...new Set(nomes)].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [atendentes, mechanics]);
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('produtos');
   const [filterLowStock, setFilterLowStock] = useState(false);
@@ -759,7 +895,13 @@ export default function InventoryPage() {
                         <span className={cn('font-bold', isLow ? 'text-[#C1272D]' : 'text-foreground')} style={isLow ? { color: '#C1272D' } : {}}>
                           {p.stock_current} {p.unit.toUpperCase()}.
                           {isLow && <span style={{ color: '#C1272D' }} className="ml-1">(mín: {p.stock_minimum})</span>}
+                          {usaAlmox && <span className="ml-1 font-normal text-muted-foreground">loja</span>}
                         </span>
+                        {usaAlmox && (
+                          <span className="font-bold text-foreground">
+                            {saldoAlmox(p)} {p.unit.toUpperCase()}. <span className="font-normal text-muted-foreground">almox.</span>
+                          </span>
+                        )}
                         <span className="text-muted-foreground">Venda: {fmtCurrency(p.sale_price)}</span>
                         {p.location && <span className="text-muted-foreground">📦 {p.location}</span>}
                       </div>
@@ -805,7 +947,8 @@ export default function InventoryPage() {
             <div className="space-y-1.5">
               {movements.map((m) => {
                 const isIn = ['entrada_manual', 'devolucao'].includes(m.type);
-                const isOut = ['saida_os', 'saida_venda'].includes(m.type);
+                const isOut = ['saida_os', 'saida_venda', 'saida_balcao'].includes(m.type);
+                const noAlmox = (m as { local?: string }).local === 'almox';
                 return (
                   <div key={m.id} className="rounded-lg border bg-card px-3 py-2 flex items-center gap-3">
                     <div className="flex-shrink-0">
@@ -818,12 +961,13 @@ export default function InventoryPage() {
                         {(m as any).inventory_products?.name ?? '—'}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {MOV_LABELS[m.type]} · {fmtDate(m.created_at)}
+                        {MOV_LABELS[m.type] ?? m.type}{noAlmox && !m.type.startsWith('transf_') ? ' (almoxarifado)' : ''} · {fmtDate(m.created_at)}
                         {m.notes ? ` · ${m.notes}` : ''}
+                        {' · por '}{(m as { feito_por?: string | null }).feito_por || 'sistema'}
                       </p>
                     </div>
                     <span className={cn('text-sm font-bold flex-shrink-0', MOV_COLORS[m.type])}>
-                      {isOut ? '-' : isIn ? '+' : '='}{m.quantity}
+                      {m.type.startsWith('transf_') ? '' : isOut ? '-' : isIn ? '+' : '='}{m.quantity}
                     </span>
                   </div>
                 );
@@ -839,6 +983,7 @@ export default function InventoryPage() {
         product={formData}
         isEditing={!!editingProduct}
         isSaving={isCreatingProduct || isUpdatingProduct}
+        usaAlmox={usaAlmox}
         onChange={handleFormChange}
         onBulkChange={handleBulkChange}
         onSave={handleSaveProduct}
@@ -848,6 +993,8 @@ export default function InventoryPage() {
       <MovementDialog
         open={movOpen}
         product={movProduct}
+        usaAlmox={usaAlmox}
+        equipe={equipe}
         isSaving={isCreatingMovement}
         onSave={handleSaveMovement}
         onClose={() => setMovOpen(false)}

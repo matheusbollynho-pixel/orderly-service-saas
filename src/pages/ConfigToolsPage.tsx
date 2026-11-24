@@ -77,6 +77,17 @@ export default function ConfigToolsPage() {
   const { user } = useAuth();
   const { isOwner, role, loading: storeLoading, storeId, vehicleType } = useStore();
   const [salvandoTipo, setSalvandoTipo] = useState(false);
+  const [usaAlmox, setUsaAlmox] = useState<boolean | null>(null);
+
+  // Almoxarifado: estoque de uso interno (ex.: estofaria). Desligado por padrão.
+  async function mudarAlmoxarifado(ligar: boolean) {
+    if (!storeId) return;
+    setUsaAlmox(ligar);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).from('store_settings').update({ usa_almoxarifado: ligar }).eq('id', storeId);
+    if (error) { setUsaAlmox(!ligar); toast.error('Não consegui salvar: ' + error.message); return; }
+    toast.success(ligar ? 'Almoxarifado ligado. A peça lançada na OS passa a sair do almoxarifado.' : 'Almoxarifado desligado. A peça lançada na OS volta a sair da loja.');
+  }
 
   // Tipo de veículo da loja (moto, carro ou os dois). Muda rótulos e o checklist
   // das OS novas; recarrega a página para todo o sistema pegar o valor novo.
@@ -316,6 +327,20 @@ export default function ConfigToolsPage() {
                   <option value="ambos">Motos e carros</option>
                 </select>
                 <p className="text-xs text-neutral-500">Em "Motos e carros", cada veículo é marcado como moto ou carro e a OS usa o checklist certo. Vale para as OS novas.</p>
+              </div>
+
+              {/* Almoxarifado */}
+              <div className="space-y-1">
+                <label className="flex items-center gap-2 text-sm text-neutral-200">
+                  <input
+                    type="checkbox"
+                    checked={usaAlmox ?? !!settings?.usa_almoxarifado}
+                    onChange={e => mudarAlmoxarifado(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  Usar almoxarifado (estoque de uso interno)
+                </label>
+                <p className="text-xs text-neutral-500">O produto passa a ter saldo na loja e no almoxarifado, com transferência entre os dois. A peça lançada na OS sai do almoxarifado. Bom para estofaria e oficina que usam material da loja.</p>
               </div>
 
               {/* Checklist da OS personalizado */}
