@@ -7,11 +7,13 @@ import { Button } from "@/components/ui/button"
 import { Printer, Download, MessageCircle, Loader2 } from "lucide-react"
 import { generateOrderPDFFromNotaBalcao, downloadOrderPDFFromNotaBalcao } from "@/lib/pdfGeneratorNotaBalcao"
 import { sendWhatsAppDocument } from "@/services/whatsappService"
+import { ordenarChecklist } from "@/types/service-order"
 
 interface ChecklistItem {
   name: string
   checked: boolean
   rating?: number
+  isRating?: boolean // item de estrelas (combustível ou criado pela loja)
 }
 
 interface ServiceItem {
@@ -121,25 +123,29 @@ export function PrintOrderPage() {
             .replace(/[\u0300-\u036f]/g, "")
             .toUpperCase()
 
-        const checklistRaw = (order?.checklist_items || []) as Record<string, unknown>[]
+        // Mesma ordem do checklist da loja (personalizado) que aparece na tela e no PDF.
+        const checklistRaw = ordenarChecklist((order?.checklist_items || []) as { posicao?: number | null }[]) as Record<string, unknown>[]
 
-        const observacaoChecklistItem = checklistRaw.find((item: Record<string, unknown>) =>
-          normalizeLabel(item?.label as string || "").includes("OBSERVAC")
-        )
+        // Campo de texto livre (Observações ou outro criado pela loja)
+        const ehTexto = (item: Record<string, unknown>) =>
+          item?.item_type === 'textarea' || normalizeLabel(item?.label as string || "").includes("OBSERVAC")
+
+        const observacaoChecklistItem = checklistRaw.find(ehTexto)
 
         const observacoesChecklist = String(observacaoChecklistItem?.observations || "").trim()
 
         const checklistItems: ChecklistItem[] = checklistRaw
-          .filter((item: Record<string, unknown>) => !normalizeLabel(item?.label as string || "").includes("OBSERVAC"))
+          .filter((item: Record<string, unknown>) => !ehTexto(item))
           .map((item: Record<string, unknown>) => {
             const label = item?.label as string || "Item"
             const rating = Number(item?.rating || 0) || 0
-            const isFuelLevel = normalizeLabel(label).includes("NIVEL DE")
+            const isFuelLevel = item?.item_type === 'rating' || normalizeLabel(label).includes("NIVEL DE")
 
             return {
               name: label,
               checked: isFuelLevel ? rating > 0 || !!item?.completed : !!item?.completed,
               rating,
+              isRating: isFuelLevel,
             }
           })
 

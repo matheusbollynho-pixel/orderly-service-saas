@@ -5,11 +5,13 @@ import { Check, MapPin, Phone, Instagram, Star } from "lucide-react"
 import LOGO_BASE64 from "@/assets/logo"
 import { useStoreSettings } from "@/hooks/useStoreSettings"
 import { VEHICLE_CAP } from "@/lib/vehicleLabel"
+import { rotuloChecklist } from "@/types/service-order"
 
 interface ChecklistItem {
   name: string
   checked: boolean
   rating?: number
+  isRating?: boolean // item de estrelas (combustível ou criado pela loja)
 }
 
 interface ServiceItem {
@@ -532,14 +534,14 @@ export function NotaBalcao({
             </h2>
             {/* Itens de rating (combustível) aparecem primeiro, em linha inteira */}
             <div className="grid grid-cols-1 gap-1.5 mb-2">
-              {data.checklist.filter(item => normalizeLabel(item.name).includes("NIVEL DE")).map((item, index) => (
+              {data.checklist.filter(item => item.isRating ?? normalizeLabel(item.name).includes("NIVEL DE")).map((item, index) => (
                 <div key={`rating-${index}`} className="flex items-start justify-between gap-2 text-xs leading-tight min-h-5">
                   {true ? (
                     <>
                       <div className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 mt-[1px] ${item.checked ? "bg-[#C1272D] text-white" : "border border-gray-300"}`}>
                         {item.checked && <Check className="w-3 h-3" />}
                       </div>
-                      <span className="text-gray-700 flex-1 break-words">{item.name}</span>
+                      <span className="text-gray-700 flex-1 break-words">{rotuloChecklist(item.name)}</span>
                       <div className="flex items-center gap-[2px] flex-shrink-0 border border-gray-300 rounded px-1 py-[2px] bg-gray-50">
                         {[1, 2, 3, 4, 5].map((star) => {
                           const active = (item.rating || 0) >= star
@@ -553,7 +555,7 @@ export function NotaBalcao({
             </div>
             {/* Itens yesno em 2 colunas */}
             <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-              {data.checklist.filter(item => !normalizeLabel(item.name).includes("NIVEL DE")).map((item, index) => (
+              {data.checklist.filter(item => !(item.isRating ?? normalizeLabel(item.name).includes("NIVEL DE"))).map((item, index) => (
                 <div key={index} className="flex items-center gap-1.5 text-xs leading-tight min-h-5">
                   <>
                       <div
@@ -565,7 +567,7 @@ export function NotaBalcao({
                       >
                         {item.checked && <Check className="w-3 h-3" />}
                       </div>
-                      <span className="text-gray-700 flex-1 break-words">{item.name}</span>
+                      <span className="text-gray-700 flex-1 break-words">{rotuloChecklist(item.name)}</span>
                     </>
                 </div>
               ))}

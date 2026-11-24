@@ -16,7 +16,7 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
 
-  const [vehicleType, setVehicleType] = useState<'moto' | 'carro'>('moto');
+  const [vehicleType, setVehicleType] = useState<'moto' | 'carro' | 'ambos'>('moto');
   const [companyName, setCompanyName] = useState('');
   const [storePhone, setStorePhone] = useState('');
   const [storeAddress, setStoreAddress] = useState('');
@@ -126,6 +126,23 @@ export default function OnboardingPage() {
                     <p className="text-xs opacity-70">Oficina de carros</p>
                   </div>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setVehicleType('ambos')}
+                  className={cn(
+                    'col-span-2 flex items-center justify-center gap-3 p-4 rounded-xl border-2 transition-all',
+                    vehicleType === 'ambos'
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border/50 bg-muted/20 text-muted-foreground hover:border-border'
+                  )}
+                >
+                  <Bike className="h-8 w-8" />
+                  <Car className="h-8 w-8" />
+                  <div className="text-left">
+                    <p className="font-semibold text-base">Os dois</p>
+                    <p className="text-xs opacity-70">Atende motos e carros (o checklist muda em cada OS)</p>
+                  </div>
+                </button>
               </div>
             </div>
           )}
@@ -199,7 +216,7 @@ export default function OnboardingPage() {
               <div className="text-left space-y-2 rounded-lg bg-muted/20 border border-border/50 p-4 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Tipo de veículo</span>
-                  <span className="text-foreground font-medium capitalize">{vehicleType === 'moto' ? '🏍️ Motos' : '🚗 Carros'}</span>
+                  <span className="text-foreground font-medium capitalize">{vehicleType === 'moto' ? '🏍️ Motos' : vehicleType === 'carro' ? '🚗 Carros' : '🏍️🚗 Motos e carros'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Empresa</span>

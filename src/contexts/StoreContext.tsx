@@ -16,7 +16,7 @@ interface StoreContextValue {
   role: string | null;
   permissions: MemberPermissions;
   isOwner: boolean;
-  vehicleType: 'moto' | 'carro';
+  vehicleType: 'moto' | 'carro' | 'ambos';
   onboarded: boolean;
   customFeatures: string[] | null;
 }
@@ -39,7 +39,7 @@ export function StoreProvider({ user, children }: { user: User | null; children:
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<string | null>(null);
   const [permissions, setPermissions] = useState<MemberPermissions>(ALL_PERMISSIONS);
-  const [vehicleType, setVehicleType] = useState<'moto' | 'carro'>('moto');
+  const [vehicleType, setVehicleType] = useState<'moto' | 'carro' | 'ambos'>('moto');
   const [onboarded, setOnboarded] = useState(true);
   const [customFeatures, setCustomFeatures] = useState<string[] | null>(null);
 

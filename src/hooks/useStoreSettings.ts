@@ -28,6 +28,8 @@ export interface StoreSettings {
   payment_methods?: string | null;
   inspection_terms_text?: string | null;
   delivery_terms_text?: string | null;
+  checklist_moto?: { label: string; type: 'yesno' | 'rating' | 'textarea' }[] | null;
+  checklist_carro?: { label: string; type: 'yesno' | 'rating' | 'textarea' }[] | null;
 }
 
 export const DEFAULT_INSPECTION_TERMS_TEXT = 'Declaro que o checklist de inspeção do veículo foi realizado e conferido no ato do atendimento, estando ciente das condições registradas e autorizando a execução dos serviços descritos nesta Ordem de Serviço. Estou ciente do prazo de até 30 dias para retirada da motocicleta após a conclusão do serviço. Após esse período, será cobrada taxa de estadia no valor de R$ 6,00 por dia. O não comparecimento para retirada poderá caracterizar abandono do veículo, nos termos da legislação vigente.';

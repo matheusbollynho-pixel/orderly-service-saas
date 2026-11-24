@@ -36,6 +36,7 @@ export interface Motorcycle {
   motor?: string;
   chassi?: string;
   notes?: string;
+  tipo?: 'moto' | 'carro' | null; // só preenchido em loja que atende carro e moto
   active: boolean;
   created_at: string;
   updated_at: string;

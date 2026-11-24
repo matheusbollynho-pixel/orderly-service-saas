@@ -41,6 +41,20 @@ export interface ChecklistItem {
   item_type?: 'checkbox' | 'yesno' | 'rating' | 'textarea';
   rating?: number | null;
   observations?: string | null;
+  posicao?: number | null; // ordem do checklist personalizado da loja
+}
+
+/** Item do modelo de checklist que a loja monta nos Ajustes. */
+export interface ChecklistModeloItem {
+  label: string;
+  type: 'yesno' | 'rating' | 'textarea';
+}
+
+/** Ordena pela posição do checklist personalizado; sem posição, mantém a ordem recebida. */
+export function ordenarChecklist<T extends { posicao?: number | null }>(items: T[] | undefined | null): T[] {
+  const lista = [...(items || [])];
+  if (!lista.some(i => i.posicao != null)) return lista;
+  return lista.sort((a, b) => (a.posicao ?? 9999) - (b.posicao ?? 9999));
 }
 
 export interface Material {
@@ -171,28 +185,71 @@ export interface Mechanic {
 export function getDefaultChecklistItems(vehicleType: string) {
   return vehicleType === 'carro'
     ? [
-        { label: 'Chave do CARRO', type: 'yesno' as const },
-        { label: 'NÍVEL DE COMBUSTÍVEL', type: 'rating' as const },
+        { label: 'Chave do carro', type: 'yesno' as const },
+        { label: 'Nível de combustível', type: 'rating' as const },
         { label: 'Lataria sem amassados/riscos', type: 'yesno' as const },
         { label: 'Vidros sem trincas', type: 'yesno' as const },
-        { label: 'Faróis e Lanternas funcionando', type: 'yesno' as const },
-        { label: 'Pneus e Rodas em boas condições', type: 'yesno' as const },
+        { label: 'Faróis e lanternas funcionando', type: 'yesno' as const },
+        { label: 'Pneus e rodas em boas condições', type: 'yesno' as const },
         { label: 'Painel sem alertas', type: 'yesno' as const },
-        { label: 'Funcionamento do Motor', type: 'yesno' as const },
+        { label: 'Funcionamento do motor', type: 'yesno' as const },
         { label: 'Elétrica funcionando', type: 'yesno' as const },
-        { label: 'Ar Condicionado funcionando', type: 'yesno' as const },
-        { label: 'Nível de Óleo adequado', type: 'yesno' as const },
-        { label: 'Nível de Água/Radiador adequado', type: 'yesno' as const },
-        { label: 'Fluido de Freio adequado', type: 'yesno' as const },
+        { label: 'Ar-condicionado funcionando', type: 'yesno' as const },
+        { label: 'Nível de óleo adequado', type: 'yesno' as const },
+        { label: 'Nível de água/radiador adequado', type: 'yesno' as const },
+        { label: 'Fluido de freio adequado', type: 'yesno' as const },
         { label: 'Observações', type: 'textarea' as const },
       ]
     : [
-        { label: 'Chave da MOTO', type: 'yesno' as const },
-        { label: 'Funcionamento do Motor', type: 'yesno' as const },
+        { label: 'Chave da moto', type: 'yesno' as const },
+        { label: 'Funcionamento do motor', type: 'yesno' as const },
         { label: 'Elétrica', type: 'yesno' as const },
-        { label: 'NÍVEL DE GASOLINA', type: 'rating' as const },
+        { label: 'Nível de gasolina', type: 'rating' as const },
         { label: 'Observações', type: 'textarea' as const },
       ];
+}
+
+/** Chave de comparação: sem acento, maiúsculas, espaços únicos. */
+export function chaveRotulo(label: string): string {
+  const semAcento = String(label || '').normalize('NFD').replace(/\p{Diacritic}/gu, '');
+  return semAcento.toUpperCase().replace(/\s+/g, ' ').trim();
+}
+
+// Nomes antigos do checklist padrão (gravados nas OS antigas, com maiúsculas
+// misturadas) → nome padronizado. Itens criados pela loja aparecem como ela escreveu.
+const ROTULOS_PADRAO: Record<string, string> = {
+  'CHAVE DA MOTO': 'Chave da moto',
+  'CHAVE DO CARRO': 'Chave do carro',
+  'NIVEL DE GASOLINA': 'Nível de gasolina',
+  'NIVEL DE COMBUSTIVEL': 'Nível de combustível',
+  'FUNCIONAMENTO': 'Funcionamento do motor',
+  'FUNCIONAMENTO DO MOTOR': 'Funcionamento do motor',
+  'ELETRICA': 'Elétrica',
+  'ELETRICA FUNCIONANDO': 'Elétrica funcionando',
+  'LATARIA SEM AMASSADOS/RISCOS': 'Lataria sem amassados/riscos',
+  'LATARIA (AMASSADOS/RISCOS)': 'Lataria (amassados/riscos)',
+  'VIDROS SEM TRINCAS': 'Vidros sem trincas',
+  'VIDROS (TRINCAS)': 'Vidros (trincas)',
+  'FAROIS E LANTERNAS': 'Faróis e lanternas',
+  'FAROIS E LANTERNAS FUNCIONANDO': 'Faróis e lanternas funcionando',
+  'PNEUS E RODAS': 'Pneus e rodas',
+  'PNEUS E RODAS EM BOAS CONDICOES': 'Pneus e rodas em boas condições',
+  'LUZES DE ADVERTENCIA NO PAINEL': 'Luzes de advertência no painel',
+  'PAINEL SEM ALERTAS': 'Painel sem alertas',
+  'AR CONDICIONADO': 'Ar-condicionado',
+  'AR CONDICIONADO FUNCIONANDO': 'Ar-condicionado funcionando',
+  'NIVEL DE OLEO': 'Nível de óleo',
+  'NIVEL DE OLEO ADEQUADO': 'Nível de óleo adequado',
+  'NIVEL DE AGUA/RADIADOR': 'Nível de água/radiador',
+  'NIVEL DE AGUA/RADIADOR ADEQUADO': 'Nível de água/radiador adequado',
+  'FLUIDO DE FREIO': 'Fluido de freio',
+  'FLUIDO DE FREIO ADEQUADO': 'Fluido de freio adequado',
+  'OBSERVACOES': 'Observações',
+};
+
+/** Nome do item do checklist no padrão (só a primeira letra maiúscula). */
+export function rotuloChecklist(label: string): string {
+  return ROTULOS_PADRAO[chaveRotulo(label)] ?? label;
 }
 
 // Compatibilidade retroativa

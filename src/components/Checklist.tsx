@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
 import { ChecklistItem } from '@/types/service-order';
-import { getDefaultChecklistItems } from '@/types/service-order';
+import { getDefaultChecklistItems, chaveRotulo, rotuloChecklist } from '@/types/service-order';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { Star } from 'lucide-react';
-import { useVehicleLabel } from '@/hooks/useVehicleLabel';
 
 interface ChecklistProps {
   items: ChecklistItem[];
@@ -19,8 +18,11 @@ interface ChecklistProps {
 
 // Mapear label para tipo de checklist
 const getItemType = (label: string): 'checkbox' | 'yesno' | 'rating' | 'textarea' => {
-  const defaultItem = getDefaultChecklistItems(VEHICLE_CAP === 'Carro' ? 'carro' : 'moto').find(
-    item => typeof item !== 'string' && item.label === label
+  // Procura nos modelos de carro e de moto: a loja pode atender os dois, e cada
+  // OS tem o checklist do tipo do veículo dela.
+  const chave = chaveRotulo(rotuloChecklist(label));
+  const defaultItem = [...getDefaultChecklistItems('carro'), ...getDefaultChecklistItems('moto')].find(
+    item => typeof item !== 'string' && chaveRotulo(item.label) === chave
   );
 
   if (defaultItem && typeof defaultItem !== 'string') {
@@ -41,8 +43,6 @@ const getLabelColor = (itemType?: string, completed?: boolean) => {
 };
 
 export function Checklist({ items, onItemToggle, onRatingChange, onObservationsChange, disabled, orderId = '' }: ChecklistProps) {
-  const { VEHICLE_CAP } = useVehicleLabel();
-
   const observationItem = items.find(item => {
     const itemType = item.item_type || getItemType(item.label);
     return itemType === 'textarea';
@@ -67,46 +67,37 @@ export function Checklist({ items, onItemToggle, onRatingChange, onObservationsC
     return () => clearTimeout(handler);
   }, [obsDraft, obsId]);
 
-  // Mapa de ordenação e normalização de labels
-  const orderMap: Record<string, number> = {
-    [`Chave d${VEHICLE_CAP === 'Moto' ? 'a MOTO' : 'o ' + VEHICLE_CAP.toUpperCase()}`]: 1,
-    [`Chave d${VEHICLE_CAP === 'Moto' ? 'a Moto' : 'o ' + VEHICLE_CAP}`]: 1,
+  // Ordem do checklist padrão (pelo nome padronizado; vale para OS antigas,
+  // que guardam os nomes antigos com maiúsculas misturadas).
+  const ORDEM_PADRAO: Record<string, number> = {
+    'Nível de gasolina': 0,
+    'Nível de combustível': 0,
+    'Chave da moto': 1,
+    'Chave do carro': 1,
     'Lataria (amassados/riscos)': 2,
     'Lataria sem amassados/riscos': 2,
     'Vidros (trincas)': 3,
     'Vidros sem trincas': 3,
-    'Faróis e Lanternas': 4,
-    'Faróis e Lanternas funcionando': 4,
-    'Pneus e Rodas': 5,
-    'Pneus e Rodas em boas condições': 5,
-    'Luzes de Advertência no Painel': 6,
+    'Faróis e lanternas': 4,
+    'Faróis e lanternas funcionando': 4,
+    'Pneus e rodas': 5,
+    'Pneus e rodas em boas condições': 5,
+    'Luzes de advertência no painel': 6,
     'Painel sem alertas': 6,
-    'Funcionamento do Motor': 7,
-    'FUNCIONAMENTO': 7,
+    'Funcionamento do motor': 7,
     'Elétrica': 8,
     'Elétrica funcionando': 8,
-    'ELETRICA': 8,
-    'Ar Condicionado': 9,
-    'Ar Condicionado funcionando': 9,
-    'Nível de Óleo': 10,
-    'Nível de Óleo adequado': 10,
-    'Nível de Água/Radiador': 11,
-    'Nível de Água/Radiador adequado': 11,
-    'Fluido de Freio': 12,
-    'Fluido de Freio adequado': 12,
-    'NIVEL DE GASOLINA': 0,
-    'NÍVEL DE GASOLINA': 0,
-    'NÍVEL DE COMBUSTÍVEL': 0,
+    'Ar-condicionado': 9,
+    'Ar-condicionado funcionando': 9,
+    'Nível de óleo': 10,
+    'Nível de óleo adequado': 10,
+    'Nível de água/radiador': 11,
+    'Nível de água/radiador adequado': 11,
+    'Fluido de freio': 12,
+    'Fluido de freio adequado': 12,
     'Observações': 99,
   };
-
-  const normalizeLabel = (label: string) => {
-    if (label === `Chave d${VEHICLE_CAP === 'Moto' ? 'a Moto' : 'o ' + VEHICLE_CAP}`) return `Chave d${VEHICLE_CAP === 'Moto' ? 'a MOTO' : 'o ' + VEHICLE_CAP.toUpperCase()}`;
-    if (label === 'FUNCIONAMENTO') return 'Funcionamento do Motor';
-    if (label === 'ELETRICA') return 'Elétrica';
-    if (label === 'NIVEL DE GASOLINA') return 'NÍVEL DE GASOLINA';
-    return label;
-  };
+  const ordem = (label: string) => ORDEM_PADRAO[rotuloChecklist(label)] ?? 999;
 
   // Separar observações dos outros itens
   const checklistItems = items.filter(item => {
@@ -114,10 +105,11 @@ export function Checklist({ items, onItemToggle, onRatingChange, onObservationsC
     return itemType !== 'textarea';
   });
 
+  // Checklist personalizado da loja: segue a ordem montada (posicao).
+  // Checklist padrão (sem posição): ordem fixa de sempre.
   const sortedChecklistItems = [...checklistItems].sort((a, b) => {
-    const oa = orderMap[a.label] ?? 999;
-    const ob = orderMap[b.label] ?? 999;
-    return oa - ob;
+    if (a.posicao != null && b.posicao != null) return a.posicao - b.posicao;
+    return ordem(a.label) - ordem(b.label);
   });
 
   return (
@@ -205,7 +197,7 @@ export function Checklist({ items, onItemToggle, onRatingChange, onObservationsC
                     (itemType === 'checkbox' || !itemType) && 'cursor-pointer'
                   )}
                 >
-                  {normalizeLabel(item.label)}
+                  {rotuloChecklist(item.label)}
                 </label>
                 {item.completed && itemType === 'checkbox' && (
                   <span className="text-xs text-green-600 font-medium">✓</span>

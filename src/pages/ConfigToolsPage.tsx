@@ -8,6 +8,7 @@ import { useStoreSettings, StoreSettings, DEFAULT_INSPECTION_TERMS_TEXT, DEFAULT
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import { UpgradeModal } from '@/components/UpgradeModal';
 import { WhatsappConexao } from '@/components/WhatsappConexao';
+import { ChecklistEditor } from '@/components/ChecklistEditor';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Settings, Wallet, MessageSquare, CalendarCheck, Star, Cake, ShoppingCart, Store, Bot, Users, CreditCard, Send, Loader2, Lock, ArrowLeft } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -74,7 +75,21 @@ const MESSAGE_CONFIGS: MessageConfig[] = [
 
 export default function ConfigToolsPage() {
   const { user } = useAuth();
-  const { isOwner, role, loading: storeLoading } = useStore();
+  const { isOwner, role, loading: storeLoading, storeId, vehicleType } = useStore();
+  const [salvandoTipo, setSalvandoTipo] = useState(false);
+
+  // Tipo de veículo da loja (moto, carro ou os dois). Muda rótulos e o checklist
+  // das OS novas; recarrega a página para todo o sistema pegar o valor novo.
+  async function mudarTipoVeiculo(novo: 'moto' | 'carro' | 'ambos') {
+    if (!storeId || novo === vehicleType) return;
+    setSalvandoTipo(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).from('store_settings').update({ vehicle_type: novo }).eq('id', storeId);
+    setSalvandoTipo(false);
+    if (error) { toast.error('Não consegui salvar o tipo de veículo: ' + error.message); return; }
+    toast.success('Tipo de veículo salvo. Recarregando...');
+    setTimeout(() => window.location.reload(), 800);
+  }
   const isRestrictedUser = !!user && role !== null && role !== 'owner';
   const { VEHICLE_CAP } = useVehicleLabel();
   const { canAccess, getUpgradeLink, getRequiredPlan } = usePlanFeatures();
@@ -285,6 +300,33 @@ export default function ConfigToolsPage() {
                   />
                 </div>
               ))}
+
+              {/* Tipo de veículo atendido */}
+              <div className="space-y-1">
+                <label className="text-xs text-neutral-400 font-medium">A loja atende</label>
+                <select
+                  title="Tipo de veículo"
+                  value={vehicleType}
+                  disabled={salvandoTipo}
+                  onChange={e => mudarTipoVeiculo(e.target.value as 'moto' | 'carro' | 'ambos')}
+                  className="w-full p-2 border border-white/20 rounded text-sm bg-black/30 text-neutral-200"
+                >
+                  <option value="moto">Motos</option>
+                  <option value="carro">Carros</option>
+                  <option value="ambos">Motos e carros</option>
+                </select>
+                <p className="text-xs text-neutral-500">Em "Motos e carros", cada veículo é marcado como moto ou carro e a OS usa o checklist certo. Vale para as OS novas.</p>
+              </div>
+
+              {/* Checklist da OS personalizado */}
+              {storeId && settings && (
+                <div className="space-y-2">
+                  <label className="text-xs text-neutral-400 font-medium">Checklist da OS</label>
+                  <p className="text-xs text-neutral-500">Monte o checklist do jeito que a loja usa. Vale para as OS novas; as já abertas não mudam.</p>
+                  {vehicleType !== 'carro' && <ChecklistEditor storeId={storeId} tipo="moto" salvo={settings.checklist_moto} />}
+                  {vehicleType !== 'moto' && <ChecklistEditor storeId={storeId} tipo="carro" salvo={settings.checklist_carro} />}
+                </div>
+              )}
 
               {/* Horário de Funcionamento */}
               <div className="space-y-1">

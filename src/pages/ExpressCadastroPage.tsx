@@ -31,7 +31,8 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
   } = useClients();
   const { createOrder } = useServiceOrders();
   const { VEHICLE_CAP, VEHICLES_CAP } = useVehicleLabel();
-  const { storeId } = useStore();
+  const { storeId, vehicleType } = useStore();
+  const atendeOsDois = vehicleType === 'ambos';
   const { members: teamMembers } = useTeamMembers();
   const [isSaving, setIsSaving] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
@@ -51,6 +52,7 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
     modelo: '',
     ano: '',
     cor: '',
+    tipo: '' as '' | 'moto' | 'carro', // só em loja que atende carro e moto
   });
   const [serviceDescription, setServiceDescription] = useState('');
   const [atendimentoId, setAtendimentoId] = useState('');
@@ -126,13 +128,15 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
       modelo: selected.modelo || '',
       ano: selected.ano ? String(selected.ano) : '',
       cor: selected.cor || '',
+      tipo: selected.tipo ?? '',
     });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!atendimentoId.trim()) {
+    // Igual à Nova OS: só exige responsável se a loja tem equipe cadastrada.
+    if (teamMembers.length > 0 && !atendimentoId.trim()) {
       toast.error('Selecione o responsável pelo atendimento antes de criar a OS Express.');
       return;
     }
@@ -142,6 +146,10 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
     }
     if (!client.phone.trim()) {
       toast.error('Telefone do cliente é obrigatório');
+      return;
+    }
+    if (atendeOsDois && !moto.tipo) {
+      toast.error('Escolha se é moto ou carro');
       return;
     }
     if (!moto.placa.trim()) {
@@ -213,6 +221,7 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
         ano: moto.ano ? parseInt(moto.ano, 10) : null,
         cor: moto.cor.trim() || null,
         active: true,
+        ...(atendeOsDois && moto.tipo ? { tipo: moto.tipo } : {}),
       });
 
       if (!savedMoto) {
@@ -279,7 +288,7 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
       setSearchResults([]);
       setClientMotorcycles([]);
       setClient({ name: '', phone: '', cpf: '' });
-      setMoto({ placa: '', marca: '', modelo: '', ano: '', cor: '' });
+      setMoto({ placa: '', marca: '', modelo: '', ano: '', cor: '', tipo: '' });
       setServiceDescription('');
       setAtendimentoId('');
       setAutorizaLembretes(true);
@@ -401,6 +410,24 @@ export function ExpressCadastroPage({ onBack, onOrderCreated }: ExpressCadastroP
           <CardTitle>{VEHICLE_CAP}</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {atendeOsDois && (
+            <div className="space-y-2 md:col-span-2">
+              <Label>Tipo *</Label>
+              <div className="grid grid-cols-2 gap-3">
+                {(['moto', 'carro'] as const).map(t => (
+                  <Button
+                    key={t}
+                    type="button"
+                    variant={moto.tipo === t ? 'default' : 'outline'}
+                    className="h-11"
+                    onClick={() => setMoto(prev => ({ ...prev, tipo: t }))}
+                  >
+                    {t === 'moto' ? 'Moto' : 'Carro'}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="space-y-2">
             <Label>Placa *</Label>
             <Input

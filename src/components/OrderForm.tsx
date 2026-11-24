@@ -13,6 +13,7 @@ import { Client, Motorcycle } from '@/hooks/useClients';
 import { getMaintenanceKeywords, findKeywordInText, type MaintenanceKeyword } from '@/services/maintenanceReminderService';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
 import { useVehicleLabel } from '@/hooks/useVehicleLabel';
+import { useStore } from '@/contexts/StoreContext';
 
 interface ClientData {
   name: string;
@@ -35,6 +36,7 @@ interface MotoData {
   year?: string;
   color?: string;
   km: string;
+  tipo?: string; // 'moto' | 'carro' — só usado quando a loja atende carro e moto
 }
 
 interface ServicoData {
@@ -71,6 +73,8 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting, initialData }: { o
   const [detectedKeywords, setDetectedKeywords] = useState<MaintenanceKeyword[]>([]);
   const { members: teamMembers } = useTeamMembers();
   const { VEHICLE_CAP, VEHICLES_CAP } = useVehicleLabel();
+  const { vehicleType } = useStore();
+  const atendeOsDois = vehicleType === 'ambos';
 
   const getTodayLocal = () => {
     const now = new Date();
@@ -118,6 +122,7 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting, initialData }: { o
         year: m.ano ? String(m.ano) : '',
         color: m.cor ?? '',
         km: '',
+        tipo: (m as { tipo?: string | null }).tipo ?? '',
       });
 
       const motosData = motos && motos.length > 0
@@ -200,7 +205,8 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting, initialData }: { o
         model: `${moto.marca ?? ''} ${moto.modelo}`.trim(),
         year: moto.ano?.toString() || '',
         color: moto.cor || '',
-        km: ''
+        km: '',
+        tipo: moto.tipo ?? '',
       }));
       
       setFormData(prev => ({
@@ -254,6 +260,8 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting, initialData }: { o
           next.equipment = String(value);
         } else if (field === 'km') {
           next.km = String(value);
+        } else if (field === 'tipo') {
+          next.tipo = String(value);
         }
 
         if (['model', 'year', 'color'].includes(field)) {
@@ -281,7 +289,7 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting, initialData }: { o
     formData.client.name &&
     formData.client.cpf &&
     (teamMembers.length === 0 || !!formData.servicos.atendimento_id) &&
-    formData.motos.every(m => m.placa);
+    formData.motos.every(m => m.placa && (!atendeOsDois || m.tipo));
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5 max-w-4xl mx-auto p-6">
@@ -394,6 +402,26 @@ export function OrderForm({ onSubmit, onCancel, isSubmitting, initialData }: { o
                   setFormData({ ...formData, motos: newMotos.length ? newMotos : [formData.motos[0]] });
                 }}>Remover</Button>}
               </div>
+
+              {atendeOsDois && (
+                <div className="space-y-2">
+                  <Label className="font-semibold">Tipo *</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {(['moto', 'carro'] as const).map(t => (
+                      <Button
+                        key={t}
+                        type="button"
+                        variant={moto.tipo === t ? 'default' : 'outline'}
+                        className="h-12"
+                        onClick={() => updateField('motos', index, 'tipo', t)}
+                      >
+                        {t === 'moto' ? 'Moto' : 'Carro'}
+                      </Button>
+                    ))}
+                  </div>
+                  {!moto.tipo && <p className="text-xs text-muted-foreground">Escolha o tipo: o checklist da OS muda para carro ou moto.</p>}
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">

@@ -56,7 +56,7 @@ import { getMaintenanceKeywords, findKeywordInText, rescheduleMaintenanceReminde
 
 export default function Index() {
   const { isAdmin, signOut } = useAuth();
-  const { permissions, isOwner } = useStore();
+  const { permissions, isOwner, vehicleType } = useStore();
   const { canAccess, getUpgradeLink, getRequiredPlan } = usePlanFeatures();
   const navigate = useNavigate();
   // v2: menu novo (5 áreas) é o padrão; o antigo fica como opção neste aparelho
@@ -206,6 +206,9 @@ export default function Index() {
             modelo: modelo,
             ano: moto.year ? parseInt(moto.year) : null,
             cor: moto.color || null,
+            // Loja que atende carro e moto: grava o tipo (o checklist da OS usa).
+            // Nas outras lojas o campo nem é enviado.
+            ...(vehicleType === 'ambos' && (moto.tipo === 'moto' || moto.tipo === 'carro') ? { tipo: moto.tipo } : {}),
           };
           
           console.log('🏍️ Salvando moto:', motoData);

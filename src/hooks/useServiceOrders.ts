@@ -204,13 +204,51 @@ export function useServiceOrders() {
 
       console.log('✅ OS criada:', newOrder);
 
-      const checklistItems = getDefaultChecklistItems(vehicleType).map(item => ({
-        store_id: storeId!,
-        order_id: newOrder.id,
-        label: typeof item === 'string' ? item : item.label,
-        item_type: typeof item === 'string' ? 'checkbox' : item.type,
-        completed: false,
-      }));
+      // Loja que atende carro e moto: o checklist segue o tipo do veículo da OS.
+      // Lojas de um tipo só continuam como antes (nem consultam o veículo).
+      let tipoChecklist: string = vehicleType === 'carro' ? 'carro' : 'moto';
+      if (vehicleType === 'ambos' && order.motorcycle_id) {
+        const { data: veiculo } = await supabase
+          .from('motorcycles')
+          .select('tipo')
+          .eq('id', order.motorcycle_id)
+          .maybeSingle();
+        tipoChecklist = (veiculo as { tipo?: string } | null)?.tipo === 'carro' ? 'carro' : 'moto';
+      }
+
+      // Checklist personalizado da loja (Ajustes → Checklist da OS). Se a loja não
+      // montou o dela, usa o padrão de sempre — e aí o insert fica igual ao antigo
+      // (sem 'posicao'), para não depender da coluna nova.
+      let modelo: { label: string; type: string }[] | null = null;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: cfg } = await (supabase as any)
+          .from('store_settings')
+          .select(tipoChecklist === 'carro' ? 'checklist_carro' : 'checklist_moto')
+          .eq('id', storeId!)
+          .maybeSingle();
+        const lista = cfg?.[tipoChecklist === 'carro' ? 'checklist_carro' : 'checklist_moto'];
+        if (Array.isArray(lista) && lista.length > 0) modelo = lista;
+      } catch { /* coluna ainda não existe ou falha de leitura → padrão */ }
+
+      const checklistItems = modelo
+        ? modelo
+            .filter(item => item && typeof item.label === 'string' && item.label.trim())
+            .map((item, posicao) => ({
+              store_id: storeId!,
+              order_id: newOrder.id,
+              label: item.label.trim(),
+              item_type: ['yesno', 'rating', 'textarea'].includes(item.type) ? item.type : 'yesno',
+              completed: false,
+              posicao,
+            }))
+        : getDefaultChecklistItems(tipoChecklist).map(item => ({
+            store_id: storeId!,
+            order_id: newOrder.id,
+            label: typeof item === 'string' ? item : item.label,
+            item_type: typeof item === 'string' ? 'checkbox' : item.type,
+            completed: false,
+          }));
 
       const { error: checklistError } = await supabase
         .from('checklist_items')

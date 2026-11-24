@@ -3,7 +3,7 @@ import { pedirMotivoEstorno } from '@/lib/estorno';
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ServiceOrder, OrderStatus, STATUS_LABELS, PaymentMethod, Material, StatusOficina } from '@/types/service-order';
+import { ServiceOrder, OrderStatus, STATUS_LABELS, PaymentMethod, Material, StatusOficina, ordenarChecklist, rotuloChecklist } from '@/types/service-order';
 import { StatusBadge } from './StatusBadge';
 import { Checklist } from './Checklist';
 import { SignaturePad } from './SignaturePad';
@@ -707,6 +707,8 @@ export function OrderDetails({
 
   const buildPDFPayload = () => ({
     ...order,
+    // PDF (serviço no Render) desenha os itens na ordem recebida.
+    checklist_items: ordenarChecklist(order.checklist_items).map(i => ({ ...i, label: rotuloChecklist(i.label) })),
     // order.signature_data/delivery_signature_data só chegam depois do
     // round-trip com o banco (refetch). O estado local já tem o valor certo
     // no instante em que a assinatura é coletada — usa ele pra nunca gerar
