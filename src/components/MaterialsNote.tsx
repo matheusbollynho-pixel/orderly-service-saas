@@ -10,6 +10,16 @@ import { Trash2, ChevronDown, ChevronUp, Package } from 'lucide-react';
 import { Material, Mechanic, PaymentMethod } from '@/types/service-order';
 import type { InventoryProduct } from '@/hooks/useInventory';
 
+// Produto vendido por litro, metro ou quilo pode ser usado aos poucos na OS
+// (ex.: 150 ml de um frasco de 1 L). O estoque continua na unidade do produto.
+const FRACAO: Record<string, { pequena: string; grande: string; fator: number }> = {
+  l: { pequena: 'ml', grande: 'L', fator: 1000 },
+  m: { pequena: 'cm', grande: 'm', fator: 100 },
+  kg: { pequena: 'g', grande: 'kg', fator: 1000 },
+};
+const ehFracionado = (q: string) => !Number.isInteger(parseFloat(String(q).replace(',', '.')));
+const brl = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 interface MaterialsNoteProps {
   materiais: Material[];
   mecanicos?: Mechanic[];
@@ -37,6 +47,7 @@ export function MaterialsNote({
 }: MaterialsNoteProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingValues, setEditingValues] = useState<Record<string, string>>({});
+  const [fracao, setFracao] = useState({ valor: '', unidade: 'pequena' as 'pequena' | 'grande', cobrar: false });
   const [newMaterial, setNewMaterial] = useState({
     quantidade: '01',
     descricao: '',
@@ -98,6 +109,7 @@ export function MaterialsNote({
   };
 
   const handleSelectProduct = (product: InventoryProduct) => {
+    setFracao({ valor: '', unidade: 'pequena', cobrar: false });
     setNewMaterial((prev) => ({
       ...prev,
       descricao: product.name,
@@ -112,7 +124,36 @@ export function MaterialsNote({
     return sum + ((m.valor || 0) * qtd);
   }, 0);
 
+  // Produto escolhido do estoque que pode ser usado fracionado
+  const produtoSel = newMaterial.product_id ? inventoryProducts.find((p) => p.id === newMaterial.product_id) : undefined;
+  const fr = produtoSel ? FRACAO[(produtoSel.unit || '').toLowerCase()] : undefined;
+  const fracNum = parseFloat(fracao.valor.replace(',', '.')) || 0;
+  const fracBase = fr ? (fracao.unidade === 'pequena' ? fracNum / fr.fator : fracNum) : 0;
+
   const handleAddMaterial = () => {
+    if (fr && produtoSel) {
+      if (!fracNum || fracNum <= 0) {
+        toast.error(`Informe quanto foi usado (em ${fr.pequena} ou ${fr.grande}).`);
+        return;
+      }
+      if (fracBase < 0.001) {
+        toast.error(`Quantidade muito pequena. O mínimo é 1 ${fr.pequena === 'cm' ? 'mm' : fr.pequena}.`);
+        return;
+      }
+      const unidadeTxt = fracao.unidade === 'pequena' ? fr.pequena : fr.grande;
+      onAddMaterial({
+        quantidade: String(Number(fracBase.toFixed(3))),
+        descricao: `${newMaterial.descricao} (${String(fracNum).replace('.', ',')} ${unidadeTxt})`,
+        // Sem "Cobrar do cliente": sai do estoque mas não soma no valor da OS
+        valor: fracao.cobrar ? (parseFloat(newMaterial.valor) || 0) : 0,
+        is_service: false,
+        product_id: newMaterial.product_id,
+      } as unknown as Omit<Material, 'id' | 'created_at' | 'updated_at'>);
+      setNewMaterial({ quantidade: '01', descricao: '', valor: '', is_service: false, mechanic_id: undefined, product_id: undefined });
+      setFracao({ valor: '', unidade: 'pequena', cobrar: false });
+      setShowSuggestions(false);
+      return;
+    }
     if (!newMaterial.descricao || !newMaterial.quantidade || !newMaterial.valor) {
       toast.error('Preencha todos os campos para adicionar material');
       return;
@@ -177,7 +218,7 @@ export function MaterialsNote({
                     {material.product_id && <Package className="h-3 w-3 text-green-600 flex-shrink-0" title="Vinculado ao estoque" />}
                   </div>
                   <div className="col-span-2 text-sm text-muted-foreground">
-                    {material.quantidade} × R$ {parseFloat(String(material.valor)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {String(material.quantidade).replace('.', ',')} × R$ {parseFloat(String(material.valor)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                   <div className="col-span-2 flex justify-end">
                     <Button
@@ -200,6 +241,11 @@ export function MaterialsNote({
                 {expandedId === material.id && (
                   <div className="bg-muted/50 border border-border/50 border-t-0 p-3 rounded-b space-y-3">
                     <div className="flex gap-2 items-end">
+                      {ehFracionado(material.quantidade) ? (
+                        <div className="text-xs text-muted-foreground max-w-[12rem]">
+                          Quantidade fracionada ({String(material.quantidade).replace('.', ',')}). Para mudar, remova e lance de novo.
+                        </div>
+                      ) : (
                       <div className="w-16">
                         <label className="text-xs font-semibold text-foreground block mb-1">Quantidade</label>
                         <Select value={material.quantidade || '01'} onValueChange={(value) => onUpdateMaterial(material.id, 'quantidade', value)} disabled={disabled}>
@@ -213,6 +259,7 @@ export function MaterialsNote({
                           </SelectContent>
                         </Select>
                       </div>
+                      )}
                       <div className="w-24">
                         <label className="text-xs font-semibold text-foreground block mb-1">Valor (R$)</label>
                         <input
@@ -289,6 +336,27 @@ export function MaterialsNote({
             <h4 className="font-semibold text-foreground text-sm">Adicionar novo material</h4>
             <div className="space-y-3">
               <div className="flex gap-2 items-end">
+                {fr ? (
+                  <div className="w-32">
+                    <label className="text-xs font-semibold text-foreground block mb-1">Quanto usou</label>
+                    <div className="flex gap-1">
+                      <Input
+                        inputMode="decimal"
+                        placeholder="150"
+                        value={fracao.valor}
+                        onChange={(e) => setFracao({ ...fracao, valor: e.target.value.replace(/[^\d.,]/g, '') })}
+                        className="h-8 text-xs text-right bg-muted/50 border-border/50"
+                      />
+                      <Select value={fracao.unidade} onValueChange={(v) => setFracao({ ...fracao, unidade: v as 'pequena' | 'grande' })}>
+                        <SelectTrigger className="h-8 w-16 text-xs bg-muted/50 border-border/50"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pequena">{fr.pequena}</SelectItem>
+                          <SelectItem value="grande">{fr.grande}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                ) : (
                 <div className="w-16">
                   <label className="text-xs font-semibold text-foreground block mb-1">Qtd</label>
                   <Select value={newMaterial.quantidade || '01'} onValueChange={(value) => setNewMaterial({ ...newMaterial, quantidade: value })}>
@@ -302,6 +370,7 @@ export function MaterialsNote({
                     </SelectContent>
                   </Select>
                 </div>
+                )}
                 <div className="flex-1 relative" ref={suggestionsRef}>
                   <label className="text-xs font-semibold text-foreground block mb-1">
                     Descrição{' '}
@@ -350,7 +419,7 @@ export function MaterialsNote({
                   )}
                 </div>
                 <div className="w-24">
-                  <label className="text-xs font-semibold text-foreground block mb-1">Valor (R$)</label>
+                  <label className="text-xs font-semibold text-foreground block mb-1">{fr ? `R$ por ${fr.grande}` : 'Valor (R$)'}</label>
                   <Input
                     type="number"
                     placeholder="0,00"
@@ -372,6 +441,27 @@ export function MaterialsNote({
                   <span className="text-xs font-medium leading-none text-foreground">Serviço</span>
                 </div>
               </div>
+              {fr && produtoSel && (
+                <div className="rounded-md border border-border/50 bg-muted/30 p-2 space-y-1">
+                  <label className="flex items-center gap-2 text-xs font-medium text-foreground">
+                    <Checkbox
+                      checked={fracao.cobrar}
+                      onCheckedChange={(c) => setFracao({ ...fracao, cobrar: Boolean(c) })}
+                      className="h-4 w-4"
+                    />
+                    Cobrar do cliente
+                  </label>
+                  {fracNum > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Sai do estoque: {String(Number(fracBase.toFixed(3))).replace('.', ',')} {fr.grande}
+                      {' · '}
+                      {fracao.cobrar
+                        ? `cliente paga R$ ${brl(fracBase * (parseFloat(newMaterial.valor) || 0))}`
+                        : 'não soma no valor da OS (material de uso no serviço)'}
+                    </p>
+                  )}
+                </div>
+              )}
               {newMaterial.is_service && (
                 <div>
                   <label className="text-xs font-semibold text-foreground block mb-1">

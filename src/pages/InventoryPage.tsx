@@ -404,6 +404,7 @@ function ProductFormDialog({ open, product, isEditing, isSaving, usaAlmox, onCha
                     <SelectItem value="kit">Kit</SelectItem>
                     <SelectItem value="m">Metro (m)</SelectItem>
                     <SelectItem value="l">Litro (l)</SelectItem>
+                    <SelectItem value="kg">Quilo (kg)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
