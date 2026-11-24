@@ -2,7 +2,6 @@ import { matchesSearch } from '@/lib/textSearch';
 import { useEffect, useMemo, useState } from 'react';
 import { useServiceOrders } from '@/hooks/useServiceOrders';
 import { useMechanics } from '@/hooks/useMechanics';
-import { useInventory } from '@/hooks/useInventory';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,6 +12,7 @@ import { PaymentsTab } from '@/components/PaymentsTab';
 import { Switch } from '@/components/ui/switch';
 import ResumoV2 from '@/components/relatorios/ResumoV2';
 import ComissoesV2 from '@/components/relatorios/ComissoesV2';
+import RelatoriosEstoque from '@/components/relatorios/RelatoriosEstoque';
 
 type Period = 'week' | 'month' | 'all';
 
@@ -25,13 +25,10 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder }: ReportsPageProps
   const [resumoNovo, setResumoNovo] = useState(() => { try { return localStorage.getItem('v2-resumo-novo') === '1'; } catch { return false; } });
   const { orders, isLoading, createPayment, deletePayment, updatePayment } = useServiceOrders();
   const { mechanics } = useMechanics();
-  const { products: inventoryProducts, isLoadingProducts } = useInventory();
   const [period, setPeriod] = useState<Period>('month');
   const [activeTab, setActiveTab] = useState<'resumo' | 'detalhado' | 'itens' | 'pagamentos' | 'balcao' | 'estoque'>('resumo');
   const [itemsQuery, setItemsQuery] = useState('');
   const [selectedMechanicFilter, setSelectedMechanicFilter] = useState<string>('todos');
-  const [estoqueQuery, setEstoqueQuery] = useState('');
-  const [estoqueCategoria, setEstoqueCategoria] = useState<string>('todas');
 
   const startOfWeek = () => {
     const d = new Date();
@@ -160,29 +157,6 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder }: ReportsPageProps
     
     return filtered;
   }, [itemsQuery, pecasPorOS, selectedMechanicFilter]);
-
-  const categoriasEstoque = useMemo(() => {
-    const set = new Set(inventoryProducts.map(p => p.category).filter((c): c is string => !!c));
-    return Array.from(set).sort();
-  }, [inventoryProducts]);
-
-  const filteredEstoqueProducts = useMemo(() => {
-    const q = estoqueQuery.trim().toLowerCase();
-    return inventoryProducts.filter(p => {
-      if (estoqueCategoria !== 'todas' && p.category !== estoqueCategoria) return false;
-      if (q && !matchesSearch(q, p.name, p.code)) return false;
-      return true;
-    });
-  }, [inventoryProducts, estoqueQuery, estoqueCategoria]);
-
-  const estoqueTotais = useMemo(() => {
-    return filteredEstoqueProducts.reduce((acc, p) => {
-      const qtd = Number(p.stock_current) || 0;
-      acc.valorCompra += qtd * (Number(p.cost_price) || 0);
-      acc.valorVenda += qtd * (Number(p.sale_price) || 0);
-      return acc;
-    }, { valorCompra: 0, valorVenda: 0 });
-  }, [filteredEstoqueProducts]);
 
   useEffect(() => {
     const handler = () => setActiveTab('detalhado');
@@ -388,56 +362,7 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder }: ReportsPageProps
         </TabsContent>
 
         <TabsContent value="estoque" className="space-y-5">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Input
-              placeholder="Buscar produto ou código..."
-              value={estoqueQuery}
-              onChange={(e) => setEstoqueQuery(e.target.value)}
-              className="h-10 sm:col-span-2"
-            />
-            <Select value={estoqueCategoria} onValueChange={setEstoqueCategoria}>
-              <SelectTrigger className="w-full h-10">
-                <SelectValue placeholder="Todas categorias" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todas">Todas categorias</SelectItem>
-                {categoriasEstoque.map(c => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {isLoadingProducts ? (
-            <p>Carregando...</p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <Card>
-                <CardContent className="p-4">
-                  <p className="text-sm text-muted-foreground">Valor de compra (custo)</p>
-                  <p className="text-2xl font-bold">{formatCurrency(estoqueTotais.valorCompra)}</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4">
-                  <p className="text-sm text-muted-foreground">Valor de venda</p>
-                  <p className="text-2xl font-bold">{formatCurrency(estoqueTotais.valorVenda)}</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="p-4">
-                  <p className="text-sm text-muted-foreground">Lucro potencial</p>
-                  <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                    {formatCurrency(estoqueTotais.valorVenda - estoqueTotais.valorCompra)}
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          <p className="text-xs text-muted-foreground">
-            {filteredEstoqueProducts.length} produto(s) considerado(s), somando estoque atual × preço de cada um.
-          </p>
+          <RelatoriosEstoque />
         </TabsContent>
 
       </Tabs>

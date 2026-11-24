@@ -2,7 +2,7 @@ import { matchesSearch } from '@/lib/textSearch';
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useStore } from '@/contexts/StoreContext';
-import { ValidadeEstoque, diasParaVencer, type Lote } from '@/components/ValidadeEstoque';
+import { diasParaVencer, type Lote } from '@/components/ValidadeEstoque';
 import { useInventory, type InventoryProduct, type InventoryProductInsert, type InventoryMovementInsert } from '@/hooks/useInventory';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,7 +45,6 @@ import { useVehicleLabel } from '@/hooks/useVehicleLabel';
 import { useStoreSettings } from '@/hooks/useStoreSettings';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
 import { useMechanics } from '@/hooks/useMechanics';
-import { RelatorioAlmoxarifado } from '@/components/RelatorioAlmoxarifado';
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import { UpgradeModal } from '@/components/UpgradeModal';
 
@@ -746,8 +745,7 @@ export default function InventoryPage() {
   const { settings: lojaCfg } = useStoreSettings();
   const usaAlmox = !!(lojaCfg as { usa_almoxarifado?: boolean } | null)?.usa_almoxarifado;
   const { storeId } = useStore();
-  const [diasAvisoSalvo, setDiasAvisoSalvo] = useState<number | null>(null);
-  const diasAviso = diasAvisoSalvo ?? Number((lojaCfg as { dias_aviso_validade?: number } | null)?.dias_aviso_validade ?? 30);
+  const diasAviso = Number((lojaCfg as { dias_aviso_validade?: number } | null)?.dias_aviso_validade ?? 30);
   const algumComValidade = products.some((p) => (p as { controla_validade?: boolean }).controla_validade);
   const { data: lotes = [] } = useQuery({
     queryKey: ['inventory-lotes'],
@@ -904,8 +902,6 @@ export default function InventoryPage() {
         <TabsList className="w-full">
           <TabsTrigger value="produtos" className="flex-1">Produtos ({products.length})</TabsTrigger>
           <TabsTrigger value="movimentacoes" className="flex-1">Movimentações</TabsTrigger>
-          {usaAlmox && <TabsTrigger value="almoxarifado" className="flex-1">Almoxarifado</TabsTrigger>}
-          {algumComValidade && <TabsTrigger value="validade" className="flex-1">Validade</TabsTrigger>}
         </TabsList>
 
         {/* ── ABA PRODUTOS ── */}
@@ -1014,27 +1010,6 @@ export default function InventoryPage() {
             </div>
           )}
         </TabsContent>
-
-        {/* ── ABA VALIDADE ── */}
-        {algumComValidade && (
-          <TabsContent value="validade" className="mt-3">
-            <ValidadeEstoque
-              products={products}
-              lotes={lotes}
-              diasAviso={diasAviso}
-              storeId={storeId}
-              usaAlmox={usaAlmox}
-              onDiasSalvo={setDiasAvisoSalvo}
-            />
-          </TabsContent>
-        )}
-
-        {/* ── ABA ALMOXARIFADO (relatório) ── */}
-        {usaAlmox && (
-          <TabsContent value="almoxarifado" className="mt-3">
-            <RelatorioAlmoxarifado products={products} />
-          </TabsContent>
-        )}
 
         {/* ── ABA MOVIMENTAÇÕES ── */}
         <TabsContent value="movimentacoes" className="space-y-2 mt-3">

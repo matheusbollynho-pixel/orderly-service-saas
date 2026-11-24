@@ -8,6 +8,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useMechanics } from '@/hooks/useMechanics';
 import type { InventoryProduct } from '@/hooks/useInventory';
+import { Button } from '@/components/ui/button';
+import { baixarPlanilha } from '@/lib/planilha';
 
 type Periodo = 'este_mes' | 'mes_passado' | '30_dias';
 
@@ -102,6 +104,7 @@ export function RelatorioAlmoxarifado({ products }: { products: InventoryProduct
     const m = new Map<string, { os: Mov['service_orders']; itens: Map<string, number> }>();
     for (const mv of movs) {
       if (mv.local !== 'almox' || !mv.order_id || (mv.type !== 'saida_os' && mv.type !== 'devolucao')) continue;
+      if (!porId.has(mv.product_id)) continue; // fora do filtro de produtos
       if (!m.has(mv.order_id)) m.set(mv.order_id, { os: mv.service_orders, itens: new Map() });
       const g = m.get(mv.order_id)!;
       const sinal = mv.type === 'saida_os' ? 1 : -1;
@@ -138,6 +141,20 @@ export function RelatorioAlmoxarifado({ products }: { products: InventoryProduct
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">Material do almoxarifado — {rotulo}</p>
+        <Button
+          size="sm"
+          variant="outline"
+          className="ml-auto"
+          disabled={fechamento.length === 0}
+          onClick={() => baixarPlanilha(`almoxarifado-${periodo}`,
+            ['Produto', 'Código', 'Unidade', 'Entrou', 'Usado em OS', 'Voltou p/ loja', 'Contagem (+sobra/-perda)', 'Saldo hoje', 'Custo unitário', 'Custo usado'],
+            fechamento.map((r) => [
+              r.produto!.name, r.produto!.code, r.produto!.unit, r.entrou, r.usado, r.voltou, r.contagem,
+              Number((r.produto as { stock_almox?: number }).stock_almox ?? 0), custo(r.id), r.usado * custo(r.id),
+            ]))}
+        >
+          Baixar planilha
+        </Button>
         <Select value={periodo} onValueChange={(v) => setPeriodo(v as Periodo)}>
           <SelectTrigger className="w-40 h-9"><SelectValue /></SelectTrigger>
           <SelectContent>

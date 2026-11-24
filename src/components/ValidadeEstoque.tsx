@@ -6,6 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import type { InventoryProduct } from '@/hooks/useInventory';
+import { baixarPlanilha } from '@/lib/planilha';
 
 export interface Lote {
   id: string;
@@ -35,9 +36,11 @@ interface Props {
   storeId: string | null;
   usaAlmox: boolean;
   onDiasSalvo: (dias: number) => void;
+  local?: 'todos' | 'loja' | 'almox';
 }
 
-export function ValidadeEstoque({ products, lotes, diasAviso, storeId, usaAlmox, onDiasSalvo }: Props) {
+export function ValidadeEstoque({ products, lotes: todosLotes, diasAviso, storeId, usaAlmox, onDiasSalvo, local = 'todos' }: Props) {
+  const lotes = useMemo(() => (local === 'todos' ? todosLotes : todosLotes.filter((l) => l.local === local)), [todosLotes, local]);
   const [filtro, setFiltro] = useState<'aviso' | 'todos'>('aviso');
   const [dias, setDias] = useState(String(diasAviso));
   const [salvando, setSalvando] = useState(false);
@@ -62,14 +65,14 @@ export function ValidadeEstoque({ products, lotes, diasAviso, storeId, usaAlmox,
     return products
       .filter((p) => (p as { controla_validade?: boolean }).controla_validade)
       .map((p) => {
-        const somaLoja = lotes.filter((l) => l.product_id === p.id && l.local === 'loja').reduce((s, l) => s + Number(l.quantidade), 0);
-        const somaAlmox = lotes.filter((l) => l.product_id === p.id && l.local === 'almox').reduce((s, l) => s + Number(l.quantidade), 0);
-        const loja = Number(p.stock_current) - somaLoja;
-        const almox = Number((p as { stock_almox?: number }).stock_almox ?? 0) - somaAlmox;
+        const somaLoja = todosLotes.filter((l) => l.product_id === p.id && l.local === 'loja').reduce((s, l) => s + Number(l.quantidade), 0);
+        const somaAlmox = todosLotes.filter((l) => l.product_id === p.id && l.local === 'almox').reduce((s, l) => s + Number(l.quantidade), 0);
+        const loja = local === 'almox' ? 0 : Number(p.stock_current) - somaLoja;
+        const almox = local === 'loja' ? 0 : Number((p as { stock_almox?: number }).stock_almox ?? 0) - somaAlmox;
         return { p, loja, almox };
       })
       .filter((r) => r.loja > 0.0005 || r.almox > 0.0005);
-  }, [products, lotes]);
+  }, [products, todosLotes, local]);
 
   async function salvarDias() {
     const n = parseInt(dias, 10);
@@ -101,6 +104,21 @@ export function ValidadeEstoque({ products, lotes, diasAviso, storeId, usaAlmox,
           <Button size="sm" variant={filtro === 'aviso' ? 'default' : 'outline'} onClick={() => setFiltro('aviso')}>Vencidos e a vencer</Button>
           <Button size="sm" variant={filtro === 'todos' ? 'default' : 'outline'} onClick={() => setFiltro('todos')}>Todos os lotes</Button>
         </div>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={linhas.length === 0}
+          onClick={() => baixarPlanilha('validade-lotes',
+            ['Produto', 'Código', 'Lote', 'Fabricação', 'Validade', 'Dias para vencer', 'Local', 'Quantidade', 'Unidade', 'Custo unitário', 'Valor (custo)'],
+            linhas.map((l) => {
+              const p = porId.get(l.product_id)!;
+              return [p.name, p.code, l.lote || 'sem número', fmtData(l.fabricacao), fmtData(l.validade), l.dias ?? '',
+                l.local === 'almox' ? 'almoxarifado' : 'loja', Number(l.quantidade), p.unit, Number(p.cost_price || 0),
+                Number(l.quantidade) * Number(p.cost_price || 0)];
+            }))}
+        >
+          Baixar planilha
+        </Button>
         <div className="flex items-end gap-1 ml-auto">
           <div>
             <label className="text-[11px] text-muted-foreground block">Avisar com (dias)</label>
