@@ -4,6 +4,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { buscarTodas } from '@/lib/buscarTodas';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { InventoryProduct } from '@/hooks/useInventory';
@@ -23,16 +24,16 @@ export function EstoqueParado({ products, local = 'todos' }: { products: Invento
     queryFn: async () => {
       const desde = new Date(Date.now() - 365 * DIA).toISOString();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
+      const data = await buscarTodas<{ product_id: string; created_at: string }>((de, ate) => (supabase as any)
         .from('inventory_movements')
         .select('product_id, created_at')
         .in('type', ['saida_venda', 'saida_balcao', 'saida_os'])
         .gte('created_at', desde)
         .order('created_at', { ascending: false })
-        .limit(20000);
-      if (error) throw error;
+        .order('id', { ascending: true })
+        .range(de, ate));
       const m = new Map<string, string>();
-      for (const r of (data ?? []) as { product_id: string; created_at: string }[]) {
+      for (const r of data) {
         if (!m.has(r.product_id)) m.set(r.product_id, r.created_at);
       }
       return m;

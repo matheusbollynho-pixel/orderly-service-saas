@@ -14,6 +14,9 @@ import ResumoV2 from '@/components/relatorios/ResumoV2';
 import ComissoesV2 from '@/components/relatorios/ComissoesV2';
 import RelatoriosEstoque from '@/components/relatorios/RelatoriosEstoque';
 import Vencimentos from '@/components/relatorios/Vencimentos';
+import RelatorioVendas from '@/components/relatorios/RelatorioVendas';
+import RelatorioOficina from '@/components/relatorios/RelatorioOficina';
+import RelatorioClientes from '@/components/relatorios/RelatorioClientes';
 
 type Period = 'week' | 'month' | 'all';
 
@@ -177,6 +180,9 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder, onOpenCaixa }: Rep
         {/* Celular: as abas rolam para o lado; PC: cabem inteiras */}
         <TabsList className="w-full justify-start overflow-x-auto overflow-y-hidden scrollbar-hide">
           <TabsTrigger value="resumo" className="flex-1 shrink-0">Resumo</TabsTrigger>
+          <TabsTrigger value="vendas" className="flex-1 shrink-0">Vendas</TabsTrigger>
+          <TabsTrigger value="oficina" className="flex-1 shrink-0">Oficina</TabsTrigger>
+          <TabsTrigger value="clientes" className="flex-1 shrink-0">Clientes</TabsTrigger>
           <TabsTrigger value="comissoes" className="flex-1 shrink-0">Comissões</TabsTrigger>
           <TabsTrigger value="detalhado" className="flex-1 shrink-0">Mecânicos</TabsTrigger>
           <TabsTrigger value="itens" className="flex-1 shrink-0">Peças</TabsTrigger>
@@ -247,6 +253,9 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder, onOpenCaixa }: Rep
           </>)}
         </TabsContent>
 
+        <TabsContent value="vendas"><RelatorioVendas /></TabsContent>
+        <TabsContent value="oficina"><RelatorioOficina onOpenOrder={onOpenOrder} /></TabsContent>
+        <TabsContent value="clientes"><RelatorioClientes /></TabsContent>
         <TabsContent value="comissoes"><ComissoesV2 /></TabsContent>
 
         <TabsContent value="detalhado">

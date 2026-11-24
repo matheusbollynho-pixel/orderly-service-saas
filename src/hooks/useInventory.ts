@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { buscarTodas } from '@/lib/buscarTodas';
 import { toast } from 'sonner';
 import type { Database } from '@/integrations/supabase/types';
 import { useStore } from '@/contexts/StoreContext';
@@ -18,12 +19,13 @@ export function useInventory() {
   const productsQuery = useQuery({
     queryKey: ['inventory-products'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Em páginas de 1000 (o banco corta em 1000; loja de acessórios passa disso)
+      return buscarTodas<InventoryProduct>((de, ate) => supabase
         .from('inventory_products')
         .select('*')
-        .order('name', { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as InventoryProduct[];
+        .order('name', { ascending: true })
+        .order('id', { ascending: true })
+        .range(de, ate) as never);
     },
   });
 

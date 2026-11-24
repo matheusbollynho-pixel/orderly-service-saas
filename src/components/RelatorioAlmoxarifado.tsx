@@ -4,6 +4,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { buscarTodas } from '@/lib/buscarTodas';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useMechanics } from '@/hooks/useMechanics';
@@ -53,16 +54,15 @@ export function RelatorioAlmoxarifado({ products }: { products: InventoryProduct
     queryKey: ['relatorio-almox', periodo],
     queryFn: async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
+      return buscarTodas<Mov>((de, ate) => (supabase as any)
         .from('inventory_movements')
         .select('id, type, local, quantity, saldo_anterior, product_id, order_id, created_at, service_orders(client_name, equipment, mechanic_id, created_at)')
         .or('local.eq.almox,type.in.(transf_para_almox,transf_para_loja)')
         .gte('created_at', inicio.toISOString())
         .lt('created_at', fim.toISOString())
         .order('created_at', { ascending: true })
-        .limit(5000);
-      if (error) throw error;
-      return (data ?? []) as Mov[];
+        .order('id', { ascending: true })
+        .range(de, ate));
     },
   });
 

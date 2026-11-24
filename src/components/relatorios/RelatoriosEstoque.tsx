@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { buscarTodas } from '@/lib/buscarTodas';
 import { useInventory, type InventoryProduct } from '@/hooks/useInventory';
 import { useStoreSettings } from '@/hooks/useStoreSettings';
 import { useStore } from '@/contexts/StoreContext';
@@ -16,8 +17,11 @@ import { EstoqueParado } from '@/components/EstoqueParado';
 import { ValidadeEstoque, type Lote } from '@/components/ValidadeEstoque';
 import { RelatorioAlmoxarifado } from '@/components/RelatorioAlmoxarifado';
 import { FiadoEmAberto } from '@/components/relatorios/FiadoEmAberto';
+import { CurvaABC } from '@/components/relatorios/CurvaABC';
+import { SugestaoCompra } from '@/components/relatorios/SugestaoCompra';
+import { FolhaContagem } from '@/components/relatorios/FolhaContagem';
 
-type Secao = 'geral' | 'parados' | 'validade' | 'almox' | 'fiado';
+type Secao = 'geral' | 'abc' | 'compra' | 'contagem' | 'parados' | 'validade' | 'almox' | 'fiado';
 type Local = 'todos' | 'loja' | 'almox';
 
 const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -61,12 +65,12 @@ export default function RelatoriosEstoque() {
     enabled: algumComValidade,
     queryFn: async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
+      return buscarTodas<Lote>((de, ate) => (supabase as any)
         .from('inventory_lotes')
         .select('id, product_id, local, lote, fabricacao, validade, quantidade')
-        .gt('quantidade', 0);
-      if (error) throw error;
-      return (data ?? []) as Lote[];
+        .gt('quantidade', 0)
+        .order('id', { ascending: true })
+        .range(de, ate));
     },
   });
 
@@ -107,10 +111,13 @@ export default function RelatoriosEstoque() {
 
   const SECOES: { id: Secao; nome: string; mostrar: boolean }[] = [
     { id: 'geral', nome: 'Visão geral', mostrar: true },
+    { id: 'abc', nome: 'Mais vendidos (ABC)', mostrar: true },
+    { id: 'compra', nome: 'Sugestão de compra', mostrar: true },
     { id: 'parados', nome: 'Parados', mostrar: true },
     { id: 'fiado', nome: 'Fiado em aberto', mostrar: true },
     { id: 'validade', nome: 'Validade', mostrar: algumComValidade },
     { id: 'almox', nome: 'Consumo do almoxarifado', mostrar: usaAlmox },
+    { id: 'contagem', nome: 'Folha de contagem', mostrar: true },
   ];
 
   const tabelaGrupo = (titulo: string, dados: typeof geral.porCategoria) => (
@@ -256,6 +263,12 @@ export default function RelatoriosEstoque() {
           filtroDeProdutoAtivo={categoria !== 'todas' || marca !== 'todas' || fornecedor !== 'todos'}
           busca={busca}
         />
+      ) : secao === 'abc' ? (
+        <CurvaABC products={filtrados} />
+      ) : secao === 'compra' ? (
+        <SugestaoCompra products={filtrados} />
+      ) : secao === 'contagem' ? (
+        <FolhaContagem products={filtrados} local={local} nomeLoja={(settings as { company_name?: string } | null)?.company_name} />
       ) : secao === 'parados' ? (
         <EstoqueParado products={filtrados} local={local} />
       ) : secao === 'validade' ? (

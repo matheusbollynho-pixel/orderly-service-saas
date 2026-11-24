@@ -5,6 +5,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { buscarTodas } from '@/lib/buscarTodas';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { baixarPlanilha } from '@/lib/planilha';
@@ -41,13 +42,12 @@ export function FiadoEmAberto({ produtos, idsNoFiltro, filtroDeProdutoAtivo, bus
     queryKey: ['relatorio-fiado-aberto'],
     queryFn: async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
+      return buscarTodas<FiadoRow>((de, ate) => (supabase as any)
         .from('fiados')
         .select('id, client_name, client_phone, items, original_amount, amount_paid, interest_accrued, due_date, status, created_at')
         .neq('status', 'pago')
-        .limit(5000);
-      if (error) throw error;
-      return (data ?? []) as FiadoRow[];
+        .order('id', { ascending: true })
+        .range(de, ate));
     },
   });
 

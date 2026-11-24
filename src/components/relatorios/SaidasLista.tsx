@@ -3,6 +3,7 @@
 // dentro do mesmo período se anulam (semEstornosAnulados). Retirada não entra.
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { buscarTodas } from '@/lib/buscarTodas';
 import { useStore } from '@/contexts/StoreContext';
 import { Skeleton } from '@/components/ui/skeleton';
 import { semEstornosAnulados } from '@/lib/caixaEstorno';
@@ -32,16 +33,16 @@ export function SaidasLista({ periodo, valor, onAbrir }: { periodo: Periodo; val
     queryFn: async () => {
       // Busca o período todo (não só saídas) para achar os pares lançamento + estorno
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
+      const data = await buscarTodas<Lancamento>((de, ate) => (supabase as any)
         .from('cash_flow')
         .select('id, type, amount, description, category, payment_method, notes, date, created_at, estorno_de')
         .eq('store_id', storeId)
         .gte('date', periodo.ini)
         .lte('date', periodo.fim)
         .order('created_at', { ascending: false })
-        .limit(10000);
-      if (error) throw error;
-      return semEstornosAnulados((data ?? []) as Lancamento[]).filter((l) => l.type === 'saida');
+        .order('id', { ascending: true })
+        .range(de, ate));
+      return semEstornosAnulados(data).filter((l) => l.type === 'saida');
     },
   });
 

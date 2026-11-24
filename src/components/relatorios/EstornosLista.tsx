@@ -3,6 +3,7 @@
 // com estorno_de preenchido e data dentro do período. O motivo fica em `notes`.
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { buscarTodas } from '@/lib/buscarTodas';
 import { useStore } from '@/contexts/StoreContext';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Periodo } from '@/lib/periodo';
@@ -25,7 +26,7 @@ export function EstornosLista({ periodo, valor, onAbrir }: { periodo: Periodo; v
     staleTime: 5 * 60_000,
     queryFn: async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (supabase as any)
+      return buscarTodas<Estorno>((de, ate) => (supabase as any)
         .from('cash_flow')
         .select('id, type, amount, description, notes, date, created_at')
         .eq('store_id', storeId)
@@ -33,9 +34,8 @@ export function EstornosLista({ periodo, valor, onAbrir }: { periodo: Periodo; v
         .gte('date', periodo.ini)
         .lte('date', periodo.fim)
         .order('created_at', { ascending: false })
-        .limit(500);
-      if (error) throw error;
-      return (data ?? []) as Estorno[];
+        .order('id', { ascending: true })
+        .range(de, ate));
     },
   });
 

@@ -28,24 +28,26 @@ function CaixaAjuste({ titulo, children }: { titulo: string; children: React.Rea
   );
 }
 
-/** Números que recebem os alertas de boletos (contas a pagar) no WhatsApp. */
+/** Números que recebem os alertas no WhatsApp: boletos (dono e financeiro) e validade de produtos (só o dono). */
 export function AlertasBoletoCard() {
   const { isOwner } = useStore();
   const { settings, saving, saveSettings } = useStoreSettings();
   const [dono, setDono] = useState('');
   const [financeiro, setFinanceiro] = useState('');
+  const [validade, setValidade] = useState(true);
 
   useEffect(() => {
     if (!settings) return;
     setDono(settings.boleto_notify_phone_1 || '');
     setFinanceiro(settings.boleto_notify_phone_2 || '');
+    setValidade((settings as { alerta_validade_whatsapp?: boolean }).alerta_validade_whatsapp !== false);
   }, [settings]);
 
   if (!isOwner) return null;
   const soDigitos = (v: string) => v.replace(/\D/g, '');
 
   return (
-    <CaixaAjuste titulo="Alertas de boletos no WhatsApp">
+    <CaixaAjuste titulo="Alertas no WhatsApp">
       <div className="space-y-1">
         <Label>Dono / responsável</Label>
         <Input inputMode="numeric" value={dono} onChange={(e) => setDono(soDigitos(e.target.value))} placeholder="DDD + número" />
@@ -54,10 +56,17 @@ export function AlertasBoletoCard() {
         <Label>Financeiro</Label>
         <Input inputMode="numeric" value={financeiro} onChange={(e) => setFinanceiro(soDigitos(e.target.value))} placeholder="DDD + número" />
       </div>
-      <p className="text-xs text-muted-foreground">Esses números recebem o aviso de boleto vencendo e vencido.</p>
+      <p className="text-xs text-muted-foreground">Os dois recebem o aviso de boleto vencendo e vencido.</p>
+      <label className="flex items-start gap-2 text-sm">
+        <input type="checkbox" className="mt-0.5 h-4 w-4" checked={validade} onChange={(e) => setValidade(e.target.checked)} />
+        <span>
+          Avisar o dono sobre validade de produtos
+          <span className="block text-xs text-muted-foreground">1 mensagem por dia, só quando tem lote entrando no prazo de aviso, faltando 7 dias, vencendo hoje ou vencido ontem.</span>
+        </span>
+      </label>
       <Button className="w-full" disabled={saving || !settings}
-        onClick={() => saveSettings({ boleto_notify_phone_1: dono || null, boleto_notify_phone_2: financeiro || null } as Partial<StoreSettings>)}>
-        {saving ? 'Salvando...' : 'Salvar números'}
+        onClick={() => saveSettings({ boleto_notify_phone_1: dono || null, boleto_notify_phone_2: financeiro || null, alerta_validade_whatsapp: validade } as Partial<StoreSettings>)}>
+        {saving ? 'Salvando...' : 'Salvar'}
       </Button>
     </CaixaAjuste>
   );

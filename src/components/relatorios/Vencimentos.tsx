@@ -5,6 +5,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { buscarTodas } from '@/lib/buscarTodas';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { baixarPlanilha } from '@/lib/planilha';
@@ -48,14 +49,16 @@ export default function Vencimentos() {
   const { data: itens = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ['relatorio-vencimentos'],
     queryFn: async () => {
+      // Em páginas de 1000 (o banco corta em 1000 sem avisar)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const tudo = (q: () => any) => buscarTodas<any>((de, ate) => q().order('id', { ascending: true }).range(de, ate)).then((data) => ({ data }));
       const [contas, fiados, lotes, ordens, encomendas] = await Promise.all([
-        db.from('boletos').select('id, credor, valor, vencimento, categoria').is('paid_at', null).limit(2000),
-        db.from('fiados').select('id, client_name, client_phone, original_amount, amount_paid, interest_accrued, due_date').neq('status', 'pago').limit(5000),
-        db.from('inventory_lotes').select('id, lote, validade, quantidade, local, inventory_products(name, unit, cost_price)').gt('quantidade', 0).not('validade', 'is', null).limit(5000),
-        db.from('service_orders').select('id, client_name, equipment, previsao_entrega, status').in('status', ['aberta', 'em_andamento']).not('previsao_entrega', 'is', null).limit(2000),
-        db.from('encomendas').select('id, cliente_nome, peca, quantidade, preco_venda, pago_adiantado, chegou_em').eq('status', 'chegou').limit(2000),
+        tudo(() => db.from('boletos').select('id, credor, valor, vencimento, categoria').is('paid_at', null)),
+        tudo(() => db.from('fiados').select('id, client_name, client_phone, original_amount, amount_paid, interest_accrued, due_date').neq('status', 'pago')),
+        tudo(() => db.from('inventory_lotes').select('id, lote, validade, quantidade, local, inventory_products(name, unit, cost_price)').gt('quantidade', 0).not('validade', 'is', null)),
+        tudo(() => db.from('service_orders').select('id, client_name, equipment, previsao_entrega, status').in('status', ['aberta', 'em_andamento']).not('previsao_entrega', 'is', null)),
+        tudo(() => db.from('encomendas').select('id, cliente_nome, peca, quantidade, preco_venda, pago_adiantado, chegou_em').eq('status', 'chegou')),
       ]);
-      for (const r of [contas, fiados, lotes, ordens, encomendas]) if (r.error) throw r.error;
 
       const lista: Item[] = [];
       for (const c of contas.data ?? []) {
