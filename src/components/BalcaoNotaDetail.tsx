@@ -277,6 +277,8 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
       desc: i.description || '',
       qty: i.quantity || 1,
       value: i.unit_price || 0,
+      // Liga o item ao produto do estoque (relatório "Fiado em aberto")
+      ...(i.product_id ? { inventory_product_id: i.product_id } : {}),
     })).filter(i => i.desc);
     const amountAlreadyPaid = paymentEntries.reduce((s, e) => s + e.amount, 0);
     const pending = Math.max(total - amountAlreadyPaid, 0);

@@ -604,6 +604,8 @@ export function OrderDetails({
       desc: m.descricao || '',
       qty: parseFloat(String(m.quantidade)) || 1,
       value: parseFloat(String(m.valor)) || 0,
+      // Liga o item ao produto do estoque (relatório "Fiado em aberto")
+      ...((m as { product_id?: string | null }).product_id ? { inventory_product_id: (m as { product_id?: string }).product_id } : {}),
     })).filter(i => i.desc);
 
     const { error: fiadoErr } = await supabase.from('fiados').insert([{

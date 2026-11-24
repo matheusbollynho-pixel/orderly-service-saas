@@ -15,8 +15,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { EstoqueParado } from '@/components/EstoqueParado';
 import { ValidadeEstoque, type Lote } from '@/components/ValidadeEstoque';
 import { RelatorioAlmoxarifado } from '@/components/RelatorioAlmoxarifado';
+import { FiadoEmAberto } from '@/components/relatorios/FiadoEmAberto';
 
-type Secao = 'geral' | 'parados' | 'validade' | 'almox';
+type Secao = 'geral' | 'parados' | 'validade' | 'almox' | 'fiado';
 type Local = 'todos' | 'loja' | 'almox';
 
 const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -107,6 +108,7 @@ export default function RelatoriosEstoque() {
   const SECOES: { id: Secao; nome: string; mostrar: boolean }[] = [
     { id: 'geral', nome: 'Visão geral', mostrar: true },
     { id: 'parados', nome: 'Parados', mostrar: true },
+    { id: 'fiado', nome: 'Fiado em aberto', mostrar: true },
     { id: 'validade', nome: 'Validade', mostrar: algumComValidade },
     { id: 'almox', nome: 'Consumo do almoxarifado', mostrar: usaAlmox },
   ];
@@ -247,6 +249,13 @@ export default function RelatoriosEstoque() {
             Valores = saldo × preço de custo/venda atual. {qtd(geral.linhas.reduce((s, l) => s + l.s, 0))} unidades somadas no filtro.
           </p>
         </div>
+      ) : secao === 'fiado' ? (
+        <FiadoEmAberto
+          produtos={products}
+          idsNoFiltro={new Set(filtrados.map((p) => p.id))}
+          filtroDeProdutoAtivo={categoria !== 'todas' || marca !== 'todas' || fornecedor !== 'todos'}
+          busca={busca}
+        />
       ) : secao === 'parados' ? (
         <EstoqueParado products={filtrados} local={local} />
       ) : secao === 'validade' ? (
