@@ -1,5 +1,8 @@
 import { matchesSearch } from '@/lib/textSearch';
 import { useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useStore } from '@/contexts/StoreContext';
+import { ValidadeEstoque, diasParaVencer, type Lote } from '@/components/ValidadeEstoque';
 import { useInventory, type InventoryProduct, type InventoryProductInsert, type InventoryMovementInsert } from '@/hooks/useInventory';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -448,6 +451,18 @@ function ProductFormDialog({ open, product, isEditing, isSaving, usaAlmox, onCha
                   </SelectContent>
                 </Select>
               </div>
+              <div className="col-span-3">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4"
+                    checked={!!(extra as { controla_validade?: boolean }).controla_validade}
+                    onChange={(e) => onChange('controla_validade', e.target.checked)}
+                  />
+                  Controla lote e validade
+                </label>
+                <p className="text-xs text-muted-foreground">Para produtos que vencem (ceras, shampoos, colas). A entrada pede lote e validade e a saída usa primeiro o que vence antes.</p>
+              </div>
               {usaAlmox && (
                 <div>
                   <Label>Estoque do almoxarifado</Label>
@@ -559,6 +574,9 @@ interface MovementDialogProps {
 function MovementDialog({ open, product, usaAlmox, equipe, isSaving, onSave, onClose }: MovementDialogProps) {
   const [type, setType] = useState<OpcaoMov>('entrada_manual');
   const [quem, setQuem] = useState('');
+  const [lote, setLote] = useState({ numero: '', fabricacao: '', validade: '' });
+  const controlaValidade = !!(product as { controla_validade?: boolean } | null)?.controla_validade;
+  const ehEntrada = type === 'entrada_manual' || type === 'entrada_almox';
   const [quantity, setQuantity] = useState('');
   const [unitCost, setUnitCost] = useState('');
   const [unitPrice, setUnitPrice] = useState('');
@@ -574,6 +592,11 @@ function MovementDialog({ open, product, usaAlmox, equipe, isSaving, onSave, onC
     // Igual à OS: se a loja tem equipe cadastrada, precisa dizer quem está fazendo
     if (equipe.length > 0 && !quem) {
       toast.error('Selecione quem está fazendo a movimentação.');
+      return;
+    }
+    // Produto com validade: entrada precisa da validade do lote
+    if (controlaValidade && ehEntrada && !lote.validade) {
+      toast.error('Informe a validade do lote.');
       return;
     }
     // Transferência não pode tirar mais do que existe no lugar de origem
@@ -597,6 +620,9 @@ function MovementDialog({ open, product, usaAlmox, equipe, isSaving, onSave, onC
       notes: notes || null,
       // Nome escolhido na lista; sem equipe, o banco grava o e-mail do login
       ...(quem ? { feito_por: quem } : {}),
+      ...(controlaValidade && ehEntrada
+        ? { lote: lote.numero.trim() || null, fabricacao: lote.fabricacao || null, validade: lote.validade || null }
+        : {}),
     } as unknown as InventoryMovementInsert);
     setType('entrada_manual');
     setQuantity('');
@@ -604,6 +630,7 @@ function MovementDialog({ open, product, usaAlmox, equipe, isSaving, onSave, onC
     setUnitPrice('');
     setNotes('');
     setQuem('');
+    setLote({ numero: '', fabricacao: '', validade: '' });
   };
 
   if (!product) return null;
@@ -654,6 +681,22 @@ function MovementDialog({ open, product, usaAlmox, equipe, isSaving, onSave, onC
             <Label>Quantidade ({product.unit})</Label>
             <Input type="number" min="0" step="0.001" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="0" />
           </div>
+          {controlaValidade && ehEntrada && (
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <Label>Lote</Label>
+                <Input value={lote.numero} onChange={(e) => setLote({ ...lote, numero: e.target.value })} placeholder="Opcional" />
+              </div>
+              <div>
+                <Label>Fabricação</Label>
+                <Input type="date" value={lote.fabricacao} onChange={(e) => setLote({ ...lote, fabricacao: e.target.value })} />
+              </div>
+              <div>
+                <Label>Validade *</Label>
+                <Input type="date" value={lote.validade} onChange={(e) => setLote({ ...lote, validade: e.target.value })} />
+              </div>
+            </div>
+          )}
           {(type === 'entrada_manual' || type === 'entrada_almox') && (
             <div>
               <Label>Custo unitário (R$)</Label>
@@ -702,6 +745,33 @@ export default function InventoryPage() {
   const { VEHICLE_CAP } = useVehicleLabel();
   const { settings: lojaCfg } = useStoreSettings();
   const usaAlmox = !!(lojaCfg as { usa_almoxarifado?: boolean } | null)?.usa_almoxarifado;
+  const { storeId } = useStore();
+  const [diasAvisoSalvo, setDiasAvisoSalvo] = useState<number | null>(null);
+  const diasAviso = diasAvisoSalvo ?? Number((lojaCfg as { dias_aviso_validade?: number } | null)?.dias_aviso_validade ?? 30);
+  const algumComValidade = products.some((p) => (p as { controla_validade?: boolean }).controla_validade);
+  const { data: lotes = [] } = useQuery({
+    queryKey: ['inventory-lotes'],
+    enabled: algumComValidade,
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any)
+        .from('inventory_lotes')
+        .select('id, product_id, local, lote, fabricacao, validade, quantidade')
+        .gt('quantidade', 0);
+      if (error) throw error;
+      return (data ?? []) as Lote[];
+    },
+  });
+  // Próxima validade de cada produto (lote com saldo que vence primeiro)
+  const proximaValidade = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const l of lotes) {
+      const d = diasParaVencer(l.validade);
+      if (d == null) continue;
+      if (!m.has(l.product_id) || d < m.get(l.product_id)!) m.set(l.product_id, d);
+    }
+    return m;
+  }, [lotes]);
   const { members: atendentes } = useTeamMembers();
   const { mechanics } = useMechanics();
   // Atendentes + mecânicos/estofadores ativos, sem repetir nome
@@ -835,6 +905,7 @@ export default function InventoryPage() {
           <TabsTrigger value="produtos" className="flex-1">Produtos ({products.length})</TabsTrigger>
           <TabsTrigger value="movimentacoes" className="flex-1">Movimentações</TabsTrigger>
           {usaAlmox && <TabsTrigger value="almoxarifado" className="flex-1">Almoxarifado</TabsTrigger>}
+          {algumComValidade && <TabsTrigger value="validade" className="flex-1">Validade</TabsTrigger>}
         </TabsList>
 
         {/* ── ABA PRODUTOS ── */}
@@ -889,6 +960,15 @@ export default function InventoryPage() {
                           <p className="font-semibold text-sm truncate">{p.name}</p>
                           <p className="text-xs text-muted-foreground">{p.code}{p.category ? ` · ${p.category}` : ''}{p.brand ? ` · ${p.brand}` : ''}</p>
                         </div>
+                        {proximaValidade.has(p.id) && (() => {
+                          const d = proximaValidade.get(p.id)!;
+                          const cls = d < 0 ? 'border-red-500 text-red-500' : d <= diasAviso ? 'border-amber-500 text-amber-500' : 'text-muted-foreground';
+                          return (
+                            <Badge variant="outline" className={cn('text-[10px] flex-shrink-0', cls)}>
+                              {d < 0 ? 'vencido' : d === 0 ? 'vence hoje' : `vence em ${d}d`}
+                            </Badge>
+                          );
+                        })()}
                         <Badge variant="outline" className={cn('text-[10px] flex-shrink-0', STATUS_COLORS[p.status])}>
                           {STATUS_LABELS[p.status]}
                         </Badge>
@@ -934,6 +1014,20 @@ export default function InventoryPage() {
             </div>
           )}
         </TabsContent>
+
+        {/* ── ABA VALIDADE ── */}
+        {algumComValidade && (
+          <TabsContent value="validade" className="mt-3">
+            <ValidadeEstoque
+              products={products}
+              lotes={lotes}
+              diasAviso={diasAviso}
+              storeId={storeId}
+              usaAlmox={usaAlmox}
+              onDiasSalvo={setDiasAvisoSalvo}
+            />
+          </TabsContent>
+        )}
 
         {/* ── ABA ALMOXARIFADO (relatório) ── */}
         {usaAlmox && (

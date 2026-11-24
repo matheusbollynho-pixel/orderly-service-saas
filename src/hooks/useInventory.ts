@@ -101,6 +101,7 @@ export function useInventory() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inventory-movements'] });
       queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory-lotes'] });
       queryClient.invalidateQueries({ queryKey: ['cash-flow'] });
       queryClient.invalidateQueries({ queryKey: ['cash-flow-summary'] });
       queryClient.invalidateQueries({ queryKey: ['cash-flow-period'] });
