@@ -324,6 +324,17 @@ const TOOLS = [
       required: ['phone', 'motivo'],
     },
   },
+  {
+    name: 'encaminhar_pergunta_peca',
+    description: 'Avisa a equipe da loja (WhatsApp do dono) sobre uma pergunta de peça, preço ou disponibilidade que você não consegue responder. A conversa continua com você. Chamar SEMPRE antes de dizer ao cliente que vai encaminhar ao setor.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        pergunta: { type: 'string', description: 'O que o cliente quer, com os detalhes que ele deu (peça, moto/veículo, quantidade)' },
+      },
+      required: ['pergunta'],
+    },
+  },
 ];
 
 // ============================================================
@@ -342,14 +353,14 @@ async function executarFerramenta(
 
   switch (tool) {
     case 'consultar_cliente': {
-      const cliente = await buscarClientePorTelefone(sb, input.phone as string, storeId);
+      const cliente = await buscarClientePorTelefone(sb, phone, storeId); // número real de quem escreve
       if (!cliente) return { encontrado: false };
       const motos = await buscarMotosDoCliente(sb, cliente.id);
       return { encontrado: true, ...cliente, motos };
     }
 
     case 'consultar_os': {
-      let os = await buscarOSAtivaPorTelefone(sb, input.phone as string, storeId);
+      let os = await buscarOSAtivaPorTelefone(sb, phone, storeId); // número real de quem escreve
 
       // Fallback: se não achou pelo telefone mas temos o nome do cliente, busca pelo nome
       if (!os && conversationContext.client_name) {
@@ -510,7 +521,7 @@ async function executarFerramenta(
       const nome = (input.client_name as string) || conversationContext.client_name || 'Cliente';
 
       // Salvar estado como aguardando humano
-      await saveConversationState(sb, input.phone as string, 'aguardando_humano', {
+      await saveConversationState(sb, phone, 'aguardando_humano', {
         ...conversationContext,
         escalada_motivo: motivo,
         humano_assumiu_em: new Date().toISOString(),
@@ -518,21 +529,47 @@ async function executarFerramenta(
 
       // Alertar dono
       await enviarAlertaDono(
-        `👤 *${nome}* (${input.phone}) precisa de atendimento humano.\n\n📋 *Motivo:* ${motivo}`,
+        `👤 *${nome}* (${phone}) precisa de atendimento humano.\n\n📋 *Motivo:* ${motivo}`,
         storeId
       );
 
       return { escalado: true };
     }
 
+    case 'encaminhar_pergunta_peca': {
+      const pergunta = String(input.pergunta || '').slice(0, 400);
+      const nome = conversationContext.client_name || 'Cliente';
+      await enviarAlertaDono(
+        `🛒 *Pergunta sobre peça*
+👤 *${nome}* (${phone})
+💬 ${pergunta}
+
+Responda o cliente direto no WhatsApp da loja.`,
+        storeId
+      );
+      return { encaminhado: true };
+    }
+
     case 'consultar_fiado': {
-      const resultado = await buscarFiadoPorTelefone(sb, input.phone as string, input.cpf as string | undefined, storeId);
+      // Sempre o número real de quem está escrevendo (não o que a IA recebeu na conversa).
+      const resultado = await buscarFiadoPorTelefone(sb, phone, input.cpf as string | undefined, storeId);
       if (!resultado) return { encontrado: false, sugestao: 'Não encontrei débito pelo telefone. Peça o CPF do cliente e tente novamente passando o campo cpf.' };
-      const { fiados, total_aberto } = resultado;
+      const { fiados, total_aberto, encontrado_por } = resultado;
+      // Achou só pelo CPF (número diferente do cadastro): mostra valores, sem itens
+      // nem pagamentos — qualquer um pode digitar o CPF de outra pessoa.
+      const soResumo = encontrado_por === 'cpf';
       // Fiado principal: o de menor vencimento com saldo > 0
       const principal = fiados.find(f => ((f.original_amount || 0) + (f.interest_accrued || 0) - (f.amount_paid || 0)) > 0) || fiados[0];
+      const ORIGEM: Record<string, string> = { os: 'serviço na oficina (OS)', balcao: 'compra no balcão', manual: 'lançamento manual' };
       const debitos = fiados.map(f => ({
         fiado_id: f.id,
+        data_compra: f.created_at ? f.created_at.slice(0, 10) : null,
+        origem: ORIGEM[f.origin_type || ''] || 'lançamento manual',
+        itens: soResumo ? [] : (f.items || []).map(i => ({ descricao: i.desc || '', quantidade: i.qty || 1, valor_unitario: i.value || 0 })),
+        valor_original: f.original_amount || 0,
+        juros: f.interest_accrued || 0,
+        total_pago: f.amount_paid || 0,
+        pagamentos: soResumo ? [] : f.pagamentos.map(p => ({ data: (p.data || '').slice(0, 10), valor: p.valor, forma: p.forma || 'não informada' })),
         saldo: Math.max((f.original_amount || 0) + (f.interest_accrued || 0) - (f.amount_paid || 0), 0),
         vencimento: f.due_date,
         status: f.status,
@@ -545,6 +582,7 @@ async function executarFerramenta(
         total_aberto,
         fiado_id: principal.id,
         debitos,
+        ...(soResumo ? { detalhe_bloqueado: true, aviso: 'Encontrado só pelo CPF, de um número diferente do cadastro. Mostre apenas data, valor, saldo e vencimento de cada débito, SEM itens e SEM pagamentos, e diga que o detalhe completo é enviado só para o WhatsApp cadastrado.' } : {}),
       };
     }
 
@@ -740,9 +778,15 @@ ${obs ? `- *Observações:* ${obs}` : ''}
 9. *Pagamento de débito/fiado*: Se o cliente mencionar "meu débito", "meu fiado", "quanto devo", "quero pagar", "minha dívida" ou similar:
    - Chame consultar_fiado com o telefone do contexto
    - Se retornar encontrado=false, pergunte o CPF do cliente e chame consultar_fiado novamente passando o CPF no campo "cpf"
-   - Se encontrar, o resultado traz: total_debitos (quantos fiados), total_aberto (soma total em R$) e debitos[] (lista com saldo e vencimento de cada um)
-   - Se total_debitos = 1: informe o saldo e pergunte se quer o link PIX para pagar
-   - Se total_debitos > 1: informe o total geral e liste cada débito com vencimento e saldo. Pergunte qual deseja pagar primeiro (use o fiado_id do item selecionado em gerar_link_pagamento_fiado) ou se quer pagar o mais antigo
+   - Se encontrar, o resultado traz: total_debitos (quantos fiados), total_aberto (soma total em R$) e debitos[]. Cada débito tem: data_compra, origem, itens (descrição, quantidade, valor unitário), valor_original, juros, total_pago, pagamentos (data, valor, forma), saldo e vencimento
+   - SEMPRE detalhe cada débito, neste formato (datas em DD/MM/AAAA, valores em R$ com vírgula):
+     *Compra de [data_compra]* — [origem]
+     • [quantidade]x [descrição] — R$ [quantidade × valor_unitário]   (uma linha por item; se itens vier vazio, escreva "itens não detalhados")
+     Valor: R$ [valor_original]  (se juros > 0, acrescente "+ juros R$ [juros]")
+     Pagamentos: "[data] — R$ [valor] ([forma])", um por linha; se não houver, "nenhum pagamento ainda"
+     *Falta pagar: R$ [saldo]* — vence em [vencimento]
+   - Se total_debitos = 1: mostre o detalhe acima e pergunte se quer o link PIX para pagar
+   - Se total_debitos > 1: mostre o detalhe de cada débito (do mais antigo para o mais novo), depois o total geral em aberto. Pergunte qual deseja pagar primeiro (use o fiado_id do item selecionado em gerar_link_pagamento_fiado) ou se quer pagar o mais antigo
    - Nunca mostre saldo R$ 0,00 como débito — ignore fiados com saldo zerado
    - Se confirmar, use gerar_link_pagamento_fiado com o fiado_id escolhido e envie o link
    - Não peça confirmação duas vezes
@@ -768,14 +812,16 @@ ${obs ? `- *Observações:* ${obs}` : ''}
 ## REGRAS DE PEÇAS
 ${store.tem_estoque ? `- Para pergunta sobre peça, preço ou disponibilidade: chame consultar_pecas com a descrição da peça e responda com o resultado real (nome, quantidade, preço)
 - Se não encontrar em consultar_pecas, tente consultar_historico_balcao — mas NUNCA diga "temos em estoque" para item encontrado só no histórico de balcão, apenas que já vendemos algo parecido antes
-- Se não encontrar em nenhuma fonte, diga que vai encaminhar para o setor responsável` : `- Para QUALQUER pergunta sobre peças, preços ou disponibilidade: responda apenas que vai encaminhar para o setor responsável
-- NÃO tente buscar no estoque do sistema e NÃO use escalar_humano
+- Se não encontrar em nenhuma fonte, chame encaminhar_pergunta_peca e diga que encaminhou para o setor responsável` : `- Para QUALQUER pergunta sobre peças, preços ou disponibilidade: chame encaminhar_pergunta_peca com o que o cliente quer e responda com a mensagem padrão abaixo
+- NÃO tente buscar no estoque do sistema e NÃO use escalar_humano para isso (a conversa continua com você)
 - Mensagem padrão: "Sobre peças e preços, vou encaminhar sua pergunta para nosso setor responsável! Em breve eles entrarão em contato 😊"`}
+
+## AVISAR ATENDENTE = CHAMAR A FERRAMENTA
+- A ÚNICA forma de avisar um atendente é chamar escalar_humano. NUNCA escreva "já chamei", "já avisei" ou "a atendente foi avisada" sem ter chamado escalar_humano NESTA resposta.
 
 ## ESCALAR PARA HUMANO quando:
 - Cliente reclama de serviço realizado
 - Pagamento com problema
-- Peça não encontrada em nenhuma fonte
 - Mais de 3 trocas sem resolver
 - Cliente pede explicitamente falar com humano
 - Cliente recusa orçamento
@@ -783,7 +829,7 @@ ${store.tem_estoque ? `- Para pergunta sobre peça, preço ou disponibilidade: c
 ## ESTADO DA CONVERSA
 - Se o estado for "aguardando_humano", informe que um atendente já foi avisado e vai responder em breve
 - Não tente resolver nada no estado "aguardando_humano"
-- Se o estado for "menu_apresentado", o cliente acabou de ver o menu de opções (1-Loja/Peças, 2-Oficina, 3-Agendamento, 4-Localização). Interprete a resposta dele e direcione para o módulo correto sem repetir o menu
+- Se o estado for "menu_apresentado", o cliente acabou de ver o menu de opções: 1-Loja/Peças, 2-Oficina, 3-Agendamento, 4-Financeiro (débitos, fiado, link de pagamento), 5-Localização e horários. Interprete a resposta dele e direcione para o módulo correto sem repetir o menu. Se ele responder "4": siga o fluxo de Pagamento de débito/fiado (chame consultar_fiado). Se responder "5": chame enviar_localizacao e informe o endereço e os horários. NUNCA envie a localização para a opção 4
 
 ## CONSULTA AUTOMÁTICA DE OS
 Quando o cliente perguntar sobre valor, quanto ficou, o que foi feito, status da moto, se ficou pronta, ou qualquer variação disso — chame IMEDIATAMENTE consultar_os com o telefone do contexto. NÃO peça confirmação, NÃO pergunte se é isso, apenas chame a ferramenta diretamente.
@@ -1355,6 +1401,7 @@ Deno.serve(async (req) => {
     let finalResponse = '';
     let newState = state === 'novo' ? 'identificando' : state;
     let loopCount = 0;
+    const ferramentasUsadas = new Set<string>();
     const MAX_LOOPS = 5;
 
     // Dados de OS concluída para geração direta da resposta
@@ -1406,6 +1453,7 @@ Deno.serve(async (req) => {
 
         for (const toolUse of toolUses) {
           const toolName = toolUse.name!;
+          ferramentasUsadas.add(toolName);
           const toolInput = toolUse.input || {};
 
           // Atualizar contexto baseado nos resultados das ferramentas
@@ -1526,6 +1574,43 @@ Deno.serve(async (req) => {
     }
 
     // Verificar satisfação <= 2 (monitorada via satisfaction_ratings separadamente)
+
+    // 9.0 Trava do setor de peças: a IA dizia "vou encaminhar ao setor
+    // responsável" e ninguém era avisado. Se prometeu e não chamou a ferramenta,
+    // o aviso sai aqui com a mensagem do cliente.
+    if (/setor respons[aá]vel|encaminh(ar|ei|ando|ada|ado).{0,40}(pergunta|setor|equipe)/i.test(finalResponse || '')
+        && !ferramentasUsadas.has('encaminhar_pergunta_peca') && !ferramentasUsadas.has('escalar_humano')) {
+      console.log('🛒 Trava do setor de peças: IA prometeu encaminhar — avisando a loja');
+      try {
+        await executarFerramenta(sb, 'encaminhar_pergunta_peca', { pergunta: text || '' }, phone, ctx, resolvedStoreId);
+        ferramentasUsadas.add('encaminhar_pergunta_peca');
+      } catch (e) {
+        console.error('Erro na trava do setor de peças:', e);
+      }
+    }
+
+    // 9.1 Trava do atendente humano. A IA às vezes respondia "já chamei uma
+    // atendente" SEM chamar escalar_humano — o dono só era avisado várias
+    // mensagens depois (caso real 20/11). Agora o aviso sai de verdade quando:
+    //  - o cliente pede claramente um atendente/pessoa, ou
+    //  - a resposta da IA diz que chamou/avisou alguém.
+    if (newState !== 'aguardando_humano' && state !== 'aguardando_humano') {
+      const clientePediu = /(quero|queria|preciso|pode|posso|chama|chamar|falar com|fala com|passa (pra|para)|me passa|cad[eê]).{0,25}\b(atendente|humano|algu[eé]m|uma pessoa|pessoa de verdade|vendedor|vendedora|dono|gerente)\b/i.test(text || '');
+      // Depois de encaminhar pergunta de peça, "o setor foi avisado" é verdade e não é pedido de atendente.
+      const iaPrometeu = !ferramentasUsadas.has('encaminhar_pergunta_peca') && /\b(j[aá] )?(chamei|acionei|avisei|chamando|acionando|vou chamar|vou avisar|vou acionar)\b.{0,40}\b(atendente|algu[eé]m|equipe|vendedor|vendedora|setor)\b|\b(atendente|equipe|setor|vendedor|vendedora)\b.{0,40}\b(avisad|acionad|chamad)[oa]s?\b/i.test(finalResponse || '');
+      if (clientePediu || iaPrometeu) {
+        console.log(`🙋 Trava do atendente: ${clientePediu ? 'cliente pediu' : 'IA disse que chamou'} — escalando de verdade`);
+        try {
+          await executarFerramenta(sb, 'escalar_humano', {
+            motivo: clientePediu ? `Cliente pediu atendente: "${(text || '').slice(0, 120)}"` : 'A IA disse ao cliente que chamou um atendente',
+            client_name: ctx.client_name,
+          }, phone, ctx, resolvedStoreId);
+          newState = 'aguardando_humano';
+        } catch (e) {
+          console.error('Erro na trava do atendente:', e);
+        }
+      }
+    }
 
     // ----------------------------------------------------------
     // 10. Salvar estado atualizado (com histórico)

@@ -726,15 +726,26 @@ export async function buscarLinkSatisfacao(
 // FIADOS
 // ============================================================
 
+const FIADO_COLUNAS = 'id, client_name, original_amount, amount_paid, interest_accrued, due_date, status, asaas_payment_url, created_at, origin_type, items'
+
+export type FiadoDetalhado = {
+  id: string; client_name: string; original_amount: number; amount_paid: number; interest_accrued: number
+  due_date: string; status: string; asaas_payment_url: string | null
+  created_at: string; origin_type: string | null
+  items: { desc?: string; qty?: number; value?: number }[]
+  pagamentos: { valor: number; forma: string | null; data: string }[]
+}
+
 export async function buscarFiadoPorTelefone(
   sb: SupabaseClient,
   phone: string,
   cpf?: string,
   storeId?: string
-): Promise<{ fiados: { id: string; client_name: string; original_amount: number; amount_paid: number; interest_accrued: number; due_date: string; status: string; asaas_payment_url: string | null }[]; total_aberto: number } | null> {
-  type FiadoRow = { id: string; client_name: string; original_amount: number; amount_paid: number; interest_accrued: number; due_date: string; status: string; asaas_payment_url: string | null }
+): Promise<{ fiados: FiadoDetalhado[]; total_aberto: number; encontrado_por: 'telefone' | 'cpf' } | null> {
+  type FiadoRow = Omit<FiadoDetalhado, 'pagamentos'>
 
   let rows: FiadoRow[] = []
+  let encontrado_por: 'telefone' | 'cpf' = 'telefone'
 
   const clean = (phone || '').replace(/\D/g, '')
 
@@ -753,7 +764,7 @@ export async function buscarFiadoPorTelefone(
 
     let fiadoQuery = sb
       .from('fiados')
-      .select('id, client_name, original_amount, amount_paid, interest_accrued, due_date, status, asaas_payment_url')
+      .select(FIADO_COLUNAS)
       .neq('status', 'pago')
       .or(filtros.join(','));
 
@@ -762,6 +773,33 @@ export async function buscarFiadoPorTelefone(
     const { data } = await fiadoQuery.order('due_date', { ascending: true })
 
     if (data && data.length > 0) rows = data as FiadoRow[]
+
+    // Também pelo telefone ATUAL do cadastro do cliente: pega fiados ligados a ele
+    // (client_id) mesmo que a cópia do telefone no fiado seja a antiga.
+    // Só com loja definida, para nunca cruzar clientes de lojas diferentes.
+    if (storeId) {
+      const { data: clientes } = await sb
+        .from('clients')
+        .select('id')
+        .eq('store_id', storeId)
+        .or(filtros.map(f => f.replace('client_phone.', 'phone.')).join(','))
+        .limit(5)
+
+      const ids = (clientes || []).map((c: { id: string }) => c.id)
+      if (ids.length > 0) {
+        const { data: porCliente } = await sb
+          .from('fiados')
+          .select(FIADO_COLUNAS)
+          .neq('status', 'pago')
+          .eq('store_id', storeId)
+          .in('client_id', ids)
+          .order('due_date', { ascending: true })
+
+        const jaTem = new Set(rows.map(r => r.id))
+        for (const f of (porCliente || []) as FiadoRow[]) if (!jaTem.has(f.id)) rows.push(f)
+        rows.sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''))
+      }
+    }
   }
 
   // Fallback: busca por CPF se não encontrou por telefone
@@ -770,7 +808,7 @@ export async function buscarFiadoPorTelefone(
     if (cpfClean.length >= 11) {
       let cpfQuery = sb
         .from('fiados')
-        .select('id, client_name, original_amount, amount_paid, interest_accrued, due_date, status, asaas_payment_url')
+        .select(FIADO_COLUNAS)
         .neq('status', 'pago')
         .eq('client_cpf', cpfClean);
 
@@ -778,7 +816,7 @@ export async function buscarFiadoPorTelefone(
 
       const { data } = await cpfQuery.order('due_date', { ascending: true })
 
-      if (data && data.length > 0) rows = data as FiadoRow[]
+      if (data && data.length > 0) { rows = data as FiadoRow[]; encontrado_por = 'cpf' }
     }
   }
 
@@ -794,5 +832,21 @@ export async function buscarFiadoPorTelefone(
   const total_aberto = comSaldo.reduce((sum, f) =>
     sum + Math.max((f.original_amount || 0) + (f.interest_accrued || 0) - (f.amount_paid || 0), 0), 0)
 
-  return { fiados: comSaldo, total_aberto }
+  // Pagamentos já feitos de cada fiado (data, valor, forma) — para o cliente
+  // ver o que já abateu, não só o saldo.
+  const { data: pags } = await sb
+    .from('fiado_payments')
+    .select('fiado_id, amount, method, paid_at')
+    .in('fiado_id', comSaldo.map(f => f.id))
+    .order('paid_at', { ascending: true })
+
+  const fiados: FiadoDetalhado[] = comSaldo.map(f => ({
+    ...f,
+    items: Array.isArray(f.items) ? f.items : [],
+    pagamentos: ((pags || []) as { fiado_id: string; amount: number; method: string | null; paid_at: string }[])
+      .filter(p => p.fiado_id === f.id)
+      .map(p => ({ valor: p.amount, forma: p.method, data: p.paid_at })),
+  }))
+
+  return { fiados, total_aberto, encontrado_por }
 }
