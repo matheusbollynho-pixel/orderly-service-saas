@@ -42,6 +42,7 @@ import { useVehicleLabel } from '@/hooks/useVehicleLabel';
 import { useStoreSettings } from '@/hooks/useStoreSettings';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
 import { useMechanics } from '@/hooks/useMechanics';
+import { RelatorioAlmoxarifado } from '@/components/RelatorioAlmoxarifado';
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import { UpgradeModal } from '@/components/UpgradeModal';
 
@@ -833,6 +834,7 @@ export default function InventoryPage() {
         <TabsList className="w-full">
           <TabsTrigger value="produtos" className="flex-1">Produtos ({products.length})</TabsTrigger>
           <TabsTrigger value="movimentacoes" className="flex-1">Movimentações</TabsTrigger>
+          {usaAlmox && <TabsTrigger value="almoxarifado" className="flex-1">Almoxarifado</TabsTrigger>}
         </TabsList>
 
         {/* ── ABA PRODUTOS ── */}
@@ -932,6 +934,13 @@ export default function InventoryPage() {
             </div>
           )}
         </TabsContent>
+
+        {/* ── ABA ALMOXARIFADO (relatório) ── */}
+        {usaAlmox && (
+          <TabsContent value="almoxarifado" className="mt-3">
+            <RelatorioAlmoxarifado products={products} />
+          </TabsContent>
+        )}
 
         {/* ── ABA MOVIMENTAÇÕES ── */}
         <TabsContent value="movimentacoes" className="space-y-2 mt-3">
