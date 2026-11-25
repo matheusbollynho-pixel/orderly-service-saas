@@ -1,15 +1,14 @@
-import { matchesSearch } from '@/lib/textSearch';
-import { useEffect, useMemo, useState } from 'react';
+// Relatórios: Resumo · Vendas · Oficina · Clientes · Equipe · Estoque · Vencimentos · Pagamentos.
+// Limpeza 24/11: saiu o Resumo antigo (só somava serviços; o novo bate com o Caixa) e a aba Peças
+// (peças por mecânico estão em Equipe → Por mecânico; mais vendidos em Vendas e em Estoque → ABC).
+// Comissões, Mecânicos e Balcão viraram a aba Equipe. Pagamentos continua: lança/edita/exclui pagamento de OS.
+import { useEffect, useState } from 'react';
 import { useServiceOrders } from '@/hooks/useServiceOrders';
-import { useMechanics } from '@/hooks/useMechanics';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
 import { MechanicDetailReport } from './MechanicDetailReport';
 import { BalcaoCommissionReport } from './BalcaoCommissionReport';
 import { PaymentsTab } from '@/components/PaymentsTab';
-import { Switch } from '@/components/ui/switch';
 import ResumoV2 from '@/components/relatorios/ResumoV2';
 import ComissoesV2 from '@/components/relatorios/ComissoesV2';
 import RelatoriosEstoque from '@/components/relatorios/RelatoriosEstoque';
@@ -19,6 +18,8 @@ import RelatorioOficina from '@/components/relatorios/RelatorioOficina';
 import RelatorioClientes from '@/components/relatorios/RelatorioClientes';
 
 type Period = 'week' | 'month' | 'all';
+type Aba = 'resumo' | 'vendas' | 'oficina' | 'clientes' | 'equipe' | 'estoque' | 'vencimentos' | 'pagamentos';
+type ParteEquipe = 'comissoes' | 'mecanicos' | 'balcao';
 
 interface ReportsPageProps {
   onOpenOrder?: (id: string) => void;
@@ -27,145 +28,26 @@ interface ReportsPageProps {
   onOpenCaixa?: (data: string, id: string) => void;
 }
 
+const ABAS: { id: Aba; nome: string }[] = [
+  { id: 'resumo', nome: 'Resumo' },
+  { id: 'vendas', nome: 'Vendas' },
+  { id: 'oficina', nome: 'Oficina' },
+  { id: 'clientes', nome: 'Clientes' },
+  { id: 'equipe', nome: 'Equipe' },
+  { id: 'estoque', nome: 'Estoque' },
+  { id: 'vencimentos', nome: 'Vencimentos' },
+  { id: 'pagamentos', nome: 'Pagamentos' },
+];
+
 export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder, onOpenCaixa }: ReportsPageProps = {}) {
-  const [resumoNovo, setResumoNovo] = useState(() => { try { return localStorage.getItem('v2-resumo-novo') === '1'; } catch { return false; } });
   const { orders, isLoading, createPayment, deletePayment, updatePayment } = useServiceOrders();
-  const { mechanics } = useMechanics();
   const [period, setPeriod] = useState<Period>('month');
-  const [activeTab, setActiveTab] = useState<'resumo' | 'detalhado' | 'itens' | 'pagamentos' | 'balcao' | 'estoque'>('resumo');
-  const [itemsQuery, setItemsQuery] = useState('');
-  const [selectedMechanicFilter, setSelectedMechanicFilter] = useState<string>('todos');
+  const [activeTab, setActiveTab] = useState<Aba>('resumo');
+  const [parteEquipe, setParteEquipe] = useState<ParteEquipe>('comissoes');
 
-  const startOfWeek = () => {
-    const d = new Date();
-    const day = d.getDay(); // 0 (Dom) .. 6 (Sáb)
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Segunda como início
-    const date = new Date(d.setDate(diff));
-    date.setHours(0, 0, 0, 0);
-    return date;
-  };
-  const startOfMonth = () => {
-    const date = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-    date.setHours(0, 0, 0, 0);
-    return date;
-  };
-
-  const rangeStart = period === 'week' ? startOfWeek() : startOfMonth();
-
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
-
-  const { totalGeral, porMecanico } = useMemo(() => {
-    const mecMap = new Map(mechanics.map(m => [m.id, m]));
-    let total = 0; // total geral (APENAS serviços)
-    const porMec: Record<string, { name: string; receita: number; comissao: number; rate: number } > = {};
-
-    orders
-      .filter(o => o.status === 'concluida' || o.status === 'concluida_entregue')
-      .filter(o => new Date(o.exit_date || o.updated_at || o.created_at) >= rangeStart)
-      .forEach(o => {
-        // Processa apenas serviços para o total geral e por mecânico
-        (o.materials || [])
-          .filter(m => m.is_service === true)
-          .forEach(material => {
-            const qtd = parseFloat(material.quantidade) || 0;
-            const valor = (material.valor || 0) * qtd;
-            total += valor;
-
-            const mecId = material.mechanic_id || o.mechanic_id || 'sem';
-            const mec = mecMap.get(material.mechanic_id || o.mechanic_id || '');
-            const nome = mec?.name || 'Sem mecânico';
-            const rate = mec?.commission_rate ?? 0;
-            const comissao = valor * (rate / 100);
-
-            if (!porMec[mecId]) porMec[mecId] = { name: nome, receita: 0, comissao: 0, rate };
-            porMec[mecId].receita += valor;
-            if (!material.paid_at) porMec[mecId].comissao += comissao;
-          });
-      });
-
-    return { totalGeral: total, porMecanico: porMec };
-  }, [orders, mechanics, rangeStart]);
-
-  // Resumo de peças (itens) por período
-  const { totalPecas, pecasPorOS, pecasPorMecanico } = useMemo(() => {
-    const mecMap = new Map(mechanics.map(m => [m.id, m]));
-    let total = 0;
-    const lista: Array<{ 
-      id: string; 
-      created_at: string; 
-      equipment: string; 
-      client_name: string; 
-      total: number;
-      mechanic_id?: string;
-      mechanic_name?: string;
-    }> = [];
-    const porMec: Record<string, { name: string; total: number }> = {};
-
-    orders
-      .filter(o => o.status === 'concluida' || o.status === 'concluida_entregue')
-      .filter(o => new Date(o.exit_date || o.updated_at || o.created_at) >= rangeStart)
-      .forEach(o => {
-        let somaOS = 0;
-        // Mecânico é o da OS, não do material individual
-        const mecId = o.mechanic_id || 'sem';
-        const mec = mecMap.get(mecId);
-        const mecName = mec?.name || 'Sem mecânico';
-        
-        // Soma todas as peças da OS (não serviços)
-        (o.materials || [])
-          .filter(m => m.is_service !== true)
-          .forEach(m => {
-            const valor = (m.valor || 0) * (parseFloat(m.quantidade) || 0);
-            somaOS += valor;
-          });
-        
-        if (somaOS > 0) {
-          // Atribui todas as peças ao mecânico da OS
-          if (!porMec[mecId]) porMec[mecId] = { name: mecName, total: 0 };
-          porMec[mecId].total += somaOS;
-          
-          lista.push({ 
-            id: o.id, 
-            created_at: o.created_at, 
-            equipment: o.equipment, 
-            client_name: o.client_name, 
-            total: somaOS,
-            mechanic_id: mecId,
-            mechanic_name: mecName
-          });
-          total += somaOS;
-        }
-      });
-
-    // Ordenar por data desc
-    lista.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    return { totalPecas: total, pecasPorOS: lista, pecasPorMecanico: porMec };
-  }, [orders, rangeStart, mechanics]);
-
-  const filteredPecas = useMemo(() => {
-    const q = itemsQuery.trim().toLowerCase();
-    let filtered = pecasPorOS;
-    
-    // Filtro por mecânico
-    if (selectedMechanicFilter !== 'todos') {
-      filtered = filtered.filter(item => 
-        item.mechanic_id === selectedMechanicFilter
-      );
-    }
-    
-    // Filtro por busca
-    if (q) {
-      filtered = filtered.filter(item =>
-        matchesSearch(q, item.client_name, item.equipment)
-      );
-    }
-    
-    return filtered;
-  }, [itemsQuery, pecasPorOS, selectedMechanicFilter]);
-
+  // Atalho antigo de outras telas: abre o relatório por mecânico
   useEffect(() => {
-    const handler = () => setActiveTab('detalhado');
+    const handler = () => { setActiveTab('equipe'); setParteEquipe('mecanicos'); };
     window.addEventListener('reports:openDetailed', handler as EventListener);
     return () => window.removeEventListener('reports:openDetailed', handler as EventListener);
   }, []);
@@ -176,210 +58,55 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder, onOpenCaixa }: Rep
         <h2 className="text-lg font-semibold">Relatórios</h2>
       </div>
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'resumo' | 'detalhado' | 'itens' | 'pagamentos' | 'balcao' | 'estoque')} className="w-full">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as Aba)} className="w-full">
         {/* Celular: as abas rolam para o lado; PC: cabem inteiras */}
         <TabsList className="w-full justify-start overflow-x-auto overflow-y-hidden scrollbar-hide">
-          <TabsTrigger value="resumo" className="flex-1 shrink-0">Resumo</TabsTrigger>
-          <TabsTrigger value="vendas" className="flex-1 shrink-0">Vendas</TabsTrigger>
-          <TabsTrigger value="oficina" className="flex-1 shrink-0">Oficina</TabsTrigger>
-          <TabsTrigger value="clientes" className="flex-1 shrink-0">Clientes</TabsTrigger>
-          <TabsTrigger value="comissoes" className="flex-1 shrink-0">Comissões</TabsTrigger>
-          <TabsTrigger value="detalhado" className="flex-1 shrink-0">Mecânicos</TabsTrigger>
-          <TabsTrigger value="itens" className="flex-1 shrink-0">Peças</TabsTrigger>
-          <TabsTrigger value="balcao" className="flex-1 shrink-0">Balcão</TabsTrigger>
-          <TabsTrigger value="pagamentos" className="flex-1 shrink-0">Pagtos</TabsTrigger>
-          <TabsTrigger value="estoque" className="flex-1 shrink-0">Estoque</TabsTrigger>
-          <TabsTrigger value="vencimentos" className="flex-1 shrink-0">Vencimentos</TabsTrigger>
+          {ABAS.map((a) => (
+            <TabsTrigger key={a.id} value={a.id} className="flex-1 shrink-0">{a.nome}</TabsTrigger>
+          ))}
         </TabsList>
 
-        <TabsContent value="resumo" className="space-y-5">
-          {/* v2: Resumo novo (contas no banco, todas as OS) — em teste até bater com o Caixa */}
-          <label className="flex items-center justify-between gap-3 rounded-xl border border-primary/40 bg-primary/5 px-3 py-2 text-sm">
-            <span><b>Resumo novo</b> <span className="text-muted-foreground">(em teste)</span></span>
-            <Switch checked={resumoNovo} onCheckedChange={(on) => { setResumoNovo(on); try { localStorage.setItem('v2-resumo-novo', on ? '1' : '0'); } catch { /* sem localStorage */ } }} />
-          </label>
-          {resumoNovo ? <ResumoV2 onOpenCaixa={onOpenCaixa} /> : (<>
-          <div className="flex items-center justify-between">
-            <div />
-            <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="week">Semana atual</SelectItem>
-                <SelectItem value="month">Mês atual</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <Card>
-            <CardContent className="p-4">
-              <p className="text-sm text-muted-foreground">Faturado (serviços - {period === 'week' ? 'semana' : 'mês'})</p>
-              <p className="text-2xl font-bold">R$ {totalGeral.toFixed(2)}</p>
-            </CardContent>
-          </Card>
-
-          <div className="space-y-3">
-            <h3 className="text-sm font-medium text-muted-foreground">Comissão por mecânico</h3>
-            {isLoading ? (
-              <p>Carregando...</p>
-            ) : Object.keys(porMecanico).length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nenhum serviço concluído no período.</p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {Object.entries(porMecanico).map(([id, data]) => (
-                  <Card key={id} className="cursor-pointer hover:bg-accent" onClick={() => setActiveTab('detalhado')}>
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <p className="font-medium">{data.name}</p>
-                        <span className="text-xs text-muted-foreground">{data.rate}% comissão</span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="bg-green-500/10 dark:bg-green-500/20 p-2 rounded border border-green-500/20">
-                          <p className="text-xs text-green-600 dark:text-green-400">Serviços</p>
-                          <p className="font-bold text-green-900 dark:text-green-100">R$ {data.receita.toFixed(2)}</p>
-                        </div>
-                        <div className="bg-orange-500/10 dark:bg-orange-500/20 p-2 rounded border border-orange-500/20">
-                          <p className="text-xs text-orange-600 dark:text-orange-400">A pagar</p>
-                          <p className="font-bold text-orange-900 dark:text-orange-100">R$ {data.comissao.toFixed(2)}</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </div>
-          </>)}
-        </TabsContent>
-
+        <TabsContent value="resumo"><ResumoV2 onOpenCaixa={onOpenCaixa} /></TabsContent>
         <TabsContent value="vendas"><RelatorioVendas /></TabsContent>
         <TabsContent value="oficina"><RelatorioOficina onOpenOrder={onOpenOrder} /></TabsContent>
         <TabsContent value="clientes"><RelatorioClientes /></TabsContent>
-        <TabsContent value="comissoes"><ComissoesV2 /></TabsContent>
 
-        <TabsContent value="detalhado">
-          <MechanicDetailReport onBack={() => setActiveTab('resumo')} onOpenOrder={onOpenOrder} />
-        </TabsContent>
-
-        <TabsContent value="itens" className="space-y-5">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-            <Input
-              placeholder="Buscar cliente ou moto..."
-              value={itemsQuery}
-              onChange={(e) => setItemsQuery(e.target.value)}
-              className="h-10 sm:col-span-2"
-            />
-            <Select value={selectedMechanicFilter} onValueChange={setSelectedMechanicFilter}>
-              <SelectTrigger className="w-full h-10">
-                <SelectValue placeholder="Todos mecânicos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos mecânicos</SelectItem>
-                {mechanics.map(m => (
-                  <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                ))}
-                <SelectItem value="sem">Sem mecânico</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>
-              <SelectTrigger className="w-full h-10">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="week">Semana atual</SelectItem>
-                <SelectItem value="month">Mês atual</SelectItem>
-              </SelectContent>
-            </Select>
+        <TabsContent value="equipe" className="space-y-4">
+          <div className="flex flex-wrap gap-1">
+            <Button size="sm" variant={parteEquipe === 'comissoes' ? 'default' : 'outline'} onClick={() => setParteEquipe('comissoes')}>Comissões</Button>
+            <Button size="sm" variant={parteEquipe === 'mecanicos' ? 'default' : 'outline'} onClick={() => setParteEquipe('mecanicos')}>Por mecânico</Button>
+            <Button size="sm" variant={parteEquipe === 'balcao' ? 'default' : 'outline'} onClick={() => setParteEquipe('balcao')}>Balcão (atendentes)</Button>
           </div>
-
-          {/* Cards resumo por mecânico */}
-          {selectedMechanicFilter === 'todos' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {Object.entries(pecasPorMecanico).map(([id, data]) => (
-                <Card key={id} className="cursor-pointer hover:bg-accent" onClick={() => setSelectedMechanicFilter(id)}>
-                  <CardContent className="p-3">
-                    <p className="text-xs text-muted-foreground">{data.name}</p>
-                    <p className="text-lg font-bold">R$ {data.total.toFixed(2)}</p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-
-          <Card>
-            <CardContent className="p-4">
-              <p className="text-sm text-muted-foreground">
-                Peças ({period === 'week' ? 'semana' : 'mês'})
-                {selectedMechanicFilter !== 'todos' && (
-                  <span className="ml-2">
-                    - {mechanics.find(m => m.id === selectedMechanicFilter)?.name || 'Sem mecânico'}
-                  </span>
-                )}
-              </p>
-              <p className="text-2xl font-bold">
-                R$ {selectedMechanicFilter === 'todos' 
-                  ? totalPecas.toFixed(2) 
-                  : (pecasPorMecanico[selectedMechanicFilter]?.total || 0).toFixed(2)}
-              </p>
-            </CardContent>
-          </Card>
-
-          {isLoading ? (
-            <p>Carregando...</p>
-          ) : filteredPecas.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Sem peças no período selecionado.</p>
+          {parteEquipe === 'comissoes' ? (
+            <ComissoesV2 />
+          ) : parteEquipe === 'mecanicos' ? (
+            <MechanicDetailReport onBack={() => setParteEquipe('comissoes')} onOpenOrder={onOpenOrder} />
           ) : (
-            <div className="space-y-2">
-              {filteredPecas.map(item => (
-                <Card key={item.id} className={onOpenOrder ? 'cursor-pointer hover:bg-accent transition-colors' : ''} onClick={() => onOpenOrder?.(item.id)}>
-                  <CardContent className="p-4 flex items-center justify-between">
-                    <div className="flex-1">
-                      <p className="text-xs text-muted-foreground">{new Date(item.created_at).toLocaleDateString('pt-BR')}</p>
-                      <p className="font-medium">{item.client_name}</p>
-                      <p className="text-sm text-muted-foreground">{item.equipment}</p>
-                      <p className="text-xs text-muted-foreground italic mt-1">Mecânico: {item.mechanic_name}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm">Total de peças</p>
-                      <p className="font-semibold">R$ {item.total.toFixed(2)}</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+            <BalcaoCommissionReport onOpenOrder={onOpenOrder} onOpenBalcaoOrder={onOpenBalcaoOrder} />
           )}
         </TabsContent>
 
-        <TabsContent value="balcao">
-          <BalcaoCommissionReport onOpenOrder={onOpenOrder} onOpenBalcaoOrder={onOpenBalcaoOrder} />
-        </TabsContent>
-
-        <TabsContent value="pagamentos" className="space-y-5">
-            <PaymentsTab
-              orders={orders}
-              isLoading={isLoading}
-              onOpenOrder={onOpenOrder}
-              period={period}
-              onPeriodChange={(v) => setPeriod(v as Period)}
-              onAddPayment={({ order_id, amount, discount_amount, method, reference, notes }) => {
-                createPayment({ order_id, amount, discount_amount, method, reference, notes });
-              }}
-              onDeletePayment={(id, motivo) => {
-                deletePayment({ id, motivo });
-              }}
-              onUpdatePayment={(payload) => {
-                updatePayment(payload);
-              }}
-            />
-        </TabsContent>
-
-        <TabsContent value="estoque" className="space-y-5">
-          <RelatoriosEstoque />
-        </TabsContent>
-
+        <TabsContent value="estoque" className="space-y-5"><RelatoriosEstoque /></TabsContent>
         <TabsContent value="vencimentos"><Vencimentos /></TabsContent>
 
+        <TabsContent value="pagamentos" className="space-y-5">
+          <PaymentsTab
+            orders={orders}
+            isLoading={isLoading}
+            onOpenOrder={onOpenOrder}
+            period={period}
+            onPeriodChange={(v) => setPeriod(v as Period)}
+            onAddPayment={({ order_id, amount, discount_amount, method, reference, notes }) => {
+              createPayment({ order_id, amount, discount_amount, method, reference, notes });
+            }}
+            onDeletePayment={(id, motivo) => {
+              deletePayment({ id, motivo });
+            }}
+            onUpdatePayment={(payload) => {
+              updatePayment(payload);
+            }}
+          />
+        </TabsContent>
       </Tabs>
     </div>
   );

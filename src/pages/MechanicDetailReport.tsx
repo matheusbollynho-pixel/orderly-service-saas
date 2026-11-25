@@ -13,6 +13,7 @@ import { ArrowLeft, Calendar as CalendarIcon, ChevronDown, Check, X } from 'luci
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { DateRange } from 'react-day-picker';
+import { useVehicleLabel } from '@/hooks/useVehicleLabel';
 
 interface MechanicDetailReportProps {
   onBack: () => void;
@@ -20,6 +21,7 @@ interface MechanicDetailReportProps {
 }
 
 export function MechanicDetailReport({ onBack, onOpenOrder }: MechanicDetailReportProps) {
+  const { VEHICLE_CAP } = useVehicleLabel();
   const { markMaterialAsPaid, markMaterialAsUnpaid } = useServiceOrders();
   const queryClient = useQueryClient();
   const { mechanics } = useMechanics();
@@ -315,7 +317,7 @@ export function MechanicDetailReport({ onBack, onOpenOrder }: MechanicDetailRepo
                         <p className="font-medium">{format(new Date(order.created_at), 'dd/MM/yyyy')}</p>
                       </div>
                       <div>
-                        <p className="text-xs text-muted-foreground">Moto</p>
+                        <p className="text-xs text-muted-foreground">{VEHICLE_CAP}</p>
                         <p className="font-medium">{order.equipment}</p>
                       </div>
                       <div>
