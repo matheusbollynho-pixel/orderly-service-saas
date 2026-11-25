@@ -16,6 +16,7 @@ const GRUPOS: Item[] = [
   { tipo: 'tela', view: 'estoque', grupo: 'Peças' },
   { tipo: 'tela', view: 'cotacao', grupo: 'Peças' },
   { tipo: 'tela', view: 'reports', grupo: 'Relatórios' },
+  { tipo: 'tela', view: 'notas-fiscais', grupo: 'Fiscal' },
   { tipo: 'tela', view: 'clientes', grupo: 'Clientes', nome: 'Cadastro de clientes' },
   { tipo: 'tela', view: 'pos-venda', grupo: 'Clientes' },
   { tipo: 'tela', view: 'satisfacao', grupo: 'Clientes' },

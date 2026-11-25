@@ -177,7 +177,7 @@ function ProductFormDialog({ open, product, isEditing, isSaving, usaAlmox, onCha
   // Campos novos (almoxarifado e fiscais) ainda fora dos tipos gerados do banco
   const extra = product as typeof product & {
     stock_almox?: number | null; ncm?: string | null; cest?: string | null;
-    origem_fiscal?: number | null; csosn?: string | null; cfop?: string | null;
+    origem_fiscal?: number | null; csosn?: string | null; cfop?: string | null; pis_cofins_cst?: number | null;
   };
   const { VEHICLE_CAP } = useVehicleLabel();
   const { canAccess, getUpgradeLink, getRequiredPlan } = usePlanFeatures();
@@ -512,12 +512,16 @@ function ProductFormDialog({ open, product, isEditing, isSaving, usaAlmox, onCha
                 </Select>
               </div>
               <div>
-                <Label>CSOSN</Label>
-                <Input inputMode="numeric" value={extra.csosn ?? ''} onChange={(e) => onChange('csosn', e.target.value.replace(/\D/g, '').slice(0, 3) || null)} placeholder="Ex: 102" />
+                <Label>CSOSN / CST ICMS</Label>
+                <Input inputMode="numeric" value={extra.csosn ?? ''} onChange={(e) => onChange('csosn', e.target.value.replace(/\D/g, '').slice(0, 3) || null)} placeholder="Ex: 102 ou 60 (ST)" />
               </div>
               <div>
                 <Label>CFOP</Label>
                 <Input inputMode="numeric" value={extra.cfop ?? ''} onChange={(e) => onChange('cfop', e.target.value.replace(/\D/g, '').slice(0, 4) || null)} placeholder="Ex: 5102" />
+              </div>
+              <div>
+                <Label>CST PIS/COFINS</Label>
+                <Input inputMode="numeric" value={extra.pis_cofins_cst ?? ''} onChange={(e) => { const d = e.target.value.replace(/\D/g, '').slice(0, 2); onChange('pis_cofins_cst', d ? Number(d) : null); }} placeholder="Padrão da loja" title="Ex.: 4 = peça monofásica; 1 = tributável. Vazio usa o padrão da loja." />
               </div>
             </div>
           </section>

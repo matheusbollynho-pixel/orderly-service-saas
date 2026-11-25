@@ -24,6 +24,7 @@ import SatisfactionDashboardPage from './SatisfactionDashboardPage';
 import InventoryPage from './InventoryPage';
 import CotacaoPage from './CotacaoPage';
 import EncomendasPage from './EncomendasPage';
+import NotasFiscaisPage from './NotasFiscaisPage';
 import ClientesPage from './ClientesPage';
 import PagamentosEquipe from '@/components/equipe/PagamentosEquipe';
 import VendaBalcaoPage from './VendaBalcaoPage';
@@ -574,7 +575,9 @@ Retirada: ${retiradaInfo}`;
   const navView = currentView === 'details' || currentView === 'materials' ? 'orders' : currentView as string;
 
   // ---- v2: porta única de navegação (confere permissão e plano antes de abrir)
-  const acessoDe = (v: View) => acesso(v, permissions, canAccess);
+  // Notas fiscais só existe para loja com o módulo fiscal ligado
+  const fiscalAtivo = !!(storeSettings as { fiscal_ativo?: boolean } | null)?.fiscal_ativo;
+  const acessoDe = (v: View) => (v === 'notas-fiscais' && !fiscalAtivo ? 'sem_permissao' : acesso(v, permissions, canAccess));
   const goTo = (v: View) => {
     const a = acessoDe(v);
     if (a === 'sem_permissao') { toast.error('Você não tem acesso a esta tela.'); return; }
@@ -848,6 +851,10 @@ Retirada: ${retiradaInfo}`;
         {currentView === 'cotacao' && <CotacaoPage />}
 
         {currentView === 'encomendas' && <EncomendasPage />}
+
+        {currentView === 'notas-fiscais' && fiscalAtivo && (
+          <NotasFiscaisPage onAbrirVenda={permissions.balcao ? (id) => { setInitialBalcaoOrderId(id); setCurrentView('balcao'); } : undefined} />
+        )}
 
         {currentView === 'clientes' && (
           <ClientesPage

@@ -14,7 +14,8 @@ import { Settings, Wallet, MessageSquare, CalendarCheck, Star, Cake, ShoppingCar
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
-import { Tags } from 'lucide-react';
+import { Tags, ReceiptText } from 'lucide-react';
+import { ConfigFiscal } from '@/components/fiscal/ConfigFiscal';
 import { AVISO_LOJISTA_PADRAO, VARIAVEIS_AVISO_LOJISTA, montarAvisoLojista } from '../../supabase/functions/_shared/avisoLojista';
 import { toast } from 'sonner';
 
@@ -287,7 +288,7 @@ export default function ConfigToolsPage() {
         </h1>
       </div>
 
-      <Tabs defaultValue={['mensagens', 'ia', 'cobranca', 'ferramentas'].includes(searchParams.get('aba') || '') ? searchParams.get('aba')! : 'loja'}>
+      <Tabs defaultValue={['mensagens', 'ia', 'cobranca', 'ferramentas', 'fiscal'].includes(searchParams.get('aba') || '') ? searchParams.get('aba')! : 'loja'}>
         {/* Celular: as abas rolam para o lado; PC: cabem inteiras */}
         <TabsList className="w-full mb-6 justify-start overflow-x-auto overflow-y-hidden scrollbar-hide">
           <TabsTrigger value="loja" className="flex-1 shrink-0 flex items-center gap-2">
@@ -302,6 +303,11 @@ export default function ConfigToolsPage() {
           <TabsTrigger value="cobranca" className="flex-1 shrink-0 flex items-center gap-2">
             <Wallet size={15} /> Cobrança online
           </TabsTrigger>
+          {isOwner && (settings as { fiscal_ativo?: boolean } | null)?.fiscal_ativo && (
+            <TabsTrigger value="fiscal" className="flex-1 shrink-0 flex items-center gap-2">
+              <ReceiptText size={15} /> Nota fiscal
+            </TabsTrigger>
+          )}
           <TabsTrigger value="ferramentas" className="flex-1 shrink-0 flex items-center gap-2">
             <Settings size={15} /> Ferramentas
           </TabsTrigger>
@@ -623,6 +629,11 @@ export default function ConfigToolsPage() {
               {saving ? 'Salvando...' : 'Salvar chave'}
             </Button>
           </div>
+        </TabsContent>
+
+        {/* ABA NOTA FISCAL (só com o módulo fiscal ligado) */}
+        <TabsContent value="fiscal" className="space-y-4">
+          <ConfigFiscal />
         </TabsContent>
 
         {/* ABA FERRAMENTAS */}

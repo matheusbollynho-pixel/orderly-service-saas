@@ -3,6 +3,7 @@ import { BuscaCliente } from '@/components/v2/BuscaCliente';
 import { matchesSearch } from '@/lib/textSearch';
 import { useTipoDoCliente, useTiposCliente } from '@/hooks/useTiposCliente';
 import { useCaixaFechado } from '@/hooks/useCaixaFechado';
+import { NotaFiscalVenda, useNotaDaVenda } from '@/components/fiscal/NotaFiscalVenda';
 import { motivoCancelamento } from '@/lib/motivoCancelamento';
 import { digitadoParaCliente, economiaUnit, precoParaCliente, regraDoTipo, tipoEmDia, type TipoCliente } from '@/lib/precoCliente';
 import { useState, useRef, useEffect } from 'react';
@@ -67,6 +68,8 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
 
   const items: BalcaoItem[] = order.balcao_items ?? [];
   const isEditable = order.status === 'aberta';
+  const fiscalLigado = !!(storeSettings as { fiscal_ativo?: boolean } | null)?.fiscal_ativo;
+  const { data: notaFiscal } = useNotaDaVenda(order.id, fiscalLigado && order.status !== 'aberta');
   // Loja que usa abertura de caixa: com o caixa fechado não adiciona item nem finaliza
   const caixaFechado = useCaixaFechado();
   const canAct = isEditable && !!order.atendente_id && !caixaFechado;
@@ -557,7 +560,12 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   };
 
   // ── Cancelar ──────────────────────────────────────────────────
-  const handleCancelar = () => {
+  const handleCancelar = async () => {
+    if (notaFiscal?.status === 'autorizada' && !(await confirmar({
+      titulo: `Esta venda tem nota fiscal nº ${notaFiscal.numero ?? ''} autorizada`,
+      descricao: 'Cancelar a venda NÃO cancela a nota na SEFAZ. Cancele a nota fiscal primeiro (em Mais › Notas fiscais, até 30 min depois de emitida) ou fale com o contador.',
+      verbo: 'Cancelar a venda mesmo assim', perigo: true,
+    }))) return;
     setCancelReason('');
     setCancelNotes('');
     setShowCancelDialog(true);
@@ -1555,6 +1563,10 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
               </div>
             );
           })()}
+
+          {order.status === 'finalizada' && (
+            <NotaFiscalVenda balcaoOrderId={order.id} clientCpf={editClientCpf || order.client_cpf} clientPhone={editClientPhone || order.client_phone} />
+          )}
         </div>
       </div>
 

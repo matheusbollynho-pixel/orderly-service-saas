@@ -6,7 +6,7 @@ import type { MemberPermissions } from '@/hooks/useAuth';
 export type View =
   | 'dashboard' | 'new' | 'express' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics'
   | 'pos-venda' | 'fluxo-caixa' | 'satisfacao' | 'estoque' | 'balcao' | 'quadro' | 'agenda'
-  | 'boletos' | 'fiados' | 'cotacao' | 'encomendas' | 'mais' | 'receber' | 'clientes' | 'pagar-equipe';
+  | 'boletos' | 'fiados' | 'cotacao' | 'encomendas' | 'mais' | 'receber' | 'clientes' | 'pagar-equipe' | 'notas-fiscais';
 
 export type Area = 'inicio' | 'oficina' | 'balcao' | 'caixa' | 'mais';
 
@@ -43,6 +43,7 @@ export const TELAS: Record<View, Tela> = {
   'pos-venda':   { nome: 'Lembretes e aniversários', area: 'mais', perm: 'pos_venda', recurso: 'pos-venda', busca: 'pos venda lembrete manutencao aniversario palavras chave' },
   satisfacao:    { nome: 'Avaliações', area: 'mais', perm: 'satisfacao', recurso: 'satisfacao', busca: 'satisfacao nps avaliacao nota' },
   mechanics:     { nome: 'Equipe', area: 'mais', perm: 'equipe', recurso: 'mechanics', busca: 'mecanico atendente comissao funcionario' },
+  'notas-fiscais': { nome: 'Notas fiscais', area: 'mais', perm: 'balcao', busca: 'nota fiscal nfce nfe cupom fiscal xml sefaz cancelar nota contador' },
   mais:          { nome: 'Mais', area: 'mais' },
 };
 

@@ -91,3 +91,6 @@ verify_jwt = false
 
 [functions.cotacao-link]
 verify_jwt = false
+
+[functions.fiscal]
+verify_jwt = false
