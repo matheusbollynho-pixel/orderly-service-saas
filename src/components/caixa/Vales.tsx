@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { useMechanics } from '@/hooks/useMechanics';
-import { useTeamMembers } from '@/hooks/useTeamMembers';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { useStore } from '@/contexts/StoreContext';
 import { agruparPorPessoa, useValeAcoes, useValesAbertos, type FormaVale } from '@/hooks/useVales';
 import { pedirTexto } from '@/components/v2/Confirmacao';
 
@@ -30,19 +31,25 @@ export function BotaoVale() {
 }
 
 function JanelaVale({ onClose }: { onClose: () => void }) {
-  const { mechanics } = useMechanics();
-  const { members } = useTeamMembers();
+  const { storeId } = useStore();
   const { lancar } = useValeAcoes();
-  const [pessoa, setPessoa] = useState<{ tipo: 'm' | 's'; id: string; nome: string } | null>(null);
+  const [pessoa, setPessoa] = useState<{ id: string; nome: string } | null>(null);
   const [valor, setValor] = useState('');
   const [forma, setForma] = useState<FormaVale>('dinheiro');
   const [autorizado, setAutorizado] = useState('Dono');
   const [motivo, setMotivo] = useState('');
 
-  const pessoas = useMemo(() => [
-    ...(mechanics ?? []).filter((m) => m.active !== false).map((m) => ({ tipo: 'm' as const, id: m.id, nome: m.name, papel: 'Mecânico' })),
-    ...(members ?? []).filter((s) => s.active !== false).map((s) => ({ tipo: 's' as const, id: s.id, nome: s.name, papel: 'Balcão' })),
-  ], [mechanics, members]);
+  // Pessoas da Equipe (uma por pessoa, mesmo quem é da oficina e do balcão)
+  const { data: pessoas = [] } = useQuery({
+    queryKey: ['pessoas-vale', storeId],
+    enabled: !!storeId,
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any).rpc('listar_pessoas_vale');
+      if (error) throw error;
+      return ((data ?? []) as { id: string; nome: string; cargo: string | null }[]).map((p) => ({ id: p.id, nome: p.nome, papel: p.cargo || 'Equipe' }));
+    },
+  });
 
   const num = parseFloat(valor.replace(',', '.')) || 0;
   const pode = !!pessoa && num > 0 && autorizado.trim() !== '' && !lancar.isPending;
@@ -51,8 +58,7 @@ function JanelaVale({ onClose }: { onClose: () => void }) {
     if (!pessoa) return;
     try {
       await lancar.mutateAsync({
-        mechanicId: pessoa.tipo === 'm' ? pessoa.id : undefined,
-        staffId: pessoa.tipo === 's' ? pessoa.id : undefined,
+        colaboradorId: pessoa.id,
         valor: num, forma, autorizadoPor: autorizado.trim(), motivo: motivo.trim() || undefined,
       });
       onClose();
@@ -64,7 +70,7 @@ function JanelaVale({ onClose }: { onClose: () => void }) {
       <DialogContent className="max-h-[92vh] overflow-y-auto max-sm:top-auto max-sm:bottom-0 max-sm:translate-y-0 max-sm:rounded-t-2xl max-sm:rounded-b-none">
         <DialogHeader>
           <DialogTitle className="text-left">Vale</DialogTitle>
-          <DialogDescription className="text-left">Fica guardado no nome da pessoa pra descontar no acerto.</DialogDescription>
+          <DialogDescription className="text-left">Fica guardado no nome da pessoa pra descontar no pagamento dela.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -72,14 +78,14 @@ function JanelaVale({ onClose }: { onClose: () => void }) {
             <p className="mb-2 text-sm font-medium">Pra quem?</p>
             <div className="grid grid-cols-2 gap-2">
               {pessoas.map((p) => (
-                <button key={`${p.tipo}${p.id}`} type="button" onClick={() => setPessoa(p)}
+                <button key={p.id} type="button" onClick={() => setPessoa(p)}
                   className={cn('flex min-h-[56px] flex-col items-start justify-center rounded-xl border px-3 text-left',
-                    pessoa?.id === p.id && pessoa.tipo === p.tipo ? 'border-primary bg-primary/10' : 'border-border')}>
+                    pessoa?.id === p.id ? 'border-primary bg-primary/10' : 'border-border')}>
                   <span className="text-base font-semibold leading-tight">{p.nome}</span>
                   <span className="text-xs text-muted-foreground">{p.papel}</span>
                 </button>
               ))}
-              {pessoas.length === 0 && <p className="col-span-2 text-sm text-muted-foreground">Cadastre a equipe em Ajustes › Equipe.</p>}
+              {pessoas.length === 0 && <p className="col-span-2 text-sm text-muted-foreground">Cadastre a equipe em Mais › Equipe.</p>}
             </div>
           </div>
 

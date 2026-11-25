@@ -10,7 +10,7 @@ import { MechanicDetailReport } from './MechanicDetailReport';
 import { BalcaoCommissionReport } from './BalcaoCommissionReport';
 import { PaymentsTab } from '@/components/PaymentsTab';
 import ResumoV2 from '@/components/relatorios/ResumoV2';
-import ComissoesV2 from '@/components/relatorios/ComissoesV2';
+import PagamentosEquipe from '@/components/equipe/PagamentosEquipe';
 import RelatoriosEstoque from '@/components/relatorios/RelatoriosEstoque';
 import Vencimentos from '@/components/relatorios/Vencimentos';
 import RelatorioVendas from '@/components/relatorios/RelatorioVendas';
@@ -73,12 +73,12 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder, onOpenCaixa }: Rep
 
         <TabsContent value="equipe" className="space-y-4">
           <div className="flex flex-wrap gap-1">
-            <Button size="sm" variant={parteEquipe === 'comissoes' ? 'default' : 'outline'} onClick={() => setParteEquipe('comissoes')}>Comissões</Button>
+            <Button size="sm" variant={parteEquipe === 'comissoes' ? 'default' : 'outline'} onClick={() => setParteEquipe('comissoes')}>Pagamentos</Button>
             <Button size="sm" variant={parteEquipe === 'mecanicos' ? 'default' : 'outline'} onClick={() => setParteEquipe('mecanicos')}>Por mecânico</Button>
             <Button size="sm" variant={parteEquipe === 'balcao' ? 'default' : 'outline'} onClick={() => setParteEquipe('balcao')}>Balcão (atendentes)</Button>
           </div>
           {parteEquipe === 'comissoes' ? (
-            <ComissoesV2 />
+            <PagamentosEquipe />
           ) : parteEquipe === 'mecanicos' ? (
             <MechanicDetailReport onBack={() => setParteEquipe('comissoes')} onOpenOrder={onOpenOrder} />
           ) : (

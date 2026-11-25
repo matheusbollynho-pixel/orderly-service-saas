@@ -23,10 +23,10 @@ const GRUPOS: Item[] = [
 ];
 
 // Telas de outras áreas que a busca também encontra
-const OUTRAS_TELAS: View[] = ['orders', 'quadro', 'agenda', 'new', 'express', 'balcao', 'encomendas', 'fluxo-caixa', 'fiados', 'boletos'];
+const OUTRAS_TELAS: View[] = ['orders', 'quadro', 'agenda', 'new', 'express', 'balcao', 'encomendas', 'fluxo-caixa', 'fiados', 'boletos', 'pagar-equipe'];
 const LOCAL: Partial<Record<View, string>> = {
   orders: 'Oficina', quadro: 'Oficina', agenda: 'Oficina', new: 'Oficina', express: 'Oficina',
-  balcao: 'Balcão', encomendas: 'Balcão', 'fluxo-caixa': 'Caixa', fiados: 'Caixa', boletos: 'Caixa',
+  balcao: 'Balcão', encomendas: 'Balcão', 'fluxo-caixa': 'Caixa', fiados: 'Caixa', boletos: 'Caixa', 'pagar-equipe': 'Caixa',
 };
 
 export default function MaisPage({ acessoDe, goTo, abrirRota, isOwner, telaInicial, setTelaInicial, onMenuAntigo, onSair }: {

@@ -1,4 +1,4 @@
-// v2: vales do colaborador. Lança e estorna só por função no banco (lancar_vale / estornar_vale):
+// v2: vales do colaborador. Lança e estorna só por função no banco (lancar_vale_pessoa / estornar_vale):
 // o vale fica ligado à pessoa e, se saiu do caixa, a saída entra no Caixa junto.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -13,6 +13,7 @@ export interface Vale {
   id: string; mechanic_id: string | null; staff_member_id: string | null; pessoa_nome: string;
   valor: number; data: string; forma: FormaVale; autorizado_por: string; motivo: string | null;
   cash_flow_id: string | null; acerto_id: string | null; estornado_em: string | null; created_at: string;
+  colaborador_id?: string | null; pagamento_id?: string | null;
 }
 export interface PessoaVales { chave: string; nome: string; tipo: 'mecanico' | 'balcao'; total: number; vales: Vale[] }
 
@@ -20,7 +21,7 @@ export interface PessoaVales { chave: string; nome: string; tipo: 'mecanico' | '
 export function agruparPorPessoa(vales: Vale[]): PessoaVales[] {
   const mapa = new Map<string, PessoaVales>();
   for (const v of vales) {
-    const chave = v.mechanic_id ? `m:${v.mechanic_id}` : v.staff_member_id ? `s:${v.staff_member_id}` : `n:${v.pessoa_nome}`;
+    const chave = v.colaborador_id ? `c:${v.colaborador_id}` : v.mechanic_id ? `m:${v.mechanic_id}` : v.staff_member_id ? `s:${v.staff_member_id}` : `n:${v.pessoa_nome}`;
     const p = mapa.get(chave) ?? { chave, nome: v.pessoa_nome, tipo: v.mechanic_id ? 'mecanico' : 'balcao', total: 0, vales: [] };
     p.total = Math.round((p.total + Number(v.valor)) * 100) / 100;
     p.vales.push(v);
@@ -29,7 +30,7 @@ export function agruparPorPessoa(vales: Vale[]): PessoaVales[] {
   return [...mapa.values()].sort((a, b) => b.total - a.total);
 }
 
-/** Vales ainda não descontados em acerto (e não estornados). */
+/** Vales ainda não descontados (nem em acerto nem em pagamento) e não estornados. */
 export function useValesAbertos() {
   const { storeId } = useStore();
   return useQuery({
@@ -38,7 +39,7 @@ export function useValesAbertos() {
     staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await db.from('vales').select('*')
-        .eq('store_id', storeId).is('acerto_id', null).is('estornado_em', null)
+        .eq('store_id', storeId).is('acerto_id', null).is('pagamento_id', null).is('estornado_em', null)
         .order('data', { ascending: false }).order('created_at', { ascending: false });
       if (error) throw error;
       return (data ?? []) as Vale[];
@@ -49,10 +50,18 @@ export function useValesAbertos() {
 export function useValeAcoes() {
   const qc = useQueryClient();
   const atualizar = () => {
-    for (const k of ['vales', 'cash-flow', 'cash-flow-summary', 'cash-flow-period', 'relatorio-resumo']) qc.invalidateQueries({ queryKey: [k] });
+    for (const k of ['vales', 'cash-flow', 'cash-flow-summary', 'cash-flow-period', 'relatorio-resumo', 'folha-equipe']) qc.invalidateQueries({ queryKey: [k] });
   };
   const lancar = useMutation({
-    mutationFn: async (v: { mechanicId?: string; staffId?: string; valor: number; forma: FormaVale; autorizadoPor: string; motivo?: string }) => {
+    mutationFn: async (v: { colaboradorId?: string; mechanicId?: string; staffId?: string; valor: number; forma: FormaVale; autorizadoPor: string; motivo?: string }) => {
+      // Pessoa da Equipe (cadastro novo): o banco acha o papel dela; quem não tem papel também recebe vale
+      if (v.colaboradorId) {
+        const { error } = await db.rpc('lancar_vale_pessoa', {
+          p_colaborador_id: v.colaboradorId, p_valor: v.valor, p_forma: v.forma, p_autorizado_por: v.autorizadoPor, p_motivo: v.motivo ?? null,
+        });
+        if (error) throw error;
+        return;
+      }
       const { error } = await db.rpc('lancar_vale', {
         p_mechanic_id: v.mechanicId ?? null, p_staff_member_id: v.staffId ?? null, p_valor: v.valor,
         p_forma: v.forma, p_autorizado_por: v.autorizadoPor, p_motivo: v.motivo ?? null,

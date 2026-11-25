@@ -42,6 +42,10 @@ interface Pessoa {
   ativo: boolean;
   faz_os: boolean;
   atende_balcao: boolean;
+  forma_pagamento: 'fixo' | 'fixo_comissao' | 'comissao';
+  valor_fixo: number;
+  periodicidade: 'semanal' | 'quinzenal' | 'mensal';
+  dia_pagamento: number | null;
   mechanic_id: string | null;
   staff_member_id: string | null;
 }
@@ -53,6 +57,13 @@ const CARGOS_PADRAO = ['Mecânico', 'Capoteiro', 'Atendente', 'Gerente', 'Auxili
 const TIPOS_PIX = [
   { v: 'cpf', n: 'CPF' }, { v: 'telefone', n: 'Telefone' }, { v: 'email', n: 'E-mail' }, { v: 'aleatoria', n: 'Chave aleatória' },
 ];
+const FORMAS_PAGTO: { v: Form['forma_pagamento']; n: string }[] = [
+  { v: 'comissao', n: 'Só comissão' }, { v: 'fixo_comissao', n: 'Fixo + comissão' }, { v: 'fixo', n: 'Só fixo' },
+];
+const PERIODOS: { v: Form['periodicidade']; n: string }[] = [
+  { v: 'semanal', n: 'Semana' }, { v: 'quinzenal', n: 'Quinzena' }, { v: 'mensal', n: 'Mês' },
+];
+const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const soDigitos = (v: string | null | undefined) => String(v ?? '').replace(/\D/g, '');
 const fmtTel = (v: string | null | undefined) => {
   const d = soDigitos(v);
@@ -158,13 +169,15 @@ function ListaEquipe({ onAbrir }: { onAbrir: (id: string | 'nova') => void }) {
 
 // ---------------------------------------------------------------- ficha
 
-type Form = Omit<Pessoa, 'id' | 'mechanic_id' | 'staff_member_id'> & {
+type Form = Omit<Pessoa, 'id' | 'mechanic_id' | 'staff_member_id' | 'valor_fixo'> & {
+  valor_fixo: string;
   comissao_servicos: string; comissao_pecas: string; comissao_balcao: string; comissao_balcao_pecas: boolean;
 };
 const VAZIO: Form = {
   nome: '', apelido: '', cpf: '', telefone: '', email: '', data_nascimento: null, endereco: '', cidade: '', estado: '',
   cargo: '', data_admissao: null, pix_tipo: 'cpf', pix_chave: '', observacoes: '', foto_url: null, ativo: true,
-  faz_os: false, atende_balcao: false, comissao_servicos: '0', comissao_pecas: '0', comissao_balcao: '0', comissao_balcao_pecas: false,
+  faz_os: false, atende_balcao: false, forma_pagamento: 'comissao', valor_fixo: '0', periodicidade: 'semanal', dia_pagamento: null,
+  comissao_servicos: '0', comissao_pecas: '0', comissao_balcao: '0', comissao_balcao_pecas: false,
 };
 
 function FichaPessoa({ id, onVoltar, onCriada }: { id: string | null; onVoltar: () => void; onCriada: (id: string) => void }) {
@@ -195,6 +208,7 @@ function FichaPessoa({ id, onVoltar, onCriada }: { id: string | null; onVoltar: 
     const { mec, ate } = papeis.data;
     setForm({
       ...VAZIO, ...pessoa,
+      valor_fixo: String(pessoa.valor_fixo ?? 0),
       comissao_servicos: String(mec?.commission_rate ?? 0),
       comissao_pecas: String(mec?.commission_parts_rate ?? 0),
       comissao_balcao: String(ate?.commission_rate ?? 0),
@@ -233,6 +247,8 @@ function FichaPessoa({ id, onVoltar, onCriada }: { id: string | null; onVoltar: 
         observacoes: form.observacoes, foto_url: form.foto_url ?? '', ativo: form.ativo,
         faz_os: form.faz_os, comissao_servicos: num(form.comissao_servicos), comissao_pecas: num(form.comissao_pecas),
         atende_balcao: form.atende_balcao, comissao_balcao: num(form.comissao_balcao), comissao_balcao_pecas: form.comissao_balcao_pecas,
+        forma_pagamento: form.forma_pagamento, valor_fixo: Math.max(0, parseFloat(String(form.valor_fixo).replace(',', '.')) || 0),
+        periodicidade: form.periodicidade, dia_pagamento: form.dia_pagamento ?? '',
       },
     });
     setSalvando(false);
@@ -313,7 +329,48 @@ function FichaPessoa({ id, onVoltar, onCriada }: { id: string | null; onVoltar: 
         )}
       </Secao>
 
-      <Secao titulo="Pagamento">
+      <Secao titulo="Como recebe">
+        <div className="flex flex-wrap gap-1">
+          {FORMAS_PAGTO.map((f) => (
+            <Button key={f.v} type="button" size="sm" variant={form.forma_pagamento === f.v ? 'default' : 'outline'} className="h-8 text-xs" onClick={() => set('forma_pagamento', f.v)}>{f.n}</Button>
+          ))}
+        </div>
+        {form.forma_pagamento !== 'comissao' && (
+          <Campo label={`Valor fixo por ${form.periodicidade === 'semanal' ? 'semana' : form.periodicidade === 'quinzenal' ? 'quinzena' : 'mês'} (R$)`}>
+            <Input inputMode="decimal" value={form.valor_fixo} onChange={(e) => set('valor_fixo', e.target.value)} />
+          </Campo>
+        )}
+        {form.forma_pagamento === 'fixo' && (form.faz_os || form.atende_balcao) && (
+          <p className="text-[11px] text-muted-foreground">Só fixo: a comissão das OS e vendas não entra no pagamento.</p>
+        )}
+        <Campo label="Recebe a cada">
+          <div className="flex flex-wrap gap-1">
+            {PERIODOS.map((pp) => (
+              <Button key={pp.v} type="button" size="sm" variant={form.periodicidade === pp.v ? 'default' : 'outline'} className="h-8 text-xs"
+                onClick={() => setForm((f) => ({ ...f, periodicidade: pp.v, dia_pagamento: null }))}>{pp.n}</Button>
+            ))}
+          </div>
+        </Campo>
+        {form.periodicidade === 'semanal' && (
+          <Campo label="Dia da semana do pagamento">
+            <div className="flex flex-wrap gap-1">
+              {DIAS_SEMANA.map((d, i) => (
+                <Button key={d} type="button" size="sm" variant={(form.dia_pagamento ?? -1) === i ? 'default' : 'outline'} className="h-8 w-11 text-xs" onClick={() => set('dia_pagamento', i)}>{d}</Button>
+              ))}
+            </div>
+            {form.dia_pagamento == null && <p className="text-[11px] text-muted-foreground">Sem escolher: usa o dia de acerto da loja (sábado, se não mudou).</p>}
+          </Campo>
+        )}
+        {form.periodicidade === 'quinzenal' && <p className="text-xs text-muted-foreground">Paga no dia 15 e no último dia do mês.</p>}
+        {form.periodicidade === 'mensal' && (
+          <Campo label="Dia do mês do pagamento">
+            <Input inputMode="numeric" className="w-24" value={form.dia_pagamento ?? ''} placeholder="5"
+              onChange={(e) => { const n = parseInt(e.target.value.replace(/\D/g, ''), 10); set('dia_pagamento', Number.isNaN(n) ? null : Math.min(31, Math.max(1, n))); }} />
+          </Campo>
+        )}
+      </Secao>
+
+      <Secao titulo="Dados para pagar">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Campo label="Tipo da chave Pix">
             <div className="flex flex-wrap gap-1">

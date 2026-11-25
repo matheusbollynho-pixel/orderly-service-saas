@@ -25,6 +25,7 @@ import InventoryPage from './InventoryPage';
 import CotacaoPage from './CotacaoPage';
 import EncomendasPage from './EncomendasPage';
 import ClientesPage from './ClientesPage';
+import PagamentosEquipe from '@/components/equipe/PagamentosEquipe';
 import VendaBalcaoPage from './VendaBalcaoPage';
 import QuadroOficinaPage from './QuadroOficinaPage';
 import AgendaPage from './AgendaPage';
@@ -838,6 +839,8 @@ Retirada: ${retiradaInfo}`;
         {currentView === 'boletos' && <BoletosPage />}
 
         {currentView === 'fiados' && <FiadosPage key={fiadoFoco ?? 'todos'} fiadoId={fiadoFoco} onVerTodos={() => setFiadoFoco(undefined)} />}
+
+        {currentView === 'pagar-equipe' && <PagamentosEquipe />}
 
         {currentView === 'cotacao' && <CotacaoPage />}
 

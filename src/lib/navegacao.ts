@@ -6,7 +6,7 @@ import type { MemberPermissions } from '@/hooks/useAuth';
 export type View =
   | 'dashboard' | 'new' | 'express' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics'
   | 'pos-venda' | 'fluxo-caixa' | 'satisfacao' | 'estoque' | 'balcao' | 'quadro' | 'agenda'
-  | 'boletos' | 'fiados' | 'cotacao' | 'encomendas' | 'mais' | 'receber' | 'clientes';
+  | 'boletos' | 'fiados' | 'cotacao' | 'encomendas' | 'mais' | 'receber' | 'clientes' | 'pagar-equipe';
 
 export type Area = 'inicio' | 'oficina' | 'balcao' | 'caixa' | 'mais';
 
@@ -34,6 +34,7 @@ export const TELAS: Record<View, Tela> = {
   encomendas:    { nome: 'Encomendas', area: 'balcao', perm: 'estoque', recurso: 'encomendas', busca: 'pedido cliente peca encomendar' },
   'fluxo-caixa': { nome: 'Hoje', area: 'caixa', perm: 'caixa', recurso: 'fluxo-caixa', busca: 'caixa fluxo entrada saida retirada estorno' },
   fiados:        { nome: 'Fiado', area: 'caixa', perm: 'fiados', recurso: 'fiados', busca: 'fiado devendo cobranca' },
+  'pagar-equipe': { nome: 'Pagar equipe', area: 'caixa', perm: 'caixa', recurso: 'fluxo-caixa', busca: 'salario pagamento equipe comissao acerto folha vale funcionario' },
   boletos:       { nome: 'Contas a pagar', area: 'caixa', perm: 'boletos', recurso: 'boletos', busca: 'boleto conta pagar fornecedor vencimento' },
   clientes:      { nome: 'Clientes', area: 'mais', perm: 'clientes', busca: 'cliente cadastro ficha telefone cpf placa historico' },
   estoque:       { nome: 'Estoque', area: 'mais', perm: 'estoque', recurso: 'estoque', busca: 'produto peca estoque minimo' },
@@ -49,7 +50,7 @@ export const TELAS: Record<View, Tela> = {
 export const ABAS: Partial<Record<Area, View[]>> = {
   oficina: ['orders', 'quadro', 'agenda'],
   balcao: ['balcao', 'encomendas'],
-  caixa: ['fluxo-caixa', 'fiados', 'boletos'],
+  caixa: ['fluxo-caixa', 'fiados', 'boletos', 'pagar-equipe'],
 };
 
 export type Acesso = 'ok' | 'plano' | 'sem_permissao';

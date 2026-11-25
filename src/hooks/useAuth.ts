@@ -26,6 +26,8 @@ export type MemberPermissions = {
   estornar: boolean;
   /** Movimentacao 'ajuste' e saldo digitado no cadastro do produto */
   ajustar_estoque: boolean;
+  /** Pagar salário/comissão da equipe e desfazer pagamento */
+  pagar_equipe: boolean;
 };
 
 export function useAuth() {
