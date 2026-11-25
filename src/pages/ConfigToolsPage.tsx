@@ -78,6 +78,17 @@ export default function ConfigToolsPage() {
   const { isOwner, role, loading: storeLoading, storeId, vehicleType } = useStore();
   const [salvandoTipo, setSalvandoTipo] = useState(false);
   const [usaAlmox, setUsaAlmox] = useState<boolean | null>(null);
+  const [usaTurno, setUsaTurno] = useState<boolean | null>(null);
+
+  // Abertura e fechamento do caixa (conferência da gaveta). Desligado por padrão.
+  async function mudarTurnoCaixa(ligar: boolean) {
+    if (!storeId) return;
+    setUsaTurno(ligar);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).from('store_settings').update({ usa_abertura_caixa: ligar }).eq('id', storeId);
+    if (error) { setUsaTurno(!ligar); toast.error('Não consegui salvar: ' + error.message); return; }
+    toast.success(ligar ? 'Abertura e fechamento do caixa ligados. Aparece no topo do Caixa.' : 'Abertura e fechamento do caixa desligados.');
+  }
 
   // Almoxarifado: estoque de uso interno (ex.: estofaria). Desligado por padrão.
   async function mudarAlmoxarifado(ligar: boolean) {
@@ -341,6 +352,20 @@ export default function ConfigToolsPage() {
                   Usar almoxarifado (estoque de uso interno)
                 </label>
                 <p className="text-xs text-neutral-500">O produto passa a ter saldo na loja e no almoxarifado, com transferência entre os dois. A peça lançada na OS sai do almoxarifado. Bom para estofaria e oficina que usam material da loja.</p>
+              </div>
+
+              {/* Abertura e fechamento do caixa */}
+              <div className="space-y-1">
+                <label className="flex items-center gap-2 text-sm text-neutral-200">
+                  <input
+                    type="checkbox"
+                    checked={usaTurno ?? !!(settings as { usa_abertura_caixa?: boolean } | null)?.usa_abertura_caixa}
+                    onChange={e => mudarTurnoCaixa(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  Abrir e fechar o caixa (conferir a gaveta)
+                </label>
+                <p className="text-xs text-neutral-500">Abre o dia com o troco e, no fechamento, conta o dinheiro da gaveta e mostra se sobrou ou faltou. Bom quando mais de uma pessoa mexe no caixa.</p>
               </div>
 
               {/* Checklist da OS personalizado */}

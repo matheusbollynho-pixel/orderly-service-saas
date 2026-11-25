@@ -2,6 +2,7 @@ import { pedirMotivoEstorno } from '@/lib/estorno';
 import { useStore } from '@/contexts/StoreContext';
 import { semEstornosAnulados } from '@/lib/caixaEstorno';
 import { BotaoVale, ValesAbertos } from '@/components/caixa/Vales';
+import { TurnoCaixa } from '@/components/caixa/TurnoCaixa';
 import { matchesSearch } from '@/lib/textSearch';
 import { useState, useEffect, useRef } from 'react';
 import { useCashFlow, useCashFlowPeriod } from '@/hooks/useCashFlow';
@@ -647,6 +648,8 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder, foco, onFocoU
           )}
         </div>
       </div>
+
+      <TurnoCaixa ocultar={hideValues} />
 
       <ValesAbertos ocultar={hideValues} />
 

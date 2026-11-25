@@ -42,7 +42,7 @@ export function useRealtimeSync(storeId: string | null) {
     const GRUPOS: Record<string, string[]> = {
       orders: ['service-orders', 'oficina-ativas', 'a-receber', 'contagem-os'],
       oficina: ['oficina-ativas', 'a-receber', 'contagem-os'],
-      cash: ['cash-flow', 'cash-flow-summary', 'cash-flow-period'],
+      cash: ['cash-flow', 'cash-flow-summary', 'cash-flow-period', 'caixa-turno'],
       balcao: ['balcao-orders', 'a-receber'],
       agenda: ['appointments'],
       estoque: ['inventory-products', 'inventory-movements', 'cotacao'],
@@ -269,6 +269,7 @@ export function useRealtimeSync(storeId: string | null) {
         ['fiado_payments', () => invalidate('fiados')],
         ['vales', () => invalidate('vales')],
         ['acertos', () => invalidate('acertos')],
+        ['caixa_turnos', () => invalidate('cash')],
       ];
       let canal = supabase.channel(`global-realtime-sync-${storeId}-${Date.now()}`);
       for (const [table, aoMudar] of tabelas) {

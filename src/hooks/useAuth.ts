@@ -28,6 +28,8 @@ export type MemberPermissions = {
   ajustar_estoque: boolean;
   /** Pagar salário/comissão da equipe e desfazer pagamento */
   pagar_equipe: boolean;
+  /** Abrir e fechar o caixa (conferência da gaveta) */
+  abrir_fechar_caixa: boolean;
 };
 
 export function useAuth() {
