@@ -141,6 +141,9 @@ export default function ConfigToolsPage() {
   const [storeCnpj, setStoreCnpj] = useState('');
   const [storeInstagram, setStoreInstagram] = useState('');
   const [storeOwner, setStoreOwner] = useState('');
+  // CNPJ de serviços (opcional): nota de serviço feita na prefeitura por outro CNPJ
+  const [servicosCnpj, setServicosCnpj] = useState('');
+  const [servicosRazao, setServicosRazao] = useState('');
   const [aiEnabled, setAiEnabled] = useState(true);
   const [aiNotes, setAiNotes] = useState('');
   const [asaasApiKey, setAsaasApiKey] = useState('');
@@ -174,6 +177,8 @@ export default function ConfigToolsPage() {
       setStoreCnpj(settings.store_cnpj || '');
       setStoreInstagram(settings.store_instagram || '');
       setStoreOwner(settings.store_owner || '');
+      setServicosCnpj((settings as { servicos_cnpj?: string | null }).servicos_cnpj || '');
+      setServicosRazao((settings as { servicos_razao_social?: string | null }).servicos_razao_social || '');
       setAiEnabled(settings.ai_enabled ?? true);
       setAiNotes(settings.ai_notes || '');
       setAsaasApiKey((settings as any).asaas_api_key || '');
@@ -213,6 +218,8 @@ export default function ConfigToolsPage() {
       store_cnpj: storeCnpj,
       store_instagram: storeInstagram,
       store_owner: storeOwner,
+      servicos_cnpj: servicosCnpj.trim() || null,
+      servicos_razao_social: servicosRazao.trim() || null,
       ai_enabled: aiEnabled,
       ai_notes: aiNotes,
       instagram_url: instagramUrl || null,
@@ -325,6 +332,8 @@ export default function ConfigToolsPage() {
                 { label: 'Link Instagram (URL completa)', value: instagramUrl, set: setInstagramUrl, placeholder: 'Ex: https://www.instagram.com/speedseekos/' },
                 { label: 'Link Google Maps (URL completa)', value: googleMapsUrl, set: setGoogleMapsUrl, placeholder: 'Ex: https://maps.app.goo.gl/...' },
                 { label: 'Razão Social', value: storeOwner, set: setStoreOwner, placeholder: 'Ex: João da Silva ME' },
+                { label: 'CNPJ de serviços (opcional — se a mão de obra sai por outro CNPJ)', value: servicosCnpj, set: setServicosCnpj, placeholder: 'Vazio = o mesmo CNPJ da loja' },
+                { label: 'Razão social de serviços (opcional)', value: servicosRazao, set: setServicosRazao, placeholder: 'Vazio = a mesma razão social' },
               ].map(({ label, value, set, placeholder }) => (
                 <div key={label} className="space-y-1">
                   <label className="text-xs text-neutral-400 font-medium">{label}</label>

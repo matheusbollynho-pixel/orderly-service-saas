@@ -1,3 +1,4 @@
+import { motivoCancelamento } from '@/lib/motivoCancelamento';
 import { matchesSearch } from '@/lib/textSearch';
 import React, { useState, useEffect } from 'react';
 import { useBalcao, BALCAO_DIAS_RECENTES, type BalcaoOrder } from '@/hooks/useBalcao';
@@ -210,6 +211,11 @@ export default function VendaBalcaoPage({ initialOrderId, onInitialOrderConsumed
                       {itemCount} {itemCount === 1 ? 'item' : 'itens'}
                       {order.discount_pct > 0 && ` · Desconto ${order.discount_pct}%`}
                     </p>
+                    {order.status === 'cancelada' && (
+                      <p className="text-xs text-red-500 mt-0.5 truncate">
+                        Motivo: {motivoCancelamento(order.cancel_reason)}{order.cancel_notes ? ` · ${order.cancel_notes}` : ''}
+                      </p>
+                    )}
                   </div>
                   <div className="text-right flex-shrink-0">
                     <p className="font-bold text-base">R$ {order.total.toFixed(2)}</p>

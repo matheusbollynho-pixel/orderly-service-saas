@@ -3,6 +3,7 @@ import { BuscaCliente } from '@/components/v2/BuscaCliente';
 import { matchesSearch } from '@/lib/textSearch';
 import { useTipoDoCliente, useTiposCliente } from '@/hooks/useTiposCliente';
 import { useCaixaFechado } from '@/hooks/useCaixaFechado';
+import { motivoCancelamento } from '@/lib/motivoCancelamento';
 import { digitadoParaCliente, economiaUnit, precoParaCliente, regraDoTipo, tipoEmDia, type TipoCliente } from '@/lib/precoCliente';
 import { useState, useRef, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -853,6 +854,17 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
         </div>
       </div>
 
+      {order.status === 'cancelada' && (
+        <div className="mb-3 rounded-xl border border-red-500/50 bg-red-500/10 p-3 text-sm">
+          <p className="font-semibold text-red-500">
+            Nota cancelada{order.updated_at ? ` em ${new Date(order.updated_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}` : ''}
+          </p>
+          <p className="text-xs">
+            Motivo: <b>{motivoCancelamento(order.cancel_reason)}</b>
+            {order.cancel_notes ? <> · {order.cancel_notes}</> : null}
+          </p>
+        </div>
+      )}
       {isEditable && caixaFechado && (
         <div className="mb-3 rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
           <p className="font-semibold text-amber-500">Caixa fechado</p>

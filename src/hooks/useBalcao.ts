@@ -14,6 +14,9 @@ export interface PaymentEntry {
 export interface BalcaoOrder {
   id: string;
   numero: number;
+  /** Motivo e observação de quando a nota foi cancelada */
+  cancel_reason?: string | null;
+  cancel_notes?: string | null;
   /** Venda feita pela internet (Instagram / WhatsApp / site) */
   venda_online?: boolean;
   client_name: string | null;

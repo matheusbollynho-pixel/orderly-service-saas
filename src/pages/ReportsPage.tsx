@@ -15,10 +15,11 @@ import RelatoriosEstoque from '@/components/relatorios/RelatoriosEstoque';
 import Vencimentos from '@/components/relatorios/Vencimentos';
 import RelatorioVendas from '@/components/relatorios/RelatorioVendas';
 import RelatorioOficina from '@/components/relatorios/RelatorioOficina';
+import RelatorioNfse from '@/components/relatorios/RelatorioNfse';
 import RelatorioClientes from '@/components/relatorios/RelatorioClientes';
 
 type Period = 'week' | 'month' | 'all';
-type Aba = 'resumo' | 'vendas' | 'oficina' | 'clientes' | 'equipe' | 'estoque' | 'vencimentos' | 'pagamentos';
+type Aba = 'resumo' | 'vendas' | 'oficina' | 'nfse' | 'clientes' | 'equipe' | 'estoque' | 'vencimentos' | 'pagamentos';
 type ParteEquipe = 'comissoes' | 'mecanicos' | 'balcao';
 
 interface ReportsPageProps {
@@ -32,6 +33,7 @@ const ABAS: { id: Aba; nome: string }[] = [
   { id: 'resumo', nome: 'Resumo' },
   { id: 'vendas', nome: 'Vendas' },
   { id: 'oficina', nome: 'Oficina' },
+  { id: 'nfse', nome: 'Notas de serviço' },
   { id: 'clientes', nome: 'Clientes' },
   { id: 'equipe', nome: 'Equipe' },
   { id: 'estoque', nome: 'Estoque' },
@@ -69,6 +71,7 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder, onOpenCaixa }: Rep
         <TabsContent value="resumo"><ResumoV2 onOpenCaixa={onOpenCaixa} /></TabsContent>
         <TabsContent value="vendas"><RelatorioVendas /></TabsContent>
         <TabsContent value="oficina"><RelatorioOficina onOpenOrder={onOpenOrder} /></TabsContent>
+        <TabsContent value="nfse"><RelatorioNfse onOpenOrder={onOpenOrder} /></TabsContent>
         <TabsContent value="clientes"><RelatorioClientes /></TabsContent>
 
         <TabsContent value="equipe" className="space-y-4">

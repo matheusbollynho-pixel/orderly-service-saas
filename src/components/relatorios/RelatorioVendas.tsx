@@ -10,6 +10,7 @@ import { buscarTodas } from '@/lib/buscarTodas';
 import { useStore } from '@/contexts/StoreContext';
 import { useMechanics } from '@/hooks/useMechanics';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
+import { motivoCancelamento } from '@/lib/motivoCancelamento';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { baixarPlanilha } from '@/lib/planilha';
@@ -51,7 +52,7 @@ function useVendas(p: Periodo) {
       const ate = `${iso(fimMais1)}T00:00:00${TZ}`;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const db = supabase as any;
-      const [os, notas] = await Promise.all([
+      const [os, notas, canceladas] = await Promise.all([
         buscarTodas<OS>((a, b) => db.from('service_orders')
           .select('id, exit_date, mechanic_id, client_name, materials(descricao, quantidade, valor, is_service), payments(amount, discount_amount, method)')
           .eq('store_id', storeId).eq('status', 'concluida_entregue').neq('equipment', '__QR_WALKIN_PLACEHOLDER__')
@@ -62,8 +63,14 @@ function useVendas(p: Periodo) {
           .eq('store_id', storeId).in('status', ['finalizada', 'fiado'])
           .or(`and(finalized_at.gte.${de},finalized_at.lt.${ate}),and(finalized_at.is.null,created_at.gte.${de},created_at.lt.${ate})`)
           .order('id').range(a, b)),
+        // Canceladas no período (pela data do cancelamento = última alteração)
+        buscarTodas<{ id: string; numero: number | null; client_name: string | null; total: number | null; cancel_reason: string | null; cancel_notes: string | null; updated_at: string }>((a, b) => db.from('balcao_orders')
+          .select('id, numero, client_name, total, cancel_reason, cancel_notes, updated_at')
+          .eq('store_id', storeId).eq('status', 'cancelada')
+          .gte('updated_at', de).lt('updated_at', ate)
+          .order('updated_at', { ascending: false }).order('id').range(a, b)),
       ]);
-      return { os, notas };
+      return { os, notas, canceladas };
     },
   });
 }
@@ -257,6 +264,36 @@ export default function RelatorioVendas() {
               </div>
             ))}
             {listaItens.length > 30 && <p className="text-[11px] text-muted-foreground">Mostrando os 30 primeiros de {listaItens.length}. A planilha tem todos.</p>}
+          </section>
+
+          <section className="rounded-xl border bg-card p-3 space-y-1">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold">Notas canceladas</h3>
+              <span className="text-xs text-muted-foreground">{data!.canceladas.length} no período</span>
+              <Button size="sm" variant="outline" className="ml-auto" disabled={data!.canceladas.length === 0}
+                onClick={() => baixarPlanilha(`notas-canceladas-${atual.ini}-a-${atual.fim}`, ['Cancelada em', 'Nota', 'Cliente', 'Valor', 'Motivo', 'Observação'],
+                  data!.canceladas.map((c) => [new Date(c.updated_at).toLocaleString('pt-BR'), c.numero ?? '', c.client_name ?? '', num(c.total), motivoCancelamento(c.cancel_reason), c.cancel_notes ?? '']))}>
+                Baixar planilha
+              </Button>
+            </div>
+            {data!.canceladas.length === 0 ? <p className="text-xs text-muted-foreground">Nenhuma nota cancelada no período.</p> : (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  {Object.entries(data!.canceladas.reduce((m, c) => { const k = motivoCancelamento(c.cancel_reason); m[k] = (m[k] ?? 0) + 1; return m; }, {} as Record<string, number>))
+                    .sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k}: ${n}`).join(' · ')}
+                </p>
+                {data!.canceladas.slice(0, 30).map((c) => (
+                  <div key={c.id} className="flex justify-between gap-2 text-xs border-t border-border/50 pt-1">
+                    <span className="min-w-0">
+                      <span className="text-muted-foreground">{new Date(c.updated_at).toLocaleDateString('pt-BR')} · #{String(c.numero ?? '').padStart(4, '0')}</span> {c.client_name || 'sem cliente'}
+                      <span className="block text-red-500">{motivoCancelamento(c.cancel_reason)}{c.cancel_notes ? ` · ${c.cancel_notes}` : ''}</span>
+                    </span>
+                    <span className="tabular-nums flex-shrink-0">{brl(num(c.total))}</span>
+                  </div>
+                ))}
+                {data!.canceladas.length > 30 && <p className="text-[11px] text-muted-foreground">Mostrando 30 de {data!.canceladas.length}. A planilha tem todas.</p>}
+              </>
+            )}
           </section>
 
           <p className="text-[11px] text-muted-foreground">

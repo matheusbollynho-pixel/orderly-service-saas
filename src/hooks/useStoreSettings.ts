@@ -15,6 +15,9 @@ export interface StoreSettings {
   whatsapp_satisfaction_template: string;
   whatsapp_birthday_template: string;
   whatsapp_balcao_followup_template: string;
+  /** CNPJ e razão social de serviços (nota de serviço na prefeitura); vazio = os da loja */
+  servicos_cnpj?: string | null;
+  servicos_razao_social?: string | null;
   /** Aviso de preço especial (Lojista etc.) vencendo; vazio = texto padrão */
   whatsapp_lojista_aviso_template?: string | null;
   max_agendamentos_dia: number;
