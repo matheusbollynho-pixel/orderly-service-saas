@@ -44,6 +44,7 @@ const PERMISSION_LABELS: { key: keyof MemberPermissions; label: string }[] = [
   { key: 'equipe', label: 'Equipe' },
   { key: 'pos_venda', label: 'Pós-Venda' },
   { key: 'satisfacao', label: 'Satisfação' },
+  { key: 'clientes', label: 'Clientes' },
 ];
 
 // Ações dentro das telas (o banco também confere)
@@ -60,7 +61,7 @@ const COMPARTILHADA = 'compartilhada';
 const DEFAULT_PERMISSIONS: MemberPermissions = {
   nova_os: true, express: true, orders: true, agenda: true, quadro: true,
   caixa: false, balcao: false, relatorios: false, boletos: false, fiados: false,
-  estoque: false, equipe: false, pos_venda: false, satisfacao: false,
+  estoque: false, equipe: false, pos_venda: false, satisfacao: false, clientes: true,
   editar_itens_os: true, excluir_os: true, dar_desconto: true, estornar: true, ajustar_estoque: true,
 };
 

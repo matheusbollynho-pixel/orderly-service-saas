@@ -6,7 +6,7 @@ import type { MemberPermissions } from '@/hooks/useAuth';
 const ALL_PERMISSIONS: MemberPermissions = {
   nova_os: true, express: true, orders: true, agenda: true, quadro: true,
   caixa: true, balcao: true, relatorios: true, boletos: true, fiados: true,
-  estoque: true, equipe: true, pos_venda: true, satisfacao: true,
+  estoque: true, equipe: true, pos_venda: true, satisfacao: true, clientes: true,
   editar_itens_os: true, excluir_os: true, dar_desconto: true, estornar: true, ajustar_estoque: true,
 };
 

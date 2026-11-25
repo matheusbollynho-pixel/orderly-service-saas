@@ -52,7 +52,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
-  const { updateOrder, addItem, updateItem, removeItem, finalizeOrder, cancelOrder, isFinalizing, isCancelling } = useBalcao();
+  const { updateOrder, addItem, updateItem, removeItem, finalizeOrder, cancelOrder, isFinalizing, isCancelling } = useBalcao({ recentes: true });
   const { products } = useInventory();
   const { members: teamMembers } = useTeamMembers();
   const { settings: storeSettings } = useStoreSettings();
@@ -84,6 +84,10 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
 
   const [editClientName, setEditClientName] = useState(order.client_name ?? '');
   const [editClientCpf, setEditClientCpf] = useState(order.client_cpf ?? '');
+  // Cadastro do cliente ligado à nota (ref: o blur do campo pode chegar depois da escolha)
+  const clienteIdRef = useRef<string | null>(order.client_id ?? null);
+  // Tocar num cliente da lista tira o foco do campo antes: o blur salvaria o texto digitado por cima da escolha
+  const ultimaEscolhaRef = useRef(0);
   const [editClientPhone, setEditClientPhone] = useState(order.client_phone ?? '');
   const [editClientAddress, setEditClientAddress] = useState(order.client_address ?? '');
   const [discountPct, setDiscountPct] = useState(String(order.discount_pct || ''));
@@ -167,12 +171,15 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   const handleBlurDiscountVal = () => saveTotals(discPct);
 
   const handleBlurClient = async () => {
+    await new Promise((ok) => setTimeout(ok, 350));
+    if (Date.now() - ultimaEscolhaRef.current < 2000) return; // escolheu da lista: onEscolher já salvou
     await updateOrder({
       id: order.id,
       client_name: editClientName || null,
       client_cpf: editClientCpf || null,
       client_phone: editClientPhone || null,
       client_address: editClientAddress || null,
+      client_id: clienteIdRef.current,
     });
   };
 
@@ -291,6 +298,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
       client_name: editClientName || order.client_name || 'Cliente',
       client_phone: editClientPhone || null,
       client_cpf: editClientCpf || null,
+      client_id: clienteIdRef.current ?? order.client_id ?? null,
       items: fiadoItems,
       original_amount: pending > 0 ? pending : total,
       amount_paid: 0,
@@ -787,16 +795,18 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
                 <BuscaCliente
                   className="mt-1"
                   valor={editClientName}
-                  onChange={setEditClientName}
+                  onChange={(v) => { setEditClientName(v); clienteIdRef.current = null; }}
                   onBlur={handleBlurClient}
                   placeholder="Opcional: nome, telefone ou placa"
                   onEscolher={async (c) => {
                     const tel = c.whatsapp || c.phone || '';
+                    ultimaEscolhaRef.current = Date.now();
+                    clienteIdRef.current = c.id;
                     setEditClientName(c.name);
                     setEditClientCpf(c.cpf || '');
                     setEditClientPhone(tel);
                     setEditClientAddress(c.endereco || '');
-                    await updateOrder({ id: order.id, client_name: c.name, client_cpf: c.cpf || null, client_phone: tel || null, client_address: c.endereco || null });
+                    await updateOrder({ id: order.id, client_name: c.name, client_cpf: c.cpf || null, client_phone: tel || null, client_address: c.endereco || null, client_id: c.id });
                   }}
                 />
               ) : (

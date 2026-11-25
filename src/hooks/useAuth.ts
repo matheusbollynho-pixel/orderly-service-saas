@@ -17,6 +17,7 @@ export type MemberPermissions = {
   equipe: boolean;
   pos_venda: boolean;
   satisfacao: boolean;
+  clientes: boolean;
   /** Ação: apagar ou mudar descrição/quantidade/valor de item da OS (o banco também confere) */
   editar_itens_os: boolean;
   excluir_os: boolean;

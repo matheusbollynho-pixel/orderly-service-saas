@@ -6,7 +6,7 @@ import type { MemberPermissions } from '@/hooks/useAuth';
 export type View =
   | 'dashboard' | 'new' | 'express' | 'orders' | 'details' | 'materials' | 'reports' | 'mechanics'
   | 'pos-venda' | 'fluxo-caixa' | 'satisfacao' | 'estoque' | 'balcao' | 'quadro' | 'agenda'
-  | 'boletos' | 'fiados' | 'cotacao' | 'encomendas' | 'mais' | 'receber';
+  | 'boletos' | 'fiados' | 'cotacao' | 'encomendas' | 'mais' | 'receber' | 'clientes';
 
 export type Area = 'inicio' | 'oficina' | 'balcao' | 'caixa' | 'mais';
 
@@ -35,6 +35,7 @@ export const TELAS: Record<View, Tela> = {
   'fluxo-caixa': { nome: 'Hoje', area: 'caixa', perm: 'caixa', recurso: 'fluxo-caixa', busca: 'caixa fluxo entrada saida retirada estorno' },
   fiados:        { nome: 'Fiado', area: 'caixa', perm: 'fiados', recurso: 'fiados', busca: 'fiado devendo cobranca' },
   boletos:       { nome: 'Contas a pagar', area: 'caixa', perm: 'boletos', recurso: 'boletos', busca: 'boleto conta pagar fornecedor vencimento' },
+  clientes:      { nome: 'Clientes', area: 'mais', perm: 'clientes', busca: 'cliente cadastro ficha telefone cpf placa historico' },
   estoque:       { nome: 'Estoque', area: 'mais', perm: 'estoque', recurso: 'estoque', busca: 'produto peca estoque minimo' },
   cotacao:       { nome: 'Faltas e cotação', area: 'mais', perm: 'estoque', recurso: 'cotacao', busca: 'cotacao representante falta preco pedido' },
   reports:       { nome: 'Relatórios', area: 'mais', perm: 'relatorios', recurso: 'reports', busca: 'relatorio comissao pagamentos vendas' },

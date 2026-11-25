@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useStore } from '@/contexts/StoreContext';
+import { buscarTodas } from '@/lib/buscarTodas';
 
 export interface PaymentEntry {
   method: string;
@@ -16,6 +17,8 @@ export interface BalcaoOrder {
   client_cpf: string | null;
   client_phone: string | null;
   client_address: string | null;
+  /** Cadastro do cliente (notas novas, quando escolhido na busca) */
+  client_id?: string | null;
   status: 'aberta' | 'finalizada' | 'cancelada' | 'fiado';
   payment_method: string | null;
   payment_methods: PaymentEntry[] | null;
@@ -46,20 +49,46 @@ export interface BalcaoItem {
 const toISODate = () =>
   new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Fortaleza' }).split('/').reverse().join('-');
 
-export function useBalcao() {
+/** Notas que a tela do balcão carrega: abertas e no fiado (todas) + as dos últimos dias. */
+export const BALCAO_DIAS_RECENTES = 60;
+
+/**
+ * recentes: true  -> tela do Balcão (abertas/fiado + últimos 60 dias; as antigas vêm pela busca).
+ * recentes: false -> todas as notas, paginando (relatório de comissão do balcão).
+ */
+export function useBalcao(opcoes: { recentes?: boolean } = {}) {
   const queryClient = useQueryClient();
   const { storeId } = useStore();
+  const recentes = opcoes.recentes === true;
 
   // ── Lista de notas ────────────────────────────────────────────
   const ordersQuery = useQuery({
-    queryKey: ['balcao-orders'],
+    queryKey: ['balcao-orders', recentes ? 'recentes' : 'todas'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('balcao_orders')
-        .select('*, balcao_items(*)')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as BalcaoOrder[];
+      if (!recentes) {
+        // Antes: uma consulta só, que o banco corta em 1000 notas sem avisar
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return buscarTodas<BalcaoOrder>((de, ate) => (supabase as any)
+          .from('balcao_orders')
+          .select('*, balcao_items(*)')
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: true })
+          .range(de, ate));
+      }
+      const desde = new Date(Date.now() - BALCAO_DIAS_RECENTES * 86_400_000).toISOString();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sb = supabase as any;
+      const [pendentes, ultimas] = await Promise.all([
+        sb.from('balcao_orders').select('*, balcao_items(*)').in('status', ['aberta', 'fiado'])
+          .order('created_at', { ascending: false }).limit(1000),
+        sb.from('balcao_orders').select('*, balcao_items(*)').gte('created_at', desde)
+          .order('created_at', { ascending: false }).limit(1000),
+      ]);
+      if (pendentes.error) throw pendentes.error;
+      if (ultimas.error) throw ultimas.error;
+      const porId = new Map<string, BalcaoOrder>();
+      for (const o of [...(pendentes.data ?? []), ...(ultimas.data ?? [])] as BalcaoOrder[]) porId.set(o.id, o);
+      return [...porId.values()].sort((a, b) => b.created_at.localeCompare(a.created_at));
     },
     staleTime: 5000, // tempo real (useRealtimeSync) atualiza; sem repetição a cada 60s
   });

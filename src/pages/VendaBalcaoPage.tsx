@@ -1,6 +1,8 @@
 import { matchesSearch } from '@/lib/textSearch';
 import React, { useState, useEffect } from 'react';
-import { useBalcao, type BalcaoOrder } from '@/hooks/useBalcao';
+import { useBalcao, BALCAO_DIAS_RECENTES, type BalcaoOrder } from '@/hooks/useBalcao';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { BalcaoNotaDetail } from '@/components/BalcaoNotaDetail';
 import { useAuth } from '@/hooks/useAuth';
 import { Input } from '@/components/ui/input';
@@ -37,12 +39,42 @@ interface Props {
 }
 
 export default function VendaBalcaoPage({ initialOrderId, onInitialOrderConsumed }: Props = {}) {
-  const { orders, isLoading, createOrder, isCreating } = useBalcao();
+  const { orders: recentes, isLoading, createOrder, isCreating } = useBalcao({ recentes: true });
   const { isAdmin } = useAuth();
 
   const [selectedOrder, setSelectedOrder] = useState<BalcaoOrder | null>(null);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<Filter>('aberta');
+
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  // A tela carrega abertas/fiado + últimos dias. Nota antiga: vem pela busca ou quando aberta de outra tela.
+  const termo = search.trim();
+  const { data: antigas = [] } = useQuery({
+    queryKey: ['balcao-orders', 'busca', termo],
+    enabled: termo.length >= 2,
+    queryFn: async () => {
+      const dig = termo.replace(/\D/g, '');
+      const ors = [`client_name.ilike.%${termo.replace(/[,()%]/g, ' ')}%`];
+      if (dig.length >= 4) ors.push(`client_phone.ilike.%${dig}%`, `client_cpf.ilike.%${dig}%`);
+      if (/^\d{1,9}$/.test(termo)) ors.push(`numero.eq.${termo}`);
+      const { data } = await (supabase as any).from('balcao_orders').select('*, balcao_items(*)').or(ors.join(','))
+        .order('created_at', { ascending: false }).limit(50);
+      return (data ?? []) as BalcaoOrder[];
+    },
+  });
+  const { data: notaPedida } = useQuery({
+    queryKey: ['balcao-orders', 'uma', initialOrderId],
+    enabled: !!initialOrderId && !isLoading && !recentes.some(o => o.id === initialOrderId),
+    queryFn: async () => {
+      const { data } = await (supabase as any).from('balcao_orders').select('*, balcao_items(*)').eq('id', initialOrderId!).maybeSingle();
+      return (data ?? null) as BalcaoOrder | null;
+    },
+  });
+  const orders = React.useMemo(() => {
+    const porId = new Map<string, BalcaoOrder>();
+    for (const o of [...recentes, ...antigas, ...(notaPedida ? [notaPedida] : [])]) porId.set(o.id, o);
+    return [...porId.values()].sort((a, b) => b.created_at.localeCompare(a.created_at));
+  }, [recentes, antigas, notaPedida]);
 
   // Abrir nota diretamente quando vindo do caixa
   useEffect(() => {
@@ -66,7 +98,7 @@ export default function VendaBalcaoPage({ initialOrderId, onInitialOrderConsumed
     if (search.trim()) {
       const q = search.toLowerCase();
       return (
-        matchesSearch(q, o.client_name, o.id, String(o.numero ?? ''))
+        matchesSearch(q, o.client_name, o.id, String(o.numero ?? ''), o.client_phone, o.client_cpf)
       );
     }
     return true;
@@ -127,11 +159,14 @@ export default function VendaBalcaoPage({ initialOrderId, onInitialOrderConsumed
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
         <Input
           className="pl-10 h-10"
-          placeholder="Buscar por cliente ou número da nota..."
+          placeholder="Buscar por cliente, telefone ou número da nota..."
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
       </div>
+      {(filter === 'finalizada' || filter === 'cancelada' || filter === 'todas') && !termo && (
+        <p className="text-xs text-muted-foreground -mt-2">Mostrando os últimos {BALCAO_DIAS_RECENTES} dias. Para notas mais antigas, use a busca.</p>
+      )}
 
       {/* ── Lista ── */}
       {isLoading ? (

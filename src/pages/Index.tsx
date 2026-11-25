@@ -24,6 +24,7 @@ import SatisfactionDashboardPage from './SatisfactionDashboardPage';
 import InventoryPage from './InventoryPage';
 import CotacaoPage from './CotacaoPage';
 import EncomendasPage from './EncomendasPage';
+import ClientesPage from './ClientesPage';
 import VendaBalcaoPage from './VendaBalcaoPage';
 import QuadroOficinaPage from './QuadroOficinaPage';
 import AgendaPage from './AgendaPage';
@@ -841,6 +842,22 @@ Retirada: ${retiradaInfo}`;
         {currentView === 'cotacao' && <CotacaoPage />}
 
         {currentView === 'encomendas' && <EncomendasPage />}
+
+        {currentView === 'clientes' && (
+          <ClientesPage
+            onOpenOrder={async (id) => {
+              // A lista em memória tem só as OS recentes: OS antiga do cliente é buscada aqui
+              let order = orders.find(o => o.id === id);
+              if (!order) {
+                const { data } = await supabase.from('service_orders').select('*, checklist_items(*), materials(*), payments(*)').eq('id', id).maybeSingle();
+                order = data as unknown as typeof order;
+              }
+              if (order) { setSelectedOrder(order); setCurrentView('details'); }
+            }}
+            onOpenBalcaoOrder={permissions.balcao ? (id) => { setInitialBalcaoOrderId(id); setCurrentView('balcao'); } : undefined}
+            onOpenFiado={permissions.fiados ? (id) => { setFiadoFoco(id); goTo('fiados'); } : undefined}
+          />
+        )}
 
         {currentView === 'fluxo-caixa' && (
           <CashFlowPage
