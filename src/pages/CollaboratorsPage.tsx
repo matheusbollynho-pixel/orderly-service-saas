@@ -58,14 +58,14 @@ const ACOES: { key: keyof MemberPermissions; label: string; ajuda: string }[] = 
 
 const COMPARTILHADA = 'compartilhada';
 
-const DEFAULT_PERMISSIONS: MemberPermissions = {
+export const DEFAULT_PERMISSIONS: MemberPermissions = {
   nova_os: true, express: true, orders: true, agenda: true, quadro: true,
   caixa: false, balcao: false, relatorios: false, boletos: false, fiados: false,
   estoque: false, equipe: false, pos_venda: false, satisfacao: false, clientes: true,
   editar_itens_os: true, excluir_os: true, dar_desconto: true, estornar: true, ajustar_estoque: true,
 };
 
-const MAX_MEMBERS: Record<string, number> = { basic: 2, trial: 2 };
+export const MAX_MEMBERS: Record<string, number> = { basic: 2, trial: 2 };
 
 export default function CollaboratorsPage() {
   const { storeId, isOwner } = useStore();
