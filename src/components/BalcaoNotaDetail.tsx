@@ -2,7 +2,7 @@ import { confirmar } from '@/components/v2/Confirmacao';
 import { BuscaCliente } from '@/components/v2/BuscaCliente';
 import { matchesSearch } from '@/lib/textSearch';
 import { useTipoDoCliente, useTiposCliente } from '@/hooks/useTiposCliente';
-import { useSetores } from '@/hooks/useSetores';
+import { useCaixaFechado } from '@/hooks/useCaixaFechado';
 import { digitadoParaCliente, economiaUnit, precoParaCliente, regraDoTipo, tipoEmDia, type TipoCliente } from '@/lib/precoCliente';
 import { useState, useRef, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -66,7 +66,9 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
 
   const items: BalcaoItem[] = order.balcao_items ?? [];
   const isEditable = order.status === 'aberta';
-  const canAct = isEditable && !!order.atendente_id;
+  // Loja que usa abertura de caixa: com o caixa fechado não adiciona item nem finaliza
+  const caixaFechado = useCaixaFechado();
+  const canAct = isEditable && !!order.atendente_id && !caixaFechado;
 
   // Remove acentos de vogais mas mantém ç
   const stripAccents = (text: string) =>
@@ -126,8 +128,6 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   const [fiadoLoading, setFiadoLoading] = useState(false);
 
   const activeProducts = products.filter(p => p.active !== false);
-  // Setor da venda (loja com 2 ou mais setores escolhe aqui; com 1, vai sempre nele)
-  const { ativos: setoresAtivos, nome: nomeSetor } = useSetores();
 
   // ── Tipo do cliente (Lojista etc.): preço diferente ─────────────
   const { data: tiposCli = [], isLoading: carregandoTipos } = useTiposCliente();
@@ -853,6 +853,12 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
         </div>
       </div>
 
+      {isEditable && caixaFechado && (
+        <div className="mb-3 rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
+          <p className="font-semibold text-amber-500">Caixa fechado</p>
+          <p className="text-xs text-muted-foreground">Para vender, abra o caixa primeiro: tela <b>Caixa</b> → <b>Abrir caixa</b>.</p>
+        </div>
+      )}
       <div className="border-2 border-border rounded-xl overflow-hidden shadow-sm bg-card">
 
         {/* ── Cabeçalho da nota ── */}
@@ -949,23 +955,20 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
               className="mt-1 h-9 text-sm bg-background w-full"
             />
           </div>
-          {setoresAtivos.length > 1 && (
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Setor da venda</label>
-              <div className="mt-1 flex flex-wrap gap-1.5">
-                {setoresAtivos.map(s => (
-                  <Button key={s.id} type="button" size="sm" className="h-7 text-xs" disabled={!isEditable}
-                    variant={order.setor_id === s.id ? 'default' : 'outline'}
-                    onClick={() => order.setor_id !== s.id && updateOrder({ id: order.id, setor_id: s.id })}>
-                    {s.nome}
-                  </Button>
-                ))}
-                {order.setor_id && !setoresAtivos.some(s => s.id === order.setor_id) && (
-                  <span className="text-xs text-muted-foreground self-center">{nomeSetor(order.setor_id)} (inativo)</span>
-                )}
-              </div>
-            </div>
-          )}
+          {/* Onde vendeu: o caixa e o relatório separam as vendas online */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mr-1">Onde vendeu</span>
+            <Button type="button" size="sm" className="h-7 text-xs" disabled={!isEditable}
+              variant={!order.venda_online ? 'default' : 'outline'}
+              onClick={() => order.venda_online && updateOrder({ id: order.id, venda_online: false })}>
+              Na loja
+            </Button>
+            <Button type="button" size="sm" className="h-7 text-xs" disabled={!isEditable}
+              variant={order.venda_online ? 'default' : 'outline'}
+              onClick={() => !order.venda_online && updateOrder({ id: order.id, venda_online: true })}>
+              Online (Instagram / WhatsApp)
+            </Button>
+          </div>
         </div>
 
         {/* ── Cabeçalho tabela ── */}

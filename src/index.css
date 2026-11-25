@@ -133,9 +133,13 @@ body {
     -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
   }
   
-  input, textarea {
+  /* Caixinha de marcar e bolinha de escolha ficam de fora: sem aparência nativa elas somem da tela */
+  input:not([type="checkbox"]):not([type="radio"]), textarea {
     -webkit-appearance: none;
     border-radius: 0;
+  }
+  input[type="checkbox"], input[type="radio"] {
+    accent-color: hsl(var(--primary));
   }
 }
 

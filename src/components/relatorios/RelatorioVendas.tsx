@@ -10,7 +10,6 @@ import { buscarTodas } from '@/lib/buscarTodas';
 import { useStore } from '@/contexts/StoreContext';
 import { useMechanics } from '@/hooks/useMechanics';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
-import { useSetores } from '@/hooks/useSetores';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { baixarPlanilha } from '@/lib/planilha';
@@ -29,14 +28,14 @@ const chave = (t: string) => t.normalize('NFD').replace(/\p{Diacritic}/gu, '').t
 const FORMA: Record<string, string> = { dinheiro: 'Dinheiro', pix: 'Pix', cartao: 'Cartão', credito: 'Cartão de crédito', debito: 'Cartão de débito', fiado: 'Fiado', outro: 'Outro', transferencia: 'Transferência', boleto: 'Boleto', a_receber: 'Ficou a receber' };
 
 interface OS {
-  id: string; exit_date: string; mechanic_id: string | null; client_name: string; setor_id?: string | null;
+  id: string; exit_date: string; mechanic_id: string | null; client_name: string;
   materials: { descricao: string; quantidade: string | null; valor: number | null; is_service: boolean | null }[];
   payments: { amount: number | null; discount_amount: number | null; method: string | null }[];
 }
 interface Nota {
   id: string; numero: number | null; client_name: string | null; status: string; total: number | null; discount_amount: number | null;
   payment_method: string | null; payment_methods: { method: string; amount: number }[] | null;
-  finalized_at: string | null; created_at: string; atendente_id: string | null; setor_id?: string | null;
+  finalized_at: string | null; created_at: string; atendente_id: string | null; venda_online?: boolean | null;
   balcao_items: { description: string; quantity: number | null; total_price: number | null; type: string | null }[];
 }
 
@@ -54,12 +53,12 @@ function useVendas(p: Periodo) {
       const db = supabase as any;
       const [os, notas] = await Promise.all([
         buscarTodas<OS>((a, b) => db.from('service_orders')
-          .select('id, exit_date, mechanic_id, client_name, setor_id, materials(descricao, quantidade, valor, is_service), payments(amount, discount_amount, method)')
+          .select('id, exit_date, mechanic_id, client_name, materials(descricao, quantidade, valor, is_service), payments(amount, discount_amount, method)')
           .eq('store_id', storeId).eq('status', 'concluida_entregue').neq('equipment', '__QR_WALKIN_PLACEHOLDER__')
           .gte('exit_date', de).lt('exit_date', ate)
           .order('id').range(a, b)),
         buscarTodas<Nota>((a, b) => db.from('balcao_orders')
-          .select('id, numero, client_name, status, total, discount_amount, payment_method, payment_methods, finalized_at, created_at, atendente_id, setor_id, balcao_items(description, quantity, total_price, type)')
+          .select('id, numero, client_name, status, total, discount_amount, payment_method, payment_methods, finalized_at, created_at, atendente_id, venda_online, balcao_items(description, quantity, total_price, type)')
           .eq('store_id', storeId).in('status', ['finalizada', 'fiado'])
           .or(`and(finalized_at.gte.${de},finalized_at.lt.${ate}),and(finalized_at.is.null,created_at.gte.${de},created_at.lt.${ate})`)
           .order('id').range(a, b)),
@@ -76,7 +75,6 @@ export default function RelatorioVendas() {
   const { mechanics } = useMechanics();
   const { members } = useTeamMembers();
   const [itens, setItens] = useState<'servicos' | 'pecas'>('servicos');
-  const { usa: usaSetores, nome: nomeSetor } = useSetores();
 
   const r = useMemo(() => {
     if (!data) return null;
@@ -84,12 +82,6 @@ export default function RelatorioVendas() {
     const porForma = new Map<string, number>();
     const porMecanico = new Map<string, { qtd: number; valor: number }>();
     const porAtendente = new Map<string, { qtd: number; valor: number }>();
-    const porSetor = new Map<string, { qtd: number; valor: number }>();
-    const somaSetor = (id: string | null | undefined, v: number) => {
-      const k = nomeSetor(id) ?? 'Sem setor';
-      if (!porSetor.has(k)) porSetor.set(k, { qtd: 0, valor: 0 });
-      porSetor.get(k)!.qtd += 1; porSetor.get(k)!.valor += v;
-    };
     const servicos = new Map<string, { nome: string; qtd: number; valor: number }>();
     const pecas = new Map<string, { nome: string; qtd: number; valor: number }>();
     const somaItem = (m: typeof servicos, nome: string, q: number, v: number) => {
@@ -122,13 +114,13 @@ export default function RelatorioVendas() {
       const mec = o.mechanic_id ? mechanics.find((m) => m.id === o.mechanic_id)?.name ?? 'Mecânico removido' : 'Sem mecânico';
       if (!porMecanico.has(mec)) porMecanico.set(mec, { qtd: 0, valor: 0 });
       porMecanico.get(mec)!.qtd += 1; porMecanico.get(mec)!.valor += liquido;
-      somaSetor(o.setor_id, liquido);
     }
 
-    let notasTotal = 0;
+    let notasTotal = 0, onlineTotal = 0, onlineQtd = 0;
     for (const n of data.notas) {
       const total = num(n.total);
       notasTotal += total;
+      if (n.venda_online) { onlineTotal += total; onlineQtd += 1; }
       dia(diaLocal(n.finalized_at || n.created_at)).balcao += total;
       if (n.status === 'fiado') add(porForma, 'fiado', total);
       else {
@@ -141,7 +133,6 @@ export default function RelatorioVendas() {
       const at = n.atendente_id ? members.find((m) => m.id === n.atendente_id)?.name ?? 'Atendente removido' : 'Sem atendente';
       if (!porAtendente.has(at)) porAtendente.set(at, { qtd: 0, valor: 0 });
       porAtendente.get(at)!.qtd += 1; porAtendente.get(at)!.valor += total;
-      somaSetor(n.setor_id, total);
       // Item do balcão é sempre produto (do estoque ou avulso)
       for (const it of n.balcao_items ?? []) somaItem(pecas, it.description, num(it.quantity), num(it.total_price));
     }
@@ -158,14 +149,14 @@ export default function RelatorioVendas() {
     return {
       vendeu, qtd, ticket: qtd ? vendeu / qtd : 0,
       osLiquido: osTotal - osDesc, osQtd: data.os.length, osDesc, servTotal, pecaOsTotal,
-      notasTotal, notasQtd: data.notas.length,
+      notasTotal, notasQtd: data.notas.length, onlineTotal, onlineQtd,
       dias, maxDia: Math.max(...dias.map((d) => d.os + d.balcao), 0),
       formas: [...porForma.entries()].sort((a, b) => (a[0] === 'a_receber' ? 1 : b[0] === 'a_receber' ? -1 : b[1] - a[1])),
-      mecanicos: ord(porMecanico), atendentes: ord(porAtendente), setores: ord(porSetor),
+      mecanicos: ord(porMecanico), atendentes: ord(porAtendente),
       servicos: [...servicos.values()].sort((a, b) => b.valor - a.valor),
       pecas: [...pecas.values()].sort((a, b) => b.valor - a.valor),
     };
-  }, [data, mechanics, members, atual, nomeSetor]);
+  }, [data, mechanics, members, atual]);
 
   const Card = ({ t, v, sub, tom }: { t: string; v: string; sub?: string; tom?: string }) => (
     <div className="rounded-xl border bg-card p-3">
@@ -207,7 +198,7 @@ export default function RelatorioVendas() {
             <Card t="Vendido" v={brl(r.vendeu)} sub={`${r.qtd} venda${r.qtd === 1 ? '' : 's'}`} />
             <Card t="Ticket médio" v={brl(r.ticket)} sub="por OS ou nota" />
             <Card t="Oficina (OS entregues)" v={brl(r.osLiquido)} sub={`${r.osQtd} OS · serviços ${brl(r.servTotal)} · peças ${brl(r.pecaOsTotal)}${r.osDesc > 0 ? ` · desconto ${brl(r.osDesc)}` : ''}`} />
-            <Card t="Balcão (notas)" v={brl(r.notasTotal)} sub={`${r.notasQtd} nota${r.notasQtd === 1 ? '' : 's'}`} />
+            <Card t="Balcão (notas)" v={brl(r.notasTotal)} sub={`${r.notasQtd} nota${r.notasQtd === 1 ? '' : 's'}${r.onlineQtd > 0 ? ` · na loja ${brl(r.notasTotal - r.onlineTotal)} · online ${brl(r.onlineTotal)} (${r.onlineQtd})` : ''}`} />
           </div>
 
           <section className="rounded-xl border bg-card p-3 space-y-1">
@@ -243,24 +234,6 @@ export default function RelatorioVendas() {
               </div>
             ))}
           </section>
-
-          {usaSetores && (
-            <section className="rounded-xl border bg-card p-3 space-y-1">
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-semibold">Por setor</h3>
-                <Button size="sm" variant="outline" className="ml-auto" disabled={r.setores.length === 0}
-                  onClick={() => baixarPlanilha(`vendas-por-setor-${atual.ini}-a-${atual.fim}`, ['Setor', 'Vendas', 'Valor'], r.setores.map(([n, g]) => [n, g.qtd, g.valor]))}>
-                  Baixar planilha
-                </Button>
-              </div>
-              {r.setores.length === 0 ? <p className="text-xs text-muted-foreground">Nada no período.</p> : r.setores.map(([nome, g]) => (
-                <div key={nome} className="flex justify-between gap-2 text-xs border-t border-border/50 pt-1 first:border-t-0 first:pt-0">
-                  <span>{nome} <span className="text-muted-foreground">· {g.qtd} venda{g.qtd === 1 ? '' : 's'}</span></span>
-                  <span className="tabular-nums">{brl(g.valor)} <span className="text-muted-foreground">({r.vendeu > 0 ? Math.round((g.valor / r.vendeu) * 100) : 0}%)</span></span>
-                </div>
-              ))}
-            </section>
-          )}
 
           <div className="grid gap-3 sm:grid-cols-2">
             <Tabela titulo="Oficina por mecânico" linhas={r.mecanicos} rotuloQtd="OS" />

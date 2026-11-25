@@ -1,3 +1,4 @@
+import { caixaFechadoAgora } from '@/hooks/useCaixaFechado';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -13,8 +14,8 @@ export interface PaymentEntry {
 export interface BalcaoOrder {
   id: string;
   numero: number;
-  /** Setor da venda (Balcão, Online...) */
-  setor_id?: string | null;
+  /** Venda feita pela internet (Instagram / WhatsApp / site) */
+  venda_online?: boolean;
   client_name: string | null;
   client_cpf: string | null;
   client_phone: string | null;
@@ -217,6 +218,8 @@ export function useBalcao(opcoes: { recentes?: boolean } = {}) {
         .single();
       if (fetchErr) throw fetchErr;
       if (order.status !== 'aberta') throw new Error('Nota não está aberta');
+      // Caixa fechado (loja que usa abertura de caixa): para antes de dar baixa no estoque
+      if (await caixaFechadoAgora(storeId!)) throw new Error('O caixa está fechado. Abra o caixa (tela Caixa → Abrir caixa) antes de finalizar.');
 
       // Criar movimentações de estoque para itens do tipo estoque
       let firstMovId: string | null = null;
