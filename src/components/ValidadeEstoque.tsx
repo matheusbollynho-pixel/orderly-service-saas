@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import type { InventoryProduct } from '@/hooks/useInventory';
 import { baixarPlanilha } from '@/lib/planilha';
+import { PromocaoValidade } from '@/components/relatorios/PromocaoValidade';
 
 export interface Lote {
   id: string;
@@ -37,11 +38,12 @@ interface Props {
   usaAlmox: boolean;
   onDiasSalvo: (dias: number) => void;
   local?: 'todos' | 'loja' | 'almox';
+  nomeLoja?: string | null;
 }
 
-export function ValidadeEstoque({ products, lotes: todosLotes, diasAviso, storeId, usaAlmox, onDiasSalvo, local = 'todos' }: Props) {
+export function ValidadeEstoque({ products, lotes: todosLotes, diasAviso, storeId, usaAlmox, onDiasSalvo, local = 'todos', nomeLoja }: Props) {
   const lotes = useMemo(() => (local === 'todos' ? todosLotes : todosLotes.filter((l) => l.local === local)), [todosLotes, local]);
-  const [filtro, setFiltro] = useState<'aviso' | 'todos'>('aviso');
+  const [filtro, setFiltro] = useState<'aviso' | 'todos' | 'promocao'>('aviso');
   const [dias, setDias] = useState(String(diasAviso));
   const [salvando, setSalvando] = useState(false);
   const porId = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
@@ -103,8 +105,9 @@ export function ValidadeEstoque({ products, lotes: todosLotes, diasAviso, storeI
         <div className="flex gap-1">
           <Button size="sm" variant={filtro === 'aviso' ? 'default' : 'outline'} onClick={() => setFiltro('aviso')}>Vencidos e a vencer</Button>
           <Button size="sm" variant={filtro === 'todos' ? 'default' : 'outline'} onClick={() => setFiltro('todos')}>Todos os lotes</Button>
+          <Button size="sm" variant={filtro === 'promocao' ? 'default' : 'outline'} onClick={() => setFiltro('promocao')}>Montar promoção</Button>
         </div>
-        <Button
+        {filtro !== 'promocao' && <Button
           size="sm"
           variant="outline"
           disabled={linhas.length === 0}
@@ -118,7 +121,7 @@ export function ValidadeEstoque({ products, lotes: todosLotes, diasAviso, storeI
             }))}
         >
           Baixar planilha
-        </Button>
+        </Button>}
         <div className="flex items-end gap-1 ml-auto">
           <div>
             <label className="text-[11px] text-muted-foreground block">Avisar com (dias)</label>
@@ -128,7 +131,9 @@ export function ValidadeEstoque({ products, lotes: todosLotes, diasAviso, storeI
         </div>
       </div>
 
-      {linhas.length === 0 ? (
+      {filtro === 'promocao' ? (
+        <PromocaoValidade products={products} lotes={todosLotes} diasAviso={diasAviso} nomeLoja={nomeLoja} />
+      ) : linhas.length === 0 ? (
         <p className="text-sm text-muted-foreground py-6 text-center">
           {filtro === 'aviso' ? `Nenhum lote vencido ou vencendo em até ${diasAviso} dias.` : 'Nenhum lote com saldo.'}
         </p>
@@ -160,7 +165,7 @@ export function ValidadeEstoque({ products, lotes: todosLotes, diasAviso, storeI
         </div>
       )}
 
-      {semLote.length > 0 && (
+      {filtro !== 'promocao' && semLote.length > 0 && (
         <div className="rounded-xl border bg-card p-3 space-y-1">
           <p className="text-xs font-semibold">Estoque sem lote informado</p>
           <p className="text-[11px] text-muted-foreground">Saldo que já existia antes de ligar a validade ou que entrou sem lote. Use "Ajuste" ou dê entrada com o lote para organizar.</p>

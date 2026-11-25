@@ -280,6 +280,7 @@ export default function RelatoriosEstoque() {
           usaAlmox={usaAlmox}
           onDiasSalvo={setDiasAvisoSalvo}
           local={local}
+          nomeLoja={(settings as { company_name?: string } | null)?.company_name}
         />
       ) : (
         <RelatorioAlmoxarifado products={filtrados} />
