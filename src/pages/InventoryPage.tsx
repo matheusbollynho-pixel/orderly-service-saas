@@ -166,6 +166,8 @@ interface ProductFormProps {
 }
 
 function ProductFormDialog({ open, product, isEditing, isSaving, usaAlmox, onChange, onBulkChange, onSave, onClose }: ProductFormProps) {
+  // Sem "Ajustar estoque": o saldo não é digitado aqui (entra por movimentação). O banco também confere.
+  const podeAjustar = useStore().permissions.ajustar_estoque !== false;
   // Campos novos (almoxarifado e fiscais) ainda fora dos tipos gerados do banco
   const extra = product as typeof product & {
     stock_almox?: number | null; ncm?: string | null; cest?: string | null;
@@ -421,7 +423,7 @@ function ProductFormDialog({ open, product, isEditing, isSaving, usaAlmox, onCha
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <Label>{usaAlmox ? 'Estoque da loja' : 'Estoque atual'}</Label>
-                <Input type="number" min="0" step="0.001" value={product.stock_current ?? 0} onChange={(e) => onChange('stock_current', parseFloat(e.target.value) || 0)} />
+                <Input type="number" min="0" step="0.001" value={product.stock_current ?? 0} onChange={(e) => onChange('stock_current', parseFloat(e.target.value) || 0)} disabled={!podeAjustar} title={podeAjustar ? undefined : 'Só quem pode ajustar o estoque muda o saldo'} />
               </div>
               <div>
                 <Label>Estoque mínimo</Label>
@@ -466,7 +468,7 @@ function ProductFormDialog({ open, product, isEditing, isSaving, usaAlmox, onCha
               {usaAlmox && (
                 <div>
                   <Label>Estoque do almoxarifado</Label>
-                  <Input type="number" min="0" step="0.001" value={extra.stock_almox ?? 0} onChange={(e) => onChange('stock_almox', parseFloat(e.target.value) || 0)} />
+                  <Input type="number" min="0" step="0.001" value={extra.stock_almox ?? 0} onChange={(e) => onChange('stock_almox', parseFloat(e.target.value) || 0)} disabled={!podeAjustar} title={podeAjustar ? undefined : 'Só quem pode ajustar o estoque muda o saldo'} />
                 </div>
               )}
             </div>
@@ -572,6 +574,7 @@ interface MovementDialogProps {
 }
 
 function MovementDialog({ open, product, usaAlmox, equipe, isSaving, onSave, onClose }: MovementDialogProps) {
+  const podeAjustar = useStore().permissions.ajustar_estoque !== false;
   const [type, setType] = useState<OpcaoMov>('entrada_manual');
   const [quem, setQuem] = useState('');
   const [lote, setLote] = useState({ numero: '', fabricacao: '', validade: '' });
@@ -654,13 +657,13 @@ function MovementDialog({ open, product, usaAlmox, equipe, isSaving, onSave, onC
               <SelectContent>
                 <SelectItem value="entrada_manual">Entrada manual</SelectItem>
                 <SelectItem value="saida_venda">Venda avulsa</SelectItem>
-                <SelectItem value="ajuste">{usaAlmox ? 'Ajuste da loja (define o saldo)' : 'Ajuste (define valor absoluto)'}</SelectItem>
+                {podeAjustar && <SelectItem value="ajuste">{usaAlmox ? 'Ajuste da loja (define o saldo)' : 'Ajuste (define valor absoluto)'}</SelectItem>}
                 {usaAlmox && (
                   <>
                     <SelectItem value="transf_para_almox">Transferir loja → almoxarifado</SelectItem>
                     <SelectItem value="transf_para_loja">Transferir almoxarifado → loja</SelectItem>
                     <SelectItem value="entrada_almox">Entrada no almoxarifado (sem passar pela loja)</SelectItem>
-                    <SelectItem value="ajuste_almox">Ajuste do almoxarifado (define o saldo)</SelectItem>
+                    {podeAjustar && <SelectItem value="ajuste_almox">Ajuste do almoxarifado (define o saldo)</SelectItem>}
                   </>
                 )}
               </SelectContent>

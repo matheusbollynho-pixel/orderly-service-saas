@@ -19,6 +19,12 @@ export type MemberPermissions = {
   satisfacao: boolean;
   /** Ação: apagar ou mudar descrição/quantidade/valor de item da OS (o banco também confere) */
   editar_itens_os: boolean;
+  excluir_os: boolean;
+  dar_desconto: boolean;
+  /** Estornar no caixa, apagar/alterar pagamento da OS, cancelar nota finalizada, cancelar vale */
+  estornar: boolean;
+  /** Movimentacao 'ajuste' e saldo digitado no cadastro do produto */
+  ajustar_estoque: boolean;
 };
 
 export function useAuth() {

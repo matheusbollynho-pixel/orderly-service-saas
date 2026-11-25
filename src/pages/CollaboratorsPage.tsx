@@ -49,6 +49,10 @@ const PERMISSION_LABELS: { key: keyof MemberPermissions; label: string }[] = [
 // Ações dentro das telas (o banco também confere)
 const ACOES: { key: keyof MemberPermissions; label: string; ajuda: string }[] = [
   { key: 'editar_itens_os', label: 'Editar ou remover itens da OS', ajuda: 'Desligado: só adiciona itens. Tirar ou mudar quantidade/valor fica com o gerente.' },
+  { key: 'excluir_os', label: 'Excluir OS', ajuda: 'Apagar uma ordem de serviço inteira.' },
+  { key: 'dar_desconto', label: 'Dar desconto', ajuda: 'No pagamento da OS e na nota do balcão.' },
+  { key: 'estornar', label: 'Estornar ou cancelar pagamentos', ajuda: 'Estorno no caixa, apagar ou alterar pagamento da OS, cancelar nota já finalizada, cancelar vale.' },
+  { key: 'ajustar_estoque', label: 'Ajustar estoque', ajuda: 'Corrigir o saldo (ajuste) e mudar o saldo no cadastro do produto.' },
 ];
 
 const COMPARTILHADA = 'compartilhada';
@@ -57,7 +61,7 @@ const DEFAULT_PERMISSIONS: MemberPermissions = {
   nova_os: true, express: true, orders: true, agenda: true, quadro: true,
   caixa: false, balcao: false, relatorios: false, boletos: false, fiados: false,
   estoque: false, equipe: false, pos_venda: false, satisfacao: false,
-  editar_itens_os: true,
+  editar_itens_os: true, excluir_os: true, dar_desconto: true, estornar: true, ajustar_estoque: true,
 };
 
 const MAX_MEMBERS: Record<string, number> = { basic: 2, trial: 2 };
@@ -151,7 +155,7 @@ export default function CollaboratorsPage() {
   const startEdit = (member: Member) => {
     setEditingId(member.id);
     // Quem já usava continua igual: ação não marcada = liberada
-    setEditPerms({ ...DEFAULT_PERMISSIONS, editar_itens_os: true, ...(member.permissions || {}) });
+    setEditPerms({ ...DEFAULT_PERMISSIONS, editar_itens_os: true, excluir_os: true, dar_desconto: true, estornar: true, ajustar_estoque: true, ...(member.permissions || {}) });
     setEditQuem(member.colaborador_tipo && member.colaborador_id ? `${member.colaborador_tipo}:${member.colaborador_id}` : COMPARTILHADA);
   };
 

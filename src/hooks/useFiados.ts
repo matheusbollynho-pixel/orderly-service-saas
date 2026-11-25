@@ -214,14 +214,8 @@ export function useFiados() {
         // Fiado de OS: lógica original por inventory_product_id nos itens
         const itemsWithProduct = (fiado.items || []).filter(i => i.inventory_product_id);
         for (const item of itemsWithProduct) {
-          const { data: prod } = await supabase
-            .from('inventory_products')
-            .select('stock_current')
-            .eq('id', item.inventory_product_id!)
-            .single();
-          if (prod) {
-            const newStock = (prod.stock_current || 0) + item.qty;
-            await supabase.from('inventory_products').update({ stock_current: newStock, updated_at: new Date().toISOString() }).eq('id', item.inventory_product_id!);
+          // Só a movimentação: o gatilho do banco soma o saldo (antes somava 2x)
+          {
             await supabase.from('inventory_movements').insert([{
               store_id: storeId!,
               product_id: item.inventory_product_id!,

@@ -1,4 +1,5 @@
 import { pedirMotivoEstorno } from '@/lib/estorno';
+import { useStore } from '@/contexts/StoreContext';
 import { semEstornosAnulados } from '@/lib/caixaEstorno';
 import { BotaoVale, ValesAbertos } from '@/components/caixa/Vales';
 import { matchesSearch } from '@/lib/textSearch';
@@ -92,6 +93,8 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder, foco, onFocoU
     }
   }, [activePeriod]);
   const { cashFlow, summary, isLoading, createEntry, estornarEntry, isEstornando, isCreating } = useCashFlow(selectedDate);
+  const { permissions: permsCaixa } = useStore();
+  const podeEstornar = permsCaixa.estornar !== false;
 
   // Vindo dos Relatórios: rola até o lançamento e deixa ele destacado por uns segundos
   useEffect(() => {
@@ -565,7 +568,7 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder, foco, onFocoU
                     {entry.type === 'entrada' ? '+' : '-'}
                     {formatCurrency(Math.abs(entry.amount))}
                   </span>
-                  {!entry.order_id && !entry.balcao_order_id && !entry.encomenda_id && !entry.payment_id &&
+                  {podeEstornar && !entry.order_id && !entry.balcao_order_id && !entry.encomenda_id && !entry.payment_id &&
                     !entry.estorno_de && !entry.estornado_em && (
                     <Button
                       variant="ghost"

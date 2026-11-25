@@ -126,7 +126,10 @@ export function OrderDetails({
   const { getClientById, getMotorcycleById, updateClientById, updateMotorcycleById } = useClients();
   const { settings: storeSettings } = useStoreSettings();
   const { VEHICLE_CAP } = useVehicleLabel();
-  const { storeId } = useStore();
+  const { storeId, permissions } = useStore();
+  const podeExcluirOS = permissions.excluir_os !== false;
+  const podeEstornar = permissions.estornar !== false;
+  const podeDesconto = permissions.dar_desconto !== false;
   const printRef = useRef<HTMLDivElement>(null);
   // Corrigido: declarar isExpress apenas uma vez, usando problem_description
   const isExpress = (order.problem_description || '').toLowerCase().includes('cadastro express');
@@ -1168,7 +1171,7 @@ const renderDeliverySection = () => {
             >
               <Download className="h-5 w-5" />
             </Button>
-            <AlertDialog>
+            {podeExcluirOS && <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-9 w-9 text-destructive hover:text-destructive">
                   <Trash2 className="h-5 w-5" />
@@ -1189,7 +1192,7 @@ const renderDeliverySection = () => {
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
-            </AlertDialog>
+            </AlertDialog>}
           </div>
         )}
         </div>
@@ -2054,7 +2057,7 @@ const renderDeliverySection = () => {
                       {(p.discount_amount || 0) > 0 ? <p className="text-xs text-[#C1272D]">Desconto: R$ {Number(p.discount_amount || 0).toFixed(2)}</p> : null}
                       {p.notes ? <p className="text-xs text-muted-foreground">Obs: {p.notes}</p> : null}
                     </div>
-                    {onDeletePayment && (
+                    {onDeletePayment && podeEstornar && (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -2112,7 +2115,7 @@ const renderDeliverySection = () => {
                   const pb = order.status === 'concluida_entregue' || !paymentForm.finalized_by_staff_id || !order.mechanic_id;
                   return (<>
                   <Input placeholder="Valor" value={paymentForm.amount} onChange={(e) => setPaymentForm((prev) => ({ ...prev, amount: e.target.value }))} className="h-9 sm:col-span-2" type="number" min="0" step="0.01" disabled={pb} />
-                  <Input placeholder="Desconto (R$)" value={paymentForm.discount_amount} onChange={(e) => setPaymentForm((prev) => ({ ...prev, discount_amount: e.target.value }))} className="h-9" type="number" min="0" step="0.01" disabled={pb} />
+                  {podeDesconto && <Input placeholder="Desconto (R$)" value={paymentForm.discount_amount} onChange={(e) => setPaymentForm((prev) => ({ ...prev, discount_amount: e.target.value }))} className="h-9" type="number" min="0" step="0.01" disabled={pb} />}
                   <Select
                     value={paymentForm.method}
                     onValueChange={(v) => {

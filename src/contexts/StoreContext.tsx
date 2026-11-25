@@ -7,7 +7,7 @@ const ALL_PERMISSIONS: MemberPermissions = {
   nova_os: true, express: true, orders: true, agenda: true, quadro: true,
   caixa: true, balcao: true, relatorios: true, boletos: true, fiados: true,
   estoque: true, equipe: true, pos_venda: true, satisfacao: true,
-  editar_itens_os: true,
+  editar_itens_os: true, excluir_os: true, dar_desconto: true, estornar: true, ajustar_estoque: true,
 };
 
 /** Login ligado a um mecânico ou atendente (conta pessoal). Sem isso = conta compartilhada. */

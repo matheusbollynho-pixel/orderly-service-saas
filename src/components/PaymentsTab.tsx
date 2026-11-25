@@ -1,4 +1,5 @@
 import { pedirMotivoEstorno } from '@/lib/estorno';
+import { useStore } from '@/contexts/StoreContext';
 import { matchesSearch } from '@/lib/textSearch';
 import { useMemo, useState } from 'react';
 import { ServiceOrder, PaymentMethod } from '@/types/service-order';
@@ -21,6 +22,9 @@ interface PaymentsTabProps {
 }
 
 export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPayment, onDeletePayment, onUpdatePayment, onOpenOrder }: PaymentsTabProps) {
+  const { permissions } = useStore();
+  const podeEstornar = permissions.estornar !== false;
+  const podeDesconto = permissions.dar_desconto !== false;
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed_unpaid'>('all');
   const [adding, setAdding] = useState<Record<string, { amount: string; discount_amount: string; method: PaymentMethod; notes?: string }>>({});
@@ -285,12 +289,12 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
                               {p.notes ? <p className="text-xs text-muted-foreground">Obs: {p.notes}</p> : null}
                             </div>
                             <div className="flex gap-1">
-                              <Button variant="ghost" size="sm" className="h-8 px-2 text-xs text-muted-foreground" onClick={async () => {
+                              {podeEstornar && <Button variant="ghost" size="sm" className="h-8 px-2 text-xs text-muted-foreground" onClick={async () => {
                                 const motivo = await pedirMotivoEstorno(`o pagamento de R$ ${Number(p.amount || 0).toFixed(2)}`);
                                 if (motivo) onDeletePayment(p.id, motivo);
                               }}>
                                 <Undo2 className="h-4 w-4 mr-1" /> Estornar
-                              </Button>
+                              </Button>}
                             </div>
                           </div>
                         );
@@ -312,7 +316,7 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
                     min="0"
                     step="0.01"
                   />
-                  <Input
+                  {podeDesconto && <Input
                     placeholder="Desconto (R$)"
                     value={adding[o.id]?.discount_amount || ''}
                     onChange={(e) => setAdding(prev => {
@@ -323,7 +327,7 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
                     type="number"
                     min="0"
                     step="0.01"
-                  />
+                  />}
                   <Select
                     value={adding[o.id]?.method || 'dinheiro'}
                     onValueChange={(v) => setAdding(prev => ({ ...prev, [o.id]: { ...(prev[o.id] || { amount: '', discount_amount: '' }), method: v as PaymentMethod } }))}

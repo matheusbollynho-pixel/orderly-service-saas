@@ -56,7 +56,9 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   const { products } = useInventory();
   const { members: teamMembers } = useTeamMembers();
   const { settings: storeSettings } = useStoreSettings();
-  const { storeId } = useStore();
+  const { storeId, permissions } = useStore();
+  const podeDesconto = permissions.dar_desconto !== false;
+  const podeEstornar = permissions.estornar !== false;
   const queryClient = useQueryClient();
 
   const items: BalcaoItem[] = order.balcao_items ?? [];
@@ -1024,7 +1026,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
           <div className="flex items-center justify-between px-5 py-2 border-b border-border/50 gap-4">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm text-muted-foreground">Desconto</span>
-              {isEditable ? (
+              {isEditable && podeDesconto ? (
                 <>
                   <div className="relative w-20">
                     <Input type="number" placeholder="0" value={discountPct}
@@ -1307,12 +1309,12 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
                   {isFinalizing ? 'Finalizando...' : `Finalizar · R$ ${total.toFixed(2)}`}
                 </Button>
               )}
-              <Button type="button" variant="destructive" onClick={handleCancelar}
+              {(order.status === 'aberta' || podeEstornar) && <Button type="button" variant="destructive" onClick={handleCancelar}
                 disabled={isCancelling}
                 className={order.status === 'aberta' ? 'h-10 px-4' : 'flex-1 h-10'}>
                 <XCircle className="h-4 w-4 mr-1.5" />
                 {isCancelling ? 'Cancelando...' : 'Cancelar Nota'}
-              </Button>
+              </Button>}
             </div>
           )}
 
