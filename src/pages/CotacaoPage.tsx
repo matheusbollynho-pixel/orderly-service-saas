@@ -1,3 +1,4 @@
+import { lerMarcas, repAtende } from '@/lib/marcasRep';
 import { confirmar } from '@/components/v2/Confirmacao';
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import { useMemo, useState } from 'react';
@@ -35,6 +36,11 @@ const SITUACAO: Record<Situacao, { label: string; cls: string }> = {
 };
 
 const PRECO_POR: Record<string, string> = { par: ' o par', kit: ' o kit', unidade: '', nao_informado: '' };
+
+/** Marca da peça: a digitada; se for do estoque, a do produto */
+function marcaDoItem(item: CotacaoItem, cot: Cot): string | null {
+  return item.marca?.trim() || (item.produto_id ? cot.estoque[item.produto_id]?.marca ?? null : null) || null;
+}
 
 function nomeFonte(p: CotacaoPreco, reps: Representante[]) {
   if (p.fonte === 'internet') return `Internet${p.loja_internet ? ` · ${p.loja_internet}` : ''}`;
@@ -91,10 +97,13 @@ export default function CotacaoPage() {
 
 function AbaFaltas({ cot }: { cot: Cot }) {
   const [novo, setNovo] = useState('');
+  const [novaMarca, setNovaMarca] = useState('');
   const [verPedidos, setVerPedidos] = useState(false);
   const [busca, setBusca] = useState('');
+  const [doRep, setDoRep] = useState<string>('todos');
+  const repFiltro = cot.representantes.find((r) => r.id === doRep) ?? null;
   const todosPendentes = cot.itens.filter((i) => i.status === 'pendente');
-  const pendentes = todosPendentes.filter((i) => matchesSearch(busca, i.texto));
+  const pendentes = todosPendentes.filter((i) => matchesSearch(busca, i.texto) && (!repFiltro || repAtende(repFiltro.marcas, marcaDoItem(i, cot))));
   const outros = cot.itens.filter((i) => (i.status === 'recebido' || i.status === 'cancelado') && matchesSearch(busca, i.texto)).reverse();
 
   const adicionar = () => {
@@ -110,7 +119,7 @@ function AbaFaltas({ cot }: { cot: Cot }) {
     }
     if (repetidas.length) toast.warning(`Já estava na lista: ${repetidas.join(', ')}`);
     if (!novas.length) return setNovo('');
-    cot.adicionarItens.mutate(novas.map((texto) => ({ texto, quantidade: 1 })), { onSuccess: () => setNovo('') });
+    cot.adicionarItens.mutate(novas.map((texto) => ({ texto, quantidade: 1, marca: novaMarca.trim() || null })), { onSuccess: () => { setNovo(''); setNovaMarca(''); } });
   };
 
   return (
@@ -120,12 +129,26 @@ function AbaFaltas({ cot }: { cot: Cot }) {
           <Label>Adicionar peças que faltam (uma por linha, do jeito que vocês anotam)</Label>
           <Textarea rows={3} value={novo} onChange={(e) => setNovo(e.target.value)}
             placeholder={'Relacao pop 110\ncabo acelerador A 150 2015'} />
+          <Input value={novaMarca} onChange={(e) => setNovaMarca(e.target.value)} placeholder="Marca (opcional, vale para as linhas acima). Ex.: Vonnixx" />
           <Button size="sm" onClick={adicionar} disabled={!novo.trim() || cot.adicionarItens.isPending}>
             <Plus className="h-4 w-4 mr-1" /> Adicionar
           </Button>
         </CardContent>
       </Card>
 
+      {cot.representantes.some((r) => (r.marcas ?? []).length > 0) && todosPendentes.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-muted-foreground">Ver faltas de:</span>
+          <Select value={doRep} onValueChange={setDoRep}>
+            <SelectTrigger className="h-8 w-56"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos os representantes</SelectItem>
+              {cot.representantes.filter((r) => r.ativo).map((r) => <SelectItem key={r.id} value={r.id}>{r.nome}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {repFiltro && <span className="text-xs text-muted-foreground">{(repFiltro.marcas ?? []).length ? `Marcas: ${(repFiltro.marcas ?? []).join(', ')} (e as peças sem marca)` : 'Vende de tudo'}</span>}
+        </div>
+      )}
       {todosPendentes.length > 5 && (
         <div className="relative">
           <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -178,7 +201,9 @@ function ItemFalta({ item, cot }: { item: CotacaoItem; cot: Cot }) {
   const [editando, setEditando] = useState(false);
   const [texto, setTexto] = useState(item.texto);
   const [qtd, setQtd] = useState(String(item.quantidade));
+  const [marca, setMarca] = useState(item.marca ?? '');
   const [internet, setInternet] = useState(false);
+  const marcaPeca = marcaDoItem(item, cot);
 
   const opcoes = useMemo(() => ordenarOpcoes(cot.precos.filter((p) => p.item_id === item.id)), [cot.precos, item.id]);
   const melhor = opcoes.find((p) => p.situacao === 'cotado' && p.preco != null);
@@ -189,7 +214,7 @@ function ItemFalta({ item, cot }: { item: CotacaoItem; cot: Cot }) {
   const salvar = () => {
     const q = Number(qtd.replace(',', '.'));
     if (!texto.trim() || !(q > 0)) return toast.error('Preencha o texto e a quantidade');
-    cot.atualizarItem.mutate({ id: item.id, texto: texto.trim(), quantidade: q }, { onSuccess: () => setEditando(false) });
+    cot.atualizarItem.mutate({ id: item.id, texto: texto.trim(), quantidade: q, marca: marca.trim() || null }, { onSuccess: () => setEditando(false) });
   };
 
   return (
@@ -199,6 +224,7 @@ function ItemFalta({ item, cot }: { item: CotacaoItem; cot: Cot }) {
           <div className="flex gap-2 items-center">
             <Input value={texto} onChange={(e) => setTexto(e.target.value)} />
             <Input className="w-20" value={qtd} onChange={(e) => setQtd(e.target.value)} title="Quantidade" />
+            <Input className="w-32" value={marca} onChange={(e) => setMarca(e.target.value)} placeholder={marcaPeca && !item.marca ? marcaPeca : 'Marca'} title="Marca" />
             <Button size="icon" variant="ghost" onClick={salvar}><Check className="h-4 w-4" /></Button>
             <Button size="icon" variant="ghost" onClick={() => setEditando(false)}><X className="h-4 w-4" /></Button>
           </div>
@@ -208,6 +234,7 @@ function ItemFalta({ item, cot }: { item: CotacaoItem; cot: Cot }) {
               <p className="font-medium">
                 {item.texto}
                 {Number(item.quantidade) !== 1 && <span className="text-muted-foreground"> · Qtd: {Number(item.quantidade)}</span>}
+                {marcaPeca && <span className="ml-2 inline-block rounded border px-1.5 text-[10px] font-normal text-muted-foreground align-middle">{marcaPeca}</span>}
               </p>
               {item.observacao && !(item.produto_id && item.observacao.startsWith('Estoque:')) && (
                 <p className="text-xs text-primary">{item.observacao}</p>
@@ -244,7 +271,7 @@ function ItemFalta({ item, cot }: { item: CotacaoItem; cot: Cot }) {
               <Button size="sm" variant="outline" onClick={() => setInternet((v) => !v)}>
                 <Plus className="h-4 w-4 mr-1" /> Adicionar preço (telefone, internet...)
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => { setTexto(item.texto); setQtd(String(item.quantidade)); setEditando(true); }}>
+              <Button size="sm" variant="ghost" onClick={() => { setTexto(item.texto); setQtd(String(item.quantidade)); setMarca(item.marca ?? ''); setEditando(true); }}>
                 <Pencil className="h-4 w-4 mr-1" /> Editar
               </Button>
               <Button size="sm" variant="ghost" onClick={() => cot.atualizarItem.mutate({ id: item.id, status: 'cancelado' })}>
@@ -339,10 +366,13 @@ function AbaPedir({ cot }: { cot: Cot }) {
 
   const [enviando, setEnviando] = useState<string | null>(null);
 
+  // Cada representante recebe só as peças das marcas dele (e as sem marca)
+  const doRep = (r: Representante) => selecionados.filter((i) => repAtende(r.marcas, marcaDoItem(i, cot)));
+
   const enviarLink = async (r: Representante) => {
     setEnviando(r.id);
     try {
-      const link = await cot.criarLink.mutateAsync({ representante_id: r.id, itens: selecionados.map((i) => i.id) });
+      const link = await cot.criarLink.mutateAsync({ representante_id: r.id, itens: doRep(r).map((i) => i.id) });
       await enviarWhats(r.whatsapp, mensagemLink(urlLink(link.token)));
     } catch {
       // erro já mostrado
@@ -372,6 +402,7 @@ function AbaPedir({ cot }: { cot: Cot }) {
               <Checkbox checked={!desmarcados.has(i.id)}
                 onCheckedChange={() => toggle(desmarcados, i.id, setDesmarcados)} />
               {i.texto}{Number(i.quantidade) !== 1 ? ` (${Number(i.quantidade)})` : ''}
+              {marcaDoItem(i, cot) && <span className="text-xs text-muted-foreground">· {marcaDoItem(i, cot)}</span>}
             </label>
           ))}
         </CardContent>
@@ -383,11 +414,15 @@ function AbaPedir({ cot }: { cot: Cot }) {
           {reps.length === 0 && <p className="text-sm text-muted-foreground">Cadastre os representantes na aba "Representantes".</p>}
           {reps.map((r) => {
             const ultimo = cot.links.find((l) => l.representante_id === r.id);
+            const pecas = doRep(r);
             return (
               <div key={r.id} className="flex items-start justify-between gap-2 border-b pb-2 text-sm">
                 <div>
                   <b>{r.nome}</b>
                   <span className="block text-xs text-muted-foreground">{resumoEntrega(r).join(' · ') || 'Entrega não cadastrada'}</span>
+                  {(r.marcas ?? []).length > 0 && (
+                    <span className="block text-xs text-muted-foreground">Marcas: {(r.marcas ?? []).join(', ')} · recebe {pecas.length} de {selecionados.length} peça(s)</span>
+                  )}
                   {ultimo && (
                     <span className={`block text-xs ${ultimo.respondido_em ? 'text-green-600' : 'text-yellow-600'}`}>
                       {ultimo.respondido_em ? `✓ Respondeu ${diasAtras(ultimo.respondido_em)}` : `Link enviado ${diasAtras(ultimo.created_at)}, aguardando`}
@@ -395,11 +430,11 @@ function AbaPedir({ cot }: { cot: Cot }) {
                   )}
                 </div>
                 <div className="flex flex-col items-end gap-1">
-                  <Button size="sm" disabled={!selecionados.length || enviando !== null} onClick={() => enviarLink(r)}>
-                    {enviando === r.id ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <MessageCircle className="h-4 w-4 mr-1" />} Enviar link
+                  <Button size="sm" disabled={!pecas.length || enviando !== null} onClick={() => enviarLink(r)}>
+                    {enviando === r.id ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <MessageCircle className="h-4 w-4 mr-1" />} Enviar link ({pecas.length})
                   </Button>
-                  <button className="text-xs underline text-muted-foreground" disabled={!selecionados.length}
-                    onClick={() => enviarWhats(r.whatsapp, mensagem)}>
+                  <button className="text-xs underline text-muted-foreground" disabled={!pecas.length}
+                    onClick={() => enviarWhats(r.whatsapp, mensagemCotacao(pecas))}>
                     ou só mensagem
                   </button>
                 </div>
@@ -774,6 +809,7 @@ function AbaRepresentantes({ cot }: { cot: Cot }) {
               {!r.ativo && <Badge variant="outline" className="ml-2">Inativo</Badge>}
               <p className="text-xs text-muted-foreground">{r.whatsapp || 'Sem WhatsApp'}</p>
               <p className="text-xs text-muted-foreground">{resumoEntrega(r).join(' · ') || 'Entrega não cadastrada'}</p>
+              <p className="text-xs text-muted-foreground">{(r.marcas ?? []).length ? `Marcas: ${(r.marcas ?? []).join(', ')}` : 'Marcas: todas'}</p>
               {r.tem_tabela && <p className="text-xs text-muted-foreground">Última tabela recebida: {r.tabela_atualizada_em ? diasAtras(r.tabela_atualizada_em) : 'sem data'}</p>}
             </div>
             <div className="flex">
@@ -803,6 +839,7 @@ function AbaRepresentantes({ cot }: { cot: Cot }) {
 
 function FormRepresentante({ inicial, cot, onFechar }: { inicial: Partial<Representante>; cot: Cot; onFechar: () => void }) {
   const [f, setF] = useState<Partial<Representante>>(inicial);
+  const [marcasTxt, setMarcasTxt] = useState((inicial.marcas ?? []).join(', '));
   const set = <K extends keyof Representante>(k: K, v: Representante[K] | null) => setF((o) => ({ ...o, [k]: v }));
   const num = (v: string) => (v.trim() === '' ? null : Number(v.replace(',', '.')));
 
@@ -812,7 +849,7 @@ function FormRepresentante({ inicial, cot, onFechar }: { inicial: Partial<Repres
       return toast.error('Quinzenal: informe a data de uma entrega que já aconteceu');
     }
     cot.salvarRepresentante.mutate(
-      { ...f, nome: f.nome.trim(), horario_corte: f.horario_corte || null, tabela_atualizada_em: f.tabela_atualizada_em || null, entrega_quinzenal_ref: f.entrega_quinzenal_ref || null },
+      { ...f, marcas: lerMarcas(marcasTxt), nome: f.nome.trim(), horario_corte: f.horario_corte || null, tabela_atualizada_em: f.tabela_atualizada_em || null, entrega_quinzenal_ref: f.entrega_quinzenal_ref || null },
       { onSuccess: onFechar },
     );
   };
@@ -824,6 +861,11 @@ function FormRepresentante({ inicial, cot, onFechar }: { inicial: Partial<Repres
         <div className="space-y-3 text-sm">
           <div><Label>Nome / empresa</Label><Input value={f.nome ?? ''} onChange={(e) => set('nome', e.target.value)} /></div>
           <div><Label>WhatsApp</Label><Input value={f.whatsapp ?? ''} onChange={(e) => set('whatsapp', e.target.value)} placeholder="75 9 9999-9999" /></div>
+          <div>
+            <Label>Marcas que ele vende (separadas por vírgula)</Label>
+            <Input value={marcasTxt} onChange={(e) => setMarcasTxt(e.target.value)} placeholder="Ex.: Vonnixx, AGT, Cofap" />
+            <p className="text-xs text-muted-foreground mt-1">Vazio = vende de tudo. Com marcas, na hora de pedir preço ele só recebe as peças dessas marcas (e as peças sem marca).</p>
+          </div>
           <div>
             <Label>Perfil</Label>
             <Select value={f.perfil ?? 'nenhum'} onValueChange={(v) => set('perfil', v === 'nenhum' ? null : (v as Representante['perfil']))}>

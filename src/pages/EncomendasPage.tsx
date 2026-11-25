@@ -133,7 +133,7 @@ export default function EncomendasPage() {
 
       {nova && <NovaEncomenda enc={enc} cot={cot} onFim={() => setNova(false)} />}
 
-      <div className="bg-neutral-900 rounded-[8px] p-3 md:p-4">
+      <div>
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 md:gap-3">
           {CARTOES.map((c) => (
             <Cartao key={c.id} label={c.label} icon={c.icon} cor={c.cor} ativo={filtro === c.id}

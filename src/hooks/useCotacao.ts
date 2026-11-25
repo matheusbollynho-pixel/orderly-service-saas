@@ -32,6 +32,8 @@ export interface Representante {
   tabela_atualizada_em: string | null;
   observacoes: string | null;
   ativo: boolean;
+  /** Marcas que ele vende (vazio = de tudo) */
+  marcas?: string[] | null;
 }
 
 export interface CotacaoItem {
@@ -44,6 +46,8 @@ export interface CotacaoItem {
   pedido_em: string | null;
   recebido_em: string | null;
   produto_id: string | null;
+  /** Marca da peça (digitada; se vier do estoque, vale a do produto) */
+  marca?: string | null;
   created_at: string;
 }
 
@@ -352,10 +356,10 @@ export function useCotacao() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('inventory_products')
-        .select('id, stock_current, stock_minimum')
+        .select('id, stock_current, stock_minimum, brand')
         .in('id', idsProdutos);
       if (error) throw error;
-      return Object.fromEntries((data ?? []).map((p) => [p.id, { atual: Number(p.stock_current), minimo: Number(p.stock_minimum) }])) as Record<string, { atual: number; minimo: number }>;
+      return Object.fromEntries((data ?? []).map((p) => [p.id, { atual: Number(p.stock_current), minimo: Number(p.stock_minimum), marca: (p as { brand?: string | null }).brand ?? null }])) as Record<string, { atual: number; minimo: number; marca: string | null }>;
     },
   });
 
@@ -377,7 +381,7 @@ export function useCotacao() {
   const onError = (e: Error) => toast.error(e.message);
 
   const adicionarItens = useMutation({
-    mutationFn: async (linhas: { texto: string; quantidade: number; observacao?: string | null }[]) => {
+    mutationFn: async (linhas: { texto: string; quantidade: number; observacao?: string | null; marca?: string | null }[]) => {
       const { error } = await db.from('cotacao_itens').insert(linhas.map((l) => ({ ...l, store_id: storeId })));
       if (error) throw error;
     },
