@@ -25,7 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { FileUp,
+import { Boxes, FileUp,
   Package,
   Plus,
   Search,
@@ -49,6 +49,7 @@ import { useColaboradorLogado } from '@/hooks/useColaboradorLogado';
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import { useTiposCliente } from '@/hooks/useTiposCliente';
 import { EntradaXml } from '@/components/estoque/EntradaXml';
+import { KitDialog } from '@/components/estoque/KitDialog';
 import { UpgradeModal } from '@/components/UpgradeModal';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -428,7 +429,7 @@ function ProductFormDialog({ open, product, isEditing, isSaving, usaAlmox, onCha
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <Label>{usaAlmox ? 'Estoque da loja' : 'Estoque atual'}</Label>
-                <Input type="number" min="0" step="0.001" value={product.stock_current ?? 0} onChange={(e) => onChange('stock_current', parseFloat(e.target.value) || 0)} disabled={!podeAjustar} title={podeAjustar ? undefined : 'Só quem pode ajustar o estoque muda o saldo'} />
+                <Input type="number" min="0" step="0.001" value={product.stock_current ?? 0} onChange={(e) => onChange('stock_current', parseFloat(e.target.value) || 0)} disabled={!podeAjustar || !!(product as { e_kit?: boolean }).e_kit} title={(product as { e_kit?: boolean }).e_kit ? 'Kit: o estoque é quantos dá para montar com as peças' : podeAjustar ? undefined : 'Só quem pode ajustar o estoque muda o saldo'} />
               </div>
               <div>
                 <Label>Estoque mínimo</Label>
@@ -800,6 +801,7 @@ export default function InventoryPage() {
   }, [atendentes, mechanics, eu]);
   const [search, setSearch] = useState('');
   const [xmlOpen, setXmlOpen] = useState(false);
+  const [kitAberto, setKitAberto] = useState<InventoryProduct | 'novo' | null>(null);
   const [tab, setTab] = useState('produtos');
   const [filterLowStock, setFilterLowStock] = useState(false);
 
@@ -894,12 +896,16 @@ export default function InventoryPage() {
           <Button size="sm" variant="outline" onClick={() => setXmlOpen(true)}>
             <FileUp className="h-4 w-4 mr-1" /> Entrada por XML
           </Button>
+          <Button size="sm" variant="outline" onClick={() => setKitAberto('novo')}>
+            <Boxes className="h-4 w-4 mr-1" /> Novo kit
+          </Button>
           <Button size="sm" onClick={handleOpenNew}>
             <Plus className="h-4 w-4 mr-1" /> Novo produto
           </Button>
         </div>
       </div>
       <EntradaXml open={xmlOpen} onClose={() => setXmlOpen(false)} products={products} usaAlmox={usaAlmox} equipe={equipe} />
+      <KitDialog open={!!kitAberto} kit={kitAberto === 'novo' ? null : kitAberto} products={products} onClose={() => setKitAberto(null)} />
 
       {/* Alerta estoque baixo – clicável para filtrar */}
       {lowStock.length > 0 && (
@@ -978,7 +984,10 @@ export default function InventoryPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <p className="font-semibold text-sm truncate">{p.name}</p>
+                          <p className="font-semibold text-sm truncate">
+                            {(p as { e_kit?: boolean }).e_kit && <span className="mr-1.5 rounded bg-sky-500/15 px-1.5 text-[10px] font-semibold text-sky-500 align-middle">KIT</span>}
+                            {p.name}
+                          </p>
                           <p className="text-xs text-muted-foreground">{p.code}{p.category ? ` · ${p.category}` : ''}{p.brand ? ` · ${p.brand}` : ''}</p>
                         </div>
                         {proximaValidade.has(p.id) && (() => {
@@ -1011,6 +1020,11 @@ export default function InventoryPage() {
                       </div>
 
                       <div className="flex items-center gap-2 mt-2">
+                        {(p as { e_kit?: boolean }).e_kit ? (
+                          <Button variant="outline" size="sm" className="h-7 text-xs px-2" onClick={() => setKitAberto(p)}>
+                            <Boxes className="h-3 w-3 mr-1" /> Peças do kit
+                          </Button>
+                        ) : (
                         <Button
                           variant="outline"
                           size="sm"
@@ -1019,6 +1033,7 @@ export default function InventoryPage() {
                         >
                           <ArrowLeftRight className="h-3 w-3 mr-1" /> Movimentar
                         </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"
