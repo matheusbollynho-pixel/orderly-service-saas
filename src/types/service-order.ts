@@ -69,6 +69,8 @@ export interface Material {
   payment_method?: PaymentMethod | null; // forma de pagamento do item (pix, dinheiro, cartao)
   paid_at?: string | null; // data quando foi pago
   product_id?: string | null; // produto do estoque vinculado (baixa automática)
+  preco_tabela?: number | null; // preço normal quando saiu com preço de tipo de cliente (Lojista etc.)
+  tipo_preco?: string | null; // nome do tipo que deu o preço
   created_at: string;
   updated_at: string;
 }

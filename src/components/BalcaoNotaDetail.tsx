@@ -2,7 +2,7 @@ import { confirmar } from '@/components/v2/Confirmacao';
 import { BuscaCliente } from '@/components/v2/BuscaCliente';
 import { matchesSearch } from '@/lib/textSearch';
 import { useTipoDoCliente, useTiposCliente } from '@/hooks/useTiposCliente';
-import { precoParaCliente, regraDoTipo, tipoEmDia, type TipoCliente } from '@/lib/precoCliente';
+import { digitadoParaCliente, economiaUnit, precoParaCliente, regraDoTipo, tipoEmDia, type TipoCliente } from '@/lib/precoCliente';
 import { useState, useRef, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBalcao, type BalcaoOrder, type BalcaoItem, type PaymentEntry } from '@/hooks/useBalcao';
@@ -150,6 +150,9 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   const discPct = parseFloat(discountPct) || 0;
   const discountAmount = subtotal * (discPct / 100);
   const total = subtotal - discountAmount;
+  // Economia pelo tipo de cliente (já está dentro dos preços)
+  const economiaTipo = items.reduce((s, i) => s + economiaUnit(i, i.unit_price) * i.quantity, 0);
+  const nomeTipoNota = items.find((i) => economiaUnit(i, i.unit_price) > 0)?.tipo_preco ?? '';
 
   // ── Salvar totais no servidor ─────────────────────────────────
   // overrideSub permite passar o subtotal já calculado antes da query ser invalidada
@@ -179,7 +182,19 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
         const pa = prod as InventoryProduct & { preco_atacado?: number | null };
         const np = precoParaCliente(pa, novo);
         if (Math.abs(i.unit_price - precoParaCliente(pa, antigo)) < 0.005 && Math.abs(np - i.unit_price) >= 0.005) {
-          await updateItem({ id: i.id, unit_price: np });
+          const normal = Number(pa.sale_price) || 0;
+          const comTipo = !!novo && np < normal - 0.004;
+          await updateItem({ id: i.id, unit_price: np, preco_tabela: comTipo ? normal : null, tipo_preco: comTipo ? novo!.nome : null });
+          preco = np;
+          mudou++;
+        }
+      } else if (i.type === 'avulso') {
+        // Digitado: a base é o valor normal guardado (ou o próprio preço, se ainda não teve desconto)
+        const base = i.tipo_preco ? Number(i.preco_tabela) || i.unit_price : i.unit_price;
+        const np = digitadoParaCliente(base, novo);
+        if (Math.abs(i.unit_price - digitadoParaCliente(base, antigo)) < 0.005 && Math.abs(np - i.unit_price) >= 0.005) {
+          const comTipo = !!novo && np < base - 0.004;
+          await updateItem({ id: i.id, unit_price: np, preco_tabela: comTipo ? base : null, tipo_preco: comTipo ? novo!.nome : null });
           preco = np;
           mudou++;
         }
@@ -446,6 +461,9 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
         return;
       }
       effectivePrice = price || precoDe(selectedProduct) || (selectedProduct.cost_price ?? 0);
+      const normal = Number(selectedProduct.sale_price) || 0;
+      // Saiu com o preço do tipo (não digitado à mão): guarda o normal para destacar na nota
+      const comTipo = !!tipoEfetivo && Math.abs(effectivePrice - precoDe(selectedProduct)) < 0.005 && effectivePrice < normal - 0.004;
       await addItem({
         order_id: order.id,
         type: 'estoque',
@@ -454,16 +472,21 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
         quantity: qty,
         unit_price: effectivePrice,
         total_price: effectivePrice * qty,
+        ...(comTipo ? { preco_tabela: normal, tipo_preco: tipoEfetivo!.nome } : {}),
       });
     } else {
+      // Item digitado: cliente com tipo (Lojista etc.) leva o desconto % em cima do valor
+      const final = digitadoParaCliente(price, tipoEfetivo);
+      effectivePrice = final;
       await addItem({
         order_id: order.id,
         type: 'avulso',
         product_id: null,
         description: newDesc.trim(),
         quantity: qty,
-        unit_price: price,
-        total_price: price * qty,
+        unit_price: final,
+        total_price: final * qty,
+        ...(final < price - 0.004 ? { preco_tabela: price, tipo_preco: tipoEfetivo!.nome } : {}),
       });
     }
 
@@ -496,7 +519,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
       await saveTotals(discPct, sub);
     } else if (field === 'unit_price') {
       const newPrice = parseFloat(val) || 0;
-      await updateItem({ id: itemId, unit_price: newPrice });
+      await updateItem({ id: itemId, unit_price: newPrice, ...(item.tipo_preco ? { preco_tabela: null, tipo_preco: null } : {}) });
       const sub = items.reduce((s, i) => s + i.quantity * (i.id === itemId ? newPrice : i.unit_price), 0);
       await saveTotals(discPct, sub);
     } else {
@@ -556,9 +579,9 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
 
     const itemsHtml = items.map((i, idx) => `
       <tr style="background:${idx % 2 === 0 ? '#fff' : '#f9f9f9'}">
-        <td style="padding:7px 10px;border-bottom:1px solid #e5e5e5;">${i.description}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid #e5e5e5;">${i.description}${economiaUnit(i, i.unit_price) > 0 ? `<br><span style="font-size:10px;color:#2a9d2a;font-weight:700">PREÇO ${String(i.tipo_preco).toUpperCase()}</span>` : ''}</td>
         <td style="padding:7px 10px;text-align:center;border-bottom:1px solid #e5e5e5;">${i.quantity}</td>
-        <td style="padding:7px 10px;text-align:right;border-bottom:1px solid #e5e5e5;">R$ ${i.unit_price.toFixed(2)}</td>
+        <td style="padding:7px 10px;text-align:right;border-bottom:1px solid #e5e5e5;">${economiaUnit(i, i.unit_price) > 0 ? `<s style="color:#999;font-size:11px">R$ ${Number(i.preco_tabela).toFixed(2)}</s><br>` : ''}R$ ${i.unit_price.toFixed(2)}</td>
         <td style="padding:7px 10px;text-align:right;border-bottom:1px solid #e5e5e5;font-weight:600;">R$ ${(i.unit_price * i.quantity).toFixed(2)}</td>
       </tr>`).join('');
 
@@ -642,6 +665,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
           <div class="totais-row"><span>Subtotal:</span><span>R$ ${subtotal.toFixed(2)}</span></div>
           <div class="totais-row desconto"><span>Desconto (${discPct}%):</span><span>- R$ ${discountAmount.toFixed(2)}</span></div>
           ` : ''}
+          ${economiaTipo > 0 ? `<div class="totais-row desconto"><span>Desconto ${nomeTipoNota}:</span><span style="white-space:nowrap">- R$ ${economiaTipo.toFixed(2)}</span></div>` : ''}
           <div class="totais-row total"><span>TOTAL:</span><span>R$ ${total.toFixed(2)}</span></div>
         </div>
       </div>
@@ -945,17 +969,29 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
             <div key={item.id} className="grid grid-cols-[1fr_72px_108px_96px_32px] items-center hover:bg-muted/20">
               <div className="px-4 py-2">
                 {item.type === 'avulso' && isEditable ? (
-                  <Textarea
-                    value={item.description}
-                    onChange={e => handleUpdateItem(item.id, 'description', e.target.value)}
-                    spellCheck
-                    lang="pt-BR"
-                    rows={1}
-                    className="h-7 min-h-0 py-1 text-sm border-dashed resize-none"
-                  />
+                  <>
+                    <Textarea
+                      value={item.description}
+                      onChange={e => handleUpdateItem(item.id, 'description', e.target.value)}
+                      spellCheck
+                      lang="pt-BR"
+                      rows={1}
+                      className="h-7 min-h-0 py-1 text-sm border-dashed resize-none"
+                    />
+                    {economiaUnit(item, item.unit_price) > 0 && (
+                      <span className="inline-flex items-center rounded bg-emerald-500/15 px-1.5 text-[10px] font-semibold text-emerald-500">
+                        Preço {item.tipo_preco} · normal R$ {Number(item.preco_tabela).toFixed(2)}
+                      </span>
+                    )}
+                  </>
                 ) : (
                   <div>
                     <p className="text-sm font-medium leading-tight">{item.description}</p>
+                    {economiaUnit(item, item.unit_price) > 0 && (
+                      <span className="mr-2 inline-flex items-center rounded bg-emerald-500/15 px-1.5 text-[10px] font-semibold text-emerald-500">
+                        Preço {item.tipo_preco} · normal R$ {Number(item.preco_tabela).toFixed(2)}
+                      </span>
+                    )}
                     {item.type === 'estoque' && (
                       <span className="inline-flex items-center gap-1 text-[10px] text-blue-500">
                         <Package className="h-2.5 w-2.5" /> estoque
@@ -994,7 +1030,10 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
                     />
                   </div>
                 ) : (
-                  <span className="text-sm text-right block">R$ {item.unit_price.toFixed(2)}</span>
+                  <span className="text-sm text-right block">
+                    {economiaUnit(item, item.unit_price) > 0 && <s className="block text-[11px] text-muted-foreground">R$ {Number(item.preco_tabela).toFixed(2)}</s>}
+                    R$ {item.unit_price.toFixed(2)}
+                  </span>
                 )}
               </div>
 
@@ -1070,6 +1109,11 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
                       onKeyDown={e => e.key === 'Enter' && handleAddItem()}
                       className="h-9 pl-7 text-right text-sm" min={0} step={0.01} />
                   </div>
+                  {!selectedProduct && tipoEfetivo && digitadoParaCliente(parseFloat(newPrice) || 0, tipoEfetivo) < (parseFloat(newPrice) || 0) && (
+                    <p className="mt-1 text-[11px] font-medium text-emerald-500 whitespace-nowrap">
+                      {tipoEfetivo.nome}: sai R$ {digitadoParaCliente(parseFloat(newPrice) || 0, tipoEfetivo).toFixed(2)}
+                    </p>
+                  )}
                 </div>
                 <div className="pt-5">
                   <Button type="button" variant="outline" onClick={handleAddItem} disabled={!canAct} className="h-9 px-4 gap-1.5">
@@ -1083,6 +1127,12 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
 
         {/* ── Totais ── */}
         <div className="border-t-2 border-border bg-muted/20">
+          {economiaTipo > 0 && (
+            <div className="flex items-center justify-between px-5 py-2 border-b border-border/50 bg-emerald-500/10">
+              <span className="text-sm font-semibold text-emerald-500">Desconto {nomeTipoNota} (já nos preços)</span>
+              <span className="text-sm font-semibold text-emerald-500">- R$ {economiaTipo.toFixed(2)}</span>
+            </div>
+          )}
           <div className="flex items-center justify-between px-5 py-2 border-b border-border/50">
             <span className="text-sm text-muted-foreground">Subtotal</span>
             <span className="text-sm font-medium">R$ {subtotal.toFixed(2)}</span>

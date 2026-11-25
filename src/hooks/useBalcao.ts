@@ -43,6 +43,10 @@ export interface BalcaoItem {
   quantity: number;
   unit_price: number;
   total_price: number;
+  /** Preço normal quando o item saiu com preço de tipo de cliente (Lojista etc.) */
+  preco_tabela?: number | null;
+  /** Nome do tipo que deu o preço */
+  tipo_preco?: string | null;
   created_at: string;
 }
 
@@ -144,7 +148,9 @@ export function useBalcao(opcoes: { recentes?: boolean } = {}) {
           quantity: item.quantity,
           unit_price: item.unit_price,
           total_price: item.unit_price * item.quantity,
-        })
+          // Preço de tipo de cliente (Lojista etc.): guarda o normal para destacar
+          ...(item.tipo_preco ? { preco_tabela: item.preco_tabela ?? null, tipo_preco: item.tipo_preco } : {}),
+        } as never)
         .select()
         .single();
       if (error) throw error;

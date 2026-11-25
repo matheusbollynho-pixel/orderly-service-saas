@@ -498,6 +498,9 @@ Retirada: ${retiradaInfo}`;
     const updates: Record<string, unknown> = {};
     if (field === 'valor') {
       updates[field] = parseFloat(value) || 0;
+      // Valor mexido à mão deixa de ser o preço do tipo de cliente (Lojista etc.)
+      const atual = selectedOrder?.materials?.find(m => m.id === id) as { tipo_preco?: string | null } | undefined;
+      if (atual?.tipo_preco) { updates.preco_tabela = null; updates.tipo_preco = null; }
     } else {
       updates[field] = value;
     }

@@ -140,7 +140,7 @@ function ListaClientes({ onAbrir }: { onAbrir: (id: string | 'novo' | 'tipos') =
         </div>
         <div className="flex gap-1.5">
           {(permissions.dar_desconto !== false || tipos.length > 0) && (
-            <Button size="sm" variant="outline" onClick={() => onAbrir('tipos')}><Tags className="h-4 w-4 mr-1" /> Tipos</Button>
+            <Button size="sm" variant="outline" onClick={() => onAbrir('tipos')}><Tags className="h-4 w-4 mr-1" /> Preço especial</Button>
           )}
           <Button size="sm" onClick={() => onAbrir('novo')}><Plus className="h-4 w-4 mr-1" /> Novo cliente</Button>
         </div>
@@ -154,7 +154,8 @@ function ListaClientes({ onAbrir }: { onAbrir: (id: string | 'novo' | 'tipos') =
         <Switch checked={inativos} onCheckedChange={setInativos} /> Mostrar desativados
       </label>
       {tipos.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">Ver só:</span>
           <Button size="sm" variant={filtroTipo ? 'outline' : 'default'} className="h-7 text-xs" onClick={() => setFiltroTipo(null)}>Todos</Button>
           {tipos.filter((t) => t.ativo).map((t) => (
             <Button key={t.id} size="sm" variant={filtroTipo === t.id ? 'default' : 'outline'} className="h-7 text-xs" onClick={() => setFiltroTipo(t.id)}>{t.nome}</Button>
@@ -544,7 +545,7 @@ function CampoTipo({ form, tipos, pode, mudou, onMudar }: {
   };
   return (
     <div className="rounded-lg border p-2.5 space-y-2">
-      <p className="text-xs font-semibold">Tipo de cliente (preço no balcão)</p>
+      <p className="text-xs font-semibold">Preço especial</p>
       <div className="flex flex-wrap gap-1.5">
         <Button type="button" size="sm" disabled={!pode} variant={!form.tipo_cliente_id ? 'default' : 'outline'} className="h-7 text-xs" onClick={() => escolher('')}>Normal</Button>
         {tipos.filter((t) => t.ativo || t.id === form.tipo_cliente_id).map((t) => (
@@ -570,7 +571,7 @@ function CampoTipo({ form, tipos, pode, mudou, onMudar }: {
           ) : null}
         </>
       )}
-      {!pode && <p className="text-[11px] text-muted-foreground">Só quem pode dar desconto muda o tipo.</p>}
+      {!pode && <p className="text-[11px] text-muted-foreground">Só quem pode dar desconto muda o preço especial do cliente.</p>}
       {pode && mudou && <p className="text-[11px] font-medium text-amber-500">Clique em "Salvar alterações" para gravar.</p>}
     </div>
   );
@@ -602,21 +603,26 @@ function TiposDeCliente({ onVoltar }: { onVoltar: () => void }) {
     if (res.error) { toast.error(`Não consegui salvar: ${res.error.message}`); return; }
     qc.invalidateQueries({ queryKey: ['tipos-cliente'] });
     setEditando(null);
-    toast.success('Tipo salvo');
+    toast.success('Grupo salvo');
   };
 
   return (
     <div className="space-y-3 pb-24">
       <div className="flex items-center gap-2">
         <Button variant="ghost" size="sm" className="px-2" onClick={onVoltar}><ArrowLeft className="h-4 w-4" /></Button>
-        <h2 className="text-lg font-semibold">Tipos de cliente</h2>
+        <h2 className="text-lg font-semibold">Preço especial</h2>
+      </div>
+      <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs">
+        Aqui você cria o <b>grupo</b> (ex.: <b>Lojista</b>, Lava-jato, Frota), uma vez só. Não é o cadastro do cliente.
+        Para colocar um cliente no grupo, abra a <b>ficha do cliente</b> e escolha o grupo em "Preço especial".
       </div>
       <p className="text-xs text-muted-foreground">
-        Ex.: Lojista, Lava-jato, Estética. O cliente com tipo paga o preço dele na nota de balcão (o preço entra sozinho ao escolher o cliente).
-        Com validade, o tipo vence se ele parar de comprar; uma compra a partir do valor mínimo renova sozinha.
+        O cliente do grupo paga o preço dele na nota de balcão e na OS (o preço entra sozinho ao escolher o cliente).
+        Item digitado à mão (fora do estoque) sai com o desconto em %. Preço mudado depois, item por item, fica como foi digitado.
+        Com validade, o preço especial vence se ele parar de comprar (o cadastro continua ativo); uma compra a partir do valor mínimo renova sozinha.
       </p>
       {isLoading ? <p className="text-sm text-muted-foreground">Carregando...</p> : tipos.length === 0 && !editando ? (
-        <p className="text-sm text-muted-foreground py-4 text-center">Nenhum tipo ainda.</p>
+        <p className="text-sm text-muted-foreground py-4 text-center">Nenhum grupo ainda.</p>
       ) : null}
       {tipos.map((t) => (
         <button key={t.id} type="button" disabled={!pode} onClick={() => setEditando({ id: t.id, ativo: t.ativo, nome: t.nome, desconto_pct: String(t.desconto_pct), usa_preco_atacado: t.usa_preco_atacado, validade_dias: t.validade_dias ? String(t.validade_dias) : '', compra_minima: t.compra_minima ? String(t.compra_minima) : '', vale_pecas_os: t.vale_pecas_os !== false, vale_servico_os: !!t.vale_servico_os })}
@@ -626,13 +632,13 @@ function TiposDeCliente({ onVoltar }: { onVoltar: () => void }) {
           <p className="text-[11px] text-muted-foreground">{ondeVale(t)}</p>
         </button>
       ))}
-      {pode && !editando && <Button size="sm" onClick={() => setEditando({ ...TIPO_NOVO })}><Plus className="h-4 w-4 mr-1" /> Novo tipo</Button>}
-      {!pode && <p className="text-xs text-muted-foreground">Só quem pode dar desconto cria ou muda os tipos.</p>}
+      {pode && !editando && <Button size="sm" onClick={() => setEditando({ ...TIPO_NOVO, nome: tipos.length === 0 ? 'Lojista' : '' })}><Plus className="h-4 w-4 mr-1" /> Novo grupo</Button>}
+      {!pode && <p className="text-xs text-muted-foreground">Só quem pode dar desconto cria ou muda os grupos.</p>}
 
       {editando && (
         <div className="rounded-xl border bg-card p-3 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Campo label="Nome"><Input value={editando.nome} onChange={(e) => setEditando({ ...editando, nome: e.target.value })} placeholder="Lojista" /></Campo>
+            <Campo label="Nome do grupo"><Input value={editando.nome} onChange={(e) => setEditando({ ...editando, nome: e.target.value })} placeholder="Lojista, Lava-jato, Frota..." /></Campo>
             <Campo label="Desconto (%)"><Input inputMode="decimal" value={editando.desconto_pct} onChange={(e) => setEditando({ ...editando, desconto_pct: e.target.value })} /></Campo>
             <Campo label="Validade (dias, vazio = não vence)"><Input inputMode="numeric" value={editando.validade_dias} onChange={(e) => setEditando({ ...editando, validade_dias: e.target.value.replace(/\D/g, '') })} placeholder="30" /></Campo>
             <Campo label="Compra mínima para renovar (R$)"><Input inputMode="decimal" value={editando.compra_minima} onChange={(e) => setEditando({ ...editando, compra_minima: e.target.value })} placeholder="0 = qualquer compra" /></Campo>
@@ -645,7 +651,7 @@ function TiposDeCliente({ onVoltar }: { onVoltar: () => void }) {
             <p className="text-xs font-semibold">Onde vale (o balcão sempre vale)</p>
             <label className="flex items-start gap-2 text-sm">
               <Switch checked={editando.vale_pecas_os} onCheckedChange={(v) => setEditando({ ...editando, vale_pecas_os: v })} />
-              <span>Peças na OS<span className="block text-xs text-muted-foreground">Peça do estoque lançada na OS sai com o preço do tipo.</span></span>
+              <span>Peças na OS<span className="block text-xs text-muted-foreground">Peça do estoque sai com o preço do grupo; peça digitada à mão sai com o desconto em %.</span></span>
             </label>
             <label className="flex items-start gap-2 text-sm">
               <Switch checked={editando.vale_servico_os} onCheckedChange={(v) => setEditando({ ...editando, vale_servico_os: v })} />
@@ -654,7 +660,7 @@ function TiposDeCliente({ onVoltar }: { onVoltar: () => void }) {
           </div>
           {editando.id && (
             <label className="flex items-center gap-2 text-sm">
-              <Switch checked={editando.ativo !== false} onCheckedChange={(v) => setEditando({ ...editando, ativo: v })} /> Tipo ativo
+              <Switch checked={editando.ativo !== false} onCheckedChange={(v) => setEditando({ ...editando, ativo: v })} /> Grupo ativo
             </label>
           )}
           <div className="flex gap-2">

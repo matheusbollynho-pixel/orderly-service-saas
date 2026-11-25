@@ -1,3 +1,4 @@
+import { descricaoComTipo } from '@/lib/precoCliente';
 import { toast } from 'sonner';
 import { useParams, useLocation } from "react-router-dom"
 import { useEffect, useState, useCallback, useRef } from "react"
@@ -153,7 +154,8 @@ export function PrintOrderPage() {
           const quantity = Number(item?.quantidade || 1)
           const unitPrice = formatCurrency(item?.valor)
           return {
-            description: item?.descricao as string || "",
+            // Preço de tipo de cliente (Lojista etc.): "(Lojista: de R$ 100,00)"
+            description: descricaoComTipo(item?.descricao as string || "", item as { preco_tabela?: number | null; tipo_preco?: string | null }, unitPrice),
             quantity,
             unitPrice,
             total: unitPrice * quantity,

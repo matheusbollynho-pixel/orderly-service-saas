@@ -12,7 +12,7 @@ import type { InventoryProduct } from '@/hooks/useInventory';
 import { useStore } from '@/contexts/StoreContext';
 import { useColaboradorLogado } from '@/hooks/useColaboradorLogado';
 import { useTipoDoCliente, useTiposCliente } from '@/hooks/useTiposCliente';
-import { precoParaCliente, servicoParaCliente, tipoEmDia } from '@/lib/precoCliente';
+import { digitadoParaCliente, economiaUnit, precoParaCliente, servicoParaCliente, tipoEmDia } from '@/lib/precoCliente';
 
 // Produto vendido por litro, metro ou quilo pode ser usado aos poucos na OS
 // (ex.: 150 ml de um frasco de 1 L). O estoque continua na unidade do produto.
@@ -66,6 +66,10 @@ export function MaterialsNote({
   const tipoPecas = tipoOS && tipoOS.vale_pecas_os !== false ? tipoOS : null;
   const tipoServico = tipoOS && tipoOS.vale_servico_os && tipoOS.desconto_pct > 0 ? tipoOS : null;
   const precoPeca = (p: InventoryProduct) => precoParaCliente(p, tipoPecas);
+  // Valor final do item novo: serviço (se o tipo vale no serviço) ou peça digitada fora do estoque
+  const finalDoNovo = (digitado: number) => newMaterial.is_service
+    ? servicoParaCliente(digitado, tipoServico)
+    : !newMaterial.product_id ? digitadoParaCliente(digitado, tipoPecas) : digitado;
   const vazio = () => ({ quantidade: '01', descricao: '', valor: '', is_service: false, mechanic_id: meuMecanico, product_id: undefined as string | undefined });
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingValues, setEditingValues] = useState<Record<string, string>>({});
@@ -142,6 +146,9 @@ export function MaterialsNote({
     const qtd = parseFloat(m.quantidade) || 0;
     return sum + ((m.valor || 0) * qtd);
   }, 0);
+  // Desconto do tipo de cliente que já está nos valores (Lojista etc.)
+  const economiaTipo = materiais.reduce((s, m) => s + economiaUnit(m, Number(m.valor) || 0) * (parseFloat(String(m.quantidade).replace(',', '.')) || 0), 0);
+  const nomeTipoOS = materiais.find((m) => economiaUnit(m, Number(m.valor) || 0) > 0)?.tipo_preco ?? '';
 
   // Produto escolhido do estoque que pode ser usado fracionado
   const produtoSel = newMaterial.product_id ? inventoryProducts.find((p) => p.id === newMaterial.product_id) : undefined;
@@ -184,9 +191,20 @@ export function MaterialsNote({
 
     const digitado = parseFloat(newMaterial.valor) || 0;
     // Serviço de cliente com tipo (ex.: Lojista 10%) sai com o desconto, se o tipo vale no serviço
-    const valorFinal = newMaterial.is_service ? servicoParaCliente(digitado, tipoServico) : digitado;
-    if (valorFinal !== digitado) toast.success(`Serviço com ${tipoServico!.desconto_pct}% de ${tipoServico!.nome}: R$ ${brl(valorFinal)}`);
+    // Peça digitada (fora do estoque) leva o desconto % se o tipo vale nas peças
+    const valorFinal = finalDoNovo(digitado);
+    const tipoAplicado = newMaterial.is_service ? tipoServico : tipoPecas;
+    if (valorFinal !== digitado) toast.success(`${newMaterial.is_service ? 'Serviço' : 'Peça'} com ${tipoAplicado!.desconto_pct}% de ${tipoAplicado!.nome}: R$ ${brl(valorFinal)}`);
+    // Guarda o preço normal quando saiu com preço do tipo (destaque na OS e no PDF)
+    let destaque: { preco_tabela: number; tipo_preco: string } | null = null;
+    if (valorFinal < digitado - 0.004 && tipoAplicado) {
+      destaque = { preco_tabela: digitado, tipo_preco: tipoAplicado.nome };
+    } else if (!newMaterial.is_service && produtoSel && tipoPecas) {
+      const normal = Number(produtoSel.sale_price) || 0;
+      if (Math.abs(digitado - precoPeca(produtoSel)) < 0.005 && digitado < normal - 0.004) destaque = { preco_tabela: normal, tipo_preco: tipoPecas.nome };
+    }
     const payload: Record<string, unknown> = {
+      ...(destaque ?? {}),
       quantidade: newMaterial.quantidade,
       descricao: newMaterial.descricao,
       valor: valorFinal,
@@ -209,7 +227,7 @@ export function MaterialsNote({
         <p className="text-sm text-muted-foreground mb-4">Materiais e peças utilizadas</p>
         {(tipoPecas || tipoServico) && (
           <p className="-mt-3 mb-4 text-xs font-medium text-emerald-500">
-            Cliente {tipoOS!.nome}: {[tipoPecas ? 'peças do estoque com o preço dele' : null, tipoServico ? `serviço com ${tipoServico.desconto_pct}% de desconto` : null].filter(Boolean).join(' e ')}.
+            Cliente {tipoOS!.nome}: {[tipoPecas ? `peças com o preço dele${tipoPecas.desconto_pct > 0 ? ` (digitadas: ${tipoPecas.desconto_pct}% off)` : ''}` : null, tipoServico ? `serviço com ${tipoServico.desconto_pct}% de desconto` : null].filter(Boolean).join(' e ')}.
           </p>
         )}
         {tipoAchado && !tipoOS && (
@@ -247,8 +265,14 @@ export function MaterialsNote({
                   <div className="col-span-7 text-sm font-medium text-foreground flex items-center gap-1">
                     {material.descricao}
                     {material.product_id && <Package className="h-3 w-3 text-green-600 flex-shrink-0" title="Vinculado ao estoque" />}
+                    {economiaUnit(material, Number(material.valor) || 0) > 0 && (
+                      <span className="rounded bg-emerald-500/15 px-1.5 text-[10px] font-semibold text-emerald-500 flex-shrink-0">Preço {material.tipo_preco}</span>
+                    )}
                   </div>
                   <div className="col-span-2 text-sm text-muted-foreground">
+                    {economiaUnit(material, Number(material.valor) || 0) > 0 && (
+                      <s className="block text-[11px]">R$ {Number(material.preco_tabela).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</s>
+                    )}
                     {String(material.quantidade).replace('.', ',')} × R$ {parseFloat(String(material.valor)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                   <div className="col-span-2 flex justify-end">
@@ -355,6 +379,12 @@ export function MaterialsNote({
               </div>
             ))}
 
+            {economiaTipo > 0 && (
+              <div className="grid grid-cols-12 gap-2 bg-emerald-500/10 p-2 rounded font-semibold text-emerald-500 text-xs mt-2">
+                <div className="col-span-9">DESCONTO {nomeTipoOS.toUpperCase()} (JÁ NOS VALORES):</div>
+                <div className="col-span-3 text-right">- R$ {economiaTipo.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              </div>
+            )}
             {/* Total */}
             <div className="grid grid-cols-12 gap-2 bg-[#C1272D]/20 p-2 rounded font-bold text-foreground text-xs mt-2">
               <div className="col-span-9">TOTAL:</div>
@@ -474,8 +504,8 @@ export function MaterialsNote({
                   />
                   <span className="text-xs font-medium leading-none text-foreground">Serviço</span>
                 </div>
-                {newMaterial.is_service && tipoServico && (parseFloat(newMaterial.valor) || 0) > 0 && (
-                  <span className="text-xs text-emerald-500">{tipoServico.nome}: sai R$ {brl(servicoParaCliente(parseFloat(newMaterial.valor) || 0, tipoServico))}</span>
+                {(parseFloat(newMaterial.valor) || 0) > 0 && finalDoNovo(parseFloat(newMaterial.valor) || 0) < (parseFloat(newMaterial.valor) || 0) && (
+                  <span className="text-xs text-emerald-500">{tipoOS!.nome}: sai R$ {brl(finalDoNovo(parseFloat(newMaterial.valor) || 0))}</span>
                 )}
               </div>
               {fr && produtoSel && (

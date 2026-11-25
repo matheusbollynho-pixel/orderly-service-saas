@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fmtCpf, ondeVale, precoParaCliente, servicoParaCliente, somarDias, tipoEmDia, type TipoCliente } from '@/lib/precoCliente';
+import { descricaoComTipo, digitadoParaCliente, economiaUnit, fmtCpf, ondeVale, precoParaCliente, servicoParaCliente, somarDias, tipoEmDia, type TipoCliente } from '@/lib/precoCliente';
 
 const base: TipoCliente = { id: 't', nome: 'Lojista', desconto_pct: 10, usa_preco_atacado: false, validade_dias: 30, compra_minima: 300, ativo: true };
 
@@ -31,8 +31,18 @@ describe('preço por tipo de cliente', () => {
     expect(servicoParaCliente(200, { ...base, vale_servico_os: true })).toBe(180);
     expect(servicoParaCliente(200, { ...base, vale_servico_os: true, desconto_pct: 0 })).toBe(200);
     expect(servicoParaCliente(200, null)).toBe(200);
-    expect(ondeVale({ ...base, vale_servico_os: true })).toBe('Vale em: balcão, peças da OS, serviço da OS');
-    expect(ondeVale({ ...base, vale_pecas_os: false })).toBe('Vale em: balcão');
+    expect(ondeVale({ ...base, vale_servico_os: true })).toBe('Vale em: balcão, peças da OS, serviço da OS, item digitado com 10%');
+    expect(ondeVale({ ...base, vale_pecas_os: false, desconto_pct: 0 })).toBe('Vale em: balcão');
+    expect(digitadoParaCliente(50, base)).toBe(45);
+    expect(digitadoParaCliente(50, { ...base, desconto_pct: 0 })).toBe(50);
+    expect(digitadoParaCliente(50, null)).toBe(50);
+  });
+  it('destaque do preço do tipo', () => {
+    expect(economiaUnit({ preco_tabela: 100, tipo_preco: 'Lojista' }, 80)).toBe(20);
+    expect(economiaUnit({ preco_tabela: 100, tipo_preco: null }, 80)).toBe(0);
+    expect(economiaUnit({ preco_tabela: 100, tipo_preco: 'Lojista' }, 120)).toBe(0);
+    expect(descricaoComTipo('Banco', { preco_tabela: 100, tipo_preco: 'Lojista' }, 80)).toBe('Banco (Lojista: de R$ 100,00)');
+    expect(descricaoComTipo('Banco', {}, 80)).toBe('Banco');
   });
   it('somar dias e CPF', () => {
     expect(somarDias('2026-11-25', 30)).toBe('2026-12-25');

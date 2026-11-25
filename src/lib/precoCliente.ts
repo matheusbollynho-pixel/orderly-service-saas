@@ -46,6 +46,13 @@ export function precoParaCliente(
   return normal;
 }
 
+/** Valor digitado (item fora do estoque) para o cliente: só o desconto % do tipo */
+export function digitadoParaCliente(valor: number, tipo: TipoCliente | null | undefined): number {
+  const pct = Number(tipo?.desconto_pct) || 0;
+  if (!tipo || pct <= 0 || !(valor > 0)) return valor;
+  return r2(valor * (1 - pct / 100));
+}
+
 /** Valor do serviço da OS para o cliente (só o desconto %, se o tipo vale no serviço) */
 export function servicoParaCliente(valor: number, tipo: TipoCliente | null | undefined): number {
   const pct = Number(tipo?.desconto_pct) || 0;
@@ -58,8 +65,19 @@ export function ondeVale(t: TipoCliente): string {
   const onde = ['balcão'];
   if (t.vale_pecas_os !== false) onde.push('peças da OS');
   if (t.vale_servico_os && t.desconto_pct > 0) onde.push('serviço da OS');
+  if (t.desconto_pct > 0) onde.push(`item digitado com ${t.desconto_pct}%`);
   return 'Vale em: ' + onde.join(', ');
 }
+
+/** Item saiu com preço de tipo? Devolve quanto economizou por unidade (0 = não) */
+export const economiaUnit = (i: { preco_tabela?: number | null; tipo_preco?: string | null }, preco: number) =>
+  i.tipo_preco && Number(i.preco_tabela) > preco + 0.004 ? r2(Number(i.preco_tabela) - preco) : 0;
+
+/** Descrição do item com o destaque do tipo, para PDF/impressão: "Banco (Lojista: de R$ 100,00)" */
+export const descricaoComTipo = (descricao: string, i: { preco_tabela?: number | null; tipo_preco?: string | null }, preco: number) =>
+  economiaUnit(i, preco) > 0
+    ? `${descricao} (${i.tipo_preco}: de R$ ${Number(i.preco_tabela).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`
+    : descricao;
 
 /** Texto curto do que o tipo dá */
 export function regraDoTipo(t: TipoCliente): string {

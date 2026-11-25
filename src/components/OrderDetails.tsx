@@ -1,3 +1,4 @@
+import { descricaoComTipo } from '@/lib/precoCliente';
 import { pedirTexto } from '@/components/v2/Confirmacao';
 import { pedirMotivoEstorno } from '@/lib/estorno';
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
@@ -712,6 +713,8 @@ export function OrderDetails({
 
   const buildPDFPayload = () => ({
     ...order,
+    // Item com preço de tipo de cliente (Lojista etc.): o PDF mostra "(Lojista: de R$ 100,00)"
+    materials: (order.materials || []).map(m => ({ ...m, descricao: descricaoComTipo(m.descricao, m, Number(m.valor) || 0) })),
     // PDF (serviço no Render) desenha os itens na ordem recebida.
     checklist_items: ordenarChecklist(order.checklist_items).map(i => ({ ...i, label: rotuloChecklist(i.label) })),
     // order.signature_data/delivery_signature_data só chegam depois do
