@@ -2,6 +2,7 @@ import { confirmar } from '@/components/v2/Confirmacao';
 import { BuscaCliente } from '@/components/v2/BuscaCliente';
 import { matchesSearch } from '@/lib/textSearch';
 import { useTipoDoCliente, useTiposCliente } from '@/hooks/useTiposCliente';
+import { useSetores } from '@/hooks/useSetores';
 import { digitadoParaCliente, economiaUnit, precoParaCliente, regraDoTipo, tipoEmDia, type TipoCliente } from '@/lib/precoCliente';
 import { useState, useRef, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -125,6 +126,8 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   const [fiadoLoading, setFiadoLoading] = useState(false);
 
   const activeProducts = products.filter(p => p.active !== false);
+  // Setor da venda (loja com 2 ou mais setores escolhe aqui; com 1, vai sempre nele)
+  const { ativos: setoresAtivos, nome: nomeSetor } = useSetores();
 
   // ── Tipo do cliente (Lojista etc.): preço diferente ─────────────
   const { data: tiposCli = [], isLoading: carregandoTipos } = useTiposCliente();
@@ -946,6 +949,23 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
               className="mt-1 h-9 text-sm bg-background w-full"
             />
           </div>
+          {setoresAtivos.length > 1 && (
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Setor da venda</label>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {setoresAtivos.map(s => (
+                  <Button key={s.id} type="button" size="sm" className="h-7 text-xs" disabled={!isEditable}
+                    variant={order.setor_id === s.id ? 'default' : 'outline'}
+                    onClick={() => order.setor_id !== s.id && updateOrder({ id: order.id, setor_id: s.id })}>
+                    {s.nome}
+                  </Button>
+                ))}
+                {order.setor_id && !setoresAtivos.some(s => s.id === order.setor_id) && (
+                  <span className="text-xs text-muted-foreground self-center">{nomeSetor(order.setor_id)} (inativo)</span>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── Cabeçalho tabela ── */}

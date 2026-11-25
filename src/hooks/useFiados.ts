@@ -164,7 +164,16 @@ export function useFiados() {
       }
       // Antes gravava type 'devolucao', que o caixa não aceita: o lançamento sumia sem aviso.
       const hoje = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Fortaleza' }).format(new Date());
+      // Setor da venda: o mesmo da nota de origem (loja com setores)
+      let setorId: string | null = null;
+      const origem = fiado as unknown as { origin_type?: string | null; origin_id?: string | null };
+      if (origem.origin_type === 'balcao' && origem.origin_id) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: nota } = await (supabase as any).from('balcao_orders').select('setor_id').eq('id', origem.origin_id).maybeSingle();
+        setorId = nota?.setor_id ?? null;
+      }
       const { error: caixaErr } = await supabase.from('cash_flow').insert([{
+        ...(setorId ? { setor_id: setorId } : {}),
         store_id: storeId!,
         type: 'entrada',
         category: 'Fiado',

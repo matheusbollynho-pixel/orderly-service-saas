@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { Tags } from 'lucide-react';
 import { AVISO_LOJISTA_PADRAO, VARIAVEIS_AVISO_LOJISTA, montarAvisoLojista } from '../../supabase/functions/_shared/avisoLojista';
+import { SetoresVenda } from '@/components/config/SetoresVenda';
 import { toast } from 'sonner';
 
 type MessageKey = 'whatsapp_confirmation_template' | 'whatsapp_satisfaction_template' | 'whatsapp_birthday_template' | 'whatsapp_balcao_followup_template' | 'whatsapp_lojista_aviso_template';
@@ -382,6 +383,9 @@ export default function ConfigToolsPage() {
                 </label>
                 <p className="text-xs text-neutral-500">Abre o dia com o troco e, no fechamento, conta o dinheiro da gaveta e mostra se sobrou ou faltou. Bom quando mais de uma pessoa mexe no caixa.</p>
               </div>
+
+              {/* Setores da venda (Balcão, Online, Estofaria...) */}
+              <SetoresVenda />
 
               {/* Checklist da OS personalizado */}
               {storeId && settings && (

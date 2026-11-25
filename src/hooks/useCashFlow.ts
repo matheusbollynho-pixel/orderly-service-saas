@@ -129,6 +129,8 @@ export function useCashFlow(selectedDate?: string) {
         date: dateToInsert,
         notes: entry.notes || null,
         inventory_movement_id: entry.inventory_movement_id || null,
+        // Setor escolhido no lançamento manual (sem ele, o banco herda da origem ou fica sem setor)
+        ...(entry.setor_id ? { setor_id: entry.setor_id } : {}),
       };
 
       console.log('📤 Enviando para Supabase:', insertPayload);

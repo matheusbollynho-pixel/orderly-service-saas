@@ -1,3 +1,4 @@
+import { useSetores } from '@/hooks/useSetores';
 import { pedirMotivoEstorno } from '@/lib/estorno';
 import { useStore } from '@/contexts/StoreContext';
 import { semEstornosAnulados } from '@/lib/caixaEstorno';
@@ -70,6 +71,10 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder, foco, onFocoU
   const [showForm, setShowForm] = useState(false);
   const [hideValues, setHideValues] = useState(false);
   const [entrySourceFilter, setEntrySourceFilter] = useState<'all' | 'without-os' | 'os-only'>('all');
+  // Loja com setores (Balcão, Online, Estofaria...): o filtro é por setor
+  const { usa: usaSetores, ativos: setoresAtivos, setores: todosSetores, nome: nomeSetor } = useSetores();
+  const [filtroSetor, setFiltroSetor] = useState<string>('all');
+  const [setorManual, setSetorManual] = useState<string | null>(null);
   const [selectedProductId, setSelectedProductId] = useState<string | undefined>(undefined);
   const [productSuggestions, setProductSuggestions] = useState<InventoryProduct[]>([]);
   const [showProductSuggestions, setShowProductSuggestions] = useState(false);
@@ -170,7 +175,7 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder, foco, onFocoU
       return;
     }
 
-    if (formData.type === 'saida' && !formData.saidaDestination) {
+    if (!usaSetores && formData.type === 'saida' && !formData.saidaDestination) {
       toast.error('Selecione se a saída foi para Oficina ou Balcão');
       return;
     }
@@ -201,6 +206,7 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder, foco, onFocoU
         date: todayDate,
         notes: formData.notes,
         inventory_movement_id: movement.id,
+        setor_id: setorManual,
       });
     } else {
       // Item avulso (fora do estoque): o valor digitado é o preço unitário,
@@ -212,11 +218,14 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder, foco, onFocoU
         description: formData.description,
         category:
           formData.type === 'saida'
-            ? (formData.saidaDestination === 'oficina' ? 'Saída - Oficina' : 'Saída - Balcão')
+            ? (usaSetores
+              ? (setorManual ? `Saída - ${nomeSetor(setorManual)}` : 'Saída')
+              : formData.saidaDestination === 'oficina' ? 'Saída - Oficina' : 'Saída - Balcão')
             : formData.category,
         payment_method: formData.payment_method,
         date: todayDate,
         notes: formData.notes,
+        setor_id: formData.type !== 'retirada' ? setorManual : null,
       });
     }
 
@@ -237,6 +246,7 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder, foco, onFocoU
       transactionDate: '',
     });
     setSelectedProductId(undefined);
+    setSetorManual(null);
     setShowForm(false);
   };
 
@@ -298,6 +308,11 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder, foco, onFocoU
   };
 
   const applyEntryFilter = (transactions: CashFlow[]) => {
+    if (usaSetores) {
+      if (filtroSetor === 'all') return transactions;
+      if (filtroSetor === 'none') return transactions.filter((e) => !e.setor_id);
+      return transactions.filter((e) => e.setor_id === filtroSetor);
+    }
     if (entrySourceFilter === 'all') return transactions;
     if (entrySourceFilter === 'os-only') {
       return transactions.filter((entry: CashFlow) => isOrderEntry(entry));
@@ -539,7 +554,10 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder, foco, onFocoU
                       {entry.category}
                     </p>
                   )}
-                  {entry.type === 'saida' && (entry.category?.includes('Oficina') || entry.category?.includes('Balcão')) && (
+                  {usaSetores && entry.setor_id && (
+                    <p className="text-xs font-medium text-sky-500 mb-1">Setor: {nomeSetor(entry.setor_id as string | null) ?? '—'}</p>
+                  )}
+                  {!usaSetores && entry.type === 'saida' && (entry.category?.includes('Oficina') || entry.category?.includes('Balcão')) && (
                     <p className="text-xs font-medium text-amber-500 mb-1">
                       Destino: {entry.category.includes('Oficina') ? 'Oficina' : 'Balcão'}
                     </p>
@@ -595,7 +613,19 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder, foco, onFocoU
     );
   };
 
-  const renderEntrySourceFilter = () => (
+  const renderEntrySourceFilter = () => usaSetores ? (
+    <div className="w-full md:w-[280px]">
+      <Label htmlFor="entry-source-filter" className="text-xs text-muted-foreground">Setor</Label>
+      <Select value={filtroSetor} onValueChange={setFiltroSetor}>
+        <SelectTrigger id="entry-source-filter" className="mt-1"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todos os setores</SelectItem>
+          {todosSetores.map((s) => <SelectItem key={s.id} value={s.id}>{s.nome}{s.ativo ? '' : ' (inativo)'}</SelectItem>)}
+          <SelectItem value="none">Sem setor (despesas gerais, retiradas...)</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  ) : (
     <div className="w-full md:w-[280px]">
       <Label htmlFor="entry-source-filter" className="text-xs text-muted-foreground">
         Mostrar entradas
@@ -802,8 +832,21 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder, foco, onFocoU
                         </SelectContent>
                       </Select>
                       
+                      {/* Setor do lançamento (loja com setores) */}
+                      {usaSetores && formData.type !== 'retirada' && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          <Button type="button" size="sm" className="h-7 text-xs" variant={!setorManual ? 'default' : 'outline'} onClick={() => setSetorManual(null)}>
+                            Sem setor
+                          </Button>
+                          {setoresAtivos.map((s) => (
+                            <Button key={s.id} type="button" size="sm" className="h-7 text-xs" variant={setorManual === s.id ? 'default' : 'outline'} onClick={() => setSetorManual(s.id)}>
+                              {s.nome}
+                            </Button>
+                          ))}
+                        </div>
+                      )}
                       {/* Saída Destination Selector - below select */}
-                      {formData.type === 'saida' && (
+                      {!usaSetores && formData.type === 'saida' && (
                         <div className="mt-2 flex gap-2">
                           <Button
                             type="button"

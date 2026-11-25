@@ -283,6 +283,8 @@ export interface CashFlow {
   encomenda_id?: string | null;
   /** Este lançamento é o estorno de outro (id do original). */
   estorno_de?: string | null;
+  /** Setor da venda (Balcão, Online, Estofaria...) */
+  setor_id?: string | null;
   /** Preenchido quando o lançamento foi estornado. */
   estornado_em?: string | null;
   estorno_motivo?: string | null;

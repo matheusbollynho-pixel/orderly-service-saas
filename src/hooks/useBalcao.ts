@@ -13,6 +13,8 @@ export interface PaymentEntry {
 export interface BalcaoOrder {
   id: string;
   numero: number;
+  /** Setor da venda (Balcão, Online...) */
+  setor_id?: string | null;
   client_name: string | null;
   client_cpf: string | null;
   client_phone: string | null;
