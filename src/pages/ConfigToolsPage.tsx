@@ -14,9 +14,11 @@ import { Settings, Wallet, MessageSquare, CalendarCheck, Star, Cake, ShoppingCar
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import { Tags } from 'lucide-react';
+import { AVISO_LOJISTA_PADRAO, VARIAVEIS_AVISO_LOJISTA, montarAvisoLojista } from '../../supabase/functions/_shared/avisoLojista';
 import { toast } from 'sonner';
 
-type MessageKey = 'whatsapp_confirmation_template' | 'whatsapp_satisfaction_template' | 'whatsapp_birthday_template' | 'whatsapp_balcao_followup_template';
+type MessageKey = 'whatsapp_confirmation_template' | 'whatsapp_satisfaction_template' | 'whatsapp_birthday_template' | 'whatsapp_balcao_followup_template' | 'whatsapp_lojista_aviso_template';
 
 interface MessageConfig {
   key: MessageKey;
@@ -70,6 +72,17 @@ const MESSAGE_CONFIGS: MessageConfig[] = [
       .replace(/\{\{numero\}\}/g, '42')
       .replace(/\{\{atendente\}\}/g, `*Carlos* - ${c}`)
       .replace(/\{\{link\}\}/g, 'https://seusite.com/avaliar/loja'),
+  },
+  {
+    key: 'whatsapp_lojista_aviso_template',
+    label: 'Preço especial vencendo',
+    icon: Tags,
+    variables: VARIAVEIS_AVISO_LOJISTA,
+    preview: (t, c) => {
+      const hoje = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);
+      const d = new Date(`${hoje}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 3);
+      return montarAvisoLojista(t, { nome: 'João', grupo: 'Lojista', loja: c, validoAte: d.toISOString().slice(0, 10), hoje, compraMinima: 300, validadeDias: 30 });
+    },
   },
 ];
 
@@ -142,6 +155,7 @@ export default function ConfigToolsPage() {
     whatsapp_satisfaction_template: '',
     whatsapp_birthday_template: '',
     whatsapp_balcao_followup_template: '',
+    whatsapp_lojista_aviso_template: '',
   });
   const [selectedMessage, setSelectedMessage] = useState<MessageKey>('whatsapp_confirmation_template');
   const [initialized, setInitialized] = useState(false);
@@ -174,6 +188,7 @@ export default function ConfigToolsPage() {
         whatsapp_satisfaction_template: settings.whatsapp_satisfaction_template,
         whatsapp_birthday_template: settings.whatsapp_birthday_template,
         whatsapp_balcao_followup_template: settings.whatsapp_balcao_followup_template,
+        whatsapp_lojista_aviso_template: settings.whatsapp_lojista_aviso_template || AVISO_LOJISTA_PADRAO,
       });
       setInitialized(true);
     }

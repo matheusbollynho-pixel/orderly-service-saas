@@ -54,6 +54,9 @@ verify_jwt = false
 [functions.validade-alertas]
 verify_jwt = false
 
+[functions.lojista-aviso-vencimento]
+verify_jwt = false
+
 [functions.crisis-alert]
 verify_jwt = false
 

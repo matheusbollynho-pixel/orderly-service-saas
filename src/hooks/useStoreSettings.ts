@@ -15,6 +15,8 @@ export interface StoreSettings {
   whatsapp_satisfaction_template: string;
   whatsapp_birthday_template: string;
   whatsapp_balcao_followup_template: string;
+  /** Aviso de preço especial (Lojista etc.) vencendo; vazio = texto padrão */
+  whatsapp_lojista_aviso_template?: string | null;
   max_agendamentos_dia: number;
   max_por_horario: number; // motos aceitas no mesmo horário
   ai_enabled: boolean;

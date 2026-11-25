@@ -12,6 +12,10 @@ export interface TipoCliente {
   vale_pecas_os?: boolean;
   /** Serviço (mão de obra) na OS sai com o desconto % */
   vale_servico_os?: boolean;
+  /** Avisa o cliente no WhatsApp X dias antes de vencer (null = não avisa) */
+  aviso_dias?: number | null;
+  /** Texto próprio do aviso (vazio = padrão) */
+  aviso_texto?: string | null;
 }
 
 /** Hoje no fuso da loja (AAAA-MM-DD) */

@@ -17,6 +17,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { confirmar } from '@/components/v2/Confirmacao';
 import { useTiposCliente } from '@/hooks/useTiposCliente';
+import { montarAvisoLojista } from '../../supabase/functions/_shared/avisoLojista';
+import { useStoreSettings } from '@/hooks/useStoreSettings';
 import { fmtCpf, hojeISO, ondeVale, regraDoTipo, somarDias, tipoEmDia, type TipoCliente } from '@/lib/precoCliente';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -44,7 +46,7 @@ const STATUS_OS: Record<string, string> = {
   aberta: 'Aberta', em_andamento: 'Em andamento', concluida: 'Pronta', concluida_entregue: 'Entregue', cancelada: 'Cancelada',
 };
 
-type ClienteComTipo = Client & { tipo_cliente_id?: string | null; tipo_valido_ate?: string | null };
+type ClienteComTipo = Client & { tipo_cliente_id?: string | null; tipo_valido_ate?: string | null; tipo_aviso_para?: string | null; tipo_aviso_em?: string | null };
 type ClienteForm = Partial<ClienteComTipo> & { name: string };
 const VAZIO: ClienteForm = { name: '', phone: '', cpf: '', apelido: '', email: '', instagram: '', endereco: '', cidade: '', state: '', notes: '', birth_date: null, autoriza_lembretes: true, autoriza_instagram: true, tipo_cliente_id: null, tipo_valido_ate: null };
 
@@ -92,11 +94,11 @@ function ListaClientes({ onAbrir }: { onAbrir: (id: string | 'novo' | 'tipos') =
     queryFn: async (): Promise<Client[]> => {
       const base = () => {
         let q = db.from('clients').select('*');
-        if (!inativos) q = q.eq('active', true);
+        q = q.eq('active', !inativos); // chave ligada = só os desativados
         if (filtroTipo) q = q.eq('tipo_cliente_id', filtroTipo);
         return q;
       };
-      if (!termo && filtroTipo) {
+      if (!termo && (filtroTipo || inativos)) {
         const { data, error } = await base().order('name').limit(500);
         if (error) throw error;
         return data ?? [];
@@ -151,7 +153,7 @@ function ListaClientes({ onAbrir }: { onAbrir: (id: string | 'novo' | 'tipos') =
         <Input className="pl-9" placeholder="Buscar por nome, apelido, telefone, CPF ou placa" value={busca} onChange={(e) => setBusca(e.target.value)} />
       </div>
       <label className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Switch checked={inativos} onCheckedChange={setInativos} /> Mostrar desativados
+        <Switch checked={inativos} onCheckedChange={setInativos} /> Ver só os desativados
       </label>
       {tipos.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5">
@@ -163,12 +165,13 @@ function ListaClientes({ onAbrir }: { onAbrir: (id: string | 'novo' | 'tipos') =
         </div>
       )}
 
-      {!termo && !filtroTipo && <p className="text-xs text-muted-foreground">Mexidos por último. Use a busca para achar os outros.</p>}
+      {!termo && !filtroTipo && !inativos && <p className="text-xs text-muted-foreground">Mexidos por último. Use a busca para achar os outros.</p>}
+      {inativos && !isLoading && <p className="text-xs text-muted-foreground">{lista.length} cliente(s) desativado(s){termo ? ' com essa busca' : ''}. Abra a ficha para reativar.</p>}
       {filtroTipo && !isLoading && <p className="text-xs text-muted-foreground">{lista.length} cliente(s) {nomeTipo[filtroTipo]?.nome ?? ''}.</p>}
       {isLoading ? (
         <p className="text-sm text-muted-foreground py-6 text-center">Carregando...</p>
       ) : lista.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-6 text-center">{termo || filtroTipo ? 'Nenhum cliente encontrado.' : 'Nenhum cliente ainda.'}</p>
+        <p className="text-sm text-muted-foreground py-6 text-center">{inativos ? 'Nenhum cliente desativado.' : termo || filtroTipo ? 'Nenhum cliente encontrado.' : 'Nenhum cliente ainda.'}</p>
       ) : (
         <div className="space-y-1.5">
           {lista.map((c) => (
@@ -567,6 +570,9 @@ function CampoTipo({ form, tipos, pode, mudou, onMudar }: {
                 </Button>
               )}
               <span className={`text-xs font-medium ${emDia ? 'text-emerald-500' : 'text-red-500'}`}>{emDia ? 'Em dia' : 'Vencido: paga preço normal'}</span>
+              {form.tipo_aviso_em && form.tipo_aviso_para === form.tipo_valido_ate && (
+                <span className="text-xs text-muted-foreground">· aviso de vencimento enviado no WhatsApp em {dataBR(form.tipo_aviso_em)}</span>
+              )}
             </div>
           ) : null}
         </>
@@ -577,7 +583,7 @@ function CampoTipo({ form, tipos, pode, mudou, onMudar }: {
   );
 }
 
-const TIPO_NOVO = { nome: '', desconto_pct: '10', usa_preco_atacado: false, validade_dias: '30', compra_minima: '', vale_pecas_os: true, vale_servico_os: false };
+const TIPO_NOVO = { nome: '', desconto_pct: '10', usa_preco_atacado: false, validade_dias: '30', compra_minima: '', vale_pecas_os: true, vale_servico_os: false, aviso_dias: '3', aviso_texto: '' };
 
 function TiposDeCliente({ onVoltar }: { onVoltar: () => void }) {
   const { permissions } = useStore();
@@ -596,7 +602,9 @@ function TiposDeCliente({ onVoltar }: { onVoltar: () => void }) {
     if (pct < 0 || pct > 100) { toast.error('Desconto entre 0 e 100%.'); return; }
     const dias = editando.validade_dias.trim() ? Math.round(num(editando.validade_dias)) : null;
     if (dias !== null && dias <= 0) { toast.error('Validade em dias maior que zero, ou deixe vazio para não vencer.'); return; }
-    const dados = { nome, desconto_pct: pct, usa_preco_atacado: editando.usa_preco_atacado, validade_dias: dias, compra_minima: num(editando.compra_minima), ativo: editando.ativo !== false, vale_pecas_os: editando.vale_pecas_os, vale_servico_os: editando.vale_servico_os };
+    const dados = { nome, desconto_pct: pct, usa_preco_atacado: editando.usa_preco_atacado, validade_dias: dias, compra_minima: num(editando.compra_minima), ativo: editando.ativo !== false, vale_pecas_os: editando.vale_pecas_os, vale_servico_os: editando.vale_servico_os,
+      aviso_dias: dias && editando.aviso_dias.trim() ? Math.min(60, Math.max(1, Math.round(num(editando.aviso_dias)))) : null,
+      aviso_texto: editando.aviso_texto.trim() || null };
     setSalvando(true);
     const res = editando.id ? await db.from('tipos_cliente').update(dados).eq('id', editando.id) : await db.from('tipos_cliente').insert(dados);
     setSalvando(false);
@@ -625,11 +633,12 @@ function TiposDeCliente({ onVoltar }: { onVoltar: () => void }) {
         <p className="text-sm text-muted-foreground py-4 text-center">Nenhum grupo ainda.</p>
       ) : null}
       {tipos.map((t) => (
-        <button key={t.id} type="button" disabled={!pode} onClick={() => setEditando({ id: t.id, ativo: t.ativo, nome: t.nome, desconto_pct: String(t.desconto_pct), usa_preco_atacado: t.usa_preco_atacado, validade_dias: t.validade_dias ? String(t.validade_dias) : '', compra_minima: t.compra_minima ? String(t.compra_minima) : '', vale_pecas_os: t.vale_pecas_os !== false, vale_servico_os: !!t.vale_servico_os })}
+        <button key={t.id} type="button" disabled={!pode} onClick={() => setEditando({ id: t.id, ativo: t.ativo, nome: t.nome, desconto_pct: String(t.desconto_pct), usa_preco_atacado: t.usa_preco_atacado, validade_dias: t.validade_dias ? String(t.validade_dias) : '', compra_minima: t.compra_minima ? String(t.compra_minima) : '', vale_pecas_os: t.vale_pecas_os !== false, vale_servico_os: !!t.vale_servico_os, aviso_dias: t.aviso_dias ? String(t.aviso_dias) : '', aviso_texto: t.aviso_texto ?? '' })}
           className={`w-full text-left rounded-lg border bg-card px-3 py-2 hover:bg-muted/40 ${t.ativo ? '' : 'opacity-60'}`}>
           <p className="text-sm font-medium">{t.nome}{t.ativo ? '' : ' · desativado'}</p>
           <p className="text-xs text-muted-foreground">{regraDoTipo(t)}</p>
           <p className="text-[11px] text-muted-foreground">{ondeVale(t)}</p>
+          {t.validade_dias ? <p className="text-[11px] text-muted-foreground">{t.aviso_dias ? `Avisa o cliente no WhatsApp ${t.aviso_dias} dia(s) antes de vencer` : 'Sem aviso no WhatsApp'}</p> : null}
         </button>
       ))}
       {pode && !editando && <Button size="sm" onClick={() => setEditando({ ...TIPO_NOVO, nome: tipos.length === 0 ? 'Lojista' : '' })}><Plus className="h-4 w-4 mr-1" /> Novo grupo</Button>}
@@ -658,6 +667,9 @@ function TiposDeCliente({ onVoltar }: { onVoltar: () => void }) {
               <span>Serviço (mão de obra) na OS<span className="block text-xs text-muted-foreground">O valor digitado do serviço sai com o desconto em % acima.</span></span>
             </label>
           </div>
+          {editando.validade_dias.trim() && (
+            <AvisoWhatsApp editando={editando} onMudar={(c) => setEditando({ ...editando, ...c })} />
+          )}
           {editando.id && (
             <label className="flex items-center gap-2 text-sm">
               <Switch checked={editando.ativo !== false} onCheckedChange={(v) => setEditando({ ...editando, ativo: v })} /> Grupo ativo
@@ -668,6 +680,46 @@ function TiposDeCliente({ onVoltar }: { onVoltar: () => void }) {
             <Button size="sm" variant="ghost" onClick={() => setEditando(null)}>Cancelar</Button>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+function AvisoWhatsApp({ editando, onMudar }: {
+  editando: typeof TIPO_NOVO;
+  onMudar: (c: Partial<typeof TIPO_NOVO>) => void;
+}) {
+  const { settings } = useStoreSettings();
+  const storeName = (settings as { company_name?: string } | null)?.company_name;
+  const ligado = !!editando.aviso_dias.trim();
+  const hoje = hojeISO();
+  const dias = Math.max(1, Math.round(parseFloat(editando.aviso_dias) || 3));
+  const previa = montarAvisoLojista((settings as { whatsapp_lojista_aviso_template?: string | null } | null)?.whatsapp_lojista_aviso_template, {
+    nome: 'João', grupo: editando.nome.trim() || 'Lojista', loja: storeName || 'sua loja',
+    validoAte: somarDias(hoje, dias), hoje,
+    compraMinima: parseFloat(String(editando.compra_minima).replace(',', '.')) || 0,
+    validadeDias: Math.round(parseFloat(editando.validade_dias) || 30),
+  });
+  return (
+    <div className="rounded-lg border p-2.5 space-y-2">
+      <label className="flex items-start gap-2 text-sm">
+        <Switch checked={ligado} onCheckedChange={(v) => onMudar({ aviso_dias: v ? '3' : '' })} />
+        <span>Avisar o cliente no WhatsApp antes de vencer
+          <span className="block text-xs text-muted-foreground">Sai sozinho, um de cada vez (no máximo 1 a cada 10 minutos, das 9h às 18h). Só para quem aceita lembretes no WhatsApp.</span>
+        </span>
+      </label>
+      {ligado && (
+        <>
+          <div className="flex items-center gap-2 text-sm">
+            Avisar
+            <Input inputMode="numeric" className="h-8 w-16" value={editando.aviso_dias} onChange={(e) => onMudar({ aviso_dias: e.target.value.replace(/\D/g, '').slice(0, 2) })} />
+            dia(s) antes de vencer
+          </div>
+          <div className="rounded-md bg-muted/40 p-2 text-xs whitespace-pre-wrap">
+            <p className="mb-1 font-semibold text-muted-foreground">Como chega (exemplo). Para mudar o texto: engrenagem → Mensagens → Preço especial vencendo.</p>
+            {previa}
+          </div>
+        </>
       )}
     </div>
   );
