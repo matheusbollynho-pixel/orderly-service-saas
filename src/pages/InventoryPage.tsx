@@ -25,7 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import {
+import { FileUp,
   Package,
   Plus,
   Search,
@@ -48,6 +48,7 @@ import { useMechanics } from '@/hooks/useMechanics';
 import { useColaboradorLogado } from '@/hooks/useColaboradorLogado';
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import { useTiposCliente } from '@/hooks/useTiposCliente';
+import { EntradaXml } from '@/components/estoque/EntradaXml';
 import { UpgradeModal } from '@/components/UpgradeModal';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -798,6 +799,7 @@ export default function InventoryPage() {
     return [...new Set(nomes)].sort((a, b) => a.localeCompare(b, 'pt-BR'));
   }, [atendentes, mechanics, eu]);
   const [search, setSearch] = useState('');
+  const [xmlOpen, setXmlOpen] = useState(false);
   const [tab, setTab] = useState('produtos');
   const [filterLowStock, setFilterLowStock] = useState(false);
 
@@ -888,10 +890,16 @@ export default function InventoryPage() {
         <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
           <Package className="h-5 w-5" /> Estoque
         </h2>
-        <Button size="sm" onClick={handleOpenNew}>
-          <Plus className="h-4 w-4 mr-1" /> Novo produto
-        </Button>
+        <div className="flex gap-1.5">
+          <Button size="sm" variant="outline" onClick={() => setXmlOpen(true)}>
+            <FileUp className="h-4 w-4 mr-1" /> Entrada por XML
+          </Button>
+          <Button size="sm" onClick={handleOpenNew}>
+            <Plus className="h-4 w-4 mr-1" /> Novo produto
+          </Button>
+        </div>
       </div>
+      <EntradaXml open={xmlOpen} onClose={() => setXmlOpen(false)} products={products} usaAlmox={usaAlmox} equipe={equipe} />
 
       {/* Alerta estoque baixo – clicável para filtrar */}
       {lowStock.length > 0 && (
