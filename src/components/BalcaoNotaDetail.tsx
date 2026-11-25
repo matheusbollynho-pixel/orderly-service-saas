@@ -1,6 +1,8 @@
 import { confirmar } from '@/components/v2/Confirmacao';
 import { BuscaCliente } from '@/components/v2/BuscaCliente';
 import { matchesSearch } from '@/lib/textSearch';
+import { useTipoDoCliente, useTiposCliente } from '@/hooks/useTiposCliente';
+import { precoParaCliente, regraDoTipo, tipoEmDia, type TipoCliente } from '@/lib/precoCliente';
 import { useState, useRef, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBalcao, type BalcaoOrder, type BalcaoItem, type PaymentEntry } from '@/hooks/useBalcao';
@@ -124,6 +126,16 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
 
   const activeProducts = products.filter(p => p.active !== false);
 
+  // ── Tipo do cliente (Lojista etc.): preço diferente ─────────────
+  const { data: tiposCli = [], isLoading: carregandoTipos } = useTiposCliente();
+  const { data: tipoCli } = useTipoDoCliente(order.client_id);
+  const tipoDoCliente = order.client_id ? tiposCli.find(t => t.id === tipoCli?.tipo_cliente_id) ?? null : null;
+  const tipoEfetivo: TipoCliente | null = tipoDoCliente && tipoEmDia(tipoDoCliente, tipoCli?.tipo_valido_ate) ? tipoDoCliente : null;
+  const tipoCarregado = !order.client_id || (tipoCli !== undefined && !carregandoTipos);
+  // undefined = ainda não sabe o tipo desta nota (a 1ª leitura não mexe nos preços)
+  const tipoAplicadoRef = useRef<string | null | undefined>(undefined);
+  const precoDe = (p: InventoryProduct) => precoParaCliente(p as InventoryProduct & { preco_atacado?: number | null }, tipoEfetivo);
+
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node))
@@ -154,6 +166,41 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   };
 
   const handleBlurDiscount = () => saveTotals(discPct);
+
+  // Trocou o cliente (ou o tipo venceu/entrou): itens do estoque com o preço do tipo anterior
+  // passam para o preço do novo. Preço mexido à mão fica como está.
+  const reprecificar = async (antigo: TipoCliente | null, novo: TipoCliente | null) => {
+    let sub = 0;
+    let mudou = 0;
+    for (const i of items) {
+      let preco = i.unit_price;
+      const prod = i.type === 'estoque' && i.product_id ? products.find(p => p.id === i.product_id) : undefined;
+      if (prod) {
+        const pa = prod as InventoryProduct & { preco_atacado?: number | null };
+        const np = precoParaCliente(pa, novo);
+        if (Math.abs(i.unit_price - precoParaCliente(pa, antigo)) < 0.005 && Math.abs(np - i.unit_price) >= 0.005) {
+          await updateItem({ id: i.id, unit_price: np });
+          preco = np;
+          mudou++;
+        }
+      }
+      sub += preco * i.quantity;
+    }
+    if (mudou) {
+      await saveTotals(discPct, sub);
+      toast.success(novo ? `Preço de ${novo.nome} aplicado em ${mudou} item(ns)` : `Preço normal de volta em ${mudou} item(ns)`);
+    }
+  };
+
+  useEffect(() => {
+    if (!tipoCarregado) return;
+    const novoId = tipoEfetivo?.id ?? null;
+    const antes = tipoAplicadoRef.current;
+    tipoAplicadoRef.current = novoId;
+    if (antes === undefined || antes === novoId || !isEditable) return;
+    reprecificar(tiposCli.find(t => t.id === antes) ?? null, tipoEfetivo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tipoCarregado, tipoEfetivo?.id]);
 
   const handleChangePct = (val: string) => {
     setDiscountPct(val);
@@ -379,7 +426,8 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   const handleSelectProduct = (p: InventoryProduct) => {
     setSelectedProduct(p);
     setNewDesc(stripAccents(p.name));
-    if (p.sale_price > 0) setNewPrice(String(p.sale_price));
+    const preco = precoDe(p);
+    if (preco > 0) setNewPrice(String(preco));
     setShowSuggestions(false);
   };
 
@@ -397,7 +445,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
         toast.error(`Estoque insuficiente (disponível: ${selectedProduct.stock_current - qtdNoCarrinho} ${selectedProduct.unit})`);
         return;
       }
-      effectivePrice = price || (selectedProduct.sale_price ?? selectedProduct.cost_price ?? 0);
+      effectivePrice = price || precoDe(selectedProduct) || (selectedProduct.cost_price ?? 0);
       await addItem({
         order_id: order.id,
         type: 'estoque',
@@ -812,6 +860,13 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
               ) : (
                 <Input value={editClientName} disabled className="mt-1 h-8 text-sm bg-background" />
               )}
+              {tipoDoCliente && (
+                <p className={`mt-1 text-[11px] font-medium ${tipoEfetivo ? 'text-emerald-500' : 'text-amber-500'}`}>
+                  {tipoEfetivo
+                    ? `${tipoDoCliente.nome}: ${regraDoTipo(tipoDoCliente).split(' · ')[0]}`
+                    : `${tipoDoCliente.nome} vencido${tipoCli?.tipo_valido_ate ? ` em ${new Date(tipoCli.tipo_valido_ate + 'T12:00:00').toLocaleDateString('pt-BR')}` : ''}: preço normal.${tipoDoCliente.compra_minima > 0 ? ` Compra a partir de R$ ${tipoDoCliente.compra_minima.toFixed(2)} renova para as próximas.` : ' Esta compra renova para as próximas.'}`}
+                </p>
+              )}
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -991,7 +1046,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
                           <div className="flex-1 min-w-0">
                             <span className="font-medium block truncate">{p.name}</span>
                             <span className="text-muted-foreground">
-                              {p.code && `${p.code} · `}Estoque: {p.stock_current} {p.unit} · R$ {(p.sale_price ?? 0).toFixed(2)}
+                              {p.code && `${p.code} · `}Estoque: {p.stock_current} {p.unit} · R$ {precoDe(p).toFixed(2)}{tipoEfetivo && precoDe(p) !== (p.sale_price ?? 0) ? ` (${tipoEfetivo.nome})` : ''}
                             </span>
                           </div>
                           {p.stock_current <= 0 && <span className="text-red-500 text-[10px]">Zerado</span>}

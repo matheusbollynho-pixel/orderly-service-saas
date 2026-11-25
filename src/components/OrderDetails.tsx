@@ -2013,6 +2013,7 @@ const renderDeliverySection = () => {
                 onAddMaterial={onAddMaterial}
                 onRemoveMaterial={onRemoveMaterial}
                 onUpdateMaterial={onUpdateMaterial}
+                clientId={order.client_id}
                 disabled={order.status === 'concluida_entregue'}
                 loadingAdd={isUpdating}
                 loadingUpdate={isUpdating}

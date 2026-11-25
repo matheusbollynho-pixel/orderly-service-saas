@@ -98,6 +98,7 @@ export type Database = {
           sale_price: number
           profit_margin: number | null
           promotional_price: number | null
+          preco_atacado: number | null
           active: boolean
           status: 'ativo' | 'inativo' | 'em_falta' | 'descontinuado'
           notes: string | null
@@ -139,6 +140,7 @@ export type Database = {
           sale_price?: number
           profit_margin?: number | null
           promotional_price?: number | null
+          preco_atacado?: number | null
           active?: boolean
           status?: 'ativo' | 'inativo' | 'em_falta' | 'descontinuado'
           notes?: string | null
@@ -180,6 +182,7 @@ export type Database = {
           sale_price?: number
           profit_margin?: number | null
           promotional_price?: number | null
+          preco_atacado?: number | null
           active?: boolean
           status?: 'ativo' | 'inativo' | 'em_falta' | 'descontinuado'
           notes?: string | null

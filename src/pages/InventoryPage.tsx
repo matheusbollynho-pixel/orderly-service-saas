@@ -47,6 +47,7 @@ import { useTeamMembers } from '@/hooks/useTeamMembers';
 import { useMechanics } from '@/hooks/useMechanics';
 import { useColaboradorLogado } from '@/hooks/useColaboradorLogado';
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
+import { useTiposCliente } from '@/hooks/useTiposCliente';
 import { UpgradeModal } from '@/components/UpgradeModal';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -168,6 +169,9 @@ interface ProductFormProps {
 function ProductFormDialog({ open, product, isEditing, isSaving, usaAlmox, onChange, onBulkChange, onSave, onClose }: ProductFormProps) {
   // Sem "Ajustar estoque": o saldo não é digitado aqui (entra por movimentação). O banco também confere.
   const podeAjustar = useStore().permissions.ajustar_estoque !== false;
+  // Preço de atacado só aparece se a loja tem um tipo de cliente que usa ele (Clientes > Tipos)
+  const { data: tiposCliente = [] } = useTiposCliente();
+  const usaAtacado = tiposCliente.some(t => t.ativo && t.usa_preco_atacado) || Number(product.preco_atacado) > 0;
   // Campos novos (almoxarifado e fiscais) ainda fora dos tipos gerados do banco
   const extra = product as typeof product & {
     stock_almox?: number | null; ncm?: string | null; cest?: string | null;
@@ -540,6 +544,12 @@ function ProductFormDialog({ open, product, isEditing, isSaving, usaAlmox, onCha
                 <Label>Preço promocional (R$)</Label>
                 <Input type="number" min="0" step="0.01" value={product.promotional_price ?? ''} onChange={(e) => onChange('promotional_price', e.target.value ? parseFloat(e.target.value) : null)} placeholder="Opcional" />
               </div>
+              {usaAtacado && (
+                <div>
+                  <Label>Preço de atacado (R$)</Label>
+                  <Input type="number" min="0" step="0.01" value={product.preco_atacado ?? ''} onChange={(e) => onChange('preco_atacado', e.target.value ? parseFloat(e.target.value) : null)} placeholder="Para lojista" />
+                </div>
+              )}
             </div>
           </section>
 

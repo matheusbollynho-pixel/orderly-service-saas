@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowLeft, Car, ChevronRight, Plus, Search, UserRound } from 'lucide-react';
+import { ArrowLeft, Car, ChevronRight, Plus, Search, Tags, UserRound } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useStore } from '@/contexts/StoreContext';
 import { useVehicleLabel } from '@/hooks/useVehicleLabel';
@@ -16,6 +16,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { confirmar } from '@/components/v2/Confirmacao';
+import { useTiposCliente } from '@/hooks/useTiposCliente';
+import { fmtCpf, hojeISO, ondeVale, regraDoTipo, somarDias, tipoEmDia, type TipoCliente } from '@/lib/precoCliente';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
@@ -42,8 +44,9 @@ const STATUS_OS: Record<string, string> = {
   aberta: 'Aberta', em_andamento: 'Em andamento', concluida: 'Pronta', concluida_entregue: 'Entregue', cancelada: 'Cancelada',
 };
 
-type ClienteForm = Partial<Client> & { name: string };
-const VAZIO: ClienteForm = { name: '', phone: '', cpf: '', apelido: '', email: '', instagram: '', endereco: '', cidade: '', state: '', notes: '', birth_date: null, autoriza_lembretes: true, autoriza_instagram: true };
+type ClienteComTipo = Client & { tipo_cliente_id?: string | null; tipo_valido_ate?: string | null };
+type ClienteForm = Partial<ClienteComTipo> & { name: string };
+const VAZIO: ClienteForm = { name: '', phone: '', cpf: '', apelido: '', email: '', instagram: '', endereco: '', cidade: '', state: '', notes: '', birth_date: null, autoriza_lembretes: true, autoriza_instagram: true, tipo_cliente_id: null, tipo_valido_ate: null };
 
 interface Props {
   onOpenOrder?: (id: string) => void;
@@ -52,7 +55,8 @@ interface Props {
 }
 
 export default function ClientesPage({ onOpenOrder, onOpenBalcaoOrder, onOpenFiado }: Props) {
-  const [aberto, setAberto] = useState<string | 'novo' | null>(null);
+  const [aberto, setAberto] = useState<string | 'novo' | 'tipos' | null>(null);
+  if (aberto === 'tipos') return <TiposDeCliente onVoltar={() => setAberto(null)} />;
   if (aberto) {
     return <FichaCliente id={aberto === 'novo' ? null : aberto} onVoltar={() => setAberto(null)} onCriado={(id) => setAberto(id)}
       onOpenOrder={onOpenOrder} onOpenBalcaoOrder={onOpenBalcaoOrder} onOpenFiado={onOpenFiado} />;
@@ -62,8 +66,12 @@ export default function ClientesPage({ onOpenOrder, onOpenBalcaoOrder, onOpenFia
 
 // ---------------------------------------------------------------- lista
 
-function ListaClientes({ onAbrir }: { onAbrir: (id: string | 'novo') => void }) {
-  const { storeId } = useStore();
+function ListaClientes({ onAbrir }: { onAbrir: (id: string | 'novo' | 'tipos') => void }) {
+  const { storeId, permissions } = useStore();
+  const { data: tipos = [] } = useTiposCliente();
+  const [filtroTipo, setFiltroTipo] = useState<string | null>(null);
+  const nomeTipo = useMemo(() => Object.fromEntries(tipos.map((t) => [t.id, t])), [tipos]);
+  const hoje = hojeISO();
   const [busca, setBusca] = useState('');
   const [termo, setTermo] = useState('');
   const [inativos, setInativos] = useState(false);
@@ -79,14 +87,20 @@ function ListaClientes({ onAbrir }: { onAbrir: (id: string | 'novo') => void }) 
   });
 
   const { data: lista = [], isLoading } = useQuery({
-    queryKey: ['clientes-lista', storeId, termo, inativos],
+    queryKey: ['clientes-lista', storeId, termo, inativos, filtroTipo],
     enabled: !!storeId,
     queryFn: async (): Promise<Client[]> => {
       const base = () => {
         let q = db.from('clients').select('*');
         if (!inativos) q = q.eq('active', true);
+        if (filtroTipo) q = q.eq('tipo_cliente_id', filtroTipo);
         return q;
       };
+      if (!termo && filtroTipo) {
+        const { data, error } = await base().order('name').limit(500);
+        if (error) throw error;
+        return data ?? [];
+      }
       if (!termo) {
         const { data, error } = await base().order('updated_at', { ascending: false }).limit(30);
         if (error) throw error;
@@ -124,7 +138,12 @@ function ListaClientes({ onAbrir }: { onAbrir: (id: string | 'novo') => void }) 
           <h2 className="text-lg font-semibold">Clientes</h2>
           <p className="text-xs text-muted-foreground">{total != null ? `${total.toLocaleString('pt-BR')} clientes ativos` : ' '}</p>
         </div>
-        <Button size="sm" onClick={() => onAbrir('novo')}><Plus className="h-4 w-4 mr-1" /> Novo cliente</Button>
+        <div className="flex gap-1.5">
+          {(permissions.dar_desconto !== false || tipos.length > 0) && (
+            <Button size="sm" variant="outline" onClick={() => onAbrir('tipos')}><Tags className="h-4 w-4 mr-1" /> Tipos</Button>
+          )}
+          <Button size="sm" onClick={() => onAbrir('novo')}><Plus className="h-4 w-4 mr-1" /> Novo cliente</Button>
+        </div>
       </div>
 
       <div className="relative">
@@ -134,12 +153,21 @@ function ListaClientes({ onAbrir }: { onAbrir: (id: string | 'novo') => void }) 
       <label className="flex items-center gap-2 text-xs text-muted-foreground">
         <Switch checked={inativos} onCheckedChange={setInativos} /> Mostrar desativados
       </label>
+      {tipos.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          <Button size="sm" variant={filtroTipo ? 'outline' : 'default'} className="h-7 text-xs" onClick={() => setFiltroTipo(null)}>Todos</Button>
+          {tipos.filter((t) => t.ativo).map((t) => (
+            <Button key={t.id} size="sm" variant={filtroTipo === t.id ? 'default' : 'outline'} className="h-7 text-xs" onClick={() => setFiltroTipo(t.id)}>{t.nome}</Button>
+          ))}
+        </div>
+      )}
 
-      {!termo && <p className="text-xs text-muted-foreground">Mexidos por último. Use a busca para achar os outros.</p>}
+      {!termo && !filtroTipo && <p className="text-xs text-muted-foreground">Mexidos por último. Use a busca para achar os outros.</p>}
+      {filtroTipo && !isLoading && <p className="text-xs text-muted-foreground">{lista.length} cliente(s) {nomeTipo[filtroTipo]?.nome ?? ''}.</p>}
       {isLoading ? (
         <p className="text-sm text-muted-foreground py-6 text-center">Carregando...</p>
       ) : lista.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-6 text-center">{termo ? 'Nenhum cliente encontrado.' : 'Nenhum cliente ainda.'}</p>
+        <p className="text-sm text-muted-foreground py-6 text-center">{termo || filtroTipo ? 'Nenhum cliente encontrado.' : 'Nenhum cliente ainda.'}</p>
       ) : (
         <div className="space-y-1.5">
           {lista.map((c) => (
@@ -147,9 +175,11 @@ function ListaClientes({ onAbrir }: { onAbrir: (id: string | 'novo') => void }) 
               className={`w-full text-left rounded-lg border bg-card px-3 py-2 flex items-center gap-3 hover:bg-muted/40 ${c.active === false ? 'opacity-60' : ''}`}>
               <UserRound className="h-5 w-5 text-muted-foreground flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{c.name}{c.apelido ? <span className="text-muted-foreground font-normal"> · {c.apelido}</span> : null}</p>
+                <p className="text-sm font-medium truncate">{c.name}{c.apelido ? <span className="text-muted-foreground font-normal"> · {c.apelido}</span> : null}
+                  <SeloTipo tipo={nomeTipo[(c as ClienteComTipo).tipo_cliente_id ?? '']} validoAte={(c as ClienteComTipo).tipo_valido_ate} hoje={hoje} />
+                </p>
                 <p className="text-xs text-muted-foreground truncate">
-                  {[fmtTel(c.phone), c.cpf ? `CPF ${c.cpf}` : null, c.active === false ? 'desativado' : null].filter(Boolean).join(' · ') || 'sem telefone'}
+                  {[fmtTel(c.phone), c.cpf ? `CPF ${fmtCpf(c.cpf)}` : null, c.active === false ? 'desativado' : null].filter(Boolean).join(' · ') || 'sem telefone'}
                 </p>
               </div>
               <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -168,8 +198,10 @@ function FichaCliente({ id, onVoltar, onCriado, onOpenOrder, onOpenBalcaoOrder, 
   onVoltar: () => void;
   onCriado: (id: string) => void;
 } & Props) {
-  const { storeId } = useStore();
+  const { storeId, permissions } = useStore();
   const qc = useQueryClient();
+  const { data: tipos = [] } = useTiposCliente();
+  const podeTipo = permissions.dar_desconto !== false;
   const [form, setForm] = useState<ClienteForm>(VAZIO);
   const [salvando, setSalvando] = useState(false);
 
@@ -180,10 +212,10 @@ function FichaCliente({ id, onVoltar, onCriado, onOpenOrder, onOpenBalcaoOrder, 
     queryFn: async () => {
       const { data, error } = await db.from('clients').select('*').eq('id', id).maybeSingle();
       if (error) throw error;
-      return data as Client | null;
+      return data as ClienteComTipo | null;
     },
   });
-  useEffect(() => { if (cliente) setForm({ ...VAZIO, ...cliente }); }, [cliente]);
+  useEffect(() => { if (cliente) setForm({ ...VAZIO, ...cliente, cpf: fmtCpf(cliente.cpf) }); }, [cliente]);
 
   const set = (campo: keyof ClienteForm, valor: unknown) => setForm((f) => ({ ...f, [campo]: valor }));
 
@@ -204,6 +236,10 @@ function FichaCliente({ id, onVoltar, onCriado, onOpenOrder, onOpenBalcaoOrder, 
       birth_date: form.birth_date || null,
       autoriza_lembretes: form.autoriza_lembretes !== false,
       autoriza_instagram: form.autoriza_instagram !== false,
+      // Tipo só vai junto se mudou (quem não pode dar desconto ainda consegue salvar o resto)
+      ...((form.tipo_cliente_id ?? null) !== (cliente?.tipo_cliente_id ?? null) || (form.tipo_valido_ate ?? null) !== (cliente?.tipo_valido_ate ?? null)
+        ? { tipo_cliente_id: form.tipo_cliente_id || null, tipo_valido_ate: form.tipo_cliente_id ? form.tipo_valido_ate || null : null }
+        : {}),
     };
     // Mesmo telefone em outro cliente: avisa antes de duplicar
     const vars = variantesTel(dados.phone);
@@ -219,12 +255,13 @@ function FichaCliente({ id, onVoltar, onCriado, onOpenOrder, onOpenBalcaoOrder, 
       : await db.from('clients').insert({ ...dados, store_id: storeId, active: true }).select().single();
     setSalvando(false);
     if (res.error) {
-      toast.error(res.error.code === '23505' ? 'Já existe um cliente com esse CPF.' : `Não consegui salvar: ${res.error.message}`);
+      toast.error(res.error.code === '23505' ? 'Já existe um cliente com esse CPF.' : res.error.code === '42501' ? res.error.message : `Não consegui salvar: ${res.error.message}`);
       return;
     }
     qc.invalidateQueries({ queryKey: ['clientes-lista'] });
     qc.invalidateQueries({ queryKey: ['clientes-total'] });
     qc.invalidateQueries({ queryKey: ['cliente', res.data.id] });
+    qc.invalidateQueries({ queryKey: ['cliente-tipo', res.data.id] });
     toast.success(id ? 'Cliente atualizado' : 'Cliente cadastrado');
     if (!id) onCriado(res.data.id);
   };
@@ -256,7 +293,7 @@ function FichaCliente({ id, onVoltar, onCriado, onOpenOrder, onOpenBalcaoOrder, 
           <Campo label="Nome *"><Input value={form.name} onChange={(e) => set('name', e.target.value)} /></Campo>
           <Campo label="Apelido"><Input value={form.apelido ?? ''} onChange={(e) => set('apelido', e.target.value)} /></Campo>
           <Campo label="Telefone / WhatsApp"><Input inputMode="tel" value={fmtTel(form.phone) || form.phone || ''} onChange={(e) => set('phone', e.target.value)} placeholder="(75) 99999-9999" /></Campo>
-          <Campo label="CPF"><Input inputMode="numeric" value={form.cpf ?? ''} onChange={(e) => set('cpf', e.target.value)} /></Campo>
+          <Campo label="CPF"><Input inputMode="numeric" value={form.cpf ?? ''} onChange={(e) => set('cpf', e.target.value)} onBlur={() => set('cpf', fmtCpf(form.cpf))} placeholder="000.000.000-00" /></Campo>
           <Campo label="E-mail"><Input type="email" value={form.email ?? ''} onChange={(e) => set('email', e.target.value)} /></Campo>
           <Campo label="Aniversário"><Input type="date" value={form.birth_date ?? ''} onChange={(e) => set('birth_date', e.target.value || null)} /></Campo>
           <Campo label="Instagram"><Input value={form.instagram ?? ''} onChange={(e) => set('instagram', e.target.value)} placeholder="@cliente" /></Campo>
@@ -264,6 +301,9 @@ function FichaCliente({ id, onVoltar, onCriado, onOpenOrder, onOpenBalcaoOrder, 
           <Campo label="Cidade"><Input value={form.cidade ?? ''} onChange={(e) => set('cidade', e.target.value)} /></Campo>
           <Campo label="Estado (UF)"><Input maxLength={2} value={form.state ?? ''} onChange={(e) => set('state', e.target.value.toUpperCase())} /></Campo>
         </div>
+        {tipos.length > 0 && <CampoTipo form={form} tipos={tipos} pode={podeTipo}
+          mudou={(form.tipo_cliente_id ?? null) !== (cliente?.tipo_cliente_id ?? null) || (form.tipo_valido_ate ?? null) !== (cliente?.tipo_valido_ate ?? null)}
+          onMudar={(campos) => setForm((f) => ({ ...f, ...campos }))} />}
         <Campo label="Observações"><Textarea rows={2} value={form.notes ?? ''} onChange={(e) => set('notes', e.target.value)} /></Campo>
         <div className="flex flex-wrap gap-4 text-sm">
           <label className="flex items-center gap-2"><Switch checked={form.autoriza_lembretes !== false} onCheckedChange={(v) => set('autoriza_lembretes', v)} /> Aceita lembretes no WhatsApp</label>
@@ -476,5 +516,153 @@ function Linha({ esquerda, sub, direita, onClick }: { esquerda: React.ReactNode;
       </div>
       <span className="text-sm font-medium flex-shrink-0">{direita}</span>
     </button>
+  );
+}
+
+// ---------------------------------------------------------------- tipos de cliente
+
+function SeloTipo({ tipo, validoAte, hoje }: { tipo?: TipoCliente; validoAte?: string | null; hoje: string }) {
+  if (!tipo) return null;
+  const ok = tipoEmDia(tipo, validoAte, hoje);
+  return (
+    <span className={`ml-1.5 text-[10px] font-semibold rounded px-1.5 py-0.5 align-middle ${ok ? 'bg-emerald-500/15 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>
+      {tipo.nome}{ok ? '' : ' (vencido)'}
+    </span>
+  );
+}
+
+function CampoTipo({ form, tipos, pode, mudou, onMudar }: {
+  form: ClienteForm; tipos: TipoCliente[]; pode: boolean; mudou: boolean;
+  onMudar: (c: Partial<ClienteForm>) => void;
+}) {
+  const hoje = hojeISO();
+  const tipo = tipos.find((t) => t.id === form.tipo_cliente_id);
+  const emDia = tipoEmDia(tipo, form.tipo_valido_ate, hoje);
+  const escolher = (id: string) => {
+    const t = tipos.find((x) => x.id === id);
+    onMudar({ tipo_cliente_id: t?.id ?? null, tipo_valido_ate: t?.validade_dias ? somarDias(hoje, t.validade_dias) : null });
+  };
+  return (
+    <div className="rounded-lg border p-2.5 space-y-2">
+      <p className="text-xs font-semibold">Tipo de cliente (preço no balcão)</p>
+      <div className="flex flex-wrap gap-1.5">
+        <Button type="button" size="sm" disabled={!pode} variant={!form.tipo_cliente_id ? 'default' : 'outline'} className="h-7 text-xs" onClick={() => escolher('')}>Normal</Button>
+        {tipos.filter((t) => t.ativo || t.id === form.tipo_cliente_id).map((t) => (
+          <Button key={t.id} type="button" size="sm" disabled={!pode} variant={form.tipo_cliente_id === t.id ? 'default' : 'outline'} className="h-7 text-xs" onClick={() => escolher(t.id)}>{t.nome}</Button>
+        ))}
+      </div>
+      {tipo && (
+        <>
+          <p className="text-[11px] text-muted-foreground">{regraDoTipo(tipo)}</p>
+          {tipo.validade_dias ? (
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Vale até</Label>
+                <Input type="date" className="h-8 w-40" disabled={!pode} value={form.tipo_valido_ate ?? ''} onChange={(e) => onMudar({ tipo_valido_ate: e.target.value || null })} />
+              </div>
+              {pode && (
+                <Button type="button" size="sm" variant="outline" className="h-8" onClick={() => onMudar({ tipo_valido_ate: somarDias(hoje, tipo.validade_dias!) })}>
+                  Renovar {tipo.validade_dias} dias
+                </Button>
+              )}
+              <span className={`text-xs font-medium ${emDia ? 'text-emerald-500' : 'text-red-500'}`}>{emDia ? 'Em dia' : 'Vencido: paga preço normal'}</span>
+            </div>
+          ) : null}
+        </>
+      )}
+      {!pode && <p className="text-[11px] text-muted-foreground">Só quem pode dar desconto muda o tipo.</p>}
+      {pode && mudou && <p className="text-[11px] font-medium text-amber-500">Clique em "Salvar alterações" para gravar.</p>}
+    </div>
+  );
+}
+
+const TIPO_NOVO = { nome: '', desconto_pct: '10', usa_preco_atacado: false, validade_dias: '30', compra_minima: '', vale_pecas_os: true, vale_servico_os: false };
+
+function TiposDeCliente({ onVoltar }: { onVoltar: () => void }) {
+  const { permissions } = useStore();
+  const pode = permissions.dar_desconto !== false;
+  const qc = useQueryClient();
+  const { data: tipos = [], isLoading } = useTiposCliente();
+  const [editando, setEditando] = useState<(typeof TIPO_NOVO & { id?: string; ativo?: boolean }) | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  const num = (v: string) => { const n = parseFloat(String(v).replace(',', '.')); return Number.isFinite(n) ? n : 0; };
+
+  const salvar = async () => {
+    if (!editando) return;
+    const nome = editando.nome.trim();
+    if (!nome) { toast.error('Dê um nome ao tipo (ex.: Lojista).'); return; }
+    const pct = num(editando.desconto_pct);
+    if (pct < 0 || pct > 100) { toast.error('Desconto entre 0 e 100%.'); return; }
+    const dias = editando.validade_dias.trim() ? Math.round(num(editando.validade_dias)) : null;
+    if (dias !== null && dias <= 0) { toast.error('Validade em dias maior que zero, ou deixe vazio para não vencer.'); return; }
+    const dados = { nome, desconto_pct: pct, usa_preco_atacado: editando.usa_preco_atacado, validade_dias: dias, compra_minima: num(editando.compra_minima), ativo: editando.ativo !== false, vale_pecas_os: editando.vale_pecas_os, vale_servico_os: editando.vale_servico_os };
+    setSalvando(true);
+    const res = editando.id ? await db.from('tipos_cliente').update(dados).eq('id', editando.id) : await db.from('tipos_cliente').insert(dados);
+    setSalvando(false);
+    if (res.error) { toast.error(`Não consegui salvar: ${res.error.message}`); return; }
+    qc.invalidateQueries({ queryKey: ['tipos-cliente'] });
+    setEditando(null);
+    toast.success('Tipo salvo');
+  };
+
+  return (
+    <div className="space-y-3 pb-24">
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="sm" className="px-2" onClick={onVoltar}><ArrowLeft className="h-4 w-4" /></Button>
+        <h2 className="text-lg font-semibold">Tipos de cliente</h2>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Ex.: Lojista, Lava-jato, Estética. O cliente com tipo paga o preço dele na nota de balcão (o preço entra sozinho ao escolher o cliente).
+        Com validade, o tipo vence se ele parar de comprar; uma compra a partir do valor mínimo renova sozinha.
+      </p>
+      {isLoading ? <p className="text-sm text-muted-foreground">Carregando...</p> : tipos.length === 0 && !editando ? (
+        <p className="text-sm text-muted-foreground py-4 text-center">Nenhum tipo ainda.</p>
+      ) : null}
+      {tipos.map((t) => (
+        <button key={t.id} type="button" disabled={!pode} onClick={() => setEditando({ id: t.id, ativo: t.ativo, nome: t.nome, desconto_pct: String(t.desconto_pct), usa_preco_atacado: t.usa_preco_atacado, validade_dias: t.validade_dias ? String(t.validade_dias) : '', compra_minima: t.compra_minima ? String(t.compra_minima) : '', vale_pecas_os: t.vale_pecas_os !== false, vale_servico_os: !!t.vale_servico_os })}
+          className={`w-full text-left rounded-lg border bg-card px-3 py-2 hover:bg-muted/40 ${t.ativo ? '' : 'opacity-60'}`}>
+          <p className="text-sm font-medium">{t.nome}{t.ativo ? '' : ' · desativado'}</p>
+          <p className="text-xs text-muted-foreground">{regraDoTipo(t)}</p>
+          <p className="text-[11px] text-muted-foreground">{ondeVale(t)}</p>
+        </button>
+      ))}
+      {pode && !editando && <Button size="sm" onClick={() => setEditando({ ...TIPO_NOVO })}><Plus className="h-4 w-4 mr-1" /> Novo tipo</Button>}
+      {!pode && <p className="text-xs text-muted-foreground">Só quem pode dar desconto cria ou muda os tipos.</p>}
+
+      {editando && (
+        <div className="rounded-xl border bg-card p-3 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Campo label="Nome"><Input value={editando.nome} onChange={(e) => setEditando({ ...editando, nome: e.target.value })} placeholder="Lojista" /></Campo>
+            <Campo label="Desconto (%)"><Input inputMode="decimal" value={editando.desconto_pct} onChange={(e) => setEditando({ ...editando, desconto_pct: e.target.value })} /></Campo>
+            <Campo label="Validade (dias, vazio = não vence)"><Input inputMode="numeric" value={editando.validade_dias} onChange={(e) => setEditando({ ...editando, validade_dias: e.target.value.replace(/\D/g, '') })} placeholder="30" /></Campo>
+            <Campo label="Compra mínima para renovar (R$)"><Input inputMode="decimal" value={editando.compra_minima} onChange={(e) => setEditando({ ...editando, compra_minima: e.target.value })} placeholder="0 = qualquer compra" /></Campo>
+          </div>
+          <label className="flex items-start gap-2 text-sm">
+            <Switch checked={editando.usa_preco_atacado} onCheckedChange={(v) => setEditando({ ...editando, usa_preco_atacado: v })} />
+            <span>Usar o <b>preço de atacado</b> do produto<span className="block text-xs text-muted-foreground">Preenchido no cadastro do produto. Produto sem preço de atacado usa o desconto acima.</span></span>
+          </label>
+          <div className="rounded-lg border p-2.5 space-y-2">
+            <p className="text-xs font-semibold">Onde vale (o balcão sempre vale)</p>
+            <label className="flex items-start gap-2 text-sm">
+              <Switch checked={editando.vale_pecas_os} onCheckedChange={(v) => setEditando({ ...editando, vale_pecas_os: v })} />
+              <span>Peças na OS<span className="block text-xs text-muted-foreground">Peça do estoque lançada na OS sai com o preço do tipo.</span></span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <Switch checked={editando.vale_servico_os} onCheckedChange={(v) => setEditando({ ...editando, vale_servico_os: v })} />
+              <span>Serviço (mão de obra) na OS<span className="block text-xs text-muted-foreground">O valor digitado do serviço sai com o desconto em % acima.</span></span>
+            </label>
+          </div>
+          {editando.id && (
+            <label className="flex items-center gap-2 text-sm">
+              <Switch checked={editando.ativo !== false} onCheckedChange={(v) => setEditando({ ...editando, ativo: v })} /> Tipo ativo
+            </label>
+          )}
+          <div className="flex gap-2">
+            <Button size="sm" onClick={salvar} disabled={salvando}>{salvando ? 'Salvando...' : 'Salvar'}</Button>
+            <Button size="sm" variant="ghost" onClick={() => setEditando(null)}>Cancelar</Button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

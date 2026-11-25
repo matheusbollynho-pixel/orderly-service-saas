@@ -92,6 +92,7 @@ export function MaterialsPage({
             onAddMaterial={onAddMaterial}
             onRemoveMaterial={onRemoveMaterial}
             onUpdateMaterial={onUpdateMaterial}
+            clientId={order.client_id}
             disabled={order.status === 'concluida' || disabledAll}
             loadingAdd={isCreatingMaterial}
             loadingUpdate={isUpdatingMaterial}
