@@ -4,6 +4,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useStore } from '@/contexts/StoreContext';
 import { useAuth } from '@/hooks/useAuth';
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
+import { useMechanics } from '@/hooks/useMechanics';
+import { useTeamMembers } from '@/hooks/useTeamMembers';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { MemberPermissions } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { UserPlus, Trash2, Mail, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { confirmar } from '@/components/v2/Confirmacao';
 
 type Member = {
   id: string;
@@ -21,6 +25,8 @@ type Member = {
   role: string;
   active: boolean;
   permissions: MemberPermissions | null;
+  colaborador_tipo: 'mecanico' | 'atendente' | null;
+  colaborador_id: string | null;
 };
 
 const PERMISSION_LABELS: { key: keyof MemberPermissions; label: string }[] = [
@@ -40,10 +46,18 @@ const PERMISSION_LABELS: { key: keyof MemberPermissions; label: string }[] = [
   { key: 'satisfacao', label: 'Satisfação' },
 ];
 
+// Ações dentro das telas (o banco também confere)
+const ACOES: { key: keyof MemberPermissions; label: string; ajuda: string }[] = [
+  { key: 'editar_itens_os', label: 'Editar ou remover itens da OS', ajuda: 'Desligado: só adiciona itens. Tirar ou mudar quantidade/valor fica com o gerente.' },
+];
+
+const COMPARTILHADA = 'compartilhada';
+
 const DEFAULT_PERMISSIONS: MemberPermissions = {
   nova_os: true, express: true, orders: true, agenda: true, quadro: true,
   caixa: false, balcao: false, relatorios: false, boletos: false, fiados: false,
   estoque: false, equipe: false, pos_venda: false, satisfacao: false,
+  editar_itens_os: true,
 };
 
 const MAX_MEMBERS: Record<string, number> = { basic: 2, trial: 2 };
@@ -58,13 +72,16 @@ export default function CollaboratorsPage() {
   const [inviting, setInviting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editPerms, setEditPerms] = useState<MemberPermissions>(DEFAULT_PERMISSIONS);
+  const [editQuem, setEditQuem] = useState<string>(COMPARTILHADA);
+  const { mechanics } = useMechanics();
+  const { members: atendentes } = useTeamMembers();
 
   const { data: members = [], isLoading } = useQuery({
     queryKey: ['collaborators', storeId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('store_members' as never)
-        .select('id, user_id, email, role, active, permissions')
+        .select('id, user_id, email, role, active, permissions, colaborador_tipo, colaborador_id')
         .eq('store_id', storeId!)
         .eq('active', true)
         .order('role');
@@ -75,11 +92,13 @@ export default function CollaboratorsPage() {
   });
 
   const updatePermissions = useMutation({
-    mutationFn: async ({ id, permissions }: { id: string; permissions: MemberPermissions }) => {
-      const { error } = await supabase
-        .from('store_members' as never)
-        .update({ permissions } as never)
-        .eq('id', id);
+    mutationFn: async ({ id, permissions, quem }: { id: string; permissions: MemberPermissions; quem: string }) => {
+      const [tipo, colaboradorId] = quem === COMPARTILHADA ? [null, null] : quem.split(':');
+      // Função no banco confere se quem salva é o dono desta loja (antes o update não gravava nada)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any).rpc('salvar_colaborador', {
+        p_member_id: id, p_permissions: permissions, p_colaborador_tipo: tipo, p_colaborador_id: colaboradorId,
+      });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -92,10 +111,8 @@ export default function CollaboratorsPage() {
 
   const removeMember = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('store_members' as never)
-        .update({ active: false } as never)
-        .eq('id', id);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any).rpc('remover_colaborador', { p_member_id: id });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -133,7 +150,15 @@ export default function CollaboratorsPage() {
 
   const startEdit = (member: Member) => {
     setEditingId(member.id);
-    setEditPerms({ ...DEFAULT_PERMISSIONS, ...(member.permissions || {}) });
+    // Quem já usava continua igual: ação não marcada = liberada
+    setEditPerms({ ...DEFAULT_PERMISSIONS, editar_itens_os: true, ...(member.permissions || {}) });
+    setEditQuem(member.colaborador_tipo && member.colaborador_id ? `${member.colaborador_tipo}:${member.colaborador_id}` : COMPARTILHADA);
+  };
+
+  const nomeDoColaborador = (m: Member) => {
+    if (!m.colaborador_tipo || !m.colaborador_id) return null;
+    const lista = m.colaborador_tipo === 'mecanico' ? mechanics : atendentes;
+    return lista.find((p) => p.id === m.colaborador_id)?.name ?? null;
   };
 
   if (!isOwner) {
@@ -199,7 +224,9 @@ export default function CollaboratorsPage() {
                     <Mail className="h-4 w-4 text-muted-foreground" />
                     <div>
                       <p className="text-sm font-medium">{member.email || member.user_id}</p>
-                      <p className="text-xs text-muted-foreground capitalize">{member.role === 'owner' ? 'Proprietário' : 'Colaborador'}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {member.role === 'owner' ? 'Proprietário' : nomeDoColaborador(member) ? `Conta de ${nomeDoColaborador(member)}` : 'Conta compartilhada'}
+                      </p>
                     </div>
                   </div>
                   {member.role !== 'owner' && (
@@ -214,7 +241,11 @@ export default function CollaboratorsPage() {
                       <Button
                         variant="destructive"
                         size="sm"
-                        onClick={() => removeMember.mutate(member.id)}
+                        onClick={async () => {
+                          if (await confirmar({ titulo: `Remover ${member.email || 'este colaborador'}?`, descricao: 'Ele perde o acesso ao sistema na hora. O que ele já lançou continua.', verbo: 'Remover', perigo: true })) {
+                            removeMember.mutate(member.id);
+                          }
+                        }}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -224,6 +255,22 @@ export default function CollaboratorsPage() {
 
                 {editingId === member.id && (
                   <div className="border-t pt-3 space-y-3">
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Quem usa esta conta</p>
+                      <Select value={editQuem} onValueChange={setEditQuem}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={COMPARTILHADA}>Conta compartilhada (pergunta quem está fazendo)</SelectItem>
+                          {mechanics.filter((m) => m.active !== false).map((m) => (
+                            <SelectItem key={m.id} value={`mecanico:${m.id}`}>{m.name} (mecânico/capoteiro)</SelectItem>
+                          ))}
+                          {atendentes.filter((a) => a.active !== false).map((a) => (
+                            <SelectItem key={a.id} value={`atendente:${a.id}`}>{a.name} (atendente)</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[11px] text-muted-foreground">Conta de uma pessoa: o que ela lançar sai com o nome dela, sem perguntar.</p>
+                    </div>
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Acesso aos módulos</p>
                     <div className="grid grid-cols-2 gap-3">
                       {PERMISSION_LABELS.map(({ key, label }) => (
@@ -236,9 +283,21 @@ export default function CollaboratorsPage() {
                         </div>
                       ))}
                     </div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">O que pode fazer</p>
+                    <div className="space-y-2">
+                      {ACOES.map(({ key, label, ajuda }) => (
+                        <div key={key} className="flex items-start justify-between gap-3">
+                          <div>
+                            <Label className="text-sm">{label}</Label>
+                            <p className="text-[11px] text-muted-foreground">{ajuda}</p>
+                          </div>
+                          <Switch checked={editPerms[key] !== false} onCheckedChange={(v) => setEditPerms(p => ({ ...p, [key]: v }))} />
+                        </div>
+                      ))}
+                    </div>
                     <Button
                       className="w-full mt-2"
-                      onClick={() => updatePermissions.mutate({ id: member.id, permissions: editPerms })}
+                      onClick={() => updatePermissions.mutate({ id: member.id, permissions: editPerms, quem: editQuem })}
                       disabled={updatePermissions.isPending}
                     >
                       {updatePermissions.isPending ? 'Salvando...' : 'Salvar permissões'}

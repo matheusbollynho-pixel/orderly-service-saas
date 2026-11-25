@@ -461,7 +461,8 @@ export function useServiceOrders() {
       toast.success('Material atualizado!');
     },
     onError: (error) => {
-      toast.error('Erro ao atualizar material');
+      const msg = (error as { message?: string })?.message || '';
+      toast.error(msg.startsWith('Sem permissão') ? msg : 'Erro ao atualizar material');
       console.error(error);
     },
   });
@@ -487,7 +488,8 @@ export function useServiceOrders() {
       toast.success('Material removido!');
     },
     onError: (error) => {
-      toast.error('Erro ao remover material');
+      const msg = (error as { message?: string })?.message || '';
+      toast.error(msg.startsWith('Sem permissão') ? msg : 'Erro ao remover material');
       console.error(error);
     },
   });

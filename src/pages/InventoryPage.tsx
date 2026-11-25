@@ -45,6 +45,7 @@ import { useVehicleLabel } from '@/hooks/useVehicleLabel';
 import { useStoreSettings } from '@/hooks/useStoreSettings';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
 import { useMechanics } from '@/hooks/useMechanics';
+import { useColaboradorLogado } from '@/hooks/useColaboradorLogado';
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import { UpgradeModal } from '@/components/UpgradeModal';
 
@@ -772,14 +773,17 @@ export default function InventoryPage() {
   }, [lotes]);
   const { members: atendentes } = useTeamMembers();
   const { mechanics } = useMechanics();
+  // Login de uma pessoa: o banco grava o nome dela, sem perguntar "Quem está fazendo?"
+  const eu = useColaboradorLogado();
   // Atendentes + mecânicos/estofadores ativos, sem repetir nome
   const equipe = useMemo(() => {
+    if (eu) return [];
     const nomes = [
       ...atendentes.filter((m) => m.active !== false).map((m) => m.name),
       ...mechanics.filter((m) => m.active !== false).map((m) => m.name),
     ].map((n) => (n || '').trim()).filter(Boolean);
     return [...new Set(nomes)].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  }, [atendentes, mechanics]);
+  }, [atendentes, mechanics, eu]);
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('produtos');
   const [filterLowStock, setFilterLowStock] = useState(false);

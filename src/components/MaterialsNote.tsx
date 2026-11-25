@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Trash2, ChevronDown, ChevronUp, Package } from 'lucide-react';
 import { Material, Mechanic, PaymentMethod } from '@/types/service-order';
 import type { InventoryProduct } from '@/hooks/useInventory';
+import { useStore } from '@/contexts/StoreContext';
+import { useColaboradorLogado } from '@/hooks/useColaboradorLogado';
 
 // Produto vendido por litro, metro ou quilo pode ser usado aos poucos na OS
 // (ex.: 150 ml de um frasco de 1 L). O estoque continua na unidade do produto.
@@ -45,17 +47,21 @@ export function MaterialsNote({
   loadingUpdate = false,
   loadingDelete = false
 }: MaterialsNoteProps) {
+  // Sem a permissão "Editar ou remover itens da OS": só adiciona (o banco também confere)
+  const { permissions } = useStore();
+  const podeEditar = permissions.editar_itens_os !== false;
+  // Login de um mecânico/capoteiro: o item novo já sai no nome dele
+  const eu = useColaboradorLogado();
+  const meuMecanico = eu?.tipo === 'mecanico' ? eu.id : undefined;
+  const vazio = () => ({ quantidade: '01', descricao: '', valor: '', is_service: false, mechanic_id: meuMecanico, product_id: undefined as string | undefined });
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingValues, setEditingValues] = useState<Record<string, string>>({});
   const [fracao, setFracao] = useState({ valor: '', unidade: 'pequena' as 'pequena' | 'grande', cobrar: false });
-  const [newMaterial, setNewMaterial] = useState({
-    quantidade: '01',
-    descricao: '',
-    valor: '',
-    is_service: false,
-    mechanic_id: undefined as string | undefined,
-    product_id: undefined as string | undefined,
-  });
+  const [newMaterial, setNewMaterial] = useState<{ quantidade: string; descricao: string; valor: string; is_service: boolean; mechanic_id: string | undefined; product_id: string | undefined }>(vazio);
+  // O nome do login chega depois (lista de mecânicos carregando)
+  useEffect(() => {
+    if (meuMecanico) setNewMaterial((m) => (m.mechanic_id ? m : { ...m, mechanic_id: meuMecanico }));
+  }, [meuMecanico]);
   const [suggestions, setSuggestions] = useState<InventoryProduct[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const suggestionsRef = useRef<HTMLDivElement>(null);
@@ -149,7 +155,7 @@ export function MaterialsNote({
         is_service: false,
         product_id: newMaterial.product_id,
       } as unknown as Omit<Material, 'id' | 'created_at' | 'updated_at'>);
-      setNewMaterial({ quantidade: '01', descricao: '', valor: '', is_service: false, mechanic_id: undefined, product_id: undefined });
+      setNewMaterial(vazio());
       setFracao({ valor: '', unidade: 'pequena', cobrar: false });
       setShowSuggestions(false);
       return;
@@ -175,7 +181,7 @@ export function MaterialsNote({
 
     onAddMaterial(payload);
 
-    setNewMaterial({ quantidade: '01', descricao: '', valor: '', is_service: false, mechanic_id: undefined, product_id: undefined });
+    setNewMaterial(vazio());
     setShowSuggestions(false);
   };
 
@@ -221,7 +227,7 @@ export function MaterialsNote({
                     {String(material.quantidade).replace('.', ',')} × R$ {parseFloat(String(material.valor)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                   <div className="col-span-2 flex justify-end">
-                    <Button
+                    {podeEditar && <Button
                       type="button"
                       variant="ghost"
                       size="sm"
@@ -233,13 +239,16 @@ export function MaterialsNote({
                       className="h-7 w-7 p-0 text-[#C1272D] hover:text-red-600 hover:bg-red-50/10"
                     >
                       <Trash2 className="h-3 w-3" />
-                    </Button>
+                    </Button>}
                   </div>
                 </div>
 
                 {/* Detalhe expandível */}
                 {expandedId === material.id && (
                   <div className="bg-muted/50 border border-border/50 border-t-0 p-3 rounded-b space-y-3">
+                    {!podeEditar && (
+                      <p className="text-xs text-muted-foreground">Para tirar ou mudar este item, chame o gerente.</p>
+                    )}
                     <div className="flex gap-2 items-end">
                       {ehFracionado(material.quantidade) ? (
                         <div className="text-xs text-muted-foreground max-w-[12rem]">
@@ -248,8 +257,8 @@ export function MaterialsNote({
                       ) : (
                       <div className="w-16">
                         <label className="text-xs font-semibold text-foreground block mb-1">Quantidade</label>
-                        <Select value={material.quantidade || '01'} onValueChange={(value) => onUpdateMaterial(material.id, 'quantidade', value)} disabled={disabled}>
-                          <SelectTrigger className="h-8 text-xs text-center bg-muted/50 border-border/50" disabled={disabled}>
+                        <Select value={material.quantidade || '01'} onValueChange={(value) => onUpdateMaterial(material.id, 'quantidade', value)} disabled={disabled || !podeEditar}>
+                          <SelectTrigger className="h-8 text-xs text-center bg-muted/50 border-border/50" disabled={disabled || !podeEditar}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -282,7 +291,7 @@ export function MaterialsNote({
                               return newValues;
                             });
                           }}
-                          disabled={disabled}
+                          disabled={disabled || !podeEditar}
                           inputMode="decimal"
                           className="h-8 text-xs text-right bg-muted/50 border-border/50 flex w-full rounded-md border border-input bg-transparent px-3 py-1 shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                           placeholder="0,00"
@@ -294,7 +303,7 @@ export function MaterialsNote({
                       <Checkbox 
                         checked={material.is_service || false} 
                         onCheckedChange={(checked) => onUpdateMaterial(material.id, 'is_service', String(Boolean(checked)))}
-                        disabled={disabled}
+                        disabled={disabled || !podeEditar}
                         className="h-4 w-4"
                       />
                       <span className="text-xs font-medium text-foreground">Serviço</span>
