@@ -157,7 +157,7 @@ export function useServiceOrders() {
     // Otimizações balanceadas (performance + sync entre dispositivos)
     staleTime: 60 * 1000, // 60s - menos refetch pesado, sync principal via Realtime
     gcTime: 5 * 60 * 1000, // 5 minutos - mantém cache
-    refetchOnWindowFocus: true, // Atualiza ao trocar de aba
+    refetchOnWindowFocus: false, // a volta pra aba é tratada no useRealtimeSync (no máximo 1x a cada 2 min)
     refetchOnReconnect: true,
     // Retry apenas 1 vez em caso de erro
     retry: 1,

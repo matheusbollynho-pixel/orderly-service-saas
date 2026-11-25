@@ -264,7 +264,7 @@ export function useCotacao() {
   };
 
   // Tempo real: representante respondeu o link (ou outro funcionário mexeu) -> tela atualiza na hora.
-  // Os refetchInterval de 30s continuam como reserva se a conexão cair.
+  // Se a conexão cair, o useRealtimeSync recarrega tudo a cada 5 min (grupo estoque → 'cotacao').
   useEffect(() => {
     if (!storeId) return;
     const atualizar = () => {
@@ -320,8 +320,6 @@ export function useCotacao() {
       if (error) throw error;
       return (data ?? []) as CotacaoPreco[];
     },
-    // Respostas pelo link chegam sozinhas
-    refetchInterval: 30_000,
   });
 
   const respostas = useQuery({
@@ -374,8 +372,6 @@ export function useCotacao() {
       if (error) throw error;
       return (data ?? []) as CotacaoLink[];
     },
-    // Resposta do representante chega por fora: confere a cada 30s
-    refetchInterval: 30_000,
   });
 
   const onError = (e: Error) => toast.error(e.message);

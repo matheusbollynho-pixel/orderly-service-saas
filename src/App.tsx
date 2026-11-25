@@ -154,7 +154,6 @@ function AuthenticatedApp() {
 function AppContent() {
   // Inicializar sistema de sincronização local (dentro do QueryClientProvider)
   const { status: syncStatus } = useLocalSync();
-  useRealtimeSync();
 
   useEffect(() => {
     if (syncStatus.isReady) {
@@ -199,10 +198,17 @@ function StoreGuard({ children }: { children: React.ReactNode }) {
 
   return (
     <>
+      <RealtimeSync storeId={storeId} />
       <PaymentAlertModal />
       {children}
     </>
   );
+}
+
+// Tempo real só depois de saber a loja (antes rodava até na tela de login)
+function RealtimeSync({ storeId }: { storeId: string }) {
+  useRealtimeSync(storeId);
+  return null;
 }
 
 // Componente interno ao StoreProvider para atualizar o título da página

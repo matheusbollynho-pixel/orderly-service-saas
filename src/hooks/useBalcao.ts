@@ -61,8 +61,7 @@ export function useBalcao() {
       if (error) throw error;
       return (data ?? []) as BalcaoOrder[];
     },
-    refetchInterval: 60_000,
-    staleTime: 5000,
+    staleTime: 5000, // tempo real (useRealtimeSync) atualiza; sem repetição a cada 60s
   });
 
   // ── Criar nova nota ───────────────────────────────────────────

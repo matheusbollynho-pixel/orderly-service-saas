@@ -3,10 +3,14 @@ import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { ServiceOrder } from '@/types/service-order';
 
-export function useRealtimeSync() {
+// Escuta só a loja logada (antes ouvia as 15 tabelas de todas as lojas e o banco conferia
+// a permissão de cada aviso para cada aparelho conectado).
+export function useRealtimeSync(storeId: string | null) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
+    if (!storeId) return;
+    const daLoja = `store_id=eq.${storeId}`;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let fallbackInterval: ReturnType<typeof setInterval> | null = null;
     let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -22,6 +26,13 @@ export function useRealtimeSync() {
         if (!old) return old;
         return updater(old);
       });
+    };
+
+    // OS (da lista em memória) que tem este item de checklist/material/pagamento
+    const donoDoItem = (campo: 'checklist_items' | 'materials' | 'payments', id: unknown) => {
+      if (!id) return undefined;
+      const lista = queryClient.getQueryData<ServiceOrder[]>(['service-orders']) ?? [];
+      return lista.find((o) => ((o[campo] as { id?: string }[] | undefined) ?? []).some((i) => i.id === id))?.id;
     };
 
     // Junta os avisos que chegam em sequência e atualiza cada lista uma vez só (antes um
@@ -60,9 +71,11 @@ export function useRealtimeSync() {
 
     const handleServiceOrdersChange = (payload: Record<string, unknown>) => {
       const eventType = payload?.eventType;
-      invalidate('oficina');
       const row = payload?.new;
       const oldRow = payload?.old;
+      // Exclusão chega de qualquer loja: só interessa se a OS está na lista desta loja
+      if (eventType === 'DELETE' && !queryClient.getQueryData<ServiceOrder[]>(['service-orders'])?.some((o) => o.id === (oldRow as { id?: string } | undefined)?.id)) return;
+      invalidate('oficina');
 
       updateOrdersCache((orders) => {
         if (eventType === 'INSERT') {
@@ -90,12 +103,12 @@ export function useRealtimeSync() {
 
     const handleChecklistChange = (payload: Record<string, unknown>) => {
       const eventType = payload?.eventType;
-      // Apagado chega sem o id da OS: recarrega a lista inteira
-      invalidate(eventType === 'DELETE' ? 'orders' : 'oficina');
       const row = payload?.new;
       const oldRow = payload?.old;
-      const orderId = row?.order_id || oldRow?.order_id;
+      // Exclusão chega de qualquer loja e só com o id: procura a OS dona na lista desta loja.
+      const orderId = row?.order_id || oldRow?.order_id || (eventType === 'DELETE' ? donoDoItem('checklist_items', (oldRow as { id?: string } | undefined)?.id) : undefined);
       if (!orderId) return;
+      invalidate('oficina');
 
       updateOrdersCache((orders) => {
         return orders.map((order) => {
@@ -131,12 +144,12 @@ export function useRealtimeSync() {
 
     const handleMaterialsChange = (payload: Record<string, unknown>) => {
       const eventType = payload?.eventType;
-      // Apagado chega sem o id da OS: recarrega a lista inteira
-      invalidate(eventType === 'DELETE' ? 'orders' : 'oficina');
       const row = payload?.new;
       const oldRow = payload?.old;
-      const orderId = row?.order_id || oldRow?.order_id;
+      // Exclusão chega de qualquer loja e só com o id: procura a OS dona na lista desta loja.
+      const orderId = row?.order_id || oldRow?.order_id || (eventType === 'DELETE' ? donoDoItem('materials', (oldRow as { id?: string } | undefined)?.id) : undefined);
       if (!orderId) return;
+      invalidate('oficina');
 
       updateOrdersCache((orders) => {
         return orders.map((order) => {
@@ -172,12 +185,12 @@ export function useRealtimeSync() {
 
     const handlePaymentsChange = (payload: Record<string, unknown>) => {
       const eventType = payload?.eventType;
-      // Apagado chega sem o id da OS: recarrega a lista inteira
-      invalidate(eventType === 'DELETE' ? 'orders' : 'oficina');
       const row = payload?.new;
       const oldRow = payload?.old;
-      const orderId = row?.order_id || oldRow?.order_id;
+      // Exclusão chega de qualquer loja e só com o id: procura a OS dona na lista desta loja.
+      const orderId = row?.order_id || oldRow?.order_id || (eventType === 'DELETE' ? donoDoItem('payments', (oldRow as { id?: string } | undefined)?.id) : undefined);
       if (!orderId) return;
+      invalidate('oficina');
 
       updateOrdersCache((orders) => {
         return orders.map((order) => {
@@ -211,11 +224,16 @@ export function useRealtimeSync() {
       });
     };
 
-    const handleFocusSync = () => invalidate('orders');
+    // Voltar pra aba recarregava a lista inteira de OS a cada troca (ex.: ir no WhatsApp e voltar).
+    // O tempo real já mantém tudo em dia; aqui é só garantia, no máximo 1 vez a cada 2 minutos.
+    let ultimoFoco = 0;
+    const handleFocusSync = () => {
+      if (Date.now() - ultimoFoco < 2 * 60 * 1000) return;
+      ultimoFoco = Date.now();
+      invalidate('orders');
+    };
     const handleVisibilitySync = () => {
-      if (document.visibilityState === 'visible') {
-        invalidate('orders');
-      }
+      if (document.visibilityState === 'visible') handleFocusSync();
     };
 
     window.addEventListener('focus', handleFocusSync);
@@ -234,23 +252,32 @@ export function useRealtimeSync() {
         supabase.removeChannel(currentChannel);
       }
 
-      currentChannel = supabase
-        .channel('global-realtime-sync-' + Date.now())
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'service_orders' }, (payload) => handleServiceOrdersChange(payload))
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'checklist_items' }, (payload) => handleChecklistChange(payload))
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'materials' }, (payload) => handleMaterialsChange(payload))
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, (payload) => handlePaymentsChange(payload))
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'cash_flow' }, () => invalidate('cash'))
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'balcao_orders' }, () => invalidate('balcao'))
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'balcao_items' }, () => invalidate('balcao'))
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, () => invalidate('agenda'))
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_products' }, () => invalidate('estoque'))
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_movements' }, () => invalidate('estoque'))
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'boletos' }, () => invalidate('boletos'))
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'fiados' }, () => invalidate('fiados'))
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'fiado_payments' }, () => invalidate('fiados'))
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'vales' }, () => invalidate('vales'))
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'acertos' }, () => invalidate('acertos'))
+      // Inclusão/alteração: só da loja. Exclusão: sem filtro (o Supabase não filtra DELETE por coluna).
+      const tabelas: [string, (payload: Record<string, unknown>) => void][] = [
+        ['service_orders', (payload) => handleServiceOrdersChange(payload)],
+        ['checklist_items', (payload) => handleChecklistChange(payload)],
+        ['materials', (payload) => handleMaterialsChange(payload)],
+        ['payments', (payload) => handlePaymentsChange(payload)],
+        ['cash_flow', () => invalidate('cash')],
+        ['balcao_orders', () => invalidate('balcao')],
+        ['balcao_items', () => invalidate('balcao')],
+        ['appointments', () => invalidate('agenda')],
+        ['inventory_products', () => invalidate('estoque')],
+        ['inventory_movements', () => invalidate('estoque')],
+        ['boletos', () => invalidate('boletos')],
+        ['fiados', () => invalidate('fiados')],
+        ['fiado_payments', () => invalidate('fiados')],
+        ['vales', () => invalidate('vales')],
+        ['acertos', () => invalidate('acertos')],
+      ];
+      let canal = supabase.channel(`global-realtime-sync-${storeId}-${Date.now()}`);
+      for (const [table, aoMudar] of tabelas) {
+        canal = canal
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table, filter: daLoja }, aoMudar)
+          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table, filter: daLoja }, aoMudar)
+          .on('postgres_changes', { event: 'DELETE', schema: 'public', table }, aoMudar);
+      }
+      currentChannel = canal
         .subscribe((status) => {
           if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
             invalidate('all');
@@ -273,5 +300,5 @@ export function useRealtimeSync() {
       document.removeEventListener('visibilitychange', handleVisibilitySync);
       if (currentChannel) supabase.removeChannel(currentChannel);
     };
-  }, [queryClient]);
+  }, [queryClient, storeId]);
 }
