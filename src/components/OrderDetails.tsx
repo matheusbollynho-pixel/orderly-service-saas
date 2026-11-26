@@ -53,6 +53,7 @@ import { useMechanics } from '@/hooks/useMechanics';
 import { useClients } from '@/hooks/useClients';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
 import { useStoreSettings, DEFAULT_INSPECTION_TERMS_TEXT, DEFAULT_DELIVERY_TERMS_TEXT } from '@/hooks/useStoreSettings';
+import { NotaFiscalVenda } from '@/components/fiscal/NotaFiscalVenda';
 import { useStore } from '@/contexts/StoreContext';
 import { sendWhatsAppText, sendWhatsAppDocument } from '@/lib/whatsappService';
 import { supabase } from '@/integrations/supabase/client';
@@ -2275,6 +2276,12 @@ const renderDeliverySection = () => {
           )}
         </CardContent>
       </Card>
+      )}
+
+      {/* Nota fiscal das peças (só com módulo fiscal ligado e OS pronta/entregue) */}
+      {(order.status === 'concluida' || order.status === 'concluida_entregue') && (
+        <NotaFiscalVenda orderId={order.id} clientCpf={order.client_cpf} clientPhone={order.client_phone}
+          clientId={(order as { client_id?: string | null }).client_id ?? null} clientNome={order.client_name} />
       )}
 
       {/* Termo de Entrega do Veículo */}

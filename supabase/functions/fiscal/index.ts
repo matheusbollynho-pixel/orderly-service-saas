@@ -6,6 +6,7 @@
 // A loja é sempre a do usuário logado; módulo fiscal precisa estar ligado na loja.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { strToU8, zipSync } from 'https://esm.sh/fflate@0.8.2'
+import { pecasDaOs } from '../_shared/fiscal/os.ts'
 import { agoraBrasilia, autorizadosXml, montarNfce, montarNfe, spedy, type Destinatario, type ItemVenda, type PadroesFiscais, type Ambiente, type RetornoNota } from '../_shared/fiscal/spedy.ts'
 
 const URL = Deno.env.get('SUPABASE_URL')!
@@ -107,6 +108,37 @@ Deno.serve(async (req) => {
         : [{ forma: venda.payment_method ?? 'dinheiro', valor: 0 }]
     const MORTAS = ['rejeitada', 'denegada', 'cancelada', 'erro', 'inutilizada']
 
+    // De onde vêm os itens da nota: venda do balcão ou OS (só as peças). Devolve texto = erro para o usuário.
+    type Fonte = {
+      coluna: 'balcao_order_id' | 'order_id'; id: string; origem: 'balcao' | 'os' | 'site'; nome: string
+      itens: ItemVenda[]; desconto: number; formas: { forma: string; valor: number }[]; cpf: string | null; online: boolean
+    }
+    const carregarFonte = async (balcaoId?: string | null, osId?: string | null): Promise<Fonte | string> => {
+      if (osId) {
+        const { data: os } = await admin.from('service_orders')
+          .select('id, status, client_cpf, materials(descricao, quantidade, valor, is_service, product_id), payments(method, amount, discount_amount)')
+          .eq('id', osId).eq('store_id', loja).maybeSingle()
+        if (!os) return 'OS não encontrada.'
+        if (!['concluida', 'concluida_entregue'].includes(os.status)) return 'Só dá para emitir nota de OS pronta ou entregue.'
+        const pc = pecasDaOs(os.materials ?? [], os.payments ?? [])
+        if (!pc.linhas.length) return 'Esta OS não tem peças com valor. A mão de obra vai na nota de serviço (NFS-e).'
+        return {
+          coluna: 'order_id', id: os.id, origem: 'os', nome: 'OS', itens: await itensComFiscal(pc.linhas), desconto: pc.descontoPecas,
+          formas: pc.formas.length ? pc.formas : [{ forma: 'dinheiro', valor: 0 }], cpf: os.client_cpf ?? null, online: false,
+        }
+      }
+      const { data: venda } = await admin.from('balcao_orders')
+        .select('id, status, discount_amount, payment_method, payment_methods, client_cpf, venda_online, balcao_items(description, quantity, unit_price, product_id)')
+        .eq('id', balcaoId).eq('store_id', loja).maybeSingle()
+      if (!venda) return 'Venda não encontrada.'
+      if (venda.status !== 'finalizada') return 'Só dá para emitir nota de venda finalizada.'
+      return {
+        coluna: 'balcao_order_id', id: venda.id, origem: venda.venda_online ? 'site' : 'balcao', nome: 'venda',
+        itens: await itensComFiscal(venda.balcao_items ?? []), desconto: Number(venda.discount_amount) || 0,
+        formas: formasDaVenda(venda), cpf: venda.client_cpf ?? null, online: !!venda.venda_online,
+      }
+    }
+
     // ---------------------------------------------------------------- emitir NFC-e de uma venda do balcão
     if (p.acao === 'emitir_nfce') {
       const { data: podeVender } = await comoUsuario.rpc('pode_acao', { acao: 'balcao' })
@@ -114,47 +146,42 @@ Deno.serve(async (req) => {
       const { data: emissor } = await admin.from('fiscal_emissores').select('id, uf')
         .eq('store_id', loja).eq('papel', 'vendas').eq('ambiente', amb).eq('ativo', true).maybeSingle()
       if (!emissor) return erro('Nenhum CNPJ de vendas configurado para emitir nota nesta loja.')
-      const { data: venda } = await admin.from('balcao_orders')
-        .select('id, store_id, status, discount_amount, payment_method, payment_methods, client_cpf, venda_online, balcao_items(description, quantity, unit_price, product_id)')
-        .eq('id', p.balcao_order_id).eq('store_id', loja).single()
-      if (!venda) return erro('Venda não encontrada.', 404)
-      if (venda.status !== 'finalizada') return erro('Só dá para emitir nota de venda finalizada.')
+      const fonte = await carregarFonte(p.balcao_order_id, p.order_id)
+      if (typeof fonte === 'string') return erro(fonte)
 
-      // Já tem nota viva desta venda? Reaproveita a rejeitada (corrige com o mesmo id).
+      // Já tem nota viva desta venda/OS?
       const { data: anteriores } = await admin.from('notas_fiscais').select('id, status, modelo')
-        .eq('balcao_order_id', venda.id).order('created_at', { ascending: false })
+        .eq(fonte.coluna, fonte.id).order('created_at', { ascending: false })
       const viva = (anteriores ?? []).find((n) => !MORTAS.includes(n.status))
-      if (viva) return erro(viva.status === 'autorizada' ? `Esta venda já tem ${viva.modelo === 'nfe' ? 'NF-e' : 'nota'} autorizada.` : 'Esta venda já tem nota em processamento.')
+      if (viva) return erro(viva.status === 'autorizada' ? `Esta ${fonte.nome} já tem ${viva.modelo === 'nfe' ? 'NF-e' : 'nota'} autorizada.` : `Esta ${fonte.nome} já tem nota em processamento.`)
       // Tentativa que deu ERRO no envio (Spedy pode ou não ter recebido): reenvia com o MESMO id, sem risco de nota duplicada.
       // Nota REJEITADA pela SEFAZ não é reaproveitada: a Spedy mantém o horário antigo e a SEFAZ recusa NFC-e atrasada (704).
       // Então vira nota nova (próximo número); o número da rejeitada fica para inutilizar.
       const rejeitada = (anteriores ?? []).find((n) => n.status === 'erro' && n.modelo === 'nfce')
 
-      const itens = await itensComFiscal(venda.balcao_items ?? [])
-      const formas = formasDaVenda(venda)
 
       // Registro antes de enviar (o id dele é o identificador no fornecedor = sem nota duplicada)
       let notaId = rejeitada?.id as string | undefined
       if (!notaId) {
         const { data: nova, error } = await admin.from('notas_fiscais').insert({
-          store_id: loja, emissor_id: emissor.id, modelo: 'nfce', origem: venda.venda_online ? 'site' : 'balcao',
-          balcao_order_id: venda.id, ambiente: amb, status: 'processando', created_by: u.user.id,
-          cpf_cnpj_cliente: (p.cpf || venda.client_cpf || '').replace(/\D/g, '') || null,
+          store_id: loja, emissor_id: emissor.id, modelo: 'nfce', origem: fonte.origem,
+          [fonte.coluna]: fonte.id, ambiente: amb, status: 'processando', created_by: u.user.id,
+          cpf_cnpj_cliente: (p.cpf || fonte.cpf || '').replace(/\D/g, '') || null,
         }).select('id').single()
-        if (error) return erro(error.code === '23505' ? 'Esta venda já tem nota em processamento.' : error.message)
+        if (error) return erro(error.code === '23505' ? `Esta ${fonte.nome} já tem nota em processamento.` : error.message)
         notaId = nova.id
       } else {
         await admin.from('notas_fiscais').update({
           status: 'processando', motivo: null, updated_at: new Date().toISOString(),
-          cpf_cnpj_cliente: (p.cpf || venda.client_cpf || '').replace(/\D/g, '') || null,
+          cpf_cnpj_cliente: (p.cpf || fonte.cpf || '').replace(/\D/g, '') || null,
         }).eq('id', notaId)
       }
 
       let corpo
       try {
         corpo = montarNfce({
-          idIntegracao: notaId!, itens, desconto: Number(venda.discount_amount) || 0, pagamentos: formas,
-          cpf: p.cpf || venda.client_cpf, online: !!venda.venda_online, emitidaEm: agoraBrasilia(),
+          idIntegracao: notaId!, itens: fonte.itens, desconto: fonte.desconto, pagamentos: fonte.formas,
+          cpf: p.cpf || fonte.cpf, online: fonte.online, emitidaEm: agoraBrasilia(),
           autorizadosXml: autorizadosXml(cfg.fiscal_contador_doc, emissor.uf),
         }, padroes())
       } catch (e) {
@@ -178,7 +205,7 @@ Deno.serve(async (req) => {
     //          forma?, desconto?, consumidor_final?, observacao? }
     if (p.acao === 'emitir_nfe') {
       const q = p as unknown as {
-        destinatario?: Destinatario; balcao_order_id?: string; itens?: { descricao: string; quantidade: number; valor_unitario: number; product_id?: string | null }[]
+        destinatario?: Destinatario; balcao_order_id?: string; order_id?: string; itens?: { descricao: string; quantidade: number; valor_unitario: number; product_id?: string | null }[]
         forma?: string; desconto?: number; consumidor_final?: boolean; observacao?: string
       }
       const { data: podeVender } = await comoUsuario.rpc('pode_acao', { acao: 'balcao' })
@@ -199,21 +226,20 @@ Deno.serve(async (req) => {
       let desconto = 0
       let pagamentos: { forma: string; valor: number }[]
       let reaproveitar: string | undefined
-      if (q.balcao_order_id) {
-        const { data: venda } = await admin.from('balcao_orders')
-          .select('id, status, discount_amount, payment_method, payment_methods, balcao_items(description, quantity, unit_price, product_id)')
-          .eq('id', q.balcao_order_id).eq('store_id', loja).single()
-        if (!venda) return erro('Venda não encontrada.', 404)
-        if (venda.status !== 'finalizada') return erro('Só dá para emitir nota de venda finalizada.')
+      let fonte: Fonte | null = null
+      if (q.balcao_order_id || q.order_id) {
+        const f = await carregarFonte(q.balcao_order_id, q.order_id)
+        if (typeof f === 'string') return erro(f)
+        fonte = f
         const { data: anteriores } = await admin.from('notas_fiscais').select('id, status, modelo')
-          .eq('balcao_order_id', venda.id).order('created_at', { ascending: false })
+          .eq(f.coluna, f.id).order('created_at', { ascending: false })
         const viva = (anteriores ?? []).find((n) => !MORTAS.includes(n.status))
-        if (viva) return erro(viva.modelo === 'nfce' ? 'Esta venda já tem NFC-e (cupom). Cancele o cupom antes de emitir a NF-e.' : 'Esta venda já tem NF-e.')
+        if (viva) return erro(viva.modelo === 'nfce' ? `Esta ${f.nome} já tem NFC-e (cupom). Cancele o cupom antes de emitir a NF-e.` : `Esta ${f.nome} já tem NF-e.`)
         // NF-e rejeitada pode ser corrigida com o MESMO id (a SEFAZ aceita NF-e com data de até 30 dias): não pula número
         reaproveitar = (anteriores ?? []).find((n) => n.modelo === 'nfe' && (n.status === 'rejeitada' || n.status === 'erro'))?.id
-        itens = await itensComFiscal(venda.balcao_items ?? [])
-        desconto = Number(venda.discount_amount) || 0
-        pagamentos = formasDaVenda(venda)
+        itens = f.itens
+        desconto = f.desconto
+        pagamentos = f.formas
       } else {
         const lista = Array.isArray(q.itens) ? q.itens : []
         if (!lista.length || lista.length > 100) return erro('Informe de 1 a 100 itens.')
@@ -227,8 +253,8 @@ Deno.serve(async (req) => {
       let notaId = reaproveitar
       if (!notaId) {
         const { data: nova, error } = await admin.from('notas_fiscais').insert({
-          store_id: loja, emissor_id: emissor.id, modelo: 'nfe', origem: q.balcao_order_id ? 'balcao' : 'manual',
-          balcao_order_id: q.balcao_order_id ?? null, ambiente: amb, status: 'processando', created_by: u.user.id,
+          store_id: loja, emissor_id: emissor.id, modelo: 'nfe', origem: fonte ? (fonte.origem === 'site' ? 'balcao' : fonte.origem) : 'manual',
+          ...(fonte ? { [fonte.coluna]: fonte.id } : {}), ambiente: amb, status: 'processando', created_by: u.user.id,
           cpf_cnpj_cliente: doc || null, destinatario_nome: String(q.destinatario.nome ?? '').slice(0, 120) || null,
         }).select('id').single()
         if (error) return erro(error.code === '23505' ? 'Esta venda já tem nota em processamento.' : error.message)

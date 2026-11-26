@@ -29,11 +29,13 @@ function C({ l, children, className = '' }: { l: string; children: React.ReactNo
   return <div className={`space-y-1 ${className}`}><Label className="text-xs text-muted-foreground">{l}</Label>{children}</div>;
 }
 
-export function NovaNfe({ aberto, onFechar, balcaoOrderId, clientId, clientNome, clientDoc }: {
+export function NovaNfe({ aberto, onFechar, balcaoOrderId, orderId, clientId, clientNome, clientDoc }: {
   aberto: boolean;
   onFechar: () => void;
-  /** Venda do balcão (itens e pagamento vêm dela). Sem venda = NF-e avulsa. */
+  /** Venda do balcão (itens e pagamento vêm dela). Sem venda nem OS = NF-e avulsa. */
   balcaoOrderId?: string;
+  /** OS: a NF-e leva só as peças */
+  orderId?: string;
   clientId?: string | null;
   clientNome?: string | null;
   clientDoc?: string | null;
@@ -88,7 +90,7 @@ export function NovaNfe({ aberto, onFechar, balcaoOrderId, clientId, clientNome,
 
   const emitir = async () => {
     const lista = itens.filter((i) => i.descricao.trim());
-    if (!balcaoOrderId && !lista.length) { toast.error('Adicione pelo menos um item.'); return; }
+    if (!balcaoOrderId && !orderId && !lista.length) { toast.error('Adicione pelo menos um item.'); return; }
     setEnviando(true);
     try {
       const r = await chamarFiscal<{ status: string; motivo?: string | null; numero?: number | null }>({
@@ -100,7 +102,7 @@ export function NovaNfe({ aberto, onFechar, balcaoOrderId, clientId, clientNome,
         },
         consumidor_final: !revende,
         observacao: obs.trim() || null,
-        ...(balcaoOrderId ? { balcao_order_id: balcaoOrderId } : {
+        ...(balcaoOrderId ? { balcao_order_id: balcaoOrderId } : orderId ? { order_id: orderId } : {
           itens: lista.map((i) => ({ descricao: i.descricao.trim(), quantidade: Number(i.quantidade.replace(',', '.')) || 0, valor_unitario: Number(i.valor.replace(',', '.')) || 0 })),
           forma, desconto: Number(desconto.replace(',', '.')) || 0,
         }),
@@ -119,7 +121,7 @@ export function NovaNfe({ aberto, onFechar, balcaoOrderId, clientId, clientNome,
         if (error) toast.warning('A nota foi enviada, mas não consegui salvar os dados no cadastro do cliente.');
       }
       qc.invalidateQueries({ queryKey: ['notas-fiscais'] });
-      if (balcaoOrderId) qc.invalidateQueries({ queryKey: ['nota-venda', balcaoOrderId] });
+      if (balcaoOrderId || orderId) qc.invalidateQueries({ queryKey: ['nota-venda', balcaoOrderId ?? orderId] });
       onFechar();
     } catch (e) {
       toast.error((e as Error).message);
@@ -133,7 +135,7 @@ export function NovaNfe({ aberto, onFechar, balcaoOrderId, clientId, clientNome,
   return (
     <Dialog open={aberto} onOpenChange={(o) => { if (!o) onFechar(); }}>
       <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
-        <DialogHeader><DialogTitle>{balcaoOrderId ? 'NF-e desta venda (cliente com CNPJ)' : 'Nova NF-e avulsa'}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{balcaoOrderId ? 'NF-e desta venda (cliente com CNPJ)' : orderId ? 'NF-e das peças desta OS (cliente com CNPJ)' : 'Nova NF-e avulsa'}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <C l="CNPJ (ou CPF)">
@@ -172,7 +174,7 @@ export function NovaNfe({ aberto, onFechar, balcaoOrderId, clientId, clientNome,
             <input type="checkbox" checked={revende} onChange={(e) => setRevende(e.target.checked)} /> Cliente vai revender ou usar no próprio negócio (não é consumidor final)
           </label>
 
-          {!balcaoOrderId && (
+          {!balcaoOrderId && !orderId && (
             <div className="space-y-2 rounded-lg border p-2.5">
               <p className="text-sm font-medium">Itens</p>
               {itens.map((it, i) => (

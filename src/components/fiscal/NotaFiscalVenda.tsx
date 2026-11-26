@@ -1,4 +1,4 @@
-// Bloco "Nota fiscal" dentro da venda do balcão: emitir NFC-e, ver status, PDF/WhatsApp, tentar de novo.
+// Bloco "Nota fiscal" dentro da venda do balcão ou da OS (só as peças): emitir NFC-e/NF-e, ver status, PDF/WhatsApp, tentar de novo.
 // Não aparece se o módulo fiscal da loja estiver desligado.
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -17,21 +17,21 @@ const db = supabase as any;
 const brl = (v: number | null) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 /** Nota fiscal mais recente da venda (a "viva" vem antes). */
-export function useNotaDaVenda(balcaoOrderId: string, ativo: boolean) {
+export function useNotaDaVenda(balcaoOrderId: string, ativo: boolean, coluna: 'balcao_order_id' | 'order_id' = 'balcao_order_id') {
   const qc = useQueryClient();
   useEffect(() => {
     if (!ativo) return;
     const canal = supabase.channel(`nota-venda-${balcaoOrderId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notas_fiscais', filter: `balcao_order_id=eq.${balcaoOrderId}` },
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notas_fiscais', filter: `${coluna}=eq.${balcaoOrderId}` },
         () => qc.invalidateQueries({ queryKey: ['nota-venda', balcaoOrderId] }))
       .subscribe();
     return () => { supabase.removeChannel(canal); };
-  }, [balcaoOrderId, ativo, qc]);
+  }, [balcaoOrderId, ativo, qc, coluna]);
   return useQuery({
     queryKey: ['nota-venda', balcaoOrderId],
     enabled: ativo,
     queryFn: async () => {
-      const { data, error } = await db.from('notas_fiscais').select('*').eq('balcao_order_id', balcaoOrderId)
+      const { data, error } = await db.from('notas_fiscais').select('*').eq(coluna, balcaoOrderId)
         .order('created_at', { ascending: false }).limit(5);
       if (error) throw error;
       const lista = (data ?? []) as NotaFiscal[];
@@ -40,15 +40,22 @@ export function useNotaDaVenda(balcaoOrderId: string, ativo: boolean) {
   });
 }
 
-export function NotaFiscalVenda({ balcaoOrderId, clientCpf, clientPhone, clientId, clientNome }: {
-  balcaoOrderId: string; clientCpf?: string | null; clientPhone?: string | null; clientId?: string | null; clientNome?: string | null;
+export function NotaFiscalVenda({ balcaoOrderId, orderId, clientCpf, clientPhone, clientId, clientNome }: {
+  /** Venda do balcão... */
+  balcaoOrderId?: string;
+  /** ...ou OS (a nota leva só as peças) */
+  orderId?: string;
+  clientCpf?: string | null; clientPhone?: string | null; clientId?: string | null; clientNome?: string | null;
 }) {
+  const ehOs = !balcaoOrderId && !!orderId;
+  const idRef = (balcaoOrderId ?? orderId)!;
+  const refCorpo = ehOs ? { order_id: idRef } : { balcao_order_id: idRef };
   const [nfeAberta, setNfeAberta] = useState(false);
   const { settings } = useStoreSettings();
   const ativo = !!(settings as { fiscal_ativo?: boolean } | null)?.fiscal_ativo;
   const teste = (settings as { fiscal_ambiente?: string } | null)?.fiscal_ambiente !== 'producao';
   const qc = useQueryClient();
-  const { data: nota, isLoading } = useNotaDaVenda(balcaoOrderId, ativo);
+  const { data: nota, isLoading } = useNotaDaVenda(idRef, ativo, ehOs ? 'order_id' : 'balcao_order_id');
   const [cpf, setCpf] = useState(clientCpf ?? '');
   const [enviando, setEnviando] = useState(false);
   useEffect(() => { setCpf(clientCpf ?? ''); }, [clientCpf]);
@@ -56,7 +63,7 @@ export function NotaFiscalVenda({ balcaoOrderId, clientCpf, clientPhone, clientI
   if (!ativo) return null;
 
   const recarregar = () => {
-    qc.invalidateQueries({ queryKey: ['nota-venda', balcaoOrderId] });
+    qc.invalidateQueries({ queryKey: ['nota-venda', idRef] });
     qc.invalidateQueries({ queryKey: ['notas-fiscais'] });
   };
   const emitir = async () => {
@@ -64,7 +71,7 @@ export function NotaFiscalVenda({ balcaoOrderId, clientCpf, clientPhone, clientI
     if (d && d.length !== 11 && d.length !== 14) { toast.error('CPF/CNPJ incompleto. Corrija ou deixe em branco.'); return; }
     setEnviando(true);
     try {
-      const r = await chamarFiscal<{ status: string; motivo?: string | null }>({ acao: 'emitir_nfce', balcao_order_id: balcaoOrderId, cpf: d || null });
+      const r = await chamarFiscal<{ status: string; motivo?: string | null }>({ acao: 'emitir_nfce', ...refCorpo, cpf: d || null });
       if (r.status === 'autorizada') toast.success('Nota fiscal autorizada!');
       else if (r.status === 'rejeitada') toast.error(`Nota rejeitada: ${r.motivo ?? 'veja o motivo abaixo'}`);
       else toast.success('Nota enviada. Aguardando a SEFAZ...');
@@ -97,7 +104,10 @@ export function NotaFiscalVenda({ balcaoOrderId, clientCpf, clientPhone, clientI
   return (
     <div className="rounded-lg border border-border bg-muted/20 px-3 py-2.5 space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Nota fiscal</p>
+        <div>
+          <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Nota fiscal{ehOs ? ' das peças' : ''}</p>
+          {ehOs && <p className="text-[11px] text-muted-foreground">Só as peças. A mão de obra vai na nota de serviço (NFS-e).</p>}
+        </div>
         {teste && <span className="text-[10px] font-medium text-amber-600">teste · sem valor fiscal</span>}
       </div>
       {isLoading ? <p className="text-xs text-muted-foreground">Carregando…</p> : (
@@ -144,7 +154,7 @@ export function NotaFiscalVenda({ balcaoOrderId, clientCpf, clientPhone, clientI
           )}
         </>
       )}
-      <NovaNfe aberto={nfeAberta} onFechar={() => setNfeAberta(false)} balcaoOrderId={balcaoOrderId}
+      <NovaNfe aberto={nfeAberta} onFechar={() => setNfeAberta(false)} balcaoOrderId={balcaoOrderId} orderId={ehOs ? orderId : undefined}
         clientId={clientId} clientNome={clientNome} clientDoc={clientCpf} />
     </div>
   );
