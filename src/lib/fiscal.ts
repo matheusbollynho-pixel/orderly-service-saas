@@ -80,3 +80,11 @@ export function diasParaVencer(validade: string | null | undefined, hoje = new D
   if (Number.isNaN(v.getTime())) return null;
   return Math.floor((v.getTime() - hoje.getTime()) / 86_400_000);
 }
+
+export type FiscalAuto = 'nao' | 'cartao' | 'todas';
+/** A venda finalizada deve gerar NFC-e sozinha? 'cartao' = se alguma parte foi paga no cartão. */
+export function deveEmitirAuto(regra: FiscalAuto | null | undefined, formas: string[]): boolean {
+  if (regra === 'todas') return true;
+  if (regra === 'cartao') return formas.some((f) => /^cart(a|ã)o|credito|debito/i.test(f || ''));
+  return false;
+}

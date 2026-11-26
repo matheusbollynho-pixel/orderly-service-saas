@@ -1,4 +1,4 @@
-import { diasParaVencer, faixasSeguidas, textoFaixa } from '../lib/fiscal';
+import { deveEmitirAuto, diasParaVencer, faixasSeguidas, textoFaixa } from '../lib/fiscal';
 import { describe, expect, it } from 'vitest';
 import { agoraBrasilia, certificadoAtivo, formaSpedy, lerInutilizacao, mensagemErro, montarNfce, statusSpedy } from '../../supabase/functions/_shared/fiscal/spedy';
 
@@ -116,5 +116,14 @@ describe('NFC-e Spedy', () => {
       { expirationAt: '2027-01-09T17:55:18', subject: 'MATHEUS:24890547000178', isActive: true },
     ])).toEqual({ validade: '2027-01-09T17:55:18', titular: 'MATHEUS:24890547000178', ativo: true });
     expect(certificadoAtivo([])).toBeNull();
+  });
+  it('nota automática: só cartão / todas / não', () => {
+    expect(deveEmitirAuto('cartao', ['cartao_credito'])).toBe(true);
+    expect(deveEmitirAuto('cartao', ['dinheiro', 'cartao_debito'])).toBe(true);
+    expect(deveEmitirAuto('cartao', ['pix'])).toBe(false);
+    expect(deveEmitirAuto('cartao', ['fiado'])).toBe(false);
+    expect(deveEmitirAuto('todas', ['pix'])).toBe(true);
+    expect(deveEmitirAuto('nao', ['cartao_credito'])).toBe(false);
+    expect(deveEmitirAuto(undefined, ['cartao_credito'])).toBe(false);
   });
 });

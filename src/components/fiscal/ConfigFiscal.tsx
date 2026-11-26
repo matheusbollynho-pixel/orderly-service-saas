@@ -17,6 +17,7 @@ type Fiscal = {
   fiscal_icms_aliquota?: number | null; fiscal_fcp_aliquota?: number | null; fiscal_pis_cofins_cst?: number;
   fiscal_pis_aliquota?: number; fiscal_cofins_aliquota?: number; fiscal_ncm_padrao?: string | null;
   fiscal_cfop_padrao?: string; fiscal_csosn_padrao?: string; fiscal_origem_padrao?: number;
+  fiscal_auto?: 'nao' | 'cartao' | 'todas';
 };
 
 const CST_PIS = [
@@ -46,13 +47,14 @@ export function ConfigFiscal() {
   const [cfop, setCfop] = useState('5102');
   const [csosn, setCsosn] = useState('102');
   const [origem, setOrigem] = useState(0);
+  const [auto, setAuto] = useState<'nao' | 'cartao' | 'todas'>('nao');
 
   useEffect(() => {
     if (!settings) return;
     setRegime(f.fiscal_regime === 'normal' ? 'normal' : 'simples');
     setIcms(txt(f.fiscal_icms_aliquota)); setFcp(txt(f.fiscal_fcp_aliquota));
     setCstPis(Number(f.fiscal_pis_cofins_cst ?? 4)); setPis(txt(f.fiscal_pis_aliquota ?? 0.65)); setCofins(txt(f.fiscal_cofins_aliquota ?? 3));
-    setNcm(f.fiscal_ncm_padrao ?? ''); setCfop(f.fiscal_cfop_padrao ?? '5102'); setCsosn(f.fiscal_csosn_padrao ?? '102'); setOrigem(Number(f.fiscal_origem_padrao ?? 0));
+    setNcm(f.fiscal_ncm_padrao ?? ''); setCfop(f.fiscal_cfop_padrao ?? '5102'); setCsosn(f.fiscal_csosn_padrao ?? '102'); setOrigem(Number(f.fiscal_origem_padrao ?? 0)); setAuto(f.fiscal_auto ?? 'nao');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings?.id]);
 
@@ -91,6 +93,7 @@ export function ConfigFiscal() {
       fiscal_cfop_padrao: cfop,
       fiscal_csosn_padrao: csosn,
       fiscal_origem_padrao: origem,
+      fiscal_auto: auto,
     } as Partial<StoreSettings>);
   };
 
@@ -119,6 +122,17 @@ export function ConfigFiscal() {
           </div>
         ))}
         {emissores.filter((e) => e.ambiente === f.fiscal_ambiente).length === 0 && <p className="text-xs text-red-400">Nenhum CNPJ cadastrado para emitir. Fale com o suporte.</p>}
+      </div>
+
+      <div className="border border-white/10 rounded-lg p-3 space-y-2 bg-black/20">
+        <p className="text-sm font-semibold text-neutral-200">Nota automática</p>
+        <label className={rotulo}>Ao finalizar uma venda no balcão, emitir a NFC-e sozinho?</label>
+        <select value={auto} onChange={(e) => setAuto(e.target.value as 'nao' | 'cartao' | 'todas')} className={campo}>
+          <option value="nao">Não — só quando apertar "Emitir nota fiscal"</option>
+          <option value="cartao">Só vendas pagas no cartão</option>
+          <option value="todas">Todas as vendas</option>
+        </select>
+        <p className="text-[11px] text-neutral-500">Fiado e vendas sem cartão continuam podendo emitir pelo botão da venda. Salve no botão "Salvar impostos" abaixo.</p>
       </div>
 
       <div className="border border-white/10 rounded-lg p-3 space-y-3 bg-black/20">

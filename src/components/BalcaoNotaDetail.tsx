@@ -4,6 +4,7 @@ import { matchesSearch } from '@/lib/textSearch';
 import { useTipoDoCliente, useTiposCliente } from '@/hooks/useTiposCliente';
 import { useCaixaFechado } from '@/hooks/useCaixaFechado';
 import { NotaFiscalVenda, useNotaDaVenda } from '@/components/fiscal/NotaFiscalVenda';
+import { chamarFiscal, deveEmitirAuto, type FiscalAuto } from '@/lib/fiscal';
 import { motivoCancelamento } from '@/lib/motivoCancelamento';
 import { digitadoParaCliente, economiaUnit, precoParaCliente, regraDoTipo, tipoEmDia, type TipoCliente } from '@/lib/precoCliente';
 import { useState, useRef, useEffect } from 'react';
@@ -557,6 +558,20 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     if (!(await confirmar({ titulo: `Finalizar a nota de R$ ${total.toFixed(2)}?`, descricao: 'O valor entra no caixa e as peças saem do estoque.', verbo: 'Finalizar nota' }))) return;
     await saveTotals(discPct);
     await finalizeOrder(order.id);
+    // Nota fiscal automática (Configurações › Nota fiscal). Só depois de finalizar com sucesso.
+    const regra = (storeSettings as { fiscal_auto?: FiscalAuto } | null)?.fiscal_auto;
+    const formas = paymentEntries.length ? paymentEntries.map((e) => e.method) : [];
+    if (fiscalLigado && deveEmitirAuto(regra, formas)) {
+      const cpf = editClientCpf.replace(/\D/g, '');
+      chamarFiscal<{ status: string; motivo?: string | null }>({ acao: 'emitir_nfce', balcao_order_id: order.id, cpf: cpf.length === 11 || cpf.length === 14 ? cpf : null })
+        .then((r) => {
+          if (r.status === 'autorizada') toast.success('Nota fiscal emitida automaticamente.');
+          else if (r.status === 'rejeitada') toast.error(`Nota fiscal recusada: ${r.motivo ?? 'veja na venda'}`);
+          else toast.success('Nota fiscal enviada. Aguardando a SEFAZ...');
+        })
+        .catch((e) => toast.error(`Nota fiscal não saiu: ${(e as Error).message}. Use o botão "Emitir nota fiscal" na venda.`))
+        .finally(() => queryClient.invalidateQueries({ queryKey: ['nota-venda', order.id] }));
+    }
   };
 
   // ── Cancelar ──────────────────────────────────────────────────
