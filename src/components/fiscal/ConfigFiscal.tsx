@@ -18,6 +18,7 @@ type Fiscal = {
   fiscal_pis_aliquota?: number; fiscal_cofins_aliquota?: number; fiscal_ncm_padrao?: string | null;
   fiscal_cfop_padrao?: string; fiscal_csosn_padrao?: string; fiscal_origem_padrao?: number;
   fiscal_auto?: 'nao' | 'cartao' | 'todas';
+  fiscal_contador_doc?: string | null;
 };
 
 const CST_PIS = [
@@ -48,13 +49,14 @@ export function ConfigFiscal() {
   const [csosn, setCsosn] = useState('102');
   const [origem, setOrigem] = useState(0);
   const [auto, setAuto] = useState<'nao' | 'cartao' | 'todas'>('nao');
+  const [contador, setContador] = useState('');
 
   useEffect(() => {
     if (!settings) return;
     setRegime(f.fiscal_regime === 'normal' ? 'normal' : 'simples');
     setIcms(txt(f.fiscal_icms_aliquota)); setFcp(txt(f.fiscal_fcp_aliquota));
     setCstPis(Number(f.fiscal_pis_cofins_cst ?? 4)); setPis(txt(f.fiscal_pis_aliquota ?? 0.65)); setCofins(txt(f.fiscal_cofins_aliquota ?? 3));
-    setNcm(f.fiscal_ncm_padrao ?? ''); setCfop(f.fiscal_cfop_padrao ?? '5102'); setCsosn(f.fiscal_csosn_padrao ?? '102'); setOrigem(Number(f.fiscal_origem_padrao ?? 0)); setAuto(f.fiscal_auto ?? 'nao');
+    setNcm(f.fiscal_ncm_padrao ?? ''); setCfop(f.fiscal_cfop_padrao ?? '5102'); setCsosn(f.fiscal_csosn_padrao ?? '102'); setOrigem(Number(f.fiscal_origem_padrao ?? 0)); setAuto(f.fiscal_auto ?? 'nao'); setContador(fmtCpf(f.fiscal_contador_doc ?? ''));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings?.id]);
 
@@ -70,6 +72,7 @@ export function ConfigFiscal() {
   const erro = (() => {
     if (ncm && ncm.replace(/\D/g, '').length !== 8) return 'O NCM padrão precisa ter 8 dígitos.';
     if (!/^\d{4}$/.test(cfop)) return 'O CFOP padrão precisa ter 4 dígitos.';
+    if (contador.trim() && ![11, 14].includes(contador.replace(/\D/g, '').length)) return 'CPF/CNPJ do contador incompleto.';
     if (regime === 'normal') {
       const a = num(icms);
       if (a == null || !(a > 0 && a <= 40)) return 'Informe a alíquota de ICMS (ex.: 20,5).';
@@ -94,6 +97,7 @@ export function ConfigFiscal() {
       fiscal_csosn_padrao: csosn,
       fiscal_origem_padrao: origem,
       fiscal_auto: auto,
+      ...(contador.trim() || f.fiscal_contador_doc != null ? { fiscal_contador_doc: contador.replace(/\D/g, '') || null } : {}),
     } as Partial<StoreSettings>);
   };
 
@@ -133,6 +137,13 @@ export function ConfigFiscal() {
           <option value="todas">Todas as vendas</option>
         </select>
         <p className="text-[11px] text-neutral-500">Fiado e vendas sem cartão continuam podendo emitir pelo botão da venda. Salve no botão "Salvar impostos" abaixo.</p>
+      </div>
+
+      <div className="border border-white/10 rounded-lg p-3 space-y-2 bg-black/20">
+        <p className="text-sm font-semibold text-neutral-200">Contador</p>
+        <label className={rotulo}>CPF ou CNPJ do escritório de contabilidade</label>
+        <input inputMode="numeric" value={contador} onChange={(e) => setContador(e.target.value)} onBlur={() => setContador(fmtCpf(contador))} placeholder="Opcional" className={campo} />
+        <p className="text-[11px] text-neutral-500">Vai em cada nota como autorizado a baixar o XML direto na SEFAZ. Na Bahia é obrigatório na NF-e: sem contador, o sistema informa o CNPJ da própria SEFAZ-BA. Salve no botão "Salvar impostos".</p>
       </div>
 
       <div className="border border-white/10 rounded-lg p-3 space-y-3 bg-black/20">

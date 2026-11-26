@@ -70,6 +70,17 @@ export interface VendaNfce {
   online?: boolean
   /** Data/hora da emissão no horário de Brasília (AAAA-MM-DDTHH:MM:SS). Sempre a de AGORA: a SEFAZ recusa NFC-e atrasada (704). */
   emitidaEm?: string
+  /** CPF/CNPJ autorizados a baixar o XML na SEFAZ (grupo autXML): o escritório de contabilidade */
+  autorizadosXml?: string[]
+}
+
+/** CNPJ da SEFAZ-BA: a Bahia exige o grupo autXML na NF-e; sem contador, informa este (rejeição 486). */
+export const CNPJ_SEFAZ_BA = '13937073000156'
+/** Quem pode baixar o XML: o contador da loja; na Bahia sem contador, a própria SEFAZ-BA. */
+export function autorizadosXml(contadorDoc: string | null | undefined, ufEmitente: string | null | undefined): string[] {
+  const d = String(contadorDoc ?? '').replace(/\D/g, '')
+  if (d.length === 11 || d.length === 14) return [d]
+  return String(ufEmitente ?? '').toUpperCase() === 'BA' ? [CNPJ_SEFAZ_BA] : []
 }
 
 /** Agora no horário de Brasília, no formato que a Spedy espera (sem fuso). */
@@ -96,7 +107,13 @@ export function formaSpedy(forma: string): string {
 }
 
 /** Monta o corpo do POST /v1/consumer-invoices. Lança erro com mensagem clara se faltar dado fiscal. */
-export function montarNfce(v: VendaNfce, pad: PadroesFiscais) {
+/** Ajustes usados pela NF-e (venda para outro estado): CFOP 6xxx e alíquota interestadual por item. */
+export interface AjustesNota {
+  cfop?: (cfop: number, comSt: boolean) => number
+  icmsRate?: (it: ItemVenda) => number
+}
+
+export function montarNfce(v: VendaNfce, pad: PadroesFiscais, aj: AjustesNota = {}) {
   if (!v.itens.length) throw new Error('A venda não tem itens.')
   const faltando: string[] = []
   const itens = v.itens.map((it) => {
@@ -109,7 +126,7 @@ export function montarNfce(v: VendaNfce, pad: PadroesFiscais) {
     throw new Error(`Sem NCM (código fiscal do produto): ${faltando.join(', ')}. Cadastre o NCM no produto ou um NCM padrão nas configurações fiscais.`)
   }
   const normal = pad.regime === 'normal'
-  if (normal && itens.some((x) => !itemComSt(x.it.csosn, x.it.cfop)) && !(Number(pad.icmsAliquota) > 0)) {
+  if (normal && !aj.icmsRate && itens.some((x) => !itemComSt(x.it.csosn, x.it.cfop)) && !(Number(pad.icmsAliquota) > 0)) {
     throw new Error('Configure a alíquota de ICMS da loja (configurações fiscais) para emitir no regime normal.')
   }
   const fcp = Number(pad.fcpAliquota) || 0
@@ -130,7 +147,7 @@ export function montarNfce(v: VendaNfce, pad: PadroesFiscais) {
     if (itemComSt(it.csosn, it.cfop)) {
       icms = { origin, cst: 60 }
     } else {
-      const rate = Number(pad.icmsAliquota)
+      const rate = aj.icmsRate ? aj.icmsRate(it) : Number(pad.icmsAliquota)
       const amount = r2(liquido * rate / 100)
       somaBaseIcms = r2(somaBaseIcms + liquido); somaIcms = r2(somaIcms + amount)
       icms = { origin, cst: 0, baseTaxModality: 3, baseTax: liquido, baseTaxReduction: 0, rate, amount }
@@ -168,7 +185,11 @@ export function montarNfce(v: VendaNfce, pad: PadroesFiscais) {
       description: x.it.descricao.slice(0, 120),
       ncm: x.ncm,
       ...(x.it.cest ? { cest: x.it.cest } : {}),
-      cfop: Number((x.it.cfop || (itemComSt(x.it.csosn, null) ? '5405' : pad.cfop)).replace(/\D/g, '')),
+      cfop: (() => {
+        const st = itemComSt(x.it.csosn, x.it.cfop)
+        const base = Number((x.it.cfop || (itemComSt(x.it.csosn, null) ? '5405' : pad.cfop)).replace(/\D/g, ''))
+        return aj.cfop ? aj.cfop(base, st) : base
+      })(),
       unit: unidade,
       quantity: x.it.quantidade,
       unitAmount: r2(x.it.valorUnitario),
@@ -198,6 +219,7 @@ export function montarNfce(v: VendaNfce, pad: PadroesFiscais) {
     presenceType: v.online ? 'internet' : 'presence',
     operationNature: 'Venda de Mercadoria',
     sendEmailToCustomer: false,
+    ...(v.autorizadosXml?.length ? { authorizedPersons: v.autorizadosXml.slice(0, 10) } : {}),
     ...(cpf.length === 11 || cpf.length === 14 ? { receiver: { federalTaxNumber: cpf } } : {}),
     items: corpoItens,
     payments,
@@ -205,6 +227,110 @@ export function montarNfce(v: VendaNfce, pad: PadroesFiscais) {
       invoiceAmount: totalNota, productAmount: bruto, ...(desconto > 0 ? { discountAmount: desconto } : {}),
       ...(normal ? { icmsBaseTax: somaBaseIcms, icmsAmount: somaIcms, ...(somaFcp > 0 ? { fcpAmount: somaFcp } : {}), pisAmount: somaPis, cofinsAmount: somaCofins } : {}),
     },
+  }
+}
+
+// --------------------------------------------------------------- NF-e (modelo 55, cliente com CNPJ)
+
+export interface Destinatario {
+  documento: string            // CNPJ (14) ou CPF (11)
+  nome: string                 // razão social
+  ie?: string | null           // números ou 'ISENTO'
+  ieIndicador?: 'contribuinte' | 'isento' | 'nao_contribuinte' | null
+  email?: string | null
+  telefone?: string | null
+  logradouro: string
+  numero: string
+  complemento?: string | null
+  bairro: string
+  cep: string
+  cidade: string
+  uf: string
+  cidadeIbge: string
+}
+export interface VendaNfe extends VendaNfce {
+  destinatario: Destinatario
+  /** UF de quem emite (ex.: 'BA') — decide se é venda interna ou para outro estado */
+  ufEmitente: string
+  /** Cliente vai revender/usar na produção? (lojista com IE = sim). Padrão: contribuinte com IE não é consumidor final */
+  consumidorFinal?: boolean
+  observacao?: string | null
+}
+
+const IND_IE = { contribuinte: 'taxPayer', isento: 'exempt', nao_contribuinte: 'nonTaxPayer' } as const
+// Regiões que recebem 7% quando a venda sai do Sul/Sudeste (exceto ES): Norte, Nordeste, Centro-Oeste e ES
+const UF_SUL_SUDESTE = ['SP', 'RJ', 'MG', 'PR', 'SC', 'RS']
+const ORIGEM_IMPORTADA = [1, 2, 3, 8]
+
+/** CFOP de venda interna (5xxx) → interestadual (6xxx). 5405 (ST já retido) vira 6404. */
+export function cfopInterestadual(cfop: number): number {
+  if (cfop === 5405) return 6404
+  const s = String(cfop)
+  return s.startsWith('5') ? Number('6' + s.slice(1)) : cfop
+}
+
+/** Alíquota de ICMS em venda para outro estado: 4% importado; 7% do Sul/Sudeste para N/NE/CO/ES; senão 12%. */
+export function aliquotaInterestadual(ufOrigem: string, ufDestino: string, origemProduto: number): number {
+  if (ORIGEM_IMPORTADA.includes(origemProduto)) return 4
+  const o = ufOrigem.toUpperCase(), d = ufDestino.toUpperCase()
+  if (UF_SUL_SUDESTE.includes(o) && !UF_SUL_SUDESTE.includes(d)) return 7
+  return 12
+}
+
+/** Monta o corpo do POST /v1/product-invoices. Lança erro claro se faltar dado do cliente. */
+export function montarNfe(v: VendaNfe, pad: PadroesFiscais) {
+  const d = v.destinatario
+  const doc = (d.documento || '').replace(/\D/g, '')
+  const faltam: string[] = []
+  if (doc.length !== 14 && doc.length !== 11) faltam.push('CNPJ/CPF')
+  if (!d.nome?.trim()) faltam.push('razão social')
+  if (!d.logradouro?.trim()) faltam.push('rua')
+  if (!d.bairro?.trim()) faltam.push('bairro')
+  if ((d.cep || '').replace(/\D/g, '').length !== 8) faltam.push('CEP')
+  if (!d.cidade?.trim()) faltam.push('cidade')
+  if ((d.uf || '').trim().length !== 2) faltam.push('UF')
+  if ((d.cidadeIbge || '').replace(/\D/g, '').length !== 7) faltam.push('código IBGE da cidade')
+  if (faltam.length) throw new Error(`Faltam dados do cliente para a NF-e: ${faltam.join(', ')}. Use o "Buscar CNPJ" no cadastro do cliente.`)
+
+  const ieNum = (d.ie || '').replace(/\D/g, '')
+  const indicador = d.ieIndicador
+    ?? (doc.length === 14 && ieNum ? 'contribuinte' : doc.length === 14 && /isento/i.test(d.ie || '') ? 'isento' : 'nao_contribuinte')
+  if (indicador === 'contribuinte' && !ieNum) throw new Error('Cliente marcado como contribuinte de ICMS, mas sem Inscrição Estadual.')
+  const ufE = (v.ufEmitente || '').toUpperCase(), ufD = d.uf.toUpperCase()
+  if (ufE.length !== 2) throw new Error('UF da loja emitente não configurada.')
+  const interestadual = ufE !== ufD
+  const consumidorFinal = v.consumidorFinal ?? indicador !== 'contribuinte'
+  // Venda para consumidor final não contribuinte em outro estado exige DIFAL (partilha do ICMS): ainda não feito
+  if (interestadual && indicador === 'nao_contribuinte') {
+    throw new Error('Venda para outro estado a não contribuinte (DIFAL) ainda não é emitida pelo sistema. Fale com o contador.')
+  }
+
+  const aj: AjustesNota = interestadual
+    ? { cfop: (c) => cfopInterestadual(c), icmsRate: (it) => aliquotaInterestadual(ufE, ufD, it.origem ?? pad.origem) }
+    : {}
+  // FCP é de operação interna; em venda para outro estado não vai
+  const base = montarNfce({ ...v, cpf: null, online: v.online }, interestadual ? { ...pad, fcpAliquota: null } : pad, aj)
+  return {
+    ...base,
+    isFinalCustomer: consumidorFinal,
+    destination: interestadual ? 'interstate' : 'internal',
+    receiver: {
+      name: d.nome.trim().slice(0, 60),
+      federalTaxNumber: doc,
+      stateTaxNumberIndicator: IND_IE[indicador],
+      ...(indicador === 'contribuinte' ? { stateTaxNumber: ieNum } : indicador === 'isento' ? { stateTaxNumber: 'ISENTO' } : {}),
+      ...(d.email ? { email: d.email.trim() } : {}),
+      ...(d.telefone && d.telefone.replace(/\D/g, '').length >= 10 ? { phoneNumber: d.telefone.replace(/\D/g, '') } : {}),
+      address: {
+        street: d.logradouro.trim().slice(0, 60),
+        number: (d.numero || 'S/N').trim().slice(0, 60),
+        ...(d.complemento ? { additionalInformation: d.complemento.trim().slice(0, 60) } : {}),
+        district: d.bairro.trim().slice(0, 60),
+        postalCode: d.cep.replace(/\D/g, ''),
+        city: { code: d.cidadeIbge.replace(/\D/g, ''), name: d.cidade.trim(), state: ufD },
+      },
+    },
+    ...(v.observacao ? { additionalInformation: v.observacao.slice(0, 2000) } : {}),
   }
 }
 
@@ -264,8 +390,16 @@ function lerNota(d: Record<string, unknown>): RetornoNota {
     chave: (d.accessKey as string) || null,
     protocolo: auth.protocol || null,
     autorizadaEm: status === 'autorizada' ? auth.date || null : null,
-    motivo: !['rejeitada', 'denegada', 'erro'].includes(status) ? null : det.message ? `${det.code ? det.code + ' - ' : ''}${det.message}` : null,
+    motivo: motivoNota(status, det),
   }
+}
+
+/** Motivo para mostrar: recusa da nota; ou, em nota autorizada, um pedido que falhou depois (ex.: cancelamento recusado). */
+export function motivoNota(status: StatusNota, det: { message?: string; code?: string; status?: string }): string | null {
+  const texto = det.message ? `${det.code ? det.code + ' - ' : ''}${det.message}` : null
+  if (['rejeitada', 'denegada', 'erro'].includes(status)) return texto
+  if (status === 'autorizada' && det.status === 'failed' && texto) return `Último pedido recusado pela SEFAZ (a nota continua valendo): ${texto}`
+  return null
 }
 
 export interface RetornoInutilizacao { idFornecedor: string | null; status: 'processando' | 'inutilizada' | 'rejeitada'; protocolo: string | null; motivo: string | null }
@@ -331,6 +465,21 @@ export const spedy = {
   enviarCertificado,
   listarCertificados: async (amb: Ambiente, chave: string, empresaId: string) =>
     certificadoAtivo(await chamar(amb, chave, 'GET', `/companies/${empresaId}/certificates`)),
+  /** UF da empresa emitente cadastrada na Spedy (ex.: 'BA') */
+  ufDaEmpresa: async (amb: Ambiente, chave: string, empresaId: string) => {
+    const e = await chamar(amb, chave, 'GET', `/companies/${empresaId}`)
+    return String(((e.address as { city?: { state?: string } })?.city?.state) ?? '').toUpperCase()
+  },
+  emitirNfe: async (amb: Ambiente, chave: string, corpo: unknown) => lerNota(await chamar(amb, chave, 'POST', '/product-invoices', corpo)),
+  consultarNfe: async (amb: Ambiente, chave: string, id: string) => lerNota(await chamar(amb, chave, 'GET', `/product-invoices/${id}`)),
+  cancelarNfe: async (amb: Ambiente, chave: string, id: string, motivo: string) => {
+    await chamar(amb, chave, 'DELETE', `/product-invoices/${id}`, { reason: motivo })
+  },
+  /** Carta de correção (CC-e): texto de 15 a 1000 letras; não corrige valor, imposto, item nem emitente/destinatário */
+  corrigirNfe: async (amb: Ambiente, chave: string, id: string, texto: string) =>
+    chamar(amb, chave, 'POST', `/product-invoices/${id}/corrections`, { letter: texto }), // a doc diz 'description', a API exige 'letter' (testado 26/11)
+  /** Link público do XML (não precisa de chave) */
+  urlXml: (amb: Ambiente, modelo: 'nfce' | 'nfe', id: string) => `${baseUrl(amb)}/${modelo === 'nfe' ? 'product-invoices' : 'consumer-invoices'}/${id}/xml`,
   urlPdfNfce: (amb: Ambiente, id: string) => `${baseUrl(amb)}/consumer-invoices/${id}/pdf`,
   urlXmlNfce: (amb: Ambiente, id: string) => `${baseUrl(amb)}/consumer-invoices/${id}/xml`,
 }

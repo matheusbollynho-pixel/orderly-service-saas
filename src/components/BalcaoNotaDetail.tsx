@@ -1580,7 +1580,8 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
           })()}
 
           {order.status === 'finalizada' && (
-            <NotaFiscalVenda balcaoOrderId={order.id} clientCpf={editClientCpf || order.client_cpf} clientPhone={editClientPhone || order.client_phone} />
+            <NotaFiscalVenda balcaoOrderId={order.id} clientCpf={editClientCpf || order.client_cpf} clientPhone={editClientPhone || order.client_phone}
+              clientId={order.client_id ?? null} clientNome={editClientName || order.client_name} />
           )}
         </div>
       </div>

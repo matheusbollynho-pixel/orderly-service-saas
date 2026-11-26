@@ -1,6 +1,6 @@
 import { deveEmitirAuto, diasParaVencer, faixasSeguidas, textoFaixa } from '../lib/fiscal';
 import { describe, expect, it } from 'vitest';
-import { agoraBrasilia, certificadoAtivo, formaSpedy, lerInutilizacao, mensagemErro, montarNfce, statusSpedy } from '../../supabase/functions/_shared/fiscal/spedy';
+import { agoraBrasilia, certificadoAtivo, formaSpedy, lerInutilizacao, mensagemErro, motivoNota, montarNfce, statusSpedy } from '../../supabase/functions/_shared/fiscal/spedy';
 
 const pad = { ncm: null, cfop: '5102', csosn: '102', origem: 0, pisCofinsCst: 49 };
 const item = (o: Partial<Parameters<typeof montarNfce>[0]['itens'][number]> = {}) => ({
@@ -125,5 +125,11 @@ describe('NFC-e Spedy', () => {
     expect(deveEmitirAuto('todas', ['pix'])).toBe(true);
     expect(deveEmitirAuto('nao', ['cartao_credito'])).toBe(false);
     expect(deveEmitirAuto(undefined, ['cartao_credito'])).toBe(false);
+  });
+  it('motivo: recusa da nota e cancelamento recusado em nota autorizada', () => {
+    expect(motivoNota('rejeitada', { code: '462', message: 'CSC', status: 'success' })).toBe('462 - CSC');
+    expect(motivoNota('autorizada', { code: '494', message: 'Rejeicao: Chave de acesso inexistente', status: 'failed' })).toMatch(/continua valendo.*494/);
+    expect(motivoNota('autorizada', { code: '100', message: 'Autorizado o uso', status: 'success' })).toBeNull();
+    expect(motivoNota('cancelada', { code: '135', message: 'Cancelamento homologado', status: 'success' })).toBeNull();
   });
 });

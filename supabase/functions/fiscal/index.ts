@@ -5,7 +5,8 @@
 //   { acao: 'cancelar', nota_id, motivo }   (mín. 15 caracteres; quem pode estornar)
 // A loja é sempre a do usuário logado; módulo fiscal precisa estar ligado na loja.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { agoraBrasilia, montarNfce, spedy, type Ambiente, type RetornoNota } from '../_shared/fiscal/spedy.ts'
+import { strToU8, zipSync } from 'https://esm.sh/fflate@0.8.2'
+import { agoraBrasilia, autorizadosXml, montarNfce, montarNfe, spedy, type Destinatario, type ItemVenda, type PadroesFiscais, type Ambiente, type RetornoNota } from '../_shared/fiscal/spedy.ts'
 
 const URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -23,10 +24,16 @@ const admin = createClient(URL, SERVICE, { auth: { autoRefreshToken: false, pers
 
 // Grava o que o fornecedor devolveu na nossa nota
 async function salvarRetorno(notaId: string, r: RetornoNota) {
+  // Nota já cancelada não perde o horário/protocolo de autorização (a Spedy devolve a autorização original)
   await admin.from('notas_fiscais').update({
     fornecedor_nota_id: r.idFornecedor, status: r.status, numero: r.numero, serie: r.serie, chave: r.chave,
-    protocolo: r.protocolo, autorizada_em: r.autorizadaEm, motivo: r.motivo, updated_at: new Date().toISOString(),
+    ...(r.status !== 'cancelada' ? { protocolo: r.protocolo, autorizada_em: r.autorizadaEm } : {}),
+    motivo: r.motivo, updated_at: new Date().toISOString(),
   }).eq('id', notaId)
+  // Cancelamento confirmado na consulta: grava quando (só da primeira vez)
+  if (r.status === 'cancelada') {
+    await admin.from('notas_fiscais').update({ cancelada_em: new Date().toISOString() }).eq('id', notaId).is('cancelada_em', null)
+  }
 }
 
 Deno.serve(async (req) => {
@@ -46,7 +53,7 @@ Deno.serve(async (req) => {
     if (!p?.acao) return erro('Ação não informada')
 
     const { data: cfg } = await admin.from('store_settings')
-      .select('fiscal_ativo, fiscal_ambiente, fiscal_ncm_padrao, fiscal_cfop_padrao, fiscal_csosn_padrao, fiscal_origem_padrao, fiscal_regime, fiscal_icms_aliquota, fiscal_pis_cofins_cst, fiscal_pis_aliquota, fiscal_cofins_aliquota, fiscal_fcp_aliquota')
+      .select('fiscal_ativo, fiscal_ambiente, fiscal_ncm_padrao, fiscal_cfop_padrao, fiscal_csosn_padrao, fiscal_origem_padrao, fiscal_regime, fiscal_icms_aliquota, fiscal_pis_cofins_cst, fiscal_pis_aliquota, fiscal_cofins_aliquota, fiscal_fcp_aliquota, fiscal_contador_doc')
       .eq('id', loja).single()
     if (!cfg?.fiscal_ativo) return erro('O módulo de nota fiscal não está ativo nesta loja.', 403)
     const amb = cfg.fiscal_ambiente as Ambiente
@@ -65,11 +72,46 @@ Deno.serve(async (req) => {
       return chave as string
     }
 
+    // ---------------------------------------------------------------- partes comuns NFC-e / NF-e
+    const padroes = (): PadroesFiscais => ({
+      ncm: cfg.fiscal_ncm_padrao, cfop: cfg.fiscal_cfop_padrao, csosn: cfg.fiscal_csosn_padrao,
+      origem: cfg.fiscal_origem_padrao, pisCofinsCst: 49,
+      regime: cfg.fiscal_regime === 'normal' ? 'normal' : 'simples',
+      icmsAliquota: cfg.fiscal_icms_aliquota != null ? Number(cfg.fiscal_icms_aliquota) : null,
+      pisCofinsCstNormal: Number(cfg.fiscal_pis_cofins_cst ?? 1),
+      pisAliquota: Number(cfg.fiscal_pis_aliquota ?? 0.65),
+      cofinsAliquota: Number(cfg.fiscal_cofins_aliquota ?? 3),
+      fcpAliquota: cfg.fiscal_fcp_aliquota != null ? Number(cfg.fiscal_fcp_aliquota) : null,
+    })
+    // Itens com os dados fiscais do cadastro do produto (item digitado à mão usa os padrões da loja)
+    const itensComFiscal = async (linhas: { description: string; quantity: number; unit_price: number; product_id: string | null }[]): Promise<ItemVenda[]> => {
+      const ids = [...new Set(linhas.map((i) => i.product_id).filter(Boolean))] as string[]
+      const { data: prods } = ids.length
+        ? await admin.from('inventory_products').select('id, code, barcode, unit, ncm, cest, cfop, csosn, origem_fiscal, pis_cofins_cst').eq('store_id', loja).in('id', ids)
+        : { data: [] }
+      const porId = new Map((prods ?? []).map((x: Record<string, unknown>) => [x.id as string, x]))
+      return linhas.map((i) => {
+        const pr = (i.product_id ? porId.get(i.product_id) : null) as Record<string, unknown> | null
+        return {
+          codigo: String(pr?.code ?? ''), descricao: String(i.description ?? '').trim() || 'ITEM', quantidade: Number(i.quantity), valorUnitario: Number(i.unit_price),
+          unidade: String(pr?.unit ?? 'UN'), ncm: (pr?.ncm as string) ?? null, cfop: (pr?.cfop as string) ?? null,
+          csosn: (pr?.csosn as string) ?? null, origem: pr?.origem_fiscal != null ? Number(pr.origem_fiscal) : null,
+          gtin: (pr?.barcode as string) ?? null, cest: (pr?.cest as string) ?? null,
+          pisCofinsCst: pr?.pis_cofins_cst != null ? Number(pr.pis_cofins_cst) : null,
+        }
+      })
+    }
+    const formasDaVenda = (venda: { payment_methods: unknown; payment_method: string | null }) =>
+      Array.isArray(venda.payment_methods) && venda.payment_methods.length
+        ? (venda.payment_methods as { method: string; amount: number }[]).map((x) => ({ forma: x.method, valor: Number(x.amount) || 0 }))
+        : [{ forma: venda.payment_method ?? 'dinheiro', valor: 0 }]
+    const MORTAS = ['rejeitada', 'denegada', 'cancelada', 'erro', 'inutilizada']
+
     // ---------------------------------------------------------------- emitir NFC-e de uma venda do balcão
     if (p.acao === 'emitir_nfce') {
       const { data: podeVender } = await comoUsuario.rpc('pode_acao', { acao: 'balcao' })
       if (podeVender !== true) return erro('Sem permissão de Balcão para emitir nota.', 403)
-      const { data: emissor } = await admin.from('fiscal_emissores').select('id')
+      const { data: emissor } = await admin.from('fiscal_emissores').select('id, uf')
         .eq('store_id', loja).eq('papel', 'vendas').eq('ambiente', amb).eq('ativo', true).maybeSingle()
       if (!emissor) return erro('Nenhum CNPJ de vendas configurado para emitir nota nesta loja.')
       const { data: venda } = await admin.from('balcao_orders')
@@ -79,33 +121,17 @@ Deno.serve(async (req) => {
       if (venda.status !== 'finalizada') return erro('Só dá para emitir nota de venda finalizada.')
 
       // Já tem nota viva desta venda? Reaproveita a rejeitada (corrige com o mesmo id).
-      const { data: anteriores } = await admin.from('notas_fiscais').select('id, status')
-        .eq('balcao_order_id', venda.id).eq('modelo', 'nfce').order('created_at', { ascending: false })
-      const viva = (anteriores ?? []).find((n) => !['rejeitada', 'denegada', 'cancelada', 'erro', 'inutilizada'].includes(n.status))
-      if (viva) return erro(viva.status === 'autorizada' ? 'Esta venda já tem nota autorizada.' : 'Esta venda já tem nota em processamento.')
+      const { data: anteriores } = await admin.from('notas_fiscais').select('id, status, modelo')
+        .eq('balcao_order_id', venda.id).order('created_at', { ascending: false })
+      const viva = (anteriores ?? []).find((n) => !MORTAS.includes(n.status))
+      if (viva) return erro(viva.status === 'autorizada' ? `Esta venda já tem ${viva.modelo === 'nfe' ? 'NF-e' : 'nota'} autorizada.` : 'Esta venda já tem nota em processamento.')
       // Tentativa que deu ERRO no envio (Spedy pode ou não ter recebido): reenvia com o MESMO id, sem risco de nota duplicada.
       // Nota REJEITADA pela SEFAZ não é reaproveitada: a Spedy mantém o horário antigo e a SEFAZ recusa NFC-e atrasada (704).
       // Então vira nota nova (próximo número); o número da rejeitada fica para inutilizar.
-      const rejeitada = (anteriores ?? []).find((n) => n.status === 'erro')
+      const rejeitada = (anteriores ?? []).find((n) => n.status === 'erro' && n.modelo === 'nfce')
 
-      const ids = [...new Set((venda.balcao_items ?? []).map((i: { product_id: string | null }) => i.product_id).filter(Boolean))]
-      const { data: prods } = ids.length
-        ? await admin.from('inventory_products').select('id, code, barcode, unit, ncm, cest, cfop, csosn, origem_fiscal, pis_cofins_cst').in('id', ids)
-        : { data: [] }
-      const porId = new Map((prods ?? []).map((x: Record<string, unknown>) => [x.id as string, x]))
-      const itens = (venda.balcao_items ?? []).map((i: { description: string; quantity: number; unit_price: number; product_id: string | null }) => {
-        const pr = (i.product_id ? porId.get(i.product_id) : null) as Record<string, unknown> | null
-        return {
-          codigo: String(pr?.code ?? ''), descricao: i.description, quantidade: Number(i.quantity), valorUnitario: Number(i.unit_price),
-          unidade: String(pr?.unit ?? 'UN'), ncm: (pr?.ncm as string) ?? null, cfop: (pr?.cfop as string) ?? null,
-          csosn: (pr?.csosn as string) ?? null, origem: pr?.origem_fiscal != null ? Number(pr.origem_fiscal) : null,
-          gtin: (pr?.barcode as string) ?? null, cest: (pr?.cest as string) ?? null,
-          pisCofinsCst: pr?.pis_cofins_cst != null ? Number(pr.pis_cofins_cst) : null,
-        }
-      })
-      const formas = Array.isArray(venda.payment_methods) && venda.payment_methods.length
-        ? venda.payment_methods.map((x: { method: string; amount: number }) => ({ forma: x.method, valor: Number(x.amount) || 0 }))
-        : [{ forma: venda.payment_method ?? 'dinheiro', valor: 0 }]
+      const itens = await itensComFiscal(venda.balcao_items ?? [])
+      const formas = formasDaVenda(venda)
 
       // Registro antes de enviar (o id dele é o identificador no fornecedor = sem nota duplicada)
       let notaId = rejeitada?.id as string | undefined
@@ -129,16 +155,8 @@ Deno.serve(async (req) => {
         corpo = montarNfce({
           idIntegracao: notaId!, itens, desconto: Number(venda.discount_amount) || 0, pagamentos: formas,
           cpf: p.cpf || venda.client_cpf, online: !!venda.venda_online, emitidaEm: agoraBrasilia(),
-        }, {
-          ncm: cfg.fiscal_ncm_padrao, cfop: cfg.fiscal_cfop_padrao, csosn: cfg.fiscal_csosn_padrao,
-          origem: cfg.fiscal_origem_padrao, pisCofinsCst: 49,
-          regime: cfg.fiscal_regime === 'normal' ? 'normal' : 'simples',
-          icmsAliquota: cfg.fiscal_icms_aliquota != null ? Number(cfg.fiscal_icms_aliquota) : null,
-          pisCofinsCstNormal: Number(cfg.fiscal_pis_cofins_cst ?? 1),
-          pisAliquota: Number(cfg.fiscal_pis_aliquota ?? 0.65),
-          cofinsAliquota: Number(cfg.fiscal_cofins_aliquota ?? 3),
-          fcpAliquota: cfg.fiscal_fcp_aliquota != null ? Number(cfg.fiscal_fcp_aliquota) : null,
-        })
+          autorizadosXml: autorizadosXml(cfg.fiscal_contador_doc, emissor.uf),
+        }, padroes())
       } catch (e) {
         await admin.from('notas_fiscais').update({ status: 'erro', motivo: String((e as Error).message) }).eq('id', notaId)
         return erro((e as Error).message)
@@ -155,7 +173,149 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ---------------------------------------------------------------- emitir NF-e (cliente com CNPJ): de uma venda ou avulsa
+    // Corpo: { acao:'emitir_nfe', destinatario:{...}, balcao_order_id? , itens?:[{descricao,quantidade,valor_unitario,product_id?}],
+    //          forma?, desconto?, consumidor_final?, observacao? }
+    if (p.acao === 'emitir_nfe') {
+      const q = p as unknown as {
+        destinatario?: Destinatario; balcao_order_id?: string; itens?: { descricao: string; quantidade: number; valor_unitario: number; product_id?: string | null }[]
+        forma?: string; desconto?: number; consumidor_final?: boolean; observacao?: string
+      }
+      const { data: podeVender } = await comoUsuario.rpc('pode_acao', { acao: 'balcao' })
+      if (podeVender !== true) return erro('Sem permissão de Balcão para emitir nota.', 403)
+      if (!q.destinatario) return erro('Informe os dados do cliente (destinatário).')
+      const { data: emissor } = await admin.from('fiscal_emissores').select('id, uf, fornecedor_empresa_id')
+        .eq('store_id', loja).eq('papel', 'vendas').eq('ambiente', amb).eq('ativo', true).maybeSingle()
+      if (!emissor) return erro('Nenhum CNPJ de vendas configurado para emitir nota nesta loja.')
+      const chave = await chaveDoEmissor(emissor.id)
+      // UF da loja: guardada no emissor; se não tiver, pergunta à Spedy uma vez e guarda
+      let ufEmitente = String(emissor.uf ?? '')
+      if (ufEmitente.length !== 2) {
+        ufEmitente = (await spedy.ufDaEmpresa(amb, chave, emissor.fornecedor_empresa_id).catch(() => '')) || ''
+        if (ufEmitente) await admin.from('fiscal_emissores').update({ uf: ufEmitente }).eq('id', emissor.id)
+      }
+
+      let itens: ItemVenda[]
+      let desconto = 0
+      let pagamentos: { forma: string; valor: number }[]
+      let reaproveitar: string | undefined
+      if (q.balcao_order_id) {
+        const { data: venda } = await admin.from('balcao_orders')
+          .select('id, status, discount_amount, payment_method, payment_methods, balcao_items(description, quantity, unit_price, product_id)')
+          .eq('id', q.balcao_order_id).eq('store_id', loja).single()
+        if (!venda) return erro('Venda não encontrada.', 404)
+        if (venda.status !== 'finalizada') return erro('Só dá para emitir nota de venda finalizada.')
+        const { data: anteriores } = await admin.from('notas_fiscais').select('id, status, modelo')
+          .eq('balcao_order_id', venda.id).order('created_at', { ascending: false })
+        const viva = (anteriores ?? []).find((n) => !MORTAS.includes(n.status))
+        if (viva) return erro(viva.modelo === 'nfce' ? 'Esta venda já tem NFC-e (cupom). Cancele o cupom antes de emitir a NF-e.' : 'Esta venda já tem NF-e.')
+        // NF-e rejeitada pode ser corrigida com o MESMO id (a SEFAZ aceita NF-e com data de até 30 dias): não pula número
+        reaproveitar = (anteriores ?? []).find((n) => n.modelo === 'nfe' && (n.status === 'rejeitada' || n.status === 'erro'))?.id
+        itens = await itensComFiscal(venda.balcao_items ?? [])
+        desconto = Number(venda.discount_amount) || 0
+        pagamentos = formasDaVenda(venda)
+      } else {
+        const lista = Array.isArray(q.itens) ? q.itens : []
+        if (!lista.length || lista.length > 100) return erro('Informe de 1 a 100 itens.')
+        if (lista.some((i) => !(Number(i.quantidade) > 0) || !(Number(i.valor_unitario) >= 0))) return erro('Quantidade e valor dos itens precisam ser números válidos.')
+        itens = await itensComFiscal(lista.map((i) => ({ description: i.descricao, quantity: Number(i.quantidade), unit_price: Number(i.valor_unitario), product_id: i.product_id ?? null })))
+        desconto = Math.max(0, Number(q.desconto) || 0)
+        pagamentos = [{ forma: q.forma || 'transferencia', valor: 0 }]
+      }
+
+      const doc = String(q.destinatario.documento ?? '').replace(/\D/g, '')
+      let notaId = reaproveitar
+      if (!notaId) {
+        const { data: nova, error } = await admin.from('notas_fiscais').insert({
+          store_id: loja, emissor_id: emissor.id, modelo: 'nfe', origem: q.balcao_order_id ? 'balcao' : 'manual',
+          balcao_order_id: q.balcao_order_id ?? null, ambiente: amb, status: 'processando', created_by: u.user.id,
+          cpf_cnpj_cliente: doc || null, destinatario_nome: String(q.destinatario.nome ?? '').slice(0, 120) || null,
+        }).select('id').single()
+        if (error) return erro(error.code === '23505' ? 'Esta venda já tem nota em processamento.' : error.message)
+        notaId = nova.id
+      } else {
+        await admin.from('notas_fiscais').update({ status: 'processando', motivo: null, cpf_cnpj_cliente: doc || null, destinatario_nome: String(q.destinatario.nome ?? '').slice(0, 120) || null, updated_at: new Date().toISOString() }).eq('id', notaId)
+      }
+      let corpo
+      try {
+        corpo = montarNfe({
+          idIntegracao: notaId!, itens, desconto, pagamentos, emitidaEm: agoraBrasilia(),
+          destinatario: q.destinatario, ufEmitente, consumidorFinal: q.consumidor_final, observacao: q.observacao ?? null,
+          autorizadosXml: autorizadosXml(cfg.fiscal_contador_doc, ufEmitente),
+        }, padroes())
+      } catch (e) {
+        await admin.from('notas_fiscais').update({ status: 'erro', motivo: String((e as Error).message) }).eq('id', notaId)
+        return erro((e as Error).message)
+      }
+      await admin.from('notas_fiscais').update({ valor: corpo.total.invoiceAmount }).eq('id', notaId)
+      try {
+        const r = await spedy.emitirNfe(amb, chave, corpo)
+        await salvarRetorno(notaId!, r)
+        return resp({ nota_id: notaId, ...r })
+      } catch (e) {
+        await admin.from('notas_fiscais').update({ status: 'erro', motivo: String((e as Error).message).slice(0, 500) }).eq('id', notaId)
+        return erro((e as Error).message, 502)
+      }
+    }
+
     // ---------------------------------------------------------------- inutilizar números pulados (NFC-e)
+    // ---------------------------------------------------------------- XMLs do período para o contador (.zip)
+    // Corpo: { acao:'xmls_periodo', de:'AAAA-MM-DD', ate:'AAAA-MM-DD' }. Autorizadas e canceladas + planilha resumo.
+    if (p.acao === 'xmls_periodo') {
+      const { data: pode } = await comoUsuario.rpc('pode_acao', { acao: 'relatorios' })
+      if (pode !== true) return erro('Sem permissão de Relatórios para baixar os XMLs.', 403)
+      const de = String(p.de ?? ''), ate = String(p.ate ?? '')
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(de) || !/^\d{4}-\d{2}-\d{2}$/.test(ate) || ate < de) return erro('Período inválido.')
+      const fim = new Date(`${ate}T00:00:00-03:00`); fim.setDate(fim.getDate() + 1)
+      if ((fim.getTime() - new Date(`${de}T00:00:00-03:00`).getTime()) / 86_400_000 > 93) return erro('Escolha no máximo 3 meses por vez.')
+      const { data: notas, error } = await admin.from('notas_fiscais')
+        .select('id, modelo, ambiente, fornecedor_nota_id, status, numero, serie, chave, valor, cpf_cnpj_cliente, destinatario_nome, autorizada_em, cancelada_em, cancel_motivo, created_at')
+        .eq('store_id', loja).in('status', ['autorizada', 'cancelada']).not('fornecedor_nota_id', 'is', null)
+        .gte('created_at', `${de}T00:00:00-03:00`).lt('created_at', fim.toISOString()).order('created_at').limit(3000)
+      if (error) return erro(error.message)
+      const { data: inuts } = await admin.from('fiscal_inutilizacoes').select('modelo, serie, numero_de, numero_ate, motivo, status, protocolo, created_at')
+        .eq('store_id', loja).gte('created_at', `${de}T00:00:00-03:00`).lt('created_at', fim.toISOString()).order('created_at')
+      if (!(notas ?? []).length && !(inuts ?? []).length) return erro('Nenhuma nota autorizada ou cancelada nesse período.')
+
+      const arquivos: Record<string, Uint8Array> = {}
+      const falhas: string[] = []
+      const lista = notas ?? []
+      // Baixa 8 XMLs por vez direto do fornecedor (link público da nota)
+      for (let i = 0; i < lista.length; i += 8) {
+        await Promise.all(lista.slice(i, i + 8).map(async (n) => {
+          try {
+            const r = await fetch(spedy.urlXml(n.ambiente as Ambiente, n.modelo as 'nfce' | 'nfe', n.fornecedor_nota_id!))
+            if (!r.ok) throw new Error(String(r.status))
+            const pasta = n.modelo === 'nfe' ? 'NF-e' : 'NFC-e'
+            arquivos[`${pasta}/${n.status === 'cancelada' ? 'canceladas/' : ''}${n.chave || `${n.modelo}-${n.serie}-${n.numero}`}.xml`] = new Uint8Array(await r.arrayBuffer())
+          } catch { falhas.push(`${n.modelo} ${n.serie}-${n.numero}`) }
+        }))
+      }
+      const csv = (linhas: (string | number | null | undefined)[][]) =>
+        '\ufeff' + linhas.map((l) => l.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(';')).join('\r\n')
+      const dataBr = (s: string | null) => (s ? new Date(s).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '')
+      arquivos['resumo-notas.csv'] = strToU8(csv([
+        ['Modelo', 'Série', 'Número', 'Status', 'Emitida em', 'Autorizada em', 'Cancelada em', 'Motivo do cancelamento', 'Valor', 'Cliente', 'CPF/CNPJ', 'Chave de acesso'],
+        ...lista.map((n) => [n.modelo === 'nfe' ? 'NF-e' : 'NFC-e', n.serie, n.numero, n.status, dataBr(n.created_at), dataBr(n.autorizada_em), dataBr(n.cancelada_em), n.cancel_motivo,
+          String(n.valor ?? '').replace('.', ','), n.destinatario_nome, n.cpf_cnpj_cliente, n.chave]),
+      ]))
+      if ((inuts ?? []).length) {
+        arquivos['inutilizacoes.csv'] = strToU8(csv([
+          ['Modelo', 'Série', 'De', 'Até', 'Status', 'Protocolo', 'Motivo', 'Pedido em'],
+          ...(inuts ?? []).map((x) => [x.modelo === 'nfe' ? 'NF-e' : 'NFC-e', x.serie, x.numero_de, x.numero_ate, x.status, x.protocolo, x.motivo, dataBr(x.created_at)]),
+        ]))
+      }
+      arquivos['LEIA-ME.txt'] = strToU8([
+        `XMLs das notas fiscais de ${de.split('-').reverse().join('/')} a ${ate.split('-').reverse().join('/')}.`,
+        'Pastas NFC-e e NF-e: XML autorizado de cada nota. Subpasta "canceladas": notas que foram canceladas depois (o evento de cancelamento está na SEFAZ; dados no resumo-notas.csv).',
+        falhas.length ? `ATENÇÃO: não consegui baixar ${falhas.length} XML(s): ${falhas.join(', ')}. Baixe de novo mais tarde.` : 'Todos os XMLs foram baixados.',
+      ].join('\r\n'))
+      const zip = zipSync(arquivos, { level: 6 })
+      let bin = ''
+      for (let i = 0; i < zip.length; i += 0x8000) bin += String.fromCharCode(...zip.subarray(i, i + 0x8000))
+      return resp({ nome: `notas-fiscais-${de}-a-${ate}.zip`, base64: btoa(bin), total: lista.length, falhas: falhas.length })
+    }
+
     // ---------------------------------------------------------------- certificado A1 (só o DONO da loja)
     // Arquivo e senha vão direto para a Spedy: nada é gravado aqui nem aparece em registro de erro.
     if (p.acao === 'enviar_certificado' || p.acao === 'ver_certificado') {
@@ -245,11 +405,12 @@ Deno.serve(async (req) => {
       .eq('id', p.nota_id).eq('store_id', loja).maybeSingle()
     if (!nota) return erro('Nota não encontrada.', 404)
     if (!nota.fornecedor_nota_id || !nota.emissor_id) return erro('Essa nota não chegou a ser enviada.')
-    if (nota.modelo !== 'nfce') return erro('Tipo de nota ainda não suportado.')
+    if (nota.modelo !== 'nfce' && nota.modelo !== 'nfe') return erro('Tipo de nota ainda não suportado.')
+    const ehNfe = nota.modelo === 'nfe'
     const chave = await chaveDoEmissor(nota.emissor_id)
 
     if (p.acao === 'atualizar') {
-      const r = await spedy.consultarNfce(nota.ambiente as Ambiente, chave, nota.fornecedor_nota_id)
+      const r = await (ehNfe ? spedy.consultarNfe : spedy.consultarNfce)(nota.ambiente as Ambiente, chave, nota.fornecedor_nota_id)
       await salvarRetorno(nota.id, r)
       return resp({ nota_id: nota.id, ...r })
     }
@@ -260,14 +421,33 @@ Deno.serve(async (req) => {
       const motivo = String(p.motivo ?? '').trim()
       if (motivo.length < 15) return erro('Explique o motivo do cancelamento (mínimo 15 letras).')
       if (nota.status !== 'autorizada') return erro('Só dá para cancelar nota autorizada.')
-      await spedy.cancelarNfce(nota.ambiente as Ambiente, chave, nota.fornecedor_nota_id, motivo)
-      const r = await spedy.consultarNfce(nota.ambiente as Ambiente, chave, nota.fornecedor_nota_id).catch(() => null)
+      await (ehNfe ? spedy.cancelarNfe : spedy.cancelarNfce)(nota.ambiente as Ambiente, chave, nota.fornecedor_nota_id, motivo)
+      const r = await (ehNfe ? spedy.consultarNfe : spedy.consultarNfce)(nota.ambiente as Ambiente, chave, nota.fornecedor_nota_id).catch(() => null)
       await admin.from('notas_fiscais').update({
-        status: r?.status === 'cancelada' ? 'cancelada' : (r?.status ?? 'processando'),
+        // Spedy cancela em segundo plano: até a SEFAZ confirmar, fica "processando" (o botão Consultar aparece)
+        status: r?.status === 'cancelada' ? 'cancelada' : 'processando',
         cancel_motivo: motivo, cancelada_em: r?.status === 'cancelada' ? new Date().toISOString() : null,
         updated_at: new Date().toISOString(),
       }).eq('id', nota.id)
       return resp({ nota_id: nota.id, status: r?.status ?? 'processando' })
+    }
+
+    // Carta de correção (CC-e): só NF-e autorizada; não corrige valor, imposto, item, emitente nem destinatário
+    if (p.acao === 'corrigir') {
+      if (!ehNfe) return erro('Carta de correção só existe para NF-e. NFC-e errada tem que ser cancelada.')
+      if (nota.status !== 'autorizada') return erro('Só dá para corrigir NF-e autorizada.')
+      const { data: podeVender } = await comoUsuario.rpc('pode_acao', { acao: 'balcao' })
+      if (podeVender !== true) return erro('Sem permissão de Balcão.', 403)
+      const texto = String(p.texto ?? '').replace(/\s+/g, ' ').trim()
+      if (texto.length < 15 || texto.length > 1000) return erro('A correção precisa ter de 15 a 1000 letras.')
+      const ret = await spedy.corrigirNfe(nota.ambiente as Ambiente, chave, nota.fornecedor_nota_id, texto)
+      const protocolo = String((ret as { protocol?: string })?.protocol ?? '') || null
+      const { data: atual } = await admin.from('notas_fiscais').select('cce_quantidade').eq('id', nota.id).single()
+      await admin.from('notas_fiscais').update({
+        cce_quantidade: Number(atual?.cce_quantidade ?? 0) + 1, cce_ultima: texto, cce_protocolo: protocolo,
+        cce_em: new Date().toISOString(), updated_at: new Date().toISOString(),
+      }).eq('id', nota.id)
+      return resp({ nota_id: nota.id, ok: true, protocolo })
     }
 
     return erro('Ação desconhecida')

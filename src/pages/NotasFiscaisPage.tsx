@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { FileText, FileCode, MessageCircle, RefreshCw, XCircle } from 'lucide-react';
+import { FileArchive, FilePen, FileText, FileCode, Loader2, MessageCircle, Plus, RefreshCw, XCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { buscarTodas } from '@/lib/buscarTodas';
 import { useStore } from '@/contexts/StoreContext';
@@ -18,6 +18,8 @@ import { baixarPlanilha } from '@/lib/planilha';
 import { fmtCpf } from '@/lib/precoCliente';
 import { NumerosParaInutilizar } from '@/components/fiscal/Inutilizacao';
 import { AvisoCertificado } from '@/components/fiscal/AvisoCertificado';
+import { NovaNfe } from '@/components/fiscal/NovaNfe';
+import { VendasSemNota } from '@/components/fiscal/VendasSemNota';
 import { semAcento } from '@/lib/navegacao';
 import {
   NOME_MODELO, STATUS_NOTA, chamarFiscal, emAndamento, urlPdf, urlXml, type NotaFiscal, type StatusNota,
@@ -70,6 +72,26 @@ export default function NotasFiscaisPage({ onAbrirVenda }: { onAbrirVenda?: (bal
   const [filtro, setFiltro] = useState<Filtro>('todas');
   const [busca, setBusca] = useState('');
   const [ocupada, setOcupada] = useState<string | null>(null);
+  const [nfeAberta, setNfeAberta] = useState(false);
+  const [baixandoXml, setBaixandoXml] = useState(false);
+  // XMLs do período (para o contador): o servidor monta um .zip com os XMLs + planilha resumo
+  const baixarXmls = async () => {
+    setBaixandoXml(true);
+    try {
+      const r = await chamarFiscal<{ nome: string; base64: string; total: number; falhas: number }>({ acao: 'xmls_periodo', de: atual.ini, ate: atual.fim });
+      const bytes = Uint8Array.from(atob(r.base64), (c) => c.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/zip' }));
+      const a = document.createElement('a');
+      a.href = url; a.download = r.nome; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      if (r.falhas) toast.warning(`${r.total - r.falhas} XMLs baixados; ${r.falhas} falharam (veja o LEIA-ME no arquivo).`);
+      else toast.success(`${r.total} XMLs baixados.`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBaixandoXml(false);
+    }
+  };
   const teste = (settings as { fiscal_ambiente?: string } | null)?.fiscal_ambiente !== 'producao';
 
   const notas = data ?? [];
@@ -101,13 +123,25 @@ export default function NotasFiscaisPage({ onAbrirVenda }: { onAbrirVenda?: (bal
   const cancelar = async (n: NotaFiscal) => {
     const motivo = await pedirTexto({
       titulo: `Cancelar a nota nº ${n.numero ?? ''}?`,
-      descricao: 'A SEFAZ só aceita cancelar NFC-e até 30 minutos depois de autorizada. Escreva o motivo (mínimo 15 letras).',
+      descricao: n.modelo === 'nfe' ? 'A SEFAZ aceita cancelar NF-e até 24 horas depois de autorizada. Escreva o motivo (mínimo 15 letras).' : 'A SEFAZ só aceita cancelar NFC-e até 30 minutos depois de autorizada. Escreva o motivo (mínimo 15 letras).',
       rotulo: 'Motivo do cancelamento', obrigatorio: true, multilinha: true, verbo: 'Cancelar nota',
     });
     if (!motivo) return;
     if (motivo.trim().length < 15) { toast.error('O motivo precisa ter pelo menos 15 letras.'); return; }
     if (!(await confirmar({ titulo: 'Confirmar cancelamento?', descricao: 'Isso não tem volta: a nota fica cancelada na SEFAZ.', verbo: 'Sim, cancelar', perigo: true }))) return;
     acao(n, { acao: 'cancelar', nota_id: n.id, motivo: motivo.trim() }, 'Pedido de cancelamento enviado');
+  };
+  // Carta de correção (só NF-e autorizada): corrige texto/observação, nunca valor, imposto, item ou cliente
+  const corrigir = async (n: NotaFiscal) => {
+    const texto = await pedirTexto({
+      titulo: `Carta de correção da NF-e nº ${n.numero ?? ''}`,
+      descricao: 'Serve para corrigir erro de texto (observação, endereço de entrega, etc.). NÃO corrige valor, imposto, produto, quantidade nem o CNPJ do cliente. Cada carta nova substitui a anterior, então escreva a correção completa.',
+      rotulo: 'O que está sendo corrigido (15 a 1000 letras)', obrigatorio: true, multilinha: true, verbo: 'Enviar correção',
+      valorInicial: n.cce_ultima ?? '',
+    });
+    if (!texto) return;
+    if (texto.trim().length < 15) { toast.error('A correção precisa ter pelo menos 15 letras.'); return; }
+    acao(n, { acao: 'corrigir', nota_id: n.id, texto: texto.trim() }, 'Carta de correção registrada na SEFAZ');
   };
   const whatsapp = (n: NotaFiscal) => {
     const link = urlPdf(n);
@@ -120,11 +154,13 @@ export default function NotasFiscaisPage({ onAbrirVenda }: { onAbrirVenda?: (bal
     <div className="space-y-3 p-4 md:p-6">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="text-xl font-bold">Notas fiscais</h1>
+        <Button size="sm" variant="outline" className="ml-auto h-8 gap-1.5 text-xs" onClick={() => setNfeAberta(true)}><Plus className="h-3.5 w-3.5" /> Nova NF-e</Button>
         {teste && <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-600">Ambiente de teste — notas sem valor fiscal</span>}
       </div>
       <AvisoCertificado ambiente={teste ? 'sandbox' : 'producao'} />
       <NumerosParaInutilizar ambiente={teste ? 'sandbox' : 'producao'} />
       <BarraPeriodo p={per} />
+      {!problemaNoPeriodo(atual) && <VendasSemNota periodo={atual} ambiente={teste ? 'sandbox' : 'producao'} onAbrirVenda={onAbrirVenda} />}
       {problemaNoPeriodo(atual) ? (
         <p className="rounded-xl border p-4 text-center text-sm text-muted-foreground">{problemaNoPeriodo(atual)}</p>
       ) : isLoading ? <Skeleton className="h-40 rounded-xl" /> : (
@@ -140,7 +176,11 @@ export default function NotasFiscaisPage({ onAbrirVenda }: { onAbrirVenda?: (bal
               <Button key={f.id} size="sm" className="h-7 text-xs" variant={filtro === f.id ? 'default' : 'outline'} onClick={() => setFiltro(f.id)}>{f.nome}</Button>
             ))}
             <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Nº da nota, CPF ou chave" className="h-8 w-48 text-xs" />
-            <Button size="sm" variant="outline" className="ml-auto h-7 text-xs" disabled={visiveis.length === 0}
+            <Button size="sm" variant="outline" className="ml-auto h-7 gap-1 text-xs" disabled={baixandoXml || autorizadas.length + notas.filter((n) => n.status === 'cancelada').length === 0} onClick={baixarXmls}
+              title="Arquivo .zip com os XMLs autorizados e cancelados do período, para o contador">
+              {baixandoXml ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileArchive className="h-3.5 w-3.5" />} XMLs do período
+            </Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" disabled={visiveis.length === 0}
               onClick={() => baixarPlanilha(`notas-fiscais-${atual.ini}-a-${atual.fim}`,
                 ['Data', 'Tipo', 'Número', 'Série', 'Status', 'Valor', 'CPF/CNPJ cliente', 'Chave de acesso', 'Motivo'],
                 visiveis.map((n) => [dataHora(n.created_at), NOME_MODELO[n.modelo], n.numero ?? '', n.serie ?? '', STATUS_NOTA[n.status]?.nome ?? n.status, Number(n.valor) || 0, fmtCpf(n.cpf_cnpj_cliente ?? '') || '', n.chave ?? '', n.cancel_motivo || n.motivo || '']))}>
@@ -166,7 +206,7 @@ export default function NotasFiscaisPage({ onAbrirVenda }: { onAbrirVenda?: (bal
                           {NOME_MODELO[n.modelo]}{n.numero ? ` nº ${n.numero}` : ''}{n.serie ? <span className="text-xs text-muted-foreground"> · série {n.serie}</span> : null}
                         </p>
                         <p className="text-[11px] text-muted-foreground">
-                          {dataHora(n.created_at)}{n.cpf_cnpj_cliente ? ` · ${fmtCpf(n.cpf_cnpj_cliente)}` : ' · sem CPF'}{n.origem === 'site' ? ' · venda online' : ''}
+                          {dataHora(n.created_at)}{n.destinatario_nome ? ` · ${n.destinatario_nome}` : ''}{n.cpf_cnpj_cliente ? ` · ${fmtCpf(n.cpf_cnpj_cliente)}` : ' · sem CPF'}{n.origem === 'site' ? ' · venda online' : n.origem === 'manual' ? ' · avulsa' : ''}
                         </p>
                       </div>
                       <div className="text-right">
@@ -174,11 +214,12 @@ export default function NotasFiscaisPage({ onAbrirVenda }: { onAbrirVenda?: (bal
                         <p className={`text-xs font-medium ${st.cor}`}>{st.nome}</p>
                       </div>
                     </div>
-                    {(n.motivo || n.cancel_motivo) && n.status !== 'autorizada' && (
-                      <p className={`mt-1 rounded-md px-2 py-1 text-[11px] ${n.status === 'cancelada' ? 'bg-muted text-muted-foreground' : 'bg-red-500/10 text-red-500'}`}>
+                    {(n.motivo || n.cancel_motivo) && (n.status !== 'autorizada' || n.motivo) && (
+                      <p className={`mt-1 rounded-md px-2 py-1 text-[11px] ${n.status === 'cancelada' ? 'bg-muted text-muted-foreground' : n.status === 'autorizada' ? 'bg-amber-500/10 text-amber-600' : 'bg-red-500/10 text-red-500'}`}>
                         {n.status === 'cancelada' ? `Motivo: ${n.cancel_motivo ?? ''}` : n.motivo}
                       </p>
                     )}
+                    {n.cce_ultima && <p className="mt-1 text-[11px] text-muted-foreground">Carta de correção{n.cce_protocolo ? ` (protocolo ${n.cce_protocolo})` : ''}: {n.cce_ultima}</p>}
                     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                       {n.status === 'autorizada' && pdf && (
                         <>
@@ -195,6 +236,11 @@ export default function NotasFiscaisPage({ onAbrirVenda }: { onAbrirVenda?: (bal
                       {n.balcao_order_id && onAbrirVenda && (
                         <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => onAbrirVenda(n.balcao_order_id!)}>Ver venda</Button>
                       )}
+                      {n.status === 'autorizada' && n.modelo === 'nfe' && (
+                        <Button size="sm" variant="ghost" className="h-7 text-xs" disabled={vivo} onClick={() => corrigir(n)}>
+                          <FilePen className="h-3.5 w-3.5" /> Carta de correção{n.cce_quantidade ? ` (${n.cce_quantidade})` : ''}
+                        </Button>
+                      )}
                       {n.status === 'autorizada' && (
                         <Button size="sm" variant="ghost" className="ml-auto h-7 text-xs text-red-500 hover:text-red-500" disabled={vivo} onClick={() => cancelar(n)}>
                           <XCircle className="h-3.5 w-3.5" /> Cancelar
@@ -208,6 +254,7 @@ export default function NotasFiscaisPage({ onAbrirVenda }: { onAbrirVenda?: (bal
           )}
         </>
       )}
+      <NovaNfe aberto={nfeAberta} onFechar={() => setNfeAberta(false)} />
     </div>
   );
 }

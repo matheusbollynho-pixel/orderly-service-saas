@@ -24,9 +24,15 @@ export interface NotaFiscal {
   cancelada_em: string | null;
   cancel_motivo: string | null;
   created_at: string;
+  destinatario_nome?: string | null;
+  cce_quantidade?: number;
+  cce_ultima?: string | null;
+  cce_protocolo?: string | null;
+  cce_em?: string | null;
 }
 
 export const NOME_MODELO: Record<ModeloNota, string> = { nfce: 'NFC-e (cupom)', nfe: 'NF-e', nfse: 'NFS-e (serviço)' };
+export const SIGLA_MODELO: Record<ModeloNota, string> = { nfce: 'NFC-e', nfe: 'NF-e', nfse: 'NFS-e' };
 
 export const STATUS_NOTA: Record<StatusNota, { nome: string; cor: string }> = {
   enviando: { nome: 'Enviando', cor: 'text-amber-500' },

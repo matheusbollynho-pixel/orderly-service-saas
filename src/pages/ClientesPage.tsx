@@ -4,7 +4,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowLeft, Car, ChevronRight, Plus, Search, Tags, UserRound } from 'lucide-react';
+import { ArrowLeft, Building2, Car, ChevronRight, Loader2, Plus, Search, Tags, UserRound } from 'lucide-react';
+import { buscarCnpj, enderecoEmLinha } from '@/lib/cnpj';
 import { supabase } from '@/integrations/supabase/client';
 import { useStore } from '@/contexts/StoreContext';
 import { useVehicleLabel } from '@/hooks/useVehicleLabel';
@@ -47,7 +48,10 @@ const STATUS_OS: Record<string, string> = {
 };
 
 type ClienteComTipo = Client & { tipo_cliente_id?: string | null; tipo_valido_ate?: string | null; tipo_aviso_para?: string | null; tipo_aviso_em?: string | null };
-type ClienteForm = Partial<ClienteComTipo> & { name: string };
+// Dados para NF-e (cliente com CNPJ). Colunas novas: só vão no salvar se tiver algo preenchido.
+type DadosNfe = { razao_social?: string | null; ie?: string | null; ie_indicador?: string | null; cep?: string | null; logradouro?: string | null; numero?: string | null; complemento?: string | null; bairro?: string | null; cidade_ibge?: string | null };
+const CAMPOS_NFE: (keyof DadosNfe)[] = ['razao_social', 'ie', 'ie_indicador', 'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade_ibge'];
+type ClienteForm = Partial<ClienteComTipo> & DadosNfe & { name: string };
 const VAZIO: ClienteForm = { name: '', phone: '', cpf: '', apelido: '', email: '', instagram: '', endereco: '', cidade: '', state: '', notes: '', birth_date: null, autoriza_lembretes: true, autoriza_instagram: true, tipo_cliente_id: null, tipo_valido_ate: null };
 
 interface Props {
@@ -222,6 +226,36 @@ function FichaCliente({ id, onVoltar, onCriado, onOpenOrder, onOpenBalcaoOrder, 
   useEffect(() => { if (cliente) setForm({ ...VAZIO, ...cliente, cpf: fmtCpf(cliente.cpf) }); }, [cliente]);
 
   const set = (campo: keyof ClienteForm, valor: unknown) => setForm((f) => ({ ...f, [campo]: valor }));
+  const [buscandoCnpj, setBuscandoCnpj] = useState(false);
+  const ehCnpj = soDigitos(form.cpf).length === 14;
+  const temNfe = CAMPOS_NFE.some((c) => String(form[c] ?? '').trim() !== '');
+  const [verNfe, setVerNfe] = useState(false);
+
+  // Buscar CNPJ: preenche o que estiver vazio (não apaga o que a loja já digitou, exceto o endereço em partes)
+  const preencherCnpj = async () => {
+    setBuscandoCnpj(true);
+    try {
+      const d = await buscarCnpj(form.cpf ?? '');
+      setForm((f) => ({
+        ...f,
+        name: f.name?.trim() ? f.name : (d.fantasia || d.razaoSocial),
+        razao_social: d.razaoSocial,
+        cep: d.cep, logradouro: d.logradouro, numero: d.numero, complemento: d.complemento, bairro: d.bairro, cidade_ibge: d.cidadeIbge,
+        endereco: f.endereco?.trim() ? f.endereco : enderecoEmLinha(d),
+        cidade: d.cidade || f.cidade, state: d.uf || f.state,
+        phone: f.phone?.trim() ? f.phone : d.telefone,
+        email: f.email?.trim() ? f.email : d.email,
+        ie_indicador: f.ie_indicador || (f.ie ? 'contribuinte' : null),
+      }));
+      setVerNfe(true);
+      if (!d.ativa) toast.warning(`Atenção: CNPJ com situação "${d.situacao || 'desconhecida'}" na Receita.`);
+      else toast.success('Dados do CNPJ preenchidos. Confira e digite a Inscrição Estadual.');
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBuscandoCnpj(false);
+    }
+  };
 
   const salvar = async () => {
     const nome = form.name.trim();
@@ -236,6 +270,17 @@ function FichaCliente({ id, onVoltar, onCriado, onOpenOrder, onOpenBalcaoOrder, 
       endereco: form.endereco?.trim() || null,
       cidade: form.cidade?.trim() || null,
       state: form.state?.trim().toUpperCase().slice(0, 2) || null,
+      ...(temNfe || CAMPOS_NFE.some((c) => (cliente as DadosNfe | null)?.[c] != null) ? {
+        razao_social: form.razao_social?.trim() || null,
+        ie: soDigitos(form.ie) || (/isento/i.test(form.ie ?? '') ? 'ISENTO' : null),
+        ie_indicador: form.ie_indicador || null,
+        cep: soDigitos(form.cep) || null,
+        logradouro: form.logradouro?.trim() || null,
+        numero: form.numero?.trim() || null,
+        complemento: form.complemento?.trim() || null,
+        bairro: form.bairro?.trim() || null,
+        cidade_ibge: soDigitos(form.cidade_ibge) || null,
+      } : {}),
       notes: form.notes?.trim() || null,
       birth_date: form.birth_date || null,
       autoriza_lembretes: form.autoriza_lembretes !== false,
@@ -297,7 +342,16 @@ function FichaCliente({ id, onVoltar, onCriado, onOpenOrder, onOpenBalcaoOrder, 
           <Campo label="Nome *"><Input value={form.name} onChange={(e) => set('name', e.target.value)} /></Campo>
           <Campo label="Apelido"><Input value={form.apelido ?? ''} onChange={(e) => set('apelido', e.target.value)} /></Campo>
           <Campo label="Telefone / WhatsApp"><Input inputMode="tel" value={fmtTel(form.phone) || form.phone || ''} onChange={(e) => set('phone', e.target.value)} placeholder="(75) 99999-9999" /></Campo>
-          <Campo label="CPF"><Input inputMode="numeric" value={form.cpf ?? ''} onChange={(e) => set('cpf', e.target.value)} onBlur={() => set('cpf', fmtCpf(form.cpf))} placeholder="000.000.000-00" /></Campo>
+          <Campo label="CPF / CNPJ">
+            <div className="flex gap-2">
+              <Input inputMode="numeric" value={form.cpf ?? ''} onChange={(e) => set('cpf', e.target.value)} onBlur={() => set('cpf', fmtCpf(form.cpf))} placeholder="CPF ou CNPJ" />
+              {ehCnpj && (
+                <Button type="button" variant="outline" className="shrink-0 gap-1.5" disabled={buscandoCnpj} onClick={preencherCnpj}>
+                  {buscandoCnpj ? <Loader2 className="h-4 w-4 animate-spin" /> : <Building2 className="h-4 w-4" />} Buscar CNPJ
+                </Button>
+              )}
+            </div>
+          </Campo>
           <Campo label="E-mail"><Input type="email" value={form.email ?? ''} onChange={(e) => set('email', e.target.value)} /></Campo>
           <Campo label="Aniversário"><Input type="date" value={form.birth_date ?? ''} onChange={(e) => set('birth_date', e.target.value || null)} /></Campo>
           <Campo label="Instagram"><Input value={form.instagram ?? ''} onChange={(e) => set('instagram', e.target.value)} placeholder="@cliente" /></Campo>
@@ -305,6 +359,33 @@ function FichaCliente({ id, onVoltar, onCriado, onOpenOrder, onOpenBalcaoOrder, 
           <Campo label="Cidade"><Input value={form.cidade ?? ''} onChange={(e) => set('cidade', e.target.value)} /></Campo>
           <Campo label="Estado (UF)"><Input maxLength={2} value={form.state ?? ''} onChange={(e) => set('state', e.target.value.toUpperCase())} /></Campo>
         </div>
+        {(ehCnpj || temNfe || verNfe) && (
+          <div className="rounded-lg border border-dashed p-3 space-y-2">
+            <button type="button" className="text-sm font-medium" onClick={() => setVerNfe((v) => !v)}>
+              {verNfe || temNfe ? '▾' : '▸'} Dados para nota fiscal (NF-e)
+            </button>
+            {(verNfe || temNfe) && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Campo label="Razão social"><Input value={form.razao_social ?? ''} onChange={(e) => set('razao_social', e.target.value)} /></Campo>
+                <Campo label="Inscrição Estadual (IE)"><Input value={form.ie ?? ''} onChange={(e) => set('ie', e.target.value)} placeholder="Números ou ISENTO" /></Campo>
+                <Campo label="Contribuinte de ICMS?">
+                  <select value={form.ie_indicador ?? ''} onChange={(e) => set('ie_indicador', e.target.value || null)} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+                    <option value="">Não sei / deixar o sistema decidir</option>
+                    <option value="contribuinte">Sim, tem IE (contribuinte)</option>
+                    <option value="isento">Isento de IE</option>
+                    <option value="nao_contribuinte">Não contribuinte</option>
+                  </select>
+                </Campo>
+                <Campo label="CEP"><Input inputMode="numeric" value={form.cep ?? ''} onChange={(e) => set('cep', e.target.value)} /></Campo>
+                <Campo label="Rua"><Input value={form.logradouro ?? ''} onChange={(e) => set('logradouro', e.target.value)} /></Campo>
+                <Campo label="Número"><Input value={form.numero ?? ''} onChange={(e) => set('numero', e.target.value)} /></Campo>
+                <Campo label="Complemento"><Input value={form.complemento ?? ''} onChange={(e) => set('complemento', e.target.value)} /></Campo>
+                <Campo label="Bairro"><Input value={form.bairro ?? ''} onChange={(e) => set('bairro', e.target.value)} /></Campo>
+                <Campo label="Código IBGE da cidade"><Input inputMode="numeric" value={form.cidade_ibge ?? ''} onChange={(e) => set('cidade_ibge', e.target.value)} placeholder="Vem no Buscar CNPJ" /></Campo>
+              </div>
+            )}
+          </div>
+        )}
         {tipos.length > 0 && <CampoTipo form={form} tipos={tipos} pode={podeTipo}
           mudou={(form.tipo_cliente_id ?? null) !== (cliente?.tipo_cliente_id ?? null) || (form.tipo_valido_ate ?? null) !== (cliente?.tipo_valido_ate ?? null)}
           onMudar={(campos) => setForm((f) => ({ ...f, ...campos }))} />}

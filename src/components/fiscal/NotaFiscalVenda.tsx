@@ -9,7 +9,8 @@ import { useStoreSettings } from '@/hooks/useStoreSettings';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { fmtCpf } from '@/lib/precoCliente';
-import { STATUS_NOTA, chamarFiscal, emAndamento, urlPdf, type NotaFiscal } from '@/lib/fiscal';
+import { SIGLA_MODELO, STATUS_NOTA, chamarFiscal, emAndamento, urlPdf, type NotaFiscal } from '@/lib/fiscal';
+import { NovaNfe } from './NovaNfe';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
@@ -39,7 +40,10 @@ export function useNotaDaVenda(balcaoOrderId: string, ativo: boolean) {
   });
 }
 
-export function NotaFiscalVenda({ balcaoOrderId, clientCpf, clientPhone }: { balcaoOrderId: string; clientCpf?: string | null; clientPhone?: string | null }) {
+export function NotaFiscalVenda({ balcaoOrderId, clientCpf, clientPhone, clientId, clientNome }: {
+  balcaoOrderId: string; clientCpf?: string | null; clientPhone?: string | null; clientId?: string | null; clientNome?: string | null;
+}) {
+  const [nfeAberta, setNfeAberta] = useState(false);
   const { settings } = useStoreSettings();
   const ativo = !!(settings as { fiscal_ativo?: boolean } | null)?.fiscal_ativo;
   const teste = (settings as { fiscal_ambiente?: string } | null)?.fiscal_ambiente !== 'producao';
@@ -101,10 +105,10 @@ export function NotaFiscalVenda({ balcaoOrderId, clientCpf, clientPhone }: { bal
           {nota && st && (
             <div className="text-sm">
               <span className={`font-semibold ${st.cor}`}>{st.nome}</span>
-              {nota.numero ? <span className="text-muted-foreground"> · NFC-e nº {nota.numero}</span> : null}
+              {nota.numero ? <span className="text-muted-foreground"> · {SIGLA_MODELO[nota.modelo]} nº {nota.numero}</span> : nota.modelo === 'nfe' ? <span className="text-muted-foreground"> · NF-e</span> : null}
               {nota.cpf_cnpj_cliente ? <span className="text-muted-foreground"> · {fmtCpf(nota.cpf_cnpj_cliente)}</span> : null}
-              {nota.status !== 'autorizada' && (nota.motivo || nota.cancel_motivo) && (
-                <p className={`mt-1 rounded-md px-2 py-1 text-[11px] ${nota.status === 'cancelada' ? 'bg-muted text-muted-foreground' : 'bg-red-500/10 text-red-500'}`}>
+              {(nota.status !== 'autorizada' || nota.motivo) && (nota.motivo || nota.cancel_motivo) && (
+                <p className={`mt-1 rounded-md px-2 py-1 text-[11px] ${nota.status === 'cancelada' ? 'bg-muted text-muted-foreground' : nota.status === 'autorizada' ? 'bg-amber-500/10 text-amber-600' : 'bg-red-500/10 text-red-500'}`}>
                   {nota.status === 'cancelada' ? `Cancelada: ${nota.cancel_motivo ?? ''}` : nota.motivo}
                 </p>
               )}
@@ -131,12 +135,17 @@ export function NotaFiscalVenda({ balcaoOrderId, clientCpf, clientPhone }: { bal
               <Input value={cpf} onChange={(e) => setCpf(e.target.value)} placeholder="CPF/CNPJ na nota (opcional)" className="h-9 text-sm" inputMode="numeric" />
               <Button type="button" className="w-full h-9 gap-1.5 text-sm" disabled={enviando} onClick={emitir}>
                 {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <ReceiptText className="h-4 w-4" />}
-                {nota && !['cancelada', 'inutilizada'].includes(nota.status) ? 'Corrigir e enviar de novo' : 'Emitir nota fiscal (NFC-e)'}
+                {nota && nota.modelo === 'nfce' && !['cancelada', 'inutilizada'].includes(nota.status) ? 'Corrigir e enviar de novo' : 'Emitir nota fiscal (NFC-e)'}
+              </Button>
+              <Button type="button" variant="outline" className="w-full h-9 gap-1.5 text-sm" disabled={enviando} onClick={() => setNfeAberta(true)}>
+                {nota?.modelo === 'nfe' && !['cancelada', 'inutilizada'].includes(nota.status) ? 'Corrigir e enviar a NF-e de novo' : 'Emitir NF-e (cliente com CNPJ)'}
               </Button>
             </div>
           )}
         </>
       )}
+      <NovaNfe aberto={nfeAberta} onFechar={() => setNfeAberta(false)} balcaoOrderId={balcaoOrderId}
+        clientId={clientId} clientNome={clientNome} clientDoc={clientCpf} />
     </div>
   );
 }
