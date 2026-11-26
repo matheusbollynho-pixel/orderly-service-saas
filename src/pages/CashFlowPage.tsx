@@ -2,7 +2,7 @@ import { pedirMotivoEstorno } from '@/lib/estorno';
 import { useStore } from '@/contexts/StoreContext';
 import { semEstornosAnulados } from '@/lib/caixaEstorno';
 import { BotaoVale, ValesAbertos } from '@/components/caixa/Vales';
-import { TurnoCaixa, useGavetaAgora } from '@/components/caixa/TurnoCaixa';
+import { TurnoCaixa } from '@/components/caixa/TurnoCaixa';
 import { matchesSearch } from '@/lib/textSearch';
 import { useState, useEffect, useRef } from 'react';
 import { useCashFlow, useCashFlowPeriod } from '@/hooks/useCashFlow';
@@ -63,8 +63,6 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder, foco, onFocoU
   };
 
   const [selectedDate, setSelectedDate] = useState<string>(foco?.data || getLocalDate());
-  // Caixa aberto: o card de dinheiro mostra o que deve estar na gaveta (troco + entradas − saídas − retiradas)
-  const gaveta = useGavetaAgora();
   const [destaque, setDestaque] = useState<string | null>(null);
   const focoPendente = useRef(foco?.id ?? null);
   const [selectedMonth, setSelectedMonth] = useState<string>(getLocalMonth());
@@ -430,9 +428,7 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder, foco, onFocoU
   };
 
   const renderPaymentMethodCards = (transactions: Record<string, unknown>[]) => {
-    // Sem movimento no dia só some se não houver caixa aberto (a gaveta tem o troco mesmo sem venda)
-    if ((!transactions || transactions.length === 0) && !(gaveta && selectedDate === getLocalDate())) return null;
-    transactions = transactions ?? [];
+    if (!transactions || transactions.length === 0) return null;
 
     // Calcular saldo por forma de pagamento (apenas entradas - saídas)
     const paymentMethods = {
@@ -472,26 +468,6 @@ export function CashFlowPage({ onSelectOrder, onSelectBalcaoOrder, foco, onFocoU
               color: 'text-muted-foreground',
             };
             const isPositive = balance >= 0;
-
-            // Dinheiro, hoje, com caixa aberto: espelho da gaveta (mesma conta do "Na gaveta agora")
-            if (method === 'dinheiro' && gaveta && selectedDate === getLocalDate()) {
-              const desde = new Date(gaveta.abertoEm).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-              return (
-                <Card key={method}>
-                  <CardContent className="p-4">
-                    <p className="text-xs font-medium text-muted-foreground">💵 Dinheiro na gaveta agora</p>
-                    <h3 className={`text-lg font-bold ${gaveta.esperado >= 0 ? config.color : 'text-red-600'}`}>
-                      {hideValues ? '****' : formatCurrency(gaveta.esperado)}
-                    </h3>
-                    {!hideValues && (
-                      <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-                        Troco {formatCurrency(gaveta.abertura)} + entradas {formatCurrency(gaveta.entradas_dinheiro)} − saídas {formatCurrency(gaveta.saidas_dinheiro)} − retiradas {formatCurrency(gaveta.retiradas)} · desde {desde}
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            }
 
             return (
               <Card key={method}>

@@ -73,18 +73,9 @@ export function TurnoCaixa({ ocultar }: { ocultar?: boolean }) {
   });
 
   if (!ligado || turnos.isLoading) return null;
-  // Caixa esquecido aberto: soma os dias anteriores no "esperado" (e o dinheiro levado para casa vira diferença)
-  const abertoOutroDia = !!aberto && new Date(aberto.aberto_em).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })
-    !== new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
 
   return (
     <div className={cn('rounded-xl border p-3 space-y-2', aberto ? 'border-green-600/50 bg-green-600/5' : 'border-amber-500/50 bg-amber-500/5')}>
-      {abertoOutroDia && (
-        <p className="rounded-md bg-amber-500/15 px-2 py-1.5 text-xs font-medium text-amber-600">
-          ⚠️ O caixa está aberto desde {new Date(aberto!.aberto_em).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}: o "esperado" está somando mais de um dia.
-          Se o dinheiro daquele dia já saiu da gaveta, lance como Retirada ou feche o caixa e abra de novo.
-        </p>
-      )}
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           {aberto ? (
@@ -310,38 +301,4 @@ function JanelaFechar({ turno, onClose }: { turno: Turno; onClose: () => void })
 
 function L({ n, v }: { n: string; v: string }) {
   return <div className="flex justify-between"><span className="text-muted-foreground">{n}</span><span>{v}</span></div>;
-}
-
-/** Dinheiro em espécie que deve estar na gaveta agora (mesma conta do turno aberto). null = loja sem abertura de caixa ou caixa fechado. */
-export function useGavetaAgora() {
-  const { storeId } = useStore();
-  const { data: ligado } = useQuery({
-    queryKey: ['caixa-turno', 'ligado', storeId],
-    enabled: !!storeId,
-    queryFn: async () => {
-      const { data } = await db.from('store_settings').select('usa_abertura_caixa').eq('id', storeId).maybeSingle();
-      return !!data?.usa_abertura_caixa;
-    },
-  });
-  const turnos = useQuery({
-    queryKey: ['caixa-turno', 'lista', storeId],
-    enabled: !!storeId && !!ligado,
-    queryFn: async () => {
-      const { data, error } = await db.from('caixa_turnos').select('*').eq('store_id', storeId).order('aberto_em', { ascending: false }).limit(11);
-      if (error) throw error;
-      return (data ?? []) as Turno[];
-    },
-  });
-  const aberto = (turnos.data ?? []).find((t) => !t.fechado_em) ?? null;
-  const resumo = useQuery({
-    queryKey: ['caixa-turno', 'resumo', aberto?.id],
-    enabled: !!aberto,
-    queryFn: async () => {
-      const { data, error } = await db.rpc('resumo_caixa_turno', { p_turno: aberto!.id });
-      if (error) throw error;
-      return data as Resumo;
-    },
-  });
-  if (!ligado || !aberto || !resumo.data) return null;
-  return { abertoEm: aberto.aberto_em, ...resumo.data };
 }
