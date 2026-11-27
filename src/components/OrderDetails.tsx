@@ -1,5 +1,6 @@
 import { descricaoComTipo } from '@/lib/precoCliente';
-import { pedirTexto } from '@/components/v2/Confirmacao';
+import { confirmar, pedirTexto } from '@/components/v2/Confirmacao';
+import { conferirPagamento, textoConferencia } from '@/lib/pagamentoOs';
 import { pedirMotivoEstorno } from '@/lib/estorno';
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import { useRef, useState, useEffect } from 'react';
@@ -662,7 +663,7 @@ export function OrderDetails({
     await sendWhatsAppText({ phone, text: msg, store_id: order.store_id });
   };
 
-  const handleAddPayment = () => {
+  const handleAddPayment = async () => {
     if (!onAddPayment) return;
     if (!deliverySignatureData && !isExpress) {
       toast.error('É necessário coletar a assinatura do Termo de Entrega do Veículo antes de registrar o pagamento.');
@@ -672,6 +673,15 @@ export function OrderDetails({
     const discountAmount = parseFloat(paymentForm.discount_amount || '0') || 0;
     if (!amount || amount <= 0) return;
     if (discountAmount < 0) return;
+    // Valor = o que o cliente pagou (entra no caixa). Se valor + desconto passa do que falta, é quase sempre o total cheio digitado.
+    const conf = conferirPagamento(amount, discountAmount, pending);
+    if (conf.passou && !(await confirmar({
+      titulo: 'O valor + desconto passa do que falta',
+      descricao: conf.sugestao != null
+        ? `Falta R$ ${pending.toFixed(2).replace('.', ',')}. Com R$ ${discountAmount.toFixed(2).replace('.', ',')} de desconto, o cliente paga R$ ${conf.sugestao.toFixed(2).replace('.', ',')}. No campo "Valor recebido" vai só o que o cliente pagou (é isso que entra no caixa). Salvar R$ ${amount.toFixed(2).replace('.', ',')} mesmo assim?`
+        : `Falta R$ ${pending.toFixed(2).replace('.', ',')} e você está quitando R$ ${conf.quita.toFixed(2).replace('.', ',')}. Salvar mesmo assim?`,
+      verbo: 'Salvar mesmo assim',
+    }))) return;
     if (!paymentForm.finalized_by_staff_id) {
       toast.error('Selecione quem finalizou/recebeu o pagamento.');
       return;
@@ -2119,7 +2129,7 @@ const renderDeliverySection = () => {
                 {(() => {
                   const pb = order.status === 'concluida_entregue' || !paymentForm.finalized_by_staff_id || !order.mechanic_id;
                   return (<>
-                  <Input placeholder="Valor" value={paymentForm.amount} onChange={(e) => setPaymentForm((prev) => ({ ...prev, amount: e.target.value }))} className="h-9 sm:col-span-2" type="number" min="0" step="0.01" disabled={pb} />
+                  <Input placeholder="Valor recebido" title="O que o cliente pagou (entra no caixa). O desconto vai no campo ao lado." value={paymentForm.amount} onChange={(e) => setPaymentForm((prev) => ({ ...prev, amount: e.target.value }))} className="h-9 sm:col-span-2" type="number" min="0" step="0.01" disabled={pb} />
                   {podeDesconto && <Input placeholder="Desconto (R$)" value={paymentForm.discount_amount} onChange={(e) => setPaymentForm((prev) => ({ ...prev, discount_amount: e.target.value }))} className="h-9" type="number" min="0" step="0.01" disabled={pb} />}
                   <Select
                     value={paymentForm.method}
@@ -2148,6 +2158,26 @@ const renderDeliverySection = () => {
                   </>);
                 })()}
               </div>
+              {(() => {
+                // Conferência na hora: o que entra no caixa e se passou do que falta
+                const valor = parseFloat(paymentForm.amount || '') || 0;
+                const desc = parseFloat(paymentForm.discount_amount || '0') || 0;
+                if (!valor || paymentForm.method === 'fiado') return null;
+                const conf = conferirPagamento(valor, desc, pending);
+                return (
+                  <div className={`rounded-md px-2.5 py-1.5 text-xs ${conf.passou ? 'bg-amber-500/15 text-amber-600' : 'bg-muted/40 text-muted-foreground'}`}>
+                    {textoConferencia(conf, desc, pending)}
+                    {conf.passou && (
+                      <span className="block font-medium">
+                        ⚠️ Passa do que falta. No "Valor recebido" vai só o que o cliente pagou{conf.sugestao != null ? `: R$ ${conf.sugestao.toFixed(2).replace('.', ',')}` : ''}.
+                        {conf.sugestao != null && (
+                          <button type="button" className="ml-2 underline" onClick={() => setPaymentForm((prev) => ({ ...prev, amount: String(conf.sugestao) }))}>Usar R$ {conf.sugestao.toFixed(2).replace('.', ',')}</button>
+                        )}
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* ── Cobrar Online (Asaas, abre ao escolher a opção acima) ── */}
               {showAsaasSection && pending > 0 && (

@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Undo2, Plus } from 'lucide-react';
+import { confirmar } from '@/components/v2/Confirmacao';
+import { conferirPagamento, textoConferencia } from '@/lib/pagamentoOs';
 
 interface PaymentsTabProps {
   orders: ServiceOrder[];
@@ -160,12 +162,20 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
     return acc;
   }, [filteredOrders]);
 
-  const handleAdd = (orderId: string) => {
+  const handleAdd = async (orderId: string, falta: number) => {
     const state = adding[orderId];
     const amount = parseFloat(state?.amount || '');
     const discountAmount = parseFloat(state?.discount_amount || '0') || 0;
     const method = state?.method;
     if (!amount || amount <= 0 || !method || discountAmount < 0) return;
+    const conf = conferirPagamento(amount, discountAmount, falta);
+    if (conf.passou && !(await confirmar({
+      titulo: 'O valor + desconto passa do que falta',
+      descricao: conf.sugestao != null
+        ? `Falta R$ ${falta.toFixed(2).replace('.', ',')}. Com R$ ${discountAmount.toFixed(2).replace('.', ',')} de desconto, o cliente paga R$ ${conf.sugestao.toFixed(2).replace('.', ',')}. No "Valor recebido" vai só o que o cliente pagou. Salvar R$ ${amount.toFixed(2).replace('.', ',')} mesmo assim?`
+        : `Falta R$ ${falta.toFixed(2).replace('.', ',')} e você está quitando R$ ${conf.quita.toFixed(2).replace('.', ',')}. Salvar mesmo assim?`,
+      verbo: 'Salvar mesmo assim',
+    }))) return;
     onAddPayment({ order_id: orderId, amount, discount_amount: discountAmount, method, notes: state?.notes || null });
     setAdding(prev => ({ ...prev, [orderId]: { amount: '', discount_amount: '', method, notes: state?.notes } }));
   };
@@ -305,7 +315,8 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
 
                 <div className="grid grid-cols-1 sm:grid-cols-7 gap-2" onClick={(e) => e.stopPropagation()}>
                   <Input
-                    placeholder="Valor"
+                    placeholder="Valor recebido"
+                    title="O que o cliente pagou (entra no caixa). O desconto vai no campo ao lado."
                     value={adding[o.id]?.amount || ''}
                     onChange={(e) => setAdding(prev => {
                       const amount = sanitizeMoney(e.target.value);
@@ -347,7 +358,7 @@ export function PaymentsTab({ orders, isLoading, period, onPeriodChange, onAddPa
                     onChange={(e) => setAdding(prev => ({ ...prev, [o.id]: { ...(prev[o.id] || { amount: '', discount_amount: '', method: 'dinheiro' }), notes: e.target.value } }))}
                     className="h-9 sm:col-span-2"
                   />
-                  <Button className="h-9" onClick={() => handleAdd(o.id)}>
+                  <Button className="h-9" onClick={() => handleAdd(o.id, o._pending)}>
                     <Plus className="h-4 w-4 mr-1" /> Adicionar
                   </Button>
                 </div>
