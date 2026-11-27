@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -78,24 +78,35 @@ export function useFiados() {
   const { storeId } = useStore();
   const queryClient = useQueryClient();
 
+  // "Carregando" só na primeira vez. Antes toda atualização (voltar pra janela, aviso do tempo real,
+  // conferência de 5 em 5 min) trocava a lista pelo carregando e a tela parecia recarregar sozinha.
+  const carregou = useRef(false);
   const load = useCallback(async () => {
-    setLoading(true);
-    const { data } = await supabase
+    if (!carregou.current) setLoading(true);
+    const { data, error } = await supabase
       .from('fiados')
       .select('*, fiado_payments(*), fiado_messages(*)')
       .order('created_at', { ascending: false });
-    setFiados((data as Fiado[]) || []);
+    // Falha de rede numa atualização por baixo não apaga a lista que já está na tela
+    if (!error || !carregou.current) setFiados((data as Fiado[]) || []);
+    carregou.current = true;
     setLoading(false);
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  // Recarrega quando o usuário volta para a aba/página
+  // Voltar pra janela confere de novo, no máximo 1 vez a cada 2 min (o tempo real já avisa mudanças)
   useEffect(() => {
-    const onFocus = () => load();
+    let ultimoFoco = Date.now();
+    const onFocus = () => {
+      if (Date.now() - ultimoFoco < 2 * 60 * 1000) return;
+      ultimoFoco = Date.now();
+      load();
+    };
+    const onSync = () => load(); // mudança feita em outro aparelho (tempo real)
     window.addEventListener('focus', onFocus);
-    window.addEventListener('sync:fiados', onFocus); // mudança feita em outro aparelho (tempo real)
-    return () => { window.removeEventListener('focus', onFocus); window.removeEventListener('sync:fiados', onFocus); };
+    window.addEventListener('sync:fiados', onSync);
+    return () => { window.removeEventListener('focus', onFocus); window.removeEventListener('sync:fiados', onSync); };
   }, [load]);
 
   const createFiado = async (input: CreateFiadoInput) => {
