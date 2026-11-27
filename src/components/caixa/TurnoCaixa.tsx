@@ -73,15 +73,24 @@ export function TurnoCaixa({ ocultar }: { ocultar?: boolean }) {
   });
 
   if (!ligado || turnos.isLoading) return null;
+  // Caixa esquecido aberto de outro dia: trava as vendas até fechar aquele dia (banco também barra)
+  const diaSP = (d: Date | string) => new Date(d).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  const abertoOutroDia = !!aberto && diaSP(aberto.aberto_em) !== diaSP(new Date());
 
   return (
-    <div className={cn('rounded-xl border p-3 space-y-2', aberto ? 'border-green-600/50 bg-green-600/5' : 'border-amber-500/50 bg-amber-500/5')}>
+    <div className={cn('rounded-xl border p-3 space-y-2', abertoOutroDia ? 'border-red-500/60 bg-red-500/10' : aberto ? 'border-green-600/50 bg-green-600/5' : 'border-amber-500/50 bg-amber-500/5')}>
+      {abertoOutroDia && (
+        <div className="rounded-md bg-red-500/15 px-2.5 py-2 text-sm">
+          <p className="font-semibold text-red-500">⚠️ O caixa do dia {diaSP(aberto!.aberto_em)} ainda está aberto</p>
+          <p className="text-xs text-muted-foreground">Feche o caixa daquele dia (conte a gaveta) antes de abrir o de hoje. Até fechar, não dá para lançar vendas.</p>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           {aberto ? (
             <>
               <p className="text-sm font-semibold flex items-center gap-1.5"><DoorOpen className="h-4 w-4 text-green-600" /> Caixa aberto</p>
-              <p className="text-xs text-muted-foreground">Desde {hora(aberto.aberto_em)} por {aberto.aberto_por} · troco {v(aberto.valor_abertura)}</p>
+              <p className="text-xs text-muted-foreground">Desde {hora(aberto.aberto_em)} por {aberto.aberto_por} · abertura {v(aberto.valor_abertura)}</p>
               {resumo.data && <p className="text-xs">Na gaveta agora (esperado): <strong>{v(resumo.data.esperado)}</strong></p>}
             </>
           ) : (
@@ -120,7 +129,7 @@ export function TurnoCaixa({ ocultar }: { ocultar?: boolean }) {
         </div>
       )}
 
-      {janela === 'abrir' && <JanelaAbrir sugestao={ultimoFechado?.deixou_gaveta ?? 0} onClose={() => setJanela(null)} />}
+      {janela === 'abrir' && <JanelaAbrir sugestao={0} onClose={() => setJanela(null)} />}
       {janela === 'fechar' && aberto && <JanelaFechar turno={aberto} onClose={() => setJanela(null)} />}
     </div>
   );
@@ -174,6 +183,7 @@ function JanelaAbrir({ sugestao, onClose }: { sugestao: number; onClose: () => v
 
   const abrir = async () => {
     if (!quem.trim()) { toast.error('Diga quem está abrindo o caixa.'); return; }
+    if (troco.trim() === '') { toast.error('Conte o dinheiro da gaveta e digite o valor (se estiver vazia, digite 0).'); return; }
     if (Number.isNaN(valor) || valor < 0) { toast.error('Valor do troco inválido.'); return; }
     setSalvando(true);
     const { error } = await db.rpc('abrir_caixa', { p_valor: valor, p_quem: quem.trim() });
@@ -193,8 +203,8 @@ function JanelaAbrir({ sugestao, onClose }: { sugestao: number; onClose: () => v
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <p className="mb-1 text-sm font-medium">Troco na gaveta (R$)</p>
-            <Input inputMode="decimal" className="h-12 text-lg" value={troco} onChange={(e) => setTroco(e.target.value.replace(/[^\d.,]/g, ''))} placeholder="0,00" />
+            <p className="mb-1 text-sm font-medium">Dinheiro na gaveta ao abrir (R$)</p>
+            <Input inputMode="decimal" className="h-12 text-lg" value={troco} onChange={(e) => setTroco(e.target.value.replace(/[^\d.,]/g, ''))} placeholder="Digite o valor contado" />
             {sugestao > 0 && <p className="text-[11px] text-muted-foreground mt-1">No último fechamento ficou {brl(sugestao)} na gaveta.</p>}
           </div>
           <CampoQuem valor={quem} onChange={setQuem} pessoas={pessoas} />

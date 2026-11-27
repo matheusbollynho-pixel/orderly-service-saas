@@ -1,4 +1,4 @@
-import { caixaFechadoAgora } from '@/hooks/useCaixaFechado';
+import { situacaoCaixa, textoTravaCaixa } from '@/hooks/useCaixaFechado';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -222,7 +222,8 @@ export function useBalcao(opcoes: { recentes?: boolean } = {}) {
       if (fetchErr) throw fetchErr;
       if (order.status !== 'aberta') throw new Error('Nota não está aberta');
       // Caixa fechado (loja que usa abertura de caixa): para antes de dar baixa no estoque
-      if (await caixaFechadoAgora(storeId!)) throw new Error('O caixa está fechado. Abra o caixa (tela Caixa → Abrir caixa) antes de finalizar.');
+      const caixa = await situacaoCaixa(storeId!);
+      if (caixa.bloqueado) throw new Error(textoTravaCaixa(caixa, 'finalizar'));
 
       // Criar movimentações de estoque para itens do tipo estoque
       let firstMovId: string | null = null;

@@ -2,7 +2,7 @@ import { confirmar } from '@/components/v2/Confirmacao';
 import { BuscaCliente } from '@/components/v2/BuscaCliente';
 import { matchesSearch } from '@/lib/textSearch';
 import { useTipoDoCliente, useTiposCliente } from '@/hooks/useTiposCliente';
-import { useCaixaFechado } from '@/hooks/useCaixaFechado';
+import { useSituacaoCaixa, textoTravaCaixa } from '@/hooks/useCaixaFechado';
 import { NotaFiscalVenda, useNotaDaVenda } from '@/components/fiscal/NotaFiscalVenda';
 import { chamarFiscal, deveEmitirAuto, type FiscalAuto } from '@/lib/fiscal';
 import { motivoCancelamento } from '@/lib/motivoCancelamento';
@@ -72,7 +72,8 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   const fiscalLigado = !!(storeSettings as { fiscal_ativo?: boolean } | null)?.fiscal_ativo;
   const { data: notaFiscal } = useNotaDaVenda(order.id, fiscalLigado && order.status !== 'aberta');
   // Loja que usa abertura de caixa: com o caixa fechado não adiciona item nem finaliza
-  const caixaFechado = useCaixaFechado();
+  const situacaoDoCaixa = useSituacaoCaixa();
+  const caixaFechado = situacaoDoCaixa.bloqueado;
   const canAct = isEditable && !!order.atendente_id && !caixaFechado;
 
   // Remove acentos de vogais mas mantém ç
@@ -890,8 +891,8 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
       )}
       {isEditable && caixaFechado && (
         <div className="mb-3 rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 text-sm">
-          <p className="font-semibold text-amber-500">Caixa fechado</p>
-          <p className="text-xs text-muted-foreground">Para vender, abra o caixa primeiro: tela <b>Caixa</b> → <b>Abrir caixa</b>.</p>
+          <p className="font-semibold text-amber-500">{situacaoDoCaixa.motivo === 'outro_dia' ? `Caixa do dia ${situacaoDoCaixa.dia} ainda aberto` : 'Caixa fechado'}</p>
+          <p className="text-xs text-muted-foreground">{textoTravaCaixa(situacaoDoCaixa)}</p>
         </div>
       )}
       <div className="border-2 border-border rounded-xl overflow-hidden shadow-sm bg-card">
