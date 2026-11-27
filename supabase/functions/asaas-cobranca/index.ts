@@ -72,6 +72,17 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
+    // Login obrigatório: a loja vem do usuário logado, nunca do pedido (antes, qualquer um com o id criava cobrança)
+    const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '').trim()
+    if (!token) return json({ error: 'Não autorizado' }, 401)
+    const { data: quem } = await supabase.auth.getUser(token)
+    if (!quem?.user) return json({ error: 'Não autorizado' }, 401)
+    const comoUsuario = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
+      global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false },
+    })
+    const { data: loja } = await comoUsuario.rpc('get_my_store_id')
+    if (!loja) return json({ error: 'Usuário sem loja' }, 403)
+
     const body = await req.json()
     const order_id: string = body.order_id
     const billing_type: string = body.billing_type ?? 'UNDEFINED'
@@ -84,18 +95,21 @@ Deno.serve(async (req) => {
 
     if (!order_id) return json({ error: 'order_id obrigatorio' }, 400)
 
-    const { data: orderStoreRow } = await supabase
-      .from('service_orders')
-      .select('store_id')
-      .eq('id', order_id)
-      .maybeSingle()
-
-    if (!orderStoreRow?.store_id) return json({ error: 'OS nao encontrada' }, 404)
+    // É uma OS da loja? Se não, é uma venda do balcão da loja (o botão do balcão manda o id da venda).
+    // Antes só procurava OS: a cobrança do balcão sempre dava "OS nao encontrada".
+    const { data: osDaLoja } = await supabase
+      .from('service_orders').select('id').eq('id', order_id).eq('store_id', loja).maybeSingle()
+    if (!osDaLoja) {
+      const { data: vendaDaLoja } = await supabase
+        .from('balcao_orders').select('id').eq('id', order_id).eq('store_id', loja).maybeSingle()
+      if (!vendaDaLoja) return json({ error: 'OS ou venda nao encontrada' }, 404)
+      if (!(amount_override != null && amount_override > 0)) return json({ error: 'Informe o valor da cobranca' }, 400)
+    }
 
     const { data: settings } = await supabase
       .from('store_settings')
       .select('asaas_api_key, company_name')
-      .eq('id', orderStoreRow.store_id)
+      .eq('id', loja)
       .maybeSingle()
 
     const apiKey: string = settings?.asaas_api_key ?? ''

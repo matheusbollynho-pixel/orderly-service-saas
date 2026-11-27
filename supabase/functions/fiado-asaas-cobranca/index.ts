@@ -66,6 +66,23 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
+    // Robôs do servidor (cobrança automática do fiado, atendimento por IA) chamam com a chave interna;
+    // o app chama com o login do usuário e só enxerga fiado da própria loja.
+    const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '').trim()
+    if (!token) return json({ error: 'Não autorizado' }, 401)
+    const interno = token === Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    let loja: string | null = null
+    if (!interno) {
+      const { data: quem } = await sb.auth.getUser(token)
+      if (!quem?.user) return json({ error: 'Não autorizado' }, 401)
+      const comoUsuario = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
+        global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false },
+      })
+      const { data } = await comoUsuario.rpc('get_my_store_id')
+      if (!data) return json({ error: 'Usuário sem loja' }, 403)
+      loja = data as string
+    }
+
     const body = await req.json()
     const { fiado_id, billing_type = 'PIX' } = body
 
@@ -77,7 +94,7 @@ Deno.serve(async (req) => {
       .eq('id', fiado_id)
       .single()
 
-    if (error || !fiado) return json({ error: 'Fiado não encontrado' }, 404)
+    if (error || !fiado || (!interno && fiado.store_id !== loja)) return json({ error: 'Fiado não encontrado' }, 404)
 
     const { data: settings } = await sb
       .from('store_settings')
