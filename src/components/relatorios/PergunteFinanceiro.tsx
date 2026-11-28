@@ -9,6 +9,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 
 interface Fala { role: 'user' | 'assistant'; content: string; erro?: boolean }
 
+/** Resposta da IA: mostra **assim** como negrito (caso venha Markdown) e troca "- " no começo da linha por "• ". */
+function TextoResposta({ texto }: { texto: string }) {
+  const limpo = texto.replace(/^\s*[-*]\s+/gm, '• ').replace(/^#+\s*/gm, '');
+  return <>{limpo.split(/(\*\*[^*]+\*\*)/g).map((p, i) => (p.startsWith('**') && p.endsWith('**') && p.length > 4
+    ? <strong key={i}>{p.slice(2, -2)}</strong> : <span key={i}>{p}</span>))}</>;
+}
+
 const SUGESTOES = [
   'Quanto vendi esta semana?',
   'Qual foi o lucro das peças este mês?',
@@ -90,7 +97,7 @@ export function PergunteFinanceiro() {
                   <div key={i} className={f.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
                     <div className={`max-w-[85%] whitespace-pre-wrap rounded-lg px-3 py-2 text-sm ${
                       f.role === 'user' ? 'bg-primary text-primary-foreground' : f.erro ? 'bg-red-500/10 text-red-500' : 'bg-muted text-foreground'}`}>
-                      {f.content}
+                      {f.role === 'assistant' && !f.erro ? <TextoResposta texto={f.content} /> : f.content}
                     </div>
                   </div>
                 ))}
