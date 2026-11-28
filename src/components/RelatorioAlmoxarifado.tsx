@@ -71,9 +71,9 @@ export function RelatorioAlmoxarifado({ products }: { products: InventoryProduct
 
   // 1. Fechamento por produto
   const fechamento = useMemo(() => {
-    const m = new Map<string, { entrou: number; usado: number; voltou: number; contagem: number }>();
+    const m = new Map<string, { entrou: number; usado: number; semOs: number; voltou: number; contagem: number }>();
     const linha = (id: string) => {
-      if (!m.has(id)) m.set(id, { entrou: 0, usado: 0, voltou: 0, contagem: 0 });
+      if (!m.has(id)) m.set(id, { entrou: 0, usado: 0, semOs: 0, voltou: 0, contagem: 0 });
       return m.get(id)!;
     };
     for (const mv of movs) {
@@ -83,6 +83,7 @@ export function RelatorioAlmoxarifado({ products }: { products: InventoryProduct
       else if (mv.type === 'transf_para_loja') l.voltou += q;
       else if (mv.local === 'almox' && mv.type === 'entrada_manual') l.entrou += q;
       else if (mv.local === 'almox' && mv.type === 'saida_os') l.usado += q;
+      else if (mv.local === 'almox' && mv.type === 'consumo_interno') l.semOs += q;
       else if (mv.local === 'almox' && mv.type === 'devolucao') {
         if (mv.order_id) l.usado -= q; else l.entrou += q;
       } else if (mv.local === 'almox' && mv.type === 'ajuste' && mv.saldo_anterior != null) {
@@ -135,6 +136,7 @@ export function RelatorioAlmoxarifado({ products }: { products: InventoryProduct
   }, [porOS, mechanics]);
 
   const totalUsado = fechamento.reduce((s, r) => s + r.usado * custo(r.id), 0);
+  const totalSemOs = fechamento.reduce((s, r) => s + r.semOs * custo(r.id), 0);
   const totalPerda = fechamento.reduce((s, r) => s + (r.contagem < 0 ? -r.contagem * custo(r.id) : 0), 0);
 
   return (
@@ -147,10 +149,10 @@ export function RelatorioAlmoxarifado({ products }: { products: InventoryProduct
           className="ml-auto"
           disabled={fechamento.length === 0}
           onClick={() => baixarPlanilha(`almoxarifado-${periodo}`,
-            ['Produto', 'Código', 'Unidade', 'Entrou', 'Usado em OS', 'Voltou p/ loja', 'Contagem (+sobra/-perda)', 'Saldo hoje', 'Custo unitário', 'Custo usado'],
+            ['Produto', 'Código', 'Unidade', 'Entrou', 'Usado em OS', 'Baixa sem OS', 'Voltou p/ loja', 'Contagem (+sobra/-perda)', 'Saldo hoje', 'Custo unitário', 'Custo usado em OS', 'Custo baixa sem OS'],
             fechamento.map((r) => [
-              r.produto!.name, r.produto!.code, r.produto!.unit, r.entrou, r.usado, r.voltou, r.contagem,
-              Number((r.produto as { stock_almox?: number }).stock_almox ?? 0), custo(r.id), r.usado * custo(r.id),
+              r.produto!.name, r.produto!.code, r.produto!.unit, r.entrou, r.usado, r.semOs, r.voltou, r.contagem,
+              Number((r.produto as { stock_almox?: number }).stock_almox ?? 0), custo(r.id), r.usado * custo(r.id), r.semOs * custo(r.id),
             ]))}
         >
           Baixar planilha
@@ -169,10 +171,14 @@ export function RelatorioAlmoxarifado({ products }: { products: InventoryProduct
         <Skeleton className="h-40 rounded-xl" />
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <div className="rounded-xl border bg-card p-3">
               <p className="text-xs text-muted-foreground">Material usado nas OS (custo)</p>
               <p className="text-lg font-bold">{brl(totalUsado)}</p>
+            </div>
+            <div className="rounded-xl border bg-card p-3">
+              <p className="text-xs text-muted-foreground">Baixa sem OS (custo)</p>
+              <p className="text-lg font-bold">{brl(totalSemOs)}</p>
             </div>
             <div className="rounded-xl border bg-card p-3">
               <p className="text-xs text-muted-foreground">Perda nas contagens (custo)</p>
@@ -193,6 +199,7 @@ export function RelatorioAlmoxarifado({ products }: { products: InventoryProduct
                       <th className="py-1 pr-2">Produto</th>
                       <th className="py-1 px-1 text-right">Entrou</th>
                       <th className="py-1 px-1 text-right">Usado em OS</th>
+                      <th className="py-1 px-1 text-right">Sem OS</th>
                       <th className="py-1 px-1 text-right">Voltou p/ loja</th>
                       <th className="py-1 px-1 text-right">Contagem</th>
                       <th className="py-1 px-1 text-right">Saldo hoje</th>
@@ -207,12 +214,13 @@ export function RelatorioAlmoxarifado({ products }: { products: InventoryProduct
                           <td className="py-1 pr-2">{r.produto!.name}</td>
                           <td className="py-1 px-1 text-right">{qtd(r.entrou)} {u}</td>
                           <td className="py-1 px-1 text-right">{qtd(r.usado)} {u}</td>
+                          <td className="py-1 px-1 text-right">{r.semOs ? `${qtd(r.semOs)} ${u}` : '—'}</td>
                           <td className="py-1 px-1 text-right">{qtd(r.voltou)} {u}</td>
                           <td className={`py-1 px-1 text-right ${r.contagem < 0 ? 'text-red-500 font-semibold' : r.contagem > 0 ? 'text-green-600' : ''}`}>
                             {r.contagem === 0 ? '—' : `${r.contagem > 0 ? '+' : ''}${qtd(r.contagem)} ${u}`}
                           </td>
                           <td className="py-1 px-1 text-right">{qtd(Number((r.produto as { stock_almox?: number }).stock_almox ?? 0))} {u}</td>
-                          <td className="py-1 pl-1 text-right">{brl(r.usado * custo(r.id))}</td>
+                          <td className="py-1 pl-1 text-right">{brl((r.usado + r.semOs) * custo(r.id))}</td>
                         </tr>
                       );
                     })}

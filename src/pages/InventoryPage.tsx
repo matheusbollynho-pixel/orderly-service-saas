@@ -49,6 +49,7 @@ import { useColaboradorLogado } from '@/hooks/useColaboradorLogado';
 import { usePlanFeatures } from '@/hooks/usePlanFeatures';
 import { useTiposCliente } from '@/hooks/useTiposCliente';
 import { EntradaXml } from '@/components/estoque/EntradaXml';
+import { AbaAlmoxarifado } from '@/components/estoque/AbaAlmoxarifado';
 import { KitDialog } from '@/components/estoque/KitDialog';
 import { UpgradeModal } from '@/components/UpgradeModal';
 
@@ -77,6 +78,7 @@ const MOV_LABELS: Record<string, string> = {
   saida_balcao: 'Venda balcão',
   transf_para_almox: 'Loja → almoxarifado',
   transf_para_loja: 'Almoxarifado → loja',
+  consumo_interno: 'Baixa sem OS',
 };
 
 const MOV_COLORS: Record<string, string> = {
@@ -88,6 +90,7 @@ const MOV_COLORS: Record<string, string> = {
   saida_balcao: 'text-red-500',
   transf_para_almox: 'text-blue-500',
   transf_para_loja: 'text-blue-500',
+  consumo_interno: 'text-red-500',
 };
 
 // Campos novos do banco (almoxarifado e fiscais) ainda não estão nos tipos gerados.
@@ -475,6 +478,13 @@ function ProductFormDialog({ open, product, isEditing, isSaving, usaAlmox, onCha
                 <div>
                   <Label>Estoque do almoxarifado</Label>
                   <Input type="number" min="0" step="0.001" value={extra.stock_almox ?? 0} onChange={(e) => onChange('stock_almox', parseFloat(e.target.value) || 0)} disabled={!podeAjustar} title={podeAjustar ? undefined : 'Só quem pode ajustar o estoque muda o saldo'} />
+                </div>
+              )}
+              {usaAlmox && (
+                <div>
+                  <Label>Mínimo do almoxarifado</Label>
+                  <Input type="number" min="0" step="0.001" value={(extra as { stock_minimo_almox?: number | null }).stock_minimo_almox ?? 0}
+                    onChange={(e) => onChange('stock_minimo_almox', parseFloat(e.target.value) || 0)} />
                 </div>
               )}
               {usaAlmox && (
@@ -972,8 +982,15 @@ export default function InventoryPage() {
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="w-full">
           <TabsTrigger value="produtos" className="flex-1">Produtos ({products.length})</TabsTrigger>
+          {usaAlmox && <TabsTrigger value="almoxarifado" className="flex-1">Almoxarifado</TabsTrigger>}
           <TabsTrigger value="movimentacoes" className="flex-1">Movimentações</TabsTrigger>
         </TabsList>
+
+        {usaAlmox && (
+          <TabsContent value="almoxarifado" className="mt-3">
+            <AbaAlmoxarifado products={products} equipe={equipe} />
+          </TabsContent>
+        )}
 
         {/* ── ABA PRODUTOS ── */}
         <TabsContent value="produtos" className="space-y-3 mt-3">

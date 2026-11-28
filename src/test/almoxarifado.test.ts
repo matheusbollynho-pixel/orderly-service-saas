@@ -36,3 +36,24 @@ describe('almoxarifado: parte de uma embalagem', () => {
     expect(textoParte(0.1667)).toBe('0,167');
   });
 });
+
+import { abaixoDoMinimoAlmox, produtosDoAlmox } from '@/components/estoque/AbaAlmoxarifado';
+describe('almoxarifado: aba', () => {
+  const p = (x: Record<string, unknown>) => ({ id: String(x.name), name: String(x.name), active: true, stock_current: 0, ...x }) as never;
+  it('mostra quem tem saldo no almox, é de uso interno ou tem mínimo; esconde kit e inativo; ordena por nome', () => {
+    const lista = produtosDoAlmox([
+      p({ name: 'Zinco', stock_almox: 2 }),
+      p({ name: 'Estopa', uso: 'interno', stock_almox: 0 }),
+      p({ name: 'Fita', stock_minimo_almox: 3 }),
+      p({ name: 'Pastilha', uso: 'venda', stock_almox: 0, stock_current: 10 }),
+      p({ name: 'Kit troca de óleo', e_kit: true, stock_almox: 5 }),
+      p({ name: 'Velho', active: false, stock_almox: 4 }),
+    ]);
+    expect(lista.map((x: { name: string }) => x.name)).toEqual(['Estopa', 'Fita', 'Zinco']);
+  });
+  it('baixo = no mínimo ou abaixo (só quando tem mínimo)', () => {
+    expect(abaixoDoMinimoAlmox(p({ name: 'a', stock_almox: 3, stock_minimo_almox: 3 }))).toBe(true);
+    expect(abaixoDoMinimoAlmox(p({ name: 'b', stock_almox: 4, stock_minimo_almox: 3 }))).toBe(false);
+    expect(abaixoDoMinimoAlmox(p({ name: 'c', stock_almox: 0, stock_minimo_almox: 0 }))).toBe(false);
+  });
+});
