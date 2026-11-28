@@ -8,6 +8,7 @@ import { useStoreSettings, type StoreSettings } from '@/hooks/useStoreSettings';
 import { Button } from '@/components/ui/button';
 import { fmtCpf } from '@/lib/precoCliente';
 import { CertificadoA1, type EmissorCert } from './CertificadoA1';
+import { AcessoContador } from './AcessoContador';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
@@ -144,6 +145,7 @@ export function ConfigFiscal() {
         <label className={rotulo}>CPF ou CNPJ do escritório de contabilidade</label>
         <input inputMode="numeric" value={contador} onChange={(e) => setContador(e.target.value)} onBlur={() => setContador(fmtCpf(contador))} placeholder="Opcional" className={campo} />
         <p className="text-[11px] text-neutral-500">Vai em cada nota como autorizado a baixar o XML direto na SEFAZ. Na Bahia é obrigatório na NF-e: sem contador, o sistema informa o CNPJ da própria SEFAZ-BA. Salve no botão "Salvar impostos".</p>
+        <AcessoContador />
       </div>
 
       <div className="border border-white/10 rounded-lg p-3 space-y-3 bg-black/20">

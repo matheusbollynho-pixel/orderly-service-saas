@@ -47,11 +47,22 @@ Deno.serve(async (req) => {
     if (!u?.user) return erro('Não autorizado', 401)
     // Cliente com o login do usuário: a loja e as permissões vêm do banco, nunca do pedido
     const comoUsuario = createClient(URL, ANON, { global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false } })
-    const { data: loja } = await comoUsuario.rpc('get_my_store_id')
-    if (!loja) return erro('Usuário sem loja', 403)
-
     const p = await req.json().catch(() => null) as Record<string, string> | null
     if (!p?.acao) return erro('Ação não informada')
+
+    const { data: minhaLoja } = await comoUsuario.rpc('get_my_store_id')
+    let loja = minhaLoja as string | null
+    // Contador: escolhe a loja (store_id), mas só vale se o dono dela liberou o acesso. Só baixa XMLs.
+    let comoContador = false
+    if (p.store_id && p.store_id !== loja) {
+      const { data: acesso } = await admin.from('contador_acessos').select('id')
+        .eq('user_id', u.user.id).eq('store_id', p.store_id).eq('ativo', true).maybeSingle()
+      if (!acesso) return erro('Você não tem acesso às notas desta loja.', 403)
+      loja = p.store_id
+      comoContador = true
+      if (p.acao !== 'xmls_periodo') return erro('O acesso de contador só permite consultar e baixar as notas.', 403)
+    }
+    if (!loja) return erro('Usuário sem loja', 403)
 
     const { data: cfg } = await admin.from('store_settings')
       .select('fiscal_ativo, fiscal_ambiente, fiscal_ncm_padrao, fiscal_cfop_padrao, fiscal_csosn_padrao, fiscal_origem_padrao, fiscal_regime, fiscal_icms_aliquota, fiscal_pis_cofins_cst, fiscal_pis_aliquota, fiscal_cofins_aliquota, fiscal_fcp_aliquota, fiscal_contador_doc')
@@ -284,12 +295,66 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ---------------------------------------------------------------- inutilizar números pulados (NFC-e)
+    // ---------------------------------------------------------------- acesso do contador (só o DONO libera / tira)
+    // { acao:'contador_convidar', email } | { acao:'contador_remover', acesso_id }
+    // O contador ganha login próprio (convite por e-mail) que só lê as notas desta loja; não entra na equipe.
+    if (p.acao === 'contador_convidar' || p.acao === 'contador_remover') {
+      const { data: membro } = await admin.from('store_members').select('role')
+        .eq('user_id', u.user.id).eq('store_id', loja).eq('active', true).maybeSingle()
+      if (membro?.role !== 'owner') return erro('Só o dono da loja libera ou tira o acesso do contador.', 403)
+
+      if (p.acao === 'contador_remover') {
+        const { data: tirado, error } = await admin.from('contador_acessos')
+          .update({ ativo: false, removido_em: new Date().toISOString() })
+          .eq('id', String(p.acesso_id ?? '')).eq('store_id', loja).select('id')
+        if (error) return erro(error.message)
+        if (!tirado?.length) return erro('Acesso não encontrado.', 404)
+        return resp({ ok: true })
+      }
+
+      const email = String(p.email ?? '').trim().toLowerCase()
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return erro('Digite um e-mail válido.')
+      if (email === (u.user.email ?? '').toLowerCase()) return erro('Esse é o seu próprio e-mail. Use o e-mail do contador.')
+      const { data: lojaInfo } = await admin.from('store_settings').select('company_name').eq('id', loja).single()
+
+      // Login novo: convite por e-mail (ele cria a senha). Já tem login (atende outra loja): só libera esta.
+      let userId: string | undefined
+      let convidou = false
+      const { data: convite, error: convErr } = await admin.auth.admin.inviteUserByEmail(email, {
+        data: { contador: true, company_name: lojaInfo?.company_name ?? null },
+        redirectTo: 'https://app.speedseekos.com.br/',
+      })
+      if (!convErr && convite?.user) {
+        userId = convite.user.id
+        convidou = true
+      } else {
+        for (let pagina = 1; pagina <= 20 && !userId; pagina++) {
+          const { data: lista } = await admin.auth.admin.listUsers({ page: pagina, perPage: 1000 })
+          const usuarios = lista?.users ?? []
+          userId = usuarios.find((x: { email?: string }) => (x.email ?? '').toLowerCase() === email)?.id
+          if (usuarios.length < 1000) break
+        }
+        if (!userId) return erro(`Não consegui mandar o convite: ${convErr?.message ?? 'erro desconhecido'}`, 502)
+      }
+
+      const { data: daEquipe } = await admin.from('store_members').select('id')
+        .eq('user_id', userId).eq('store_id', loja).eq('active', true).maybeSingle()
+      if (daEquipe) return erro('Esse e-mail já é de alguém da equipe desta loja. Use o e-mail do contador.')
+
+      const { error: gravErr } = await admin.from('contador_acessos').upsert({
+        user_id: userId, store_id: loja, email, ativo: true, convidado_por: u.user.id, removido_em: null,
+      }, { onConflict: 'user_id,store_id' })
+      if (gravErr) return erro(gravErr.message)
+      return resp({ ok: true, convidou })
+    }
+
     // ---------------------------------------------------------------- XMLs do período para o contador (.zip)
     // Corpo: { acao:'xmls_periodo', de:'AAAA-MM-DD', ate:'AAAA-MM-DD' }. Autorizadas e canceladas + planilha resumo.
     if (p.acao === 'xmls_periodo') {
-      const { data: pode } = await comoUsuario.rpc('pode_acao', { acao: 'relatorios' })
-      if (pode !== true) return erro('Sem permissão de Relatórios para baixar os XMLs.', 403)
+      if (!comoContador) {
+        const { data: pode } = await comoUsuario.rpc('pode_acao', { acao: 'relatorios' })
+        if (pode !== true) return erro('Sem permissão de Relatórios para baixar os XMLs.', 403)
+      }
       const de = String(p.de ?? ''), ate = String(p.ate ?? '')
       if (!/^\d{4}-\d{2}-\d{2}$/.test(de) || !/^\d{4}-\d{2}-\d{2}$/.test(ate) || ate < de) return erro('Período inválido.')
       const fim = new Date(`${ate}T00:00:00-03:00`); fim.setDate(fim.getDate() + 1)

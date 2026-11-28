@@ -133,3 +133,17 @@ describe('NFC-e Spedy', () => {
     expect(motivoNota('cancelada', { code: '135', message: 'Cancelamento homologado', status: 'success' })).toBeNull();
   });
 });
+
+import { dataBrasilia } from '../../supabase/functions/_shared/fiscal/spedy';
+describe('horário que a Spedy devolve', () => {
+  it('sem fuso = horário de Brasília', () => {
+    expect(dataBrasilia('2026-11-26T09:18:13')).toBe('2026-11-26T09:18:13-03:00');
+    expect(new Date(dataBrasilia('2026-11-26T09:18:13')!).toISOString()).toBe('2026-11-26T12:18:13.000Z');
+  });
+  it('com fuso fica como veio; vazio = null', () => {
+    expect(dataBrasilia('2026-11-26T12:18:13Z')).toBe('2026-11-26T12:18:13Z');
+    expect(dataBrasilia('2026-11-26T09:18:13-03:00')).toBe('2026-11-26T09:18:13-03:00');
+    expect(dataBrasilia('')).toBeNull();
+    expect(dataBrasilia(undefined)).toBeNull();
+  });
+});

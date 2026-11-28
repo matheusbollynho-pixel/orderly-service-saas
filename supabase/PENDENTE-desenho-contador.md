@@ -1,6 +1,6 @@
-# Acesso do contador — desenho (ainda NÃO construído)
+# Acesso do contador — desenho
 
-Escrito em 26/11/2026. Só desenho: nada aqui está no código nem no banco.
+Escrito em 26/11/2026. **Fase 2 CONSTRUÍDA em 27/11/2026** (migration 034, ações contador_convidar/contador_remover na função fiscal, src/pages/ContadorPage.tsx, src/components/fiscal/AcessoContador.tsx). Falta só o "mandar todo mês por e-mail".
 
 ## O que o contador precisa
 1. Pegar os XMLs do mês (NFC-e, NF-e, canceladas, inutilizações).

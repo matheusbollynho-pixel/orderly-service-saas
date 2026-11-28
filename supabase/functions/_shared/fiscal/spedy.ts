@@ -378,6 +378,13 @@ export interface RetornoNota {
   motivo: string | null
 }
 
+/** A Spedy manda o horário de Brasília sem fuso ("2026-11-26T09:18:13"). Sem o fuso, o banco grava como UTC
+ *  e a nota aparece 3 horas antes. Data que já tem fuso (Z ou ±hh:mm) fica como veio. */
+export function dataBrasilia(s: string | null | undefined): string | null {
+  if (!s) return null
+  return /(Z|[+-]\d{2}:?\d{2})$/i.test(s.trim()) ? s.trim() : `${s.trim()}-03:00`
+}
+
 function lerNota(d: Record<string, unknown>): RetornoNota {
   const auth = (d.authorization ?? {}) as { date?: string; protocol?: string }
   const det = (d.processingDetail ?? {}) as { message?: string; code?: string; status?: string }
@@ -389,7 +396,7 @@ function lerNota(d: Record<string, unknown>): RetornoNota {
     serie: d.series != null ? String(d.series) : null,
     chave: (d.accessKey as string) || null,
     protocolo: auth.protocol || null,
-    autorizadaEm: status === 'autorizada' ? auth.date || null : null,
+    autorizadaEm: status === 'autorizada' ? dataBrasilia(auth.date) : null,
     motivo: motivoNota(status, det),
   }
 }

@@ -21,6 +21,7 @@ import CollaboratorsPage from "./pages/CollaboratorsPage";
 import SuperAdminPage from "./pages/SuperAdminPage";
 import OnboardingPage from "./pages/OnboardingPage";
 import MinhaContaPage from "./pages/MinhaContaPage";
+import ContadorPage from "./pages/ContadorPage";
 import { useAuth } from "./hooks/useAuth";
 import { StoreProvider, useStore } from "./contexts/StoreContext";
 import { PaymentAlertModal } from "./components/PaymentAlertModal";
@@ -123,6 +124,11 @@ function AuthenticatedApp() {
     return <LoginPage />;
   }
 
+  // Área do contador (login próprio, só notas fiscais). Quem também é de uma loja chega por /contador.
+  if (location.pathname.startsWith('/contador')) {
+    return <ContadorPage />;
+  }
+
   if (location.pathname.startsWith('/super-admin')) {
     return (
       <Routes>
@@ -169,7 +175,6 @@ function AppContent() {
 // Bloqueia acesso se usuário não tem loja ativa vinculada
 function StoreGuard({ children }: { children: React.ReactNode }) {
   const { storeId, loading, onboarded } = useStore();
-  const { signOut } = useAuth();
   const location = useLocation();
 
   if (!loading && storeId && !onboarded && location.pathname !== '/onboarding') {
@@ -178,23 +183,8 @@ function StoreGuard({ children }: { children: React.ReactNode }) {
 
   if (loading) return null;
 
-  if (!storeId) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-8">
-        <div className="text-center space-y-4">
-          <p className="text-lg font-semibold text-foreground">Acesso revogado</p>
-          <p className="text-sm text-muted-foreground">Sua conta não tem acesso a nenhuma loja ativa.</p>
-          <button
-            type="button"
-            onClick={signOut}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm"
-          >
-            Sair
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // Sem loja: pode ser contador (vê as notas das lojas que liberaram); senão, "Acesso revogado"
+  if (!storeId) return <ContadorPage />;
 
   return (
     <>
