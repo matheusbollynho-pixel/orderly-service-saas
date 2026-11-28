@@ -94,3 +94,6 @@ verify_jwt = false
 
 [functions.fiscal]
 verify_jwt = false
+
+[functions.financeiro-resumo]
+verify_jwt = false
