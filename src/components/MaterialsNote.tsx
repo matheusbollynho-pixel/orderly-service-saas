@@ -73,6 +73,8 @@ export function MaterialsNote({
   const vazio = () => ({ quantidade: '01', descricao: '', valor: '', is_service: false, mechanic_id: meuMecanico, product_id: undefined as string | undefined });
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingValues, setEditingValues] = useState<Record<string, string>>({});
+  // Nome do item digitado à mão (sem estoque) em edição
+  const [editingNomes, setEditingNomes] = useState<Record<string, string>>({});
   const [fracao, setFracao] = useState({ valor: '', unidade: 'pequena' as 'pequena' | 'grande', cobrar: false });
   const [newMaterial, setNewMaterial] = useState<{ quantidade: string; descricao: string; valor: string; is_service: boolean; mechanic_id: string | undefined; product_id: string | undefined }>(vazio);
   // O nome do login chega depois (lista de mecânicos carregando)
@@ -298,6 +300,31 @@ export function MaterialsNote({
                     {!podeEditar && (
                       <p className="text-xs text-muted-foreground">Para tirar ou mudar este item, chame o gerente.</p>
                     )}
+                    {/* Item digitado à mão (não veio do estoque): dá para corrigir o nome */}
+                    {!material.product_id && (
+                      <div>
+                        <label className="text-xs font-semibold text-foreground block mb-1">Descrição</label>
+                        <input
+                          type="text"
+                          value={editingNomes[material.id] !== undefined ? editingNomes[material.id] : material.descricao}
+                          onChange={(e) => { const v = e.target.value; setEditingNomes(prev => ({ ...prev, [material.id]: v })); }}
+                          onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                          onBlur={(e) => {
+                            const nome = e.target.value.trim();
+                            if (editingNomes[material.id] !== undefined && nome && nome !== material.descricao) {
+                              onUpdateMaterial(material.id, 'descricao', nome);
+                            } else if (!nome) {
+                              toast.error('O nome do item não pode ficar vazio.');
+                            }
+                            setEditingNomes(prev => { const n = { ...prev }; delete n[material.id]; return n; });
+                          }}
+                          disabled={disabled || !podeEditar}
+                          spellCheck
+                          lang="pt-BR"
+                          className="h-8 text-sm bg-muted/50 border-border/50 flex w-full rounded-md border border-input bg-transparent px-3 py-1 shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                        />
+                      </div>
+                    )}
                     <div className="flex gap-2 items-end">
                       {ehFracionado(material.quantidade) ? (
                         <div className="text-xs text-muted-foreground max-w-[12rem]">
@@ -325,13 +352,14 @@ export function MaterialsNote({
                           value={editingValues[material.id] !== undefined ? editingValues[material.id] : material.valor}
                           onChange={(e) => {
                             const value = e.target.value;
-                            if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                            // Aceita vírgula (5,50) ou ponto (5.50)
+                            if (value === '' || /^\d*[.,]?\d{0,2}$/.test(value)) {
                               setEditingValues(prev => ({ ...prev, [material.id]: value }));
                             }
                           }}
                           onBlur={(e) => {
-                            const value = e.target.value;
-                            if (editingValues[material.id] !== undefined && value !== String(material.valor)) {
+                            const value = e.target.value.replace(',', '.');
+                            if (editingValues[material.id] !== undefined && value !== '' && Number(value) !== Number(material.valor)) {
                               onUpdateMaterial(material.id, 'valor', value);
                             }
                             setEditingValues(prev => {
