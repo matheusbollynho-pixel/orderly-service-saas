@@ -11,6 +11,7 @@ import { useMechanics } from '@/hooks/useMechanics';
 import type { InventoryProduct } from '@/hooks/useInventory';
 import { Button } from '@/components/ui/button';
 import { baixarPlanilha } from '@/lib/planilha';
+import { consumoPorPessoa } from '@/lib/almoxarifado';
 
 type Periodo = 'este_mes' | 'mes_passado' | '30_dias';
 
@@ -22,6 +23,7 @@ interface Mov {
   saldo_anterior: number | null;
   product_id: string;
   order_id: string | null;
+  retirado_por?: string | null;
   created_at: string;
   service_orders: { client_name: string | null; equipment: string | null; mechanic_id: string | null; created_at: string } | null;
 }
@@ -56,7 +58,7 @@ export function RelatorioAlmoxarifado({ products }: { products: InventoryProduct
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return buscarTodas<Mov>((de, ate) => (supabase as any)
         .from('inventory_movements')
-        .select('id, type, local, quantity, saldo_anterior, product_id, order_id, created_at, service_orders(client_name, equipment, mechanic_id, created_at)')
+        .select('id, type, local, quantity, saldo_anterior, product_id, order_id, retirado_por, created_at, service_orders(client_name, equipment, mechanic_id, created_at)')
         .or('local.eq.almox,type.in.(transf_para_almox,transf_para_loja)')
         .gte('created_at', inicio.toISOString())
         .lt('created_at', fim.toISOString())
@@ -134,6 +136,13 @@ export function RelatorioAlmoxarifado({ products }: { products: InventoryProduct
     }
     return [...m.values()].sort((a, b) => b.total - a.total);
   }, [porOS, mechanics]);
+
+  // 4. Quem retirou (em OS e sem OS), pelo nome gravado na saída do almoxarifado
+  const porPessoa = useMemo(
+    () => consumoPorPessoa(movs.filter((mv) => porId.has(mv.product_id)), custo),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [movs, porId],
+  );
 
   const totalUsado = fechamento.reduce((s, r) => s + r.usado * custo(r.id), 0);
   const totalSemOs = fechamento.reduce((s, r) => s + r.semOs * custo(r.id), 0);
@@ -270,6 +279,28 @@ export function RelatorioAlmoxarifado({ products }: { products: InventoryProduct
               ))
             )}
             <p className="text-[11px] text-muted-foreground">Pelo mecânico responsável marcado na OS.</p>
+          </section>
+
+          {/* 4. Quem retirou */}
+          <section className="rounded-xl border bg-card p-3 space-y-2">
+            <h3 className="text-sm font-semibold">Quem retirou</h3>
+            {porPessoa.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Sem retiradas no período.</p>
+            ) : (
+              porPessoa.map((g) => (
+                <div key={g.nome} className="flex justify-between gap-2 text-xs border-t border-border/50 pt-1 first:border-t-0 first:pt-0">
+                  <span>
+                    {g.nome}
+                    <span className="text-muted-foreground">
+                      {g.emOs > 0 && <> · em OS {brl(g.emOs)}</>}
+                      {g.semOs > 0 && <> · sem OS {brl(g.semOs)}</>}
+                    </span>
+                  </span>
+                  <span className="font-semibold">{brl(g.total)}</span>
+                </div>
+              ))
+            )}
+            <p className="text-[11px] text-muted-foreground">Pelo nome escolhido em "Quem retirou". Peça devolvida da OS desconta de quem retirou por último. Custo pelo preço de custo atual.</p>
           </section>
         </>
       )}

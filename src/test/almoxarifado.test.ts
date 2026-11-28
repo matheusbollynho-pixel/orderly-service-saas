@@ -57,3 +57,36 @@ describe('almoxarifado: aba', () => {
     expect(abaixoDoMinimoAlmox(p({ name: 'c', stock_almox: 0, stock_minimo_almox: 0 }))).toBe(false);
   });
 });
+
+import { custoDoEstoqueNaOs } from '@/lib/almoxarifado';
+describe('almoxarifado: custo do estoque na OS', () => {
+  it('separa peça cobrada de material de uso; ignora serviço e item digitado', () => {
+    const r = custoDoEstoqueNaOs([
+      { product_id: 'pastilha', quantidade: '2', valor: 40 },
+      { product_id: 'desengripante', quantidade: '0.167', valor: 0 },
+      { product_id: null, quantidade: '1', valor: 30 },
+      { product_id: 'pastilha', is_service: true, quantidade: '1', valor: 100 },
+    ], [{ id: 'pastilha', cost_price: 25 }, { id: 'desengripante', cost_price: 18 }]);
+    expect(r).toEqual({ pecas: 50, uso: 3.01, total: 53.01 });
+  });
+});
+
+import { consumoPorPessoa } from '@/lib/almoxarifado';
+describe('almoxarifado: consumo por pessoa', () => {
+  it('OS menos devolução (de quem retirou por último), baixa sem OS, sem nome = Não informado; ignora loja', () => {
+    const custo = (id: string) => ({ lata: 18, fita: 4 } as Record<string, number>)[id] ?? 0;
+    const r = consumoPorPessoa([
+      { type: 'saida_os', local: 'almox', quantity: 1, product_id: 'lata', order_id: 'os1', retirado_por: 'Walace' },
+      { type: 'saida_os', local: 'almox', quantity: 0.5, product_id: 'lata', order_id: 'os1', retirado_por: 'Aislan' },
+      { type: 'devolucao', local: 'almox', quantity: 0.5, product_id: 'lata', order_id: 'os1' }, // desfaz o do Aislan
+      { type: 'consumo_interno', local: 'almox', quantity: 2, product_id: 'fita', order_id: null, retirado_por: 'Aislan' },
+      { type: 'saida_os', local: 'almox', quantity: 1, product_id: 'fita', order_id: 'os2', retirado_por: null },
+      { type: 'saida_os', local: 'loja', quantity: 5, product_id: 'lata', order_id: 'os3', retirado_por: 'Walace' }, // loja: fora
+    ], custo);
+    expect(r).toEqual([
+      { nome: 'Walace', emOs: 18, semOs: 0, total: 18, qtdEmOs: 1, qtdSemOs: 0 },
+      { nome: 'Aislan', emOs: 0, semOs: 8, total: 8, qtdEmOs: 0, qtdSemOs: 2 },
+      { nome: 'Não informado', emOs: 4, semOs: 0, total: 4, qtdEmOs: 1, qtdSemOs: 0 },
+    ]);
+  });
+});

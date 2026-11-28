@@ -14,7 +14,7 @@ import { useColaboradorLogado } from '@/hooks/useColaboradorLogado';
 import { useTipoDoCliente, useTiposCliente } from '@/hooks/useTiposCliente';
 import { digitadoParaCliente, economiaUnit, precoParaCliente, servicoParaCliente, tipoEmDia } from '@/lib/precoCliente';
 import { useStoreSettings } from '@/hooks/useStoreSettings';
-import { fracaoDaEmbalagem, origemPadrao, qtdEstoque, textoParte, unidadesDoConteudo, type Origem } from '@/lib/almoxarifado';
+import { custoDoEstoqueNaOs, fracaoDaEmbalagem, origemPadrao, qtdEstoque, textoParte, unidadesDoConteudo, type Origem } from '@/lib/almoxarifado';
 
 // Campos do almoxarifado que ainda não estão nos tipos gerados do banco
 type ProdutoAlmox = InventoryProduct & { uso?: string | null; conteudo_qtd?: number | null; conteudo_unidade?: string | null; stock_almox?: number | null };
@@ -164,6 +164,9 @@ export function MaterialsNote({
     const qtd = parseFloat(m.quantidade) || 0;
     return sum + ((m.valor || 0) * qtd);
   }, 0);
+  // Custo do que saiu do estoque nesta OS (preço de custo é só para quem vê relatórios)
+  const verCusto = usaAlmox && permissions.relatorios !== false;
+  const custoOS = custoDoEstoqueNaOs(materiais as never, inventoryProducts);
   // Desconto do tipo de cliente que já está nos valores (Lojista etc.)
   const economiaTipo = materiais.reduce((s, m) => s + economiaUnit(m, Number(m.valor) || 0) * (parseFloat(String(m.quantidade).replace(',', '.')) || 0), 0);
   const nomeTipoOS = materiais.find((m) => economiaUnit(m, Number(m.valor) || 0) > 0)?.tipo_preco ?? '';
@@ -484,6 +487,15 @@ export function MaterialsNote({
                 R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
+            {verCusto && custoOS.total > 0.004 && (
+              <div className="px-2 pt-1 text-[11px] text-muted-foreground space-y-0.5">
+                <p>
+                  Custo do estoque nesta OS: R$ {brl(custoOS.total)}
+                  {custoOS.uso > 0.004 && <> (peças R$ {brl(custoOS.pecas)} · material de uso não cobrado R$ {brl(custoOS.uso)})</>}
+                </p>
+                <p>Total menos o custo do estoque: <strong className="text-foreground">R$ {brl(total - custoOS.total)}</strong></p>
+              </div>
+            )}
           </div>
         )}
 

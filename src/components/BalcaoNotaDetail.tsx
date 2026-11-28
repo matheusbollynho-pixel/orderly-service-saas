@@ -133,7 +133,8 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
   const [fiadoInterestRate, setFiadoInterestRate] = useState('2');
   const [fiadoLoading, setFiadoLoading] = useState(false);
 
-  const activeProducts = products.filter(p => p.active !== false);
+  // Material "só uso interno" (almoxarifado: desengripante, estopa...) não aparece na busca da venda
+  const activeProducts = products.filter(p => p.active !== false && (p as { uso?: string | null }).uso !== 'interno');
 
   // ── Tipo do cliente (Lojista etc.): preço diferente ─────────────
   const { data: tiposCli = [], isLoading: carregandoTipos } = useTiposCliente();
