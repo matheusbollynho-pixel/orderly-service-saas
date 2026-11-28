@@ -117,7 +117,7 @@ export function useFiados() {
       items: input.items,
       interest_rate_monthly: input.interest_rate_monthly ?? 2.0,
     }]).select('*, fiado_payments(*), fiado_messages(*)').single();
-    if (error) { toast.error('Erro ao criar fiado'); return null; }
+    if (error) { toast.error(/aprovad|limite|cliente cadastrado/i.test(error.message) ? error.message : 'Erro ao criar fiado'); return null; }
 
     // OS vai para concluída e entregue imediatamente — moto já foi entregue ao cliente
     if (input.origin_type === 'os' && input.origin_id) {

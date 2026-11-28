@@ -17,6 +17,7 @@ import { baixarPlanilha } from '@/lib/planilha';
 import { deIso, iso, problemaNoPeriodo, type Periodo } from '@/lib/periodo';
 import { cn } from '@/lib/utils';
 import { BarraPeriodo, usePeriodo } from './BarraPeriodo';
+import { RecebidoPorEmpresa } from './RecebidoPorEmpresa';
 
 const TZ = '-03:00';
 const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -207,6 +208,8 @@ export default function RelatorioVendas() {
             <Card t="Oficina (OS entregues)" v={brl(r.osLiquido)} sub={`${r.osQtd} OS · serviços ${brl(r.servTotal)} · peças ${brl(r.pecaOsTotal)}${r.osDesc > 0 ? ` · desconto ${brl(r.osDesc)}` : ''}`} />
             <Card t="Balcão (notas)" v={brl(r.notasTotal)} sub={`${r.notasQtd} nota${r.notasQtd === 1 ? '' : 's'}${r.onlineQtd > 0 ? ` · na loja ${brl(r.notasTotal - r.onlineTotal)} · online ${brl(r.onlineTotal)} (${r.onlineQtd})` : ''}`} />
           </div>
+
+          <RecebidoPorEmpresa periodo={atual} />
 
           <section className="rounded-xl border bg-card p-3 space-y-1">
             <div className="flex items-center gap-2">

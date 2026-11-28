@@ -56,6 +56,7 @@ const ACOES: { key: keyof MemberPermissions; label: string; ajuda: string }[] = 
   { key: 'ajustar_estoque', label: 'Ajustar estoque', ajuda: 'Corrigir o saldo (ajuste) e mudar o saldo no cadastro do produto.' },
   { key: 'pagar_equipe', label: 'Pagar a equipe', ajuda: 'Fechar e desfazer pagamentos de salário e comissão.' },
   { key: 'abrir_fechar_caixa', label: 'Abrir e fechar o caixa', ajuda: 'Abertura com troco e fechamento com contagem da gaveta.' },
+  { key: 'aprovar_fiado', label: 'Aprovar fiado', ajuda: 'Liberar cliente para comprar fiado e mudar o limite dele. Vem desmarcado: só o dono, até marcar.' },
 ];
 
 const COMPARTILHADA = 'compartilhada';
@@ -65,6 +66,7 @@ export const DEFAULT_PERMISSIONS: MemberPermissions = {
   caixa: false, balcao: false, relatorios: false, boletos: false, fiados: false,
   estoque: false, equipe: false, pos_venda: false, satisfacao: false, clientes: true,
   editar_itens_os: true, excluir_os: true, dar_desconto: true, estornar: true, ajustar_estoque: true, pagar_equipe: true, abrir_fechar_caixa: true,
+  aprovar_fiado: false,
 };
 
 export const MAX_MEMBERS: Record<string, number> = { basic: 2, trial: 2 };
@@ -158,7 +160,7 @@ export default function CollaboratorsPage() {
   const startEdit = (member: Member) => {
     setEditingId(member.id);
     // Quem já usava continua igual: ação não marcada = liberada
-    setEditPerms({ ...DEFAULT_PERMISSIONS, editar_itens_os: true, excluir_os: true, dar_desconto: true, estornar: true, ajustar_estoque: true, pagar_equipe: true, abrir_fechar_caixa: true, ...(member.permissions || {}) });
+    setEditPerms({ ...DEFAULT_PERMISSIONS, editar_itens_os: true, excluir_os: true, dar_desconto: true, estornar: true, ajustar_estoque: true, pagar_equipe: true, abrir_fechar_caixa: true, aprovar_fiado: false, ...(member.permissions || {}) });
     setEditQuem(member.colaborador_tipo && member.colaborador_id ? `${member.colaborador_tipo}:${member.colaborador_id}` : COMPARTILHADA);
   };
 

@@ -75,6 +75,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useVehicleLabel } from '@/hooks/useVehicleLabel';
+import { AvisoFiadoCliente } from '@/components/fiado/AvisoFiadoCliente';
 
 interface OrderDetailsProps {
   order: ServiceOrder;
@@ -320,6 +321,8 @@ export function OrderDetails({
     setIsEditingPhone(false);
   };
   const { canAccess: canAccessPlano } = usePlanFeatures();
+  // Cartão parcelado no crédito: vai junto na observação do pagamento ("crédito 3x")
+  const [parcelasCartao, setParcelasCartao] = useState(1);
   const [paymentForm, setPaymentForm] = useState<{ amount: string; discount_amount: string; method: PaymentMethod; notes: string; finalized_by_staff_id: string }>(() => ({
     amount: '',
     discount_amount: '',
@@ -691,10 +694,12 @@ export function OrderDetails({
       amount,
       discount_amount: discountAmount,
       method: paymentForm.method,
-      notes: paymentForm.notes?.trim() || null,
+      notes: [paymentForm.method === 'cartao' && parcelasCartao > 1 ? `crédito ${parcelasCartao}x` : '', paymentForm.notes?.trim() ?? '']
+        .filter(Boolean).join(' · ') || null,
       finalized_by_staff_id: paymentForm.finalized_by_staff_id || null,
     });
     setPaymentForm((prev) => ({ ...prev, amount: '', discount_amount: '' }));
+    setParcelasCartao(1);
   };
 
   // Busca logo como base64 redimensionada (máx 200px) para enviar ao gerador de PDF
@@ -1671,6 +1676,8 @@ const renderDeliverySection = () => {
       {/* Client Info */}
       <Card className="card-elevated">
         <CardContent className="p-4 space-y-3">
+          {/* Cliente com fiado atrasado: continua sendo atendido, só o aviso */}
+          <AvisoFiadoCliente clientId={order.client_id} />
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-medium text-foreground">Informações do Cliente</h3>
             {/* Botão de alternância para visualizar detalhes do cliente */}
@@ -2151,6 +2158,16 @@ const renderDeliverySection = () => {
                       )}
                     </SelectContent>
                   </Select>
+                  {paymentForm.method === 'cartao' && (
+                    <Select value={String(parcelasCartao)} onValueChange={(v) => setParcelasCartao(Number(v))} disabled={pb}>
+                      <SelectTrigger className="h-9" title="Parcelas (crédito)"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
+                          <SelectItem key={n} value={String(n)}>{n === 1 ? 'À vista' : `${n}x`}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <Input placeholder="Obs." value={paymentForm.notes} onChange={(e) => setPaymentForm((prev) => ({ ...prev, notes: e.target.value }))} className="h-9" disabled={pb} />
                   <Button className="h-9" onClick={paymentForm.method === 'fiado' ? () => setShowFiadoDialog(true) : handleAddPayment} disabled={pb || (paymentForm.method !== 'fiado' && (isCreatingPayment || !paymentForm.amount))}>
                     {paymentForm.method === 'fiado' ? 'Registrar' : 'Adicionar'}
@@ -2360,6 +2377,7 @@ const renderDeliverySection = () => {
               Cliente: <strong>{order.client_name}</strong>
               {' · '}Valor pendente: <strong className="text-red-600">R$ {pending.toFixed(2)}</strong>
             </p>
+            <AvisoFiadoCliente clientId={order.client_id} valorNovo={pending} />
             {!order.mechanic_id && (
               <p className="text-sm text-red-600 font-medium">
                 ⚠️ Nenhum mecânico atribuído à OS. Volte e selecione o mecânico antes de registrar o fiado.

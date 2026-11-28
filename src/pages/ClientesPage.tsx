@@ -8,6 +8,7 @@ import { ArrowLeft, Building2, Car, ChevronRight, Loader2, Plus, Search, Tags, U
 import { buscarCnpj, enderecoEmLinha } from '@/lib/cnpj';
 import { supabase } from '@/integrations/supabase/client';
 import { useStore } from '@/contexts/StoreContext';
+import { useFiadoCliente } from '@/hooks/useFiadoCliente';
 import { useVehicleLabel } from '@/hooks/useVehicleLabel';
 import type { Client, Motorcycle } from '@/hooks/useClients';
 import { inicioDePalavra } from '@/lib/textSearch';
@@ -51,7 +52,7 @@ type ClienteComTipo = Client & { tipo_cliente_id?: string | null; tipo_valido_at
 // Dados para NF-e (cliente com CNPJ). Colunas novas: só vão no salvar se tiver algo preenchido.
 type DadosNfe = { razao_social?: string | null; ie?: string | null; ie_indicador?: string | null; cep?: string | null; logradouro?: string | null; numero?: string | null; complemento?: string | null; bairro?: string | null; cidade_ibge?: string | null };
 const CAMPOS_NFE: (keyof DadosNfe)[] = ['razao_social', 'ie', 'ie_indicador', 'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade_ibge'];
-type ClienteForm = Partial<ClienteComTipo> & DadosNfe & { name: string };
+type ClienteForm = Partial<ClienteComTipo> & DadosNfe & { name: string; fiado_aprovado?: boolean; fiado_limite?: number | string | null };
 const VAZIO: ClienteForm = { name: '', phone: '', cpf: '', apelido: '', email: '', instagram: '', endereco: '', cidade: '', state: '', notes: '', birth_date: null, autoriza_lembretes: true, autoriza_instagram: true, tipo_cliente_id: null, tipo_valido_ate: null };
 
 interface Props {
@@ -285,6 +286,9 @@ function FichaCliente({ id, onVoltar, onCriado, onOpenOrder, onOpenBalcaoOrder, 
       birth_date: form.birth_date || null,
       autoriza_lembretes: form.autoriza_lembretes !== false,
       autoriza_instagram: form.autoriza_instagram !== false,
+      // Fiado (aprovação e limite) só vai junto se mudou: quem não pode aprovar ainda salva o resto
+      ...(!!form.fiado_aprovado !== !!(cliente as ClienteForm | null)?.fiado_aprovado ? { fiado_aprovado: !!form.fiado_aprovado } : {}),
+      ...(limiteNum(form.fiado_limite) !== limiteNum((cliente as ClienteForm | null)?.fiado_limite) ? { fiado_limite: limiteNum(form.fiado_limite) } : {}),
       // Tipo só vai junto se mudou (quem não pode dar desconto ainda consegue salvar o resto)
       ...((form.tipo_cliente_id ?? null) !== (cliente?.tipo_cliente_id ?? null) || (form.tipo_valido_ate ?? null) !== (cliente?.tipo_valido_ate ?? null)
         ? { tipo_cliente_id: form.tipo_cliente_id || null, tipo_valido_ate: form.tipo_cliente_id ? form.tipo_valido_ate || null : null }
@@ -389,6 +393,8 @@ function FichaCliente({ id, onVoltar, onCriado, onOpenOrder, onOpenBalcaoOrder, 
         {tipos.length > 0 && <CampoTipo form={form} tipos={tipos} pode={podeTipo}
           mudou={(form.tipo_cliente_id ?? null) !== (cliente?.tipo_cliente_id ?? null) || (form.tipo_valido_ate ?? null) !== (cliente?.tipo_valido_ate ?? null)}
           onMudar={(campos) => setForm((f) => ({ ...f, ...campos }))} />}
+        <BlocoFiado form={form} clienteId={cliente?.id ?? null} pode={permissions.aprovar_fiado === true}
+          onMudar={(campos) => setForm((f) => ({ ...f, ...campos }))} />
         <Campo label="Observações"><Textarea rows={2} value={form.notes ?? ''} onChange={(e) => set('notes', e.target.value)} /></Campo>
         <div className="flex flex-wrap gap-4 text-sm">
           <label className="flex items-center gap-2"><Switch checked={form.autoriza_lembretes !== false} onCheckedChange={(v) => set('autoriza_lembretes', v)} /> Aceita lembretes no WhatsApp</label>
@@ -802,6 +808,46 @@ function AvisoWhatsApp({ editando, onMudar }: {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// Limite digitado → número (vazio = sem limite)
+function limiteNum(v: number | string | null | undefined): number | null {
+  if (v == null || String(v).trim() === '') return null;
+  if (typeof v === 'number') return Math.round(v * 100) / 100;
+  // "1.500,50" (com vírgula: ponto é milhar) ou "1500.50" (sem vírgula: ponto é decimal)
+  const t = String(v).trim();
+  const x = parseFloat(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t);
+  return Number.isFinite(x) && x >= 0 ? Math.round(x * 100) / 100 : null;
+}
+
+/** Ficha do cliente › Fiado: liberado para fiado, limite e a situação de agora. */
+function BlocoFiado({ form, clienteId, pode, onMudar }: {
+  form: ClienteForm; clienteId: string | null; pode: boolean; onMudar: (c: Partial<ClienteForm>) => void;
+}) {
+  const { data: sit } = useFiadoCliente(clienteId);
+  const brlF = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  return (
+    <div className="rounded-md border border-border p-3 space-y-2">
+      <p className="text-xs font-semibold">Fiado</p>
+      <label className="flex items-center gap-2 text-sm">
+        <Switch checked={!!form.fiado_aprovado} disabled={!pode} onCheckedChange={(v) => onMudar({ fiado_aprovado: v })} />
+        Liberado para comprar fiado
+      </label>
+      <div className="flex items-center gap-2 text-sm">
+        <span className="text-muted-foreground">Limite (R$)</span>
+        <Input className="h-8 w-32" inputMode="decimal" disabled={!pode} placeholder="Sem limite"
+          value={form.fiado_limite ?? ''} onChange={(e) => onMudar({ fiado_limite: e.target.value.replace(/[^\d.,]/g, '') })} />
+      </div>
+      {sit && (sit.aberto > 0 || sit.limite != null) && (
+        <p className="text-xs text-muted-foreground">
+          Em aberto: {brlF(sit.aberto)}
+          {sit.atrasado > 0 && <span className="text-red-500 font-semibold"> · atrasado {brlF(sit.atrasado)}</span>}
+          {sit.disponivel != null && <> · ainda cabe {brlF(sit.disponivel)}</>}
+        </p>
+      )}
+      {!pode && <p className="text-[11px] text-muted-foreground">Só o dono ou quem tem a permissão "Aprovar fiado" muda isto.</p>}
     </div>
   );
 }

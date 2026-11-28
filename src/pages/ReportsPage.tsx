@@ -17,9 +17,11 @@ import RelatorioVendas from '@/components/relatorios/RelatorioVendas';
 import RelatorioOficina from '@/components/relatorios/RelatorioOficina';
 import RelatorioNfse from '@/components/relatorios/RelatorioNfse';
 import RelatorioClientes from '@/components/relatorios/RelatorioClientes';
+import HistoricoAcoes from '@/components/relatorios/HistoricoAcoes';
+import { useStore } from '@/contexts/StoreContext';
 
 type Period = 'week' | 'month' | 'all';
-type Aba = 'resumo' | 'vendas' | 'oficina' | 'nfse' | 'clientes' | 'equipe' | 'estoque' | 'vencimentos' | 'pagamentos';
+type Aba = 'resumo' | 'vendas' | 'oficina' | 'nfse' | 'clientes' | 'equipe' | 'estoque' | 'vencimentos' | 'pagamentos' | 'historico';
 type ParteEquipe = 'comissoes' | 'mecanicos' | 'balcao';
 
 interface ReportsPageProps {
@@ -39,6 +41,7 @@ const ABAS: { id: Aba; nome: string }[] = [
   { id: 'estoque', nome: 'Estoque' },
   { id: 'vencimentos', nome: 'Vencimentos' },
   { id: 'pagamentos', nome: 'Pagamentos' },
+  { id: 'historico', nome: 'Histórico' },
 ];
 
 export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder, onOpenCaixa }: ReportsPageProps = {}) {
@@ -46,6 +49,9 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder, onOpenCaixa }: Rep
   const [period, setPeriod] = useState<Period>('month');
   const [activeTab, setActiveTab] = useState<Aba>('resumo');
   const [parteEquipe, setParteEquipe] = useState<ParteEquipe>('comissoes');
+  // Histórico (quem cancelou, deu desconto...): só o dono vê a aba
+  const { isOwner } = useStore();
+  const abas = ABAS.filter((a) => a.id !== 'historico' || isOwner);
 
   // Atalho antigo de outras telas: abre o relatório por mecânico
   useEffect(() => {
@@ -63,7 +69,7 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder, onOpenCaixa }: Rep
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as Aba)} className="w-full">
         {/* Celular: as abas rolam para o lado; PC: cabem inteiras */}
         <TabsList className="w-full justify-start overflow-x-auto overflow-y-hidden scrollbar-hide">
-          {ABAS.map((a) => (
+          {abas.map((a) => (
             <TabsTrigger key={a.id} value={a.id} className="flex-1 shrink-0">{a.nome}</TabsTrigger>
           ))}
         </TabsList>
@@ -91,6 +97,7 @@ export function ReportsPage({ onOpenOrder, onOpenBalcaoOrder, onOpenCaixa }: Rep
 
         <TabsContent value="estoque" className="space-y-5"><RelatoriosEstoque /></TabsContent>
         <TabsContent value="vencimentos"><Vencimentos /></TabsContent>
+        {isOwner && <TabsContent value="historico"><HistoricoAcoes /></TabsContent>}
 
         <TabsContent value="pagamentos" className="space-y-5">
           <PaymentsTab

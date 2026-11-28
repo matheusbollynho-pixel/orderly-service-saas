@@ -92,6 +92,7 @@ export default function ConfigToolsPage() {
   const { isOwner, role, loading: storeLoading, storeId, vehicleType } = useStore();
   const [salvandoTipo, setSalvandoTipo] = useState(false);
   const [usaAlmox, setUsaAlmox] = useState<boolean | null>(null);
+  const [fiadoAprov, setFiadoAprov] = useState<boolean | null>(null);
   const [usaTurno, setUsaTurno] = useState<boolean | null>(null);
 
   // Abertura e fechamento do caixa (conferência da gaveta). Desligado por padrão.
@@ -112,6 +113,16 @@ export default function ConfigToolsPage() {
     const { error } = await (supabase as any).from('store_settings').update({ usa_almoxarifado: ligar }).eq('id', storeId);
     if (error) { setUsaAlmox(!ligar); toast.error('Não consegui salvar: ' + error.message); return; }
     toast.success(ligar ? 'Almoxarifado ligado. A peça lançada na OS passa a sair do almoxarifado.' : 'Almoxarifado desligado. A peça lançada na OS volta a sair da loja.');
+  }
+
+  // Fiado só para cliente aprovado pelo dono/gerente. Desligado por padrão.
+  async function mudarFiadoAprovacao(ligar: boolean) {
+    if (!storeId) return;
+    setFiadoAprov(ligar);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).from('store_settings').update({ fiado_exige_aprovacao: ligar }).eq('id', storeId);
+    if (error) { setFiadoAprov(!ligar); toast.error('Não consegui salvar: ' + error.message); return; }
+    toast.success(ligar ? 'Fiado só para cliente aprovado. Libere cada cliente na ficha dele (Clientes).' : 'Fiado liberado para qualquer cliente.');
   }
 
   // Tipo de veículo da loja (moto, carro ou os dois). Muda rótulos e o checklist
@@ -382,6 +393,20 @@ export default function ConfigToolsPage() {
                   Usar almoxarifado (estoque de uso interno)
                 </label>
                 <p className="text-xs text-neutral-500">O produto passa a ter saldo na loja e no almoxarifado, com transferência entre os dois. A peça lançada na OS sai do almoxarifado. Bom para estofaria e oficina que usam material da loja.</p>
+              </div>
+
+              {/* Fiado só para cliente aprovado */}
+              <div className="space-y-1">
+                <label className="flex items-center gap-2 text-sm text-neutral-200">
+                  <input
+                    type="checkbox"
+                    checked={fiadoAprov ?? !!(settings as { fiado_exige_aprovacao?: boolean } | null)?.fiado_exige_aprovacao}
+                    onChange={e => mudarFiadoAprovacao(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  Fiado só para cliente aprovado
+                </label>
+                <p className="text-xs text-neutral-500">Só vende fiado para cliente cadastrado e liberado na ficha dele (Clientes). Quem libera: o dono ou quem tiver a permissão "Aprovar fiado". O limite de fiado do cliente vale mesmo com esta opção desligada.</p>
               </div>
 
               {/* Abertura e fechamento do caixa */}

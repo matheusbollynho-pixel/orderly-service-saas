@@ -30,6 +30,8 @@ export type MemberPermissions = {
   pagar_equipe: boolean;
   /** Abrir e fechar o caixa (conferência da gaveta) */
   abrir_fechar_caixa: boolean;
+  /** Liberar cliente para fiado e mudar o limite (ausente = NÃO pode; só o dono ou quem tiver marcado) */
+  aprovar_fiado?: boolean;
 };
 
 export function useAuth() {

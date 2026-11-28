@@ -8,6 +8,7 @@ const ALL_PERMISSIONS: MemberPermissions = {
   caixa: true, balcao: true, relatorios: true, boletos: true, fiados: true,
   estoque: true, equipe: true, pos_venda: true, satisfacao: true, clientes: true,
   editar_itens_os: true, excluir_os: true, dar_desconto: true, estornar: true, ajustar_estoque: true, pagar_equipe: true, abrir_fechar_caixa: true,
+  aprovar_fiado: true,
 };
 
 /** Login ligado a um mecânico ou atendente (conta pessoal). Sem isso = conta compartilhada. */
@@ -119,7 +120,8 @@ export function StoreProvider({ user, children }: { user: User | null; children:
           if (data.role === 'owner') {
             setPermissions(ALL_PERMISSIONS);
           } else {
-            setPermissions({ ...ALL_PERMISSIONS, ...(data.permissions || {}) });
+            // Aprovar fiado é o contrário das outras ações: sem marcar = não pode
+            setPermissions({ ...ALL_PERMISSIONS, ...(data.permissions || {}), aprovar_fiado: data.permissions?.aprovar_fiado === true });
           }
         }
         setLoading(false);

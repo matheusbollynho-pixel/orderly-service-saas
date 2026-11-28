@@ -9,6 +9,8 @@ import { buscarTodas } from '@/lib/buscarTodas';
 export interface PaymentEntry {
   method: string;
   amount: number;
+  /** Cartão de crédito parcelado (2 a 12). Ausente ou 1 = à vista. */
+  parcelas?: number;
 }
 
 export interface BalcaoOrder {
@@ -268,7 +270,7 @@ export function useBalcao(opcoes: { recentes?: boolean } = {}) {
       // Se todos os amounts são 0 mas o total é positivo, distribui o total pelo único método
       const paymentsTotal = rawPayments.reduce((s, p) => s + (p.amount || 0), 0);
       const payments: PaymentEntry[] = paymentsTotal === 0 && effectiveTotal > 0
-        ? [{ method: rawPayments[0]?.method ?? order.payment_method ?? 'dinheiro', amount: effectiveTotal }]
+        ? [{ ...(rawPayments[0] ?? {}), method: rawPayments[0]?.method ?? order.payment_method ?? 'dinheiro', amount: effectiveTotal }]
         : rawPayments;
 
       const discountNotes = order.discount_pct > 0
@@ -282,7 +284,7 @@ export function useBalcao(opcoes: { recentes?: boolean } = {}) {
           store_id: storeId!,
           type: 'entrada',
           amount: pm.amount,
-          description,
+          description: pm.method === 'cartao_credito' && (pm.parcelas ?? 1) > 1 ? `${description} (crédito ${pm.parcelas}x)` : description,
           category: 'venda_balcao',
           payment_method: pm.method,
           date: toISODate(),

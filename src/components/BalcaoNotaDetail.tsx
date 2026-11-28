@@ -1,6 +1,8 @@
 import { confirmar } from '@/components/v2/Confirmacao';
 import { BuscaCliente } from '@/components/v2/BuscaCliente';
 import { matchesSearch } from '@/lib/textSearch';
+import { produtoPeloCodigo } from '@/lib/codigoBarras';
+import { AvisoFiadoCliente } from '@/components/fiado/AvisoFiadoCliente';
 import { useTipoDoCliente, useTiposCliente } from '@/hooks/useTiposCliente';
 import { useSituacaoCaixa, textoTravaCaixa } from '@/hooks/useCaixaFechado';
 import { NotaFiscalVenda, useNotaDaVenda } from '@/components/fiscal/NotaFiscalVenda';
@@ -18,7 +20,8 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, Plus, Trash2, CheckCircle, XCircle, Package, Printer, Send, FileText, Link, Copy, CheckCheck, Loader2, HandCoins } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, CheckCircle, XCircle, Package, Printer, Send, FileText, Link, Copy, CheckCheck, Loader2, HandCoins, Undo2 } from 'lucide-react';
+import { DevolverItemDialog, useDevolucoes } from '@/components/balcao/DevolverItem';
 import { toast } from 'sonner';
 import { sendWhatsAppText, sendWhatsAppDocument } from '@/lib/whatsappService';
 import { supabase } from '@/integrations/supabase/client';
@@ -69,6 +72,12 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
 
   const items: BalcaoItem[] = order.balcao_items ?? [];
   const isEditable = order.status === 'aberta';
+  // Devolução de item: nota finalizada ou no fiado, para quem pode estornar
+  const podeDevolver = (order.status === 'finalizada' || order.status === 'fiado');
+  const { data: devolucoes } = useDevolucoes(order.id, podeDevolver);
+  const devolvidoPorItem = new Map<string, number>();
+  for (const d of devolucoes ?? []) if (d.item_id) devolvidoPorItem.set(d.item_id, (devolvidoPorItem.get(d.item_id) ?? 0) + Number(d.quantidade));
+  const [devolvendo, setDevolvendo] = useState<BalcaoItem | null>(null);
   const fiscalLigado = !!(storeSettings as { fiscal_ativo?: boolean } | null)?.fiscal_ativo;
   const { data: notaFiscal } = useNotaDaVenda(order.id, fiscalLigado && order.status !== 'aberta');
   // Loja que usa abertura de caixa: com o caixa fechado não adiciona item nem finaliza
@@ -282,7 +291,13 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
       setAsaasOpen(true);
       return;
     }
-    const updated = paymentEntries.map((e, i) => i === idx ? { ...e, method } : e);
+    // Trocou de crédito para outra forma: some o parcelamento
+    const updated = paymentEntries.map((e, i) => i === idx ? { method, amount: e.amount, ...(method === 'cartao_credito' && e.parcelas ? { parcelas: e.parcelas } : {}) } : e);
+    savePayments(updated);
+  };
+
+  const handleParcelasChange = (idx: number, parcelas: number) => {
+    const updated = paymentEntries.map((e, i) => i === idx ? { ...e, parcelas: parcelas > 1 ? parcelas : undefined } : e);
     savePayments(updated);
   };
 
@@ -381,7 +396,8 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
       status: 'pendente',
     }]);
     setFiadoLoading(false);
-    if (error) { toast.error('Erro ao registrar fiado'); return; }
+    // Recado do banco (cliente não aprovado, passa do limite) aparece inteiro
+    if (error) { toast.error(/aprovad|limite|cliente cadastrado/i.test(error.message) ? error.message : 'Erro ao registrar fiado'); return; }
 
     // Busca os itens frescos do banco para garantir type e product_id corretos
     const { data: freshItems } = await supabase
@@ -429,7 +445,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     const found = q.length === 0
       ? activeProducts.slice(0, 8)
       : activeProducts.filter(p =>
-          matchesSearch(q, p.name, p.code)
+          matchesSearch(q, p.name, p.code, p.barcode)
         ).slice(0, 8);
     setSuggestions(found);
     setShowSuggestions(true);
@@ -441,7 +457,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
       const found = q.length === 0
         ? activeProducts.slice(0, 8)
         : activeProducts.filter(p =>
-            matchesSearch(q, p.name, p.code)
+            matchesSearch(q, p.name, p.code, p.barcode)
           ).slice(0, 8);
       setSuggestions(found);
       setShowSuggestions(true);
@@ -456,11 +472,29 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
     setShowSuggestions(false);
   };
 
+  // ── Leitor de código de barras ───────────────────────────────
+  // O leitor digita o código e aperta Enter: se bate com um produto, entra direto (qtd 1);
+  // se o produto já está na nota, soma 1 na mesma linha.
+  const handleEnterDescricao = async () => {
+    const lido = !selectedProduct ? produtoPeloCodigo(activeProducts, newDesc) : null;
+    if (!lido) { handleAddItem(); return; }
+    const naNota = items.find(i => i.type === 'estoque' && i.product_id === lido.id);
+    setShowSuggestions(false);
+    if (naNota) {
+      setNewDesc('');
+      await handleUpdateItem(naNota.id, 'quantity', String(Number(naNota.quantity) + 1));
+      return;
+    }
+    await handleAddItem(lido);
+  };
+
   // ── Adicionar item ────────────────────────────────────────────
-  const handleAddItem = async () => {
-    if (!newDesc.trim()) { toast.error('Informe a descrição'); return; }
-    const qty = parseFloat(newQty) || 1;
-    const price = parseFloat(newPrice) || 0;
+  const selectedProdutoTela = selectedProduct;
+  const handleAddItem = async (lido?: InventoryProduct) => {
+    if (!lido && !newDesc.trim()) { toast.error('Informe a descrição'); return; }
+    const qty = lido ? 1 : (parseFloat(newQty) || 1);
+    const price = lido ? 0 : (parseFloat(newPrice) || 0);
+    const selectedProduct = lido ?? selectedProdutoTela;
 
     let effectivePrice = price;
     if (selectedProduct) {
@@ -744,17 +778,19 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
 
   // ── Helper: gera HTML das formas de pagamento ─────────────────
   const buildPaymentHtml = () => {
-    const entries = Array.isArray(order.payment_methods) && order.payment_methods.length > 0
+    const entries: PaymentEntry[] = Array.isArray(order.payment_methods) && order.payment_methods.length > 0
       ? order.payment_methods
       : [{ method: order.payment_method ?? 'dinheiro', amount: order.total }];
+    // "Cartão Crédito 3x" quando parcelado
+    const rotulo = (e: PaymentEntry) => `${PAYMENT_LABELS[e.method] ?? e.method}${e.method === 'cartao_credito' && (e.parcelas ?? 1) > 1 ? ` ${e.parcelas}x` : ''}`;
     if (entries.length === 1) {
-      const label = PAYMENT_LABELS[entries[0].method] ?? entries[0].method;
+      const label = rotulo(entries[0]);
       return `<div style="margin-top:16px;font-size:12px;color:#555;padding:10px 14px;border:1px solid #ddd;border-radius:4px">
         <strong>Forma de Pagamento:</strong> ${label}
       </div>`;
     }
     const rows = entries.map(e =>
-      `<tr><td style="padding:4px 8px">${PAYMENT_LABELS[e.method] ?? e.method}</td><td style="padding:4px 8px;text-align:right">R$ ${e.amount.toFixed(2)}</td></tr>`
+      `<tr><td style="padding:4px 8px">${rotulo(e)}</td><td style="padding:4px 8px;text-align:right">R$ ${e.amount.toFixed(2)}</td></tr>`
     ).join('');
     return `<div style="margin-top:16px;font-size:12px;color:#555;padding:10px 14px;border:1px solid #ddd;border-radius:4px">
       <strong>Formas de Pagamento:</strong>
@@ -992,6 +1028,8 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
               className="mt-1 h-9 text-sm bg-background w-full"
             />
           </div>
+          {/* Cliente com fiado atrasado: continua comprando, só o aviso */}
+          <AvisoFiadoCliente clientId={order.client_id} />
           {/* Onde vendeu: o caixa e o relatório separam as vendas online */}
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mr-1">Onde vendeu</span>
@@ -1025,7 +1063,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
             </div>
           )}
 
-          {items.map(item => (
+          {items.map(item => { const devolvido = devolvidoPorItem.get(item.id) ?? 0; return (
             <div key={item.id} className="grid grid-cols-[1fr_72px_108px_96px_32px] items-center hover:bg-muted/20">
               <div className="px-4 py-2">
                 {item.type === 'avulso' && isEditable ? (
@@ -1055,6 +1093,11 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
                     {item.type === 'estoque' && (
                       <span className="inline-flex items-center gap-1 text-[10px] text-blue-500">
                         <Package className="h-2.5 w-2.5" /> estoque
+                      </span>
+                    )}
+                    {devolvido > 0 && (
+                      <span className="ml-2 inline-flex items-center rounded bg-orange-500/15 px-1.5 text-[10px] font-semibold text-orange-500">
+                        devolvido {String(Number(devolvido.toFixed(3))).replace('.', ',')}
                       </span>
                     )}
                   </div>
@@ -1108,9 +1151,21 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
                     <Trash2 className="h-4 w-4" />
                   </button>
                 )}
+                {podeDevolver && permissions.estornar !== false && item.quantity - devolvido > 0.0005 && (
+                  <button type="button" title="Devolver item" onClick={() => setDevolvendo(item)}
+                    className="text-muted-foreground hover:text-orange-500 transition-colors">
+                    <Undo2 className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             </div>
-          ))}
+          ); })}
+          {(devolucoes?.length ?? 0) > 0 && (
+            <div className="px-4 py-2 text-xs text-orange-600 dark:text-orange-400">
+              Devoluções: {devolucoes!.length} · −R$ {devolucoes!.reduce((s, d) => s + Number(d.valor), 0).toFixed(2)}
+              {' '}({devolucoes!.map((d) => d.forma === 'abater_fiado' ? 'abatido do fiado' : (PAYMENT_LABELS[d.forma] ?? d.forma)).filter((v, i, a) => a.indexOf(v) === i).join(', ')})
+            </div>
+          )}
 
           {/* ── Adicionar item (só quando aberta) ── */}
           {isEditable && (
@@ -1123,7 +1178,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
                     value={newDesc}
                     onChange={e => handleDescChange(e.target.value)}
                     onFocus={handleDescFocus}
-                    onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleAddItem()}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleEnterDescricao(); } }}
                     autoComplete="off"
                     spellCheck
                     lang="pt-BR"
@@ -1176,7 +1231,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
                   )}
                 </div>
                 <div className="pt-5">
-                  <Button type="button" variant="outline" onClick={handleAddItem} disabled={!canAct} className="h-9 px-4 gap-1.5">
+                  <Button type="button" variant="outline" onClick={() => handleAddItem()} disabled={!canAct} className="h-9 px-4 gap-1.5">
                     <Plus className="h-4 w-4" /> Add
                   </Button>
                 </div>
@@ -1284,6 +1339,16 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
                       )}
                     </SelectContent>
                   </Select>
+                  {entry.method === 'cartao_credito' && (
+                    <Select value={String(entry.parcelas ?? 1)} onValueChange={v => handleParcelasChange(idx, Number(v))} disabled={!canAct}>
+                      <SelectTrigger className="h-9 w-24" title="Parcelas no crédito"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 12 }, (_, i) => i + 1).map(n => (
+                          <SelectItem key={n} value={String(n)}>{n === 1 ? 'À vista' : `${n}x`}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                   {paymentEntries.length > 1 && (
                     <Input
                       type="text"
@@ -1654,6 +1719,10 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
       </Dialog>
 
       {/* ── Fiado Dialog ── */}
+      {devolvendo && (
+        <DevolverItemDialog item={devolvendo} restante={Number((devolvendo.quantity - (devolvidoPorItem.get(devolvendo.id) ?? 0)).toFixed(3))}
+          descontoPct={Number(order.discount_pct) || 0} noFiado={order.status === 'fiado'} onClose={() => setDevolvendo(null)} />
+      )}
       <Dialog open={showFiadoDialog} onOpenChange={open => !open && setShowFiadoDialog(false)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -1664,6 +1733,7 @@ export function BalcaoNotaDetail({ order, isAdmin, onBack }: Props) {
               Cliente: <strong>{editClientName || order.client_name || 'Cliente'}</strong>
               {' · '}Total: <strong>R$ {total.toFixed(2)}</strong>
             </p>
+            <AvisoFiadoCliente clientId={clienteIdRef.current ?? order.client_id} valorNovo={Math.max(total - paymentEntries.reduce((s, e) => s + e.amount, 0), 0) || total} />
             <div>
               <label className="text-sm font-medium">Data de Vencimento *</label>
               <input
