@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { useRelatorioResumo, type ResumoDados } from '@/hooks/useRelatorioResumo';
 import { deIso, problemaNoPeriodo, rotuloPeriodo } from '@/lib/periodo';
 import { BarraPeriodo, usePeriodo } from './BarraPeriodo';
+import { PergunteFinanceiro } from './PergunteFinanceiro';
 
 const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -60,7 +61,8 @@ export default function ResumoV2({ onOpenCaixa }: { onOpenCaixa?: (data: string,
   return (
     <div className="space-y-3">
       <BarraPeriodo p={per} />
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <PergunteFinanceiro />
         <Button variant="ghost" size="sm" className="h-10 gap-2" onClick={() => setOculto((o) => !o)}>
           {oculto ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}{oculto ? 'Mostrar valores' : 'Esconder valores'}
         </Button>
