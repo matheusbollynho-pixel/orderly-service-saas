@@ -477,6 +477,42 @@ function ProductFormDialog({ open, product, isEditing, isSaving, usaAlmox, onCha
                   <Input type="number" min="0" step="0.001" value={extra.stock_almox ?? 0} onChange={(e) => onChange('stock_almox', parseFloat(e.target.value) || 0)} disabled={!podeAjustar} title={podeAjustar ? undefined : 'Só quem pode ajustar o estoque muda o saldo'} />
                 </div>
               )}
+              {usaAlmox && (
+                <>
+                  <div>
+                    <Label>Uso</Label>
+                    <Select value={(extra as { uso?: string }).uso ?? 'ambos'} onValueChange={(v) => onChange('uso', v)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ambos">Venda e uso interno</SelectItem>
+                        <SelectItem value="venda">Só venda (na OS sai da loja)</SelectItem>
+                        <SelectItem value="interno">Só uso interno (material da oficina)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-2">
+                    <Label>Conteúdo de 1 {product.unit || 'unidade'} (opcional)</Label>
+                    <div className="flex gap-2">
+                      <Input type="number" min="0" step="0.001" className="w-28" placeholder="Ex.: 300"
+                        value={(extra as { conteudo_qtd?: number | null }).conteudo_qtd ?? ''}
+                        onChange={(e) => {
+                          const q = e.target.value ? parseFloat(e.target.value) : null;
+                          onChange('conteudo_qtd', q);
+                          const un = (extra as { conteudo_unidade?: string | null }).conteudo_unidade;
+                          if (q && !un) onChange('conteudo_unidade', 'ml');
+                          if (!q) onChange('conteudo_unidade', null);
+                        }} />
+                      <Select value={(extra as { conteudo_unidade?: string | null }).conteudo_unidade ?? 'ml'} onValueChange={(v) => onChange('conteudo_unidade', v)}>
+                        <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {['ml', 'l', 'g', 'kg', 'cm', 'm', 'un'].map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">Ex.: lata de desengripante = 300 ml; rolo de fita = 20 m. Na OS dá para lançar só o que usou.</p>
+                  </div>
+                </>
+              )}
             </div>
           </section>
 

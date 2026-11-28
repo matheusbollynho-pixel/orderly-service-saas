@@ -13,6 +13,11 @@ import { useStore } from '@/contexts/StoreContext';
 import { useColaboradorLogado } from '@/hooks/useColaboradorLogado';
 import { useTipoDoCliente, useTiposCliente } from '@/hooks/useTiposCliente';
 import { digitadoParaCliente, economiaUnit, precoParaCliente, servicoParaCliente, tipoEmDia } from '@/lib/precoCliente';
+import { useStoreSettings } from '@/hooks/useStoreSettings';
+import { fracaoDaEmbalagem, origemPadrao, qtdEstoque, textoParte, unidadesDoConteudo, type Origem } from '@/lib/almoxarifado';
+
+// Campos do almoxarifado que ainda não estão nos tipos gerados do banco
+type ProdutoAlmox = InventoryProduct & { uso?: string | null; conteudo_qtd?: number | null; conteudo_unidade?: string | null; stock_almox?: number | null };
 
 // Produto vendido por litro, metro ou quilo pode ser usado aos poucos na OS
 // (ex.: 150 ml de um frasco de 1 L). O estoque continua na unidade do produto.
@@ -76,6 +81,12 @@ export function MaterialsNote({
   // Nome do item digitado à mão (sem estoque) em edição
   const [editingNomes, setEditingNomes] = useState<Record<string, string>>({});
   const [fracao, setFracao] = useState({ valor: '', unidade: 'pequena' as 'pequena' | 'grande', cobrar: false });
+  // Almoxarifado ligado: de onde sai o item, quem retirou e se usou só parte da embalagem
+  const { settings: lojaCfg } = useStoreSettings();
+  const usaAlmox = !!(lojaCfg as { usa_almoxarifado?: boolean } | null)?.usa_almoxarifado;
+  const [origem, setOrigem] = useState<Origem>('almox');
+  const [retirou, setRetirou] = useState('');
+  const [parte, setParte] = useState<{ fracao: number | null; medida: string; unidade: string }>({ fracao: null, medida: '', unidade: '' });
   const [newMaterial, setNewMaterial] = useState<{ quantidade: string; descricao: string; valor: string; is_service: boolean; mechanic_id: string | undefined; product_id: string | undefined }>(vazio);
   // O nome do login chega depois (lista de mecânicos carregando)
   useEffect(() => {
@@ -135,6 +146,11 @@ export function MaterialsNote({
 
   const handleSelectProduct = (product: InventoryProduct) => {
     setFracao({ valor: '', unidade: 'pequena', cobrar: false });
+    const pa = product as ProdutoAlmox;
+    setOrigem(origemPadrao(pa.uso));
+    setParte({ fracao: null, medida: '', unidade: pa.conteudo_unidade || '' });
+    // Quem retirou: já vem com o mecânico do login (ou o último escolhido)
+    if (!retirou && meuMecanico) setRetirou(mecanicos.find((m) => m.id === meuMecanico)?.name ?? '');
     setNewMaterial((prev) => ({
       ...prev,
       descricao: product.name,
@@ -158,7 +174,47 @@ export function MaterialsNote({
   const fracNum = parseFloat(fracao.valor.replace(',', '.')) || 0;
   const fracBase = fr ? (fracao.unidade === 'pequena' ? fracNum / fr.fator : fracNum) : 0;
 
+  // Almoxarifado: só para produto do estoque que não é serviço, em loja com almoxarifado ligado
+  const prodAlmox = produtoSel as ProdutoAlmox | undefined;
+  const almoxNoItem = usaAlmox && !!produtoSel && !newMaterial.is_service;
+  const conteudo = almoxNoItem && !fr && Number(prodAlmox?.conteudo_qtd) > 0
+    ? { qtd: Number(prodAlmox!.conteudo_qtd), un: prodAlmox!.conteudo_unidade || 'ml' } : null;
+  const podeParte = almoxNoItem && !fr;
+  const medidaNum = parseFloat(parte.medida.replace(',', '.')) || 0;
+  const parteFrac = !podeParte ? 0
+    : parte.fracao ?? (conteudo && medidaNum > 0 ? (fracaoDaEmbalagem(medidaNum, parte.unidade || conteudo.un, conteudo.qtd, conteudo.un) ?? 0) : 0);
+  const usandoParte = parteFrac > 0;
+  const mecanicosAtivos = mecanicos.filter((m) => m.active);
+  const precisaRetirou = almoxNoItem && origem === 'almox' && mecanicosAtivos.length > 0;
+  const limparParte = () => setParte({ fracao: null, medida: '', unidade: prodAlmox?.conteudo_unidade || '' });
+
   const handleAddMaterial = () => {
+    if (precisaRetirou && !retirou) {
+      toast.error('Escolha quem retirou o material do almoxarifado.');
+      return;
+    }
+    // De onde sai e quem retirou (o banco decide pela escolha; sem almoxarifado, sempre loja)
+    const extrasAlmox: Record<string, unknown> = almoxNoItem
+      ? { origem, ...(origem === 'almox' && retirou ? { retirado_por: retirou } : {}) } : {};
+    if (usandoParte && produtoSel) {
+      if (parteFrac < 0.001) { toast.error('Quantidade muito pequena.'); return; }
+      if (parteFrac > 1.0005) { toast.error(`Passou de 1 ${produtoSel.unit}. Lance as inteiras na quantidade e o resto como parte.`); return; }
+      const txt = parte.fracao ? `${textoParte(parte.fracao)} ${produtoSel.unit}` : `${parte.medida.replace('.', ',')} ${parte.unidade || conteudo!.un}`;
+      onAddMaterial({
+        quantidade: String(qtdEstoque(parteFrac)),
+        descricao: `${newMaterial.descricao} (${txt})`,
+        // Sem "Cobrar do cliente": sai do estoque mas não soma no valor da OS
+        valor: fracao.cobrar ? (parseFloat(newMaterial.valor) || 0) : 0,
+        is_service: false,
+        product_id: newMaterial.product_id,
+        ...extrasAlmox,
+      } as unknown as Omit<Material, 'id' | 'created_at' | 'updated_at'>);
+      setNewMaterial(vazio());
+      setFracao({ valor: '', unidade: 'pequena', cobrar: false });
+      limparParte();
+      setShowSuggestions(false);
+      return;
+    }
     if (fr && produtoSel) {
       if (!fracNum || fracNum <= 0) {
         toast.error(`Informe quanto foi usado (em ${fr.pequena} ou ${fr.grande}).`);
@@ -176,6 +232,7 @@ export function MaterialsNote({
         valor: fracao.cobrar ? (parseFloat(newMaterial.valor) || 0) : 0,
         is_service: false,
         product_id: newMaterial.product_id,
+        ...extrasAlmox,
       } as unknown as Omit<Material, 'id' | 'created_at' | 'updated_at'>);
       setNewMaterial(vazio());
       setFracao({ valor: '', unidade: 'pequena', cobrar: false });
@@ -215,6 +272,7 @@ export function MaterialsNote({
 
     if (newMaterial.mechanic_id) payload.mechanic_id = newMaterial.mechanic_id;
     if (newMaterial.product_id) payload.product_id = newMaterial.product_id;
+    Object.assign(payload, extrasAlmox);
 
     onAddMaterial(payload);
 
@@ -267,6 +325,9 @@ export function MaterialsNote({
                   <div className="col-span-7 text-sm font-medium text-foreground flex items-center gap-1">
                     {material.descricao}
                     {material.product_id && <Package className="h-3 w-3 text-green-600 flex-shrink-0" title="Vinculado ao estoque" />}
+                    {(material as { origem?: string | null }).origem === 'almox' && (
+                      <span className="rounded bg-blue-500/15 px-1.5 text-[10px] font-semibold text-blue-500 flex-shrink-0">almox.</span>
+                    )}
                     {economiaUnit(material, Number(material.valor) || 0) > 0 && (
                       <span className="rounded bg-emerald-500/15 px-1.5 text-[10px] font-semibold text-emerald-500 flex-shrink-0">Preço {material.tipo_preco}</span>
                     )}
@@ -299,6 +360,9 @@ export function MaterialsNote({
                   <div className="bg-muted/50 border border-border/50 border-t-0 p-3 rounded-b space-y-3">
                     {!podeEditar && (
                       <p className="text-xs text-muted-foreground">Para tirar ou mudar este item, chame o gerente.</p>
+                    )}
+                    {(material as { retirado_por?: string | null }).retirado_por && (
+                      <p className="text-xs text-muted-foreground">Retirado do almoxarifado por <strong>{(material as { retirado_por?: string | null }).retirado_por}</strong></p>
                     )}
                     {/* Item digitado à mão (não veio do estoque): dá para corrigir o nome */}
                     {!material.product_id && (
@@ -448,6 +512,11 @@ export function MaterialsNote({
                       </Select>
                     </div>
                   </div>
+                ) : usandoParte ? (
+                  <div className="w-16">
+                    <label className="text-xs font-semibold text-foreground block mb-1">Qtd</label>
+                    <div className="h-8 flex items-center justify-center rounded-md border border-border/50 bg-muted/50 text-xs">parte</div>
+                  </div>
                 ) : (
                 <div className="w-16">
                   <label className="text-xs font-semibold text-foreground block mb-1">Qtd</label>
@@ -536,6 +605,79 @@ export function MaterialsNote({
                   <span className="text-xs text-emerald-500">{tipoOS!.nome}: sai R$ {brl(finalDoNovo(parseFloat(newMaterial.valor) || 0))}</span>
                 )}
               </div>
+              {almoxNoItem && (
+                <div className="rounded-md border border-border/50 bg-muted/30 p-2 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="font-semibold text-foreground">Sai de:</span>
+                    {(['loja', 'almox'] as Origem[]).map((o) => {
+                      const saldo = o === 'loja' ? Number(produtoSel!.stock_current) || 0 : Number(prodAlmox?.stock_almox) || 0;
+                      return (
+                        <button key={o} type="button" onClick={() => setOrigem(o)}
+                          className={`rounded-full border px-3 py-1 ${origem === o ? 'border-[#C1272D] bg-[#C1272D]/15 text-foreground font-semibold' : 'border-border text-muted-foreground'}`}>
+                          {o === 'loja' ? 'Loja' : 'Almoxarifado'} ({String(Number(saldo.toFixed(3))).replace('.', ',')})
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {origem === 'almox' && mecanicosAtivos.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-semibold text-foreground whitespace-nowrap">Quem retirou <span className="text-destructive">*</span></label>
+                      <Select value={retirou || 'none'} onValueChange={(v) => setRetirou(v === 'none' ? '' : v)}>
+                        <SelectTrigger className={`h-8 text-xs bg-muted/50 ${!retirou ? 'border-destructive' : 'border-border/50'}`}><SelectValue placeholder="Escolha" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Escolha</SelectItem>
+                          {mecanicosAtivos.map((m) => <SelectItem key={m.id} value={m.name}>{m.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  {podeParte && (
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="text-muted-foreground">Usou só uma parte?</span>
+                        {[0.25, 0.5, 0.75].map((f) => (
+                          <button key={f} type="button"
+                            onClick={() => setParte((p) => (p.fracao === f ? { ...p, fracao: null } : { ...p, fracao: f, medida: '' }))}
+                            className={`rounded border px-2 py-0.5 ${parte.fracao === f ? 'border-[#C1272D] bg-[#C1272D]/15 font-semibold text-foreground' : 'border-border text-muted-foreground'}`}>
+                            {textoParte(f)}
+                          </button>
+                        ))}
+                        {conteudo && (
+                          <span className="flex items-center gap-1">
+                            <span className="text-muted-foreground">ou</span>
+                            <Input inputMode="decimal" placeholder="50" value={parte.medida}
+                              onChange={(e) => setParte((p) => ({ ...p, fracao: null, medida: e.target.value.replace(/[^\d.,]/g, '') }))}
+                              className="h-7 w-16 text-xs text-right bg-muted/50 border-border/50" />
+                            <Select value={parte.unidade || conteudo.un} onValueChange={(v) => setParte((p) => ({ ...p, unidade: v }))}>
+                              <SelectTrigger className="h-7 w-16 text-xs bg-muted/50 border-border/50"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                {unidadesDoConteudo(conteudo.un).map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                            <span className="text-muted-foreground">de {String(conteudo.qtd).replace('.', ',')} {conteudo.un}</span>
+                          </span>
+                        )}
+                        {usandoParte && <button type="button" onClick={limparParte} className="text-muted-foreground underline">usar inteira</button>}
+                      </div>
+                      {usandoParte && (
+                        <>
+                          <label className="flex items-center gap-2 text-xs font-medium text-foreground">
+                            <Checkbox checked={fracao.cobrar} onCheckedChange={(c) => setFracao({ ...fracao, cobrar: Boolean(c) })} className="h-4 w-4" />
+                            Cobrar do cliente
+                          </label>
+                          <p className="text-xs text-muted-foreground">
+                            Sai do {origem === 'almox' ? 'almoxarifado' : 'estoque da loja'}: {String(qtdEstoque(parteFrac)).replace('.', ',')} {produtoSel!.unit}
+                            {' · '}
+                            {fracao.cobrar
+                              ? `cliente paga R$ ${brl(parteFrac * (parseFloat(newMaterial.valor) || 0))}`
+                              : 'não soma no valor da OS (material de uso no serviço)'}
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
               {fr && produtoSel && (
                 <div className="rounded-md border border-border/50 bg-muted/30 p-2 space-y-1">
                   <label className="flex items-center gap-2 text-xs font-medium text-foreground">
